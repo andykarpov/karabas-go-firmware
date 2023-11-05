@@ -1,35 +1,37 @@
 #include <Arduino.h>
 #include "Adafruit_SPIFlash.h"
 #include <ArduinoJson.h>
+#include <SparkFun_PCA9536_Arduino_Library.h>
+#include <DS3231.h>
 
 // pio-usb is required for rp2040 host
 #include "pio_usb.h"
-#define HOST_PIN_DP   36   // Pin used as D+ for host, D- = D+ + 1
+#define HOST_PIN_DP   25 // pin 37 // gpio 25  
 
-#define PIN_MCU_SPI_SCK 35
-#define PIN_MCU_SPI_CS 34
-#define PIN_MCU_SPI_RX 32
-#define PIN_MCU_SPI_TX 31
+#define PIN_MCU_SPI_SCK 22 // pin 35
+#define PIN_MCU_SPI_CS 21 // pin 34
+#define PIN_MCU_SPI_RX 20 // pin 32
+#define PIN_MCU_SPI_TX 23 // pin 31
 
-#define PIN_SD_SPI_SCK 12
-#define PIN_SD_SPI_CS 11
-#define PIN_SD_SPI_RX 14
-#define PIN_SD_SPI_TX 13
+#define PIN_SD_SPI_SCK 10 // pin 12
+#define PIN_SD_SPI_CS 9 // pin 11
+#define PIN_SD_SPI_RX 8 // pin 14
+#define PIN_SD_SPI_TX 11 // pin 13
 //#define SD_CHIP_SELECT_PIN PIN_SD_SPI_CS
 
-#define PIN_I2C_SDA 15
-#define PIN_I2C_SCL 16
+#define PIN_I2C_SDA 12 // pin 15
+#define PIN_I2C_SCL 13 // pin 16
 
-#define PIN_JOY_SCK 7
-#define PIN_JOY_DATA 8
-#define PIN_JOY_LOAD 6
-#define PIN_JOY_P7 3
+#define PIN_JOY_SCK 5 // pin 7
+#define PIN_JOY_DATA 6 // pin 8
+#define PIN_JOY_LOAD 4 // pin 6
+#define PIN_JOY_P7 1 // pin 3
 
-#define PIN_CONF_INIT_B 5
-#define PIN_CONF_PRG_B 27
-#define PIN_CONF_IO1 29
-#define PIN_CONF_CLK 28
-#define PIN_CONF_DONE 30
+#define PIN_CONF_INIT_B 3 // pin 5
+#define PIN_CONF_PRG_B 16 // pin 27
+#define PIN_CONF_IO1 18 // pin 29
+#define PIN_CONF_CLK 17 // pin 28
+#define PIN_CONF_DONE 19 // pin 30
 
 #include <SPI.h>
 #include <Wire.h>
@@ -56,10 +58,27 @@ static struct
   tuh_hid_report_info_t report_info[MAX_REPORT];
 }hid_info[CFG_TUH_HID];
 
+typedef struct {
+  tusb_desc_device_t desc_device;
+  uint16_t manufacturer[32];
+  uint16_t product[48];
+  uint16_t serial[16];
+  bool mounted;
+} dev_info_t;
+
+// CFG_TUH_DEVICE_MAX is defined by tusb_config header
+dev_info_t dev_info[CFG_TUH_DEVICE_MAX] = { 0 };
+
+PCA9536 extender;
+DS3231 rtc_clock;
+
 static void process_kbd_report(hid_keyboard_report_t const *report);
 static void process_mouse_report(hid_mouse_report_t const * report);
 static void process_gamepad_report(hid_gamepad_report_t const * report);
 static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len);
+
+// Language ID: English
+#define LANGUAGE_ID 0x0409
 
 // USB Host object
 Adafruit_USBH_Host USBHost;
@@ -70,22 +89,28 @@ tusb_desc_device_t desc_device;
 // the setup function runs once when you press reset or power the board
 void setup()
 {
+  while ( !Serial ) delay(10);   // wait for native usb
+
   Serial.begin(115200);
   Serial.println("Karabas Go rp2040 core");
 
-  // SPI1 to FPGA
-  SPI1.setSCK(PIN_MCU_SPI_SCK);
-  SPI1.setRX(PIN_MCU_SPI_RX);
-  SPI1.setTX(PIN_MCU_SPI_TX);
-  SPI1.setCS(PIN_MCU_SPI_CS);
-  SPI1.begin(PIN_MCU_SPI_CS);
+  // TODO: изменить ноги на GPIO в конфигк
+  // TODO: поменять местами согласно разрешенным ногам PIO
+  // 
 
-  // SPI for SD
-  SPI.setSCK(PIN_SD_SPI_SCK);
-  SPI.setRX(PIN_SD_SPI_RX);
-  SPI.setTX(PIN_SD_SPI_TX);
-  SPI.setCS(PIN_SD_SPI_CS);
-  SPI.begin();
+  // SPI0 to FPGA
+  SPI.setSCK(PIN_MCU_SPI_SCK);
+  SPI.setRX(PIN_MCU_SPI_RX);
+  SPI.setTX(PIN_MCU_SPI_TX);
+  SPI.setCS(PIN_MCU_SPI_CS);
+  SPI.begin(PIN_MCU_SPI_CS);
+
+  // SPI1 for SD
+  SPI1.setSCK(PIN_SD_SPI_SCK);
+  SPI1.setRX(PIN_SD_SPI_RX);
+  SPI1.setTX(PIN_SD_SPI_TX);
+  SPI1.setCS(PIN_SD_SPI_CS);
+  SPI1.begin();
 
   if (!sd.begin(SD_CONFIG)) {
     Serial.println("Error init SD card");
@@ -99,7 +124,7 @@ void setup()
     while(bitstream.available()) {
       // TODO: config spartan
       char c = bitstream.read();
-      Serial.print(c);
+      //Serial.print(c);
     }
     bitstream.close();
   }
@@ -109,16 +134,57 @@ void setup()
   Wire.setSCL(PIN_I2C_SCL);
   Wire.begin();
 
+  if (extender.begin() == false)
+  {
+    Serial.println("PCA9536 not detected. Please check wiring. Freezing...");
+    while (1)
+      ;
+  }
+
+  extender.pinMode(0, INPUT_PULLUP);
+  extender.pinMode(1, INPUT_PULLUP);
+  extender.pinMode(2, OUTPUT);
+  extender.pinMode(3, OUTPUT);
+
   //delay(2000);
+
+  Serial.println("Done");
 }
 
 uint8_t counter = 0;
 
 void loop()
 {
-  delay(100);
+  delay(1000);
+  Serial.print("Counter: ");
   Serial.println(counter);
   counter++;
+
+  extender.digitalWrite(2, counter %2 == 0);
+  extender.digitalWrite(3, counter %2 != 0);
+
+  if (extender.digitalRead(0) == LOW) {
+    Serial.println("Pushed button 0");
+    delay(500);
+  }
+    if (extender.digitalRead(1) == LOW) {
+    Serial.println("Pushed button 1");
+    delay(500);
+  }
+
+  bool century;
+  bool h12flag;
+  bool pmflag;
+
+  Serial.print("RTC: ");
+  Serial.print(rtc_clock.getYear(), DEC); Serial.print(" ");
+  Serial.print(rtc_clock.getMonth(century), DEC); Serial.print(" ");
+	Serial.print(rtc_clock.getDate(), DEC); Serial.print(" ");
+	Serial.print(rtc_clock.getDoW(), DEC); Serial.print(" ");
+	Serial.print(rtc_clock.getHour(h12flag, pmflag), DEC);
+	Serial.print(" "); Serial.print(rtc_clock.getMinute(), DEC);
+	Serial.print(" "); Serial.println(rtc_clock.getSecond(), DEC);
+
 }
 
 // core1's setup
@@ -137,6 +203,7 @@ void setup1() {
 
   pio_usb_configuration_t pio_cfg = PIO_USB_DEFAULT_CONFIG;
   pio_cfg.pin_dp = HOST_PIN_DP;
+  pio_cfg.pinout = PIO_USB_PINOUT_DMDP;
   USBHost.configure_pio_usb(1, &pio_cfg);
 
   // run host stack on controller (rhport) 1
@@ -149,21 +216,178 @@ void setup1() {
 void loop1()
 {
   USBHost.task();
+  Serial.flush();
 }
 
 //--------------------------------------------------------------------+
 // TinyUSB Host callbacks
 //--------------------------------------------------------------------+
 
+void print_device_descriptor(tuh_xfer_t *xfer);
+
+void utf16_to_utf8(uint16_t *temp_buf, size_t buf_len);
+
+void print_lsusb(void) {
+  bool no_device = true;
+  for (uint8_t daddr = 1; daddr < CFG_TUH_DEVICE_MAX + 1; daddr++) {
+    // TODO can use tuh_mounted(daddr), but tinyusb has an bug
+    // use local connected flag instead
+    dev_info_t *dev = &dev_info[daddr - 1];
+    if (dev->mounted) {
+      Serial.printf("Device %u: ID %04x:%04x %s %s\r\n", daddr,
+                    dev->desc_device.idVendor, dev->desc_device.idProduct,
+                    (char *) dev->manufacturer, (char *) dev->product);
+
+      no_device = false;
+    }
+  }
+
+  if (no_device) {
+    Serial.println("No device connected (except hub)");
+  }
+}
+
+// Invoked when device is mounted (configured)
+void tuh_mount_cb(uint8_t daddr) {
+  Serial.printf("Device attached, address = %d\r\n", daddr);
+
+  dev_info_t *dev = &dev_info[daddr - 1];
+  dev->mounted = true;
+
+  // Get Device Descriptor
+  tuh_descriptor_get_device(daddr, &dev->desc_device, 18, print_device_descriptor, 0);
+}
+
+/// Invoked when device is unmounted (bus reset/unplugged)
+void tuh_umount_cb(uint8_t daddr) {
+  Serial.printf("Device removed, address = %d\r\n", daddr);
+  dev_info_t *dev = &dev_info[daddr - 1];
+  dev->mounted = false;
+
+  // print device summary
+  print_lsusb();
+}
+
+void print_device_descriptor(tuh_xfer_t *xfer) {
+  if (XFER_RESULT_SUCCESS != xfer->result) {
+    Serial.printf("Failed to get device descriptor\r\n");
+    return;
+  }
+
+  uint8_t const daddr = xfer->daddr;
+  dev_info_t *dev = &dev_info[daddr - 1];
+  tusb_desc_device_t *desc = &dev->desc_device;
+
+  Serial.printf("Device %u: ID %04x:%04x\r\n", daddr, desc->idVendor, desc->idProduct);
+  Serial.printf("Device Descriptor:\r\n");
+  Serial.printf("  bLength             %u\r\n"     , desc->bLength);
+  Serial.printf("  bDescriptorType     %u\r\n"     , desc->bDescriptorType);
+  Serial.printf("  bcdUSB              %04x\r\n"   , desc->bcdUSB);
+  Serial.printf("  bDeviceClass        %u\r\n"     , desc->bDeviceClass);
+  Serial.printf("  bDeviceSubClass     %u\r\n"     , desc->bDeviceSubClass);
+  Serial.printf("  bDeviceProtocol     %u\r\n"     , desc->bDeviceProtocol);
+  Serial.printf("  bMaxPacketSize0     %u\r\n"     , desc->bMaxPacketSize0);
+  Serial.printf("  idVendor            0x%04x\r\n" , desc->idVendor);
+  Serial.printf("  idProduct           0x%04x\r\n" , desc->idProduct);
+  Serial.printf("  bcdDevice           %04x\r\n"   , desc->bcdDevice);
+
+  // Get String descriptor using Sync API
+  Serial.printf("  iManufacturer       %u     ", desc->iManufacturer);
+  if (XFER_RESULT_SUCCESS ==
+      tuh_descriptor_get_manufacturer_string_sync(daddr, LANGUAGE_ID, dev->manufacturer, sizeof(dev->manufacturer))) {
+    utf16_to_utf8(dev->manufacturer, sizeof(dev->manufacturer));
+    Serial.printf((char *) dev->manufacturer);
+  }
+  Serial.printf("\r\n");
+
+  Serial.printf("  iProduct            %u     ", desc->iProduct);
+  if (XFER_RESULT_SUCCESS ==
+      tuh_descriptor_get_product_string_sync(daddr, LANGUAGE_ID, dev->product, sizeof(dev->product))) {
+    utf16_to_utf8(dev->product, sizeof(dev->product));
+    Serial.printf((char *) dev->product);
+  }
+  Serial.printf("\r\n");
+
+  Serial.printf("  iSerialNumber       %u     ", desc->iSerialNumber);
+  if (XFER_RESULT_SUCCESS ==
+      tuh_descriptor_get_serial_string_sync(daddr, LANGUAGE_ID, dev->serial, sizeof(dev->serial))) {
+    utf16_to_utf8(dev->serial, sizeof(dev->serial));
+    Serial.printf((char *) dev->serial);
+  }
+  Serial.printf("\r\n");
+
+  Serial.printf("  bNumConfigurations  %u\r\n", desc->bNumConfigurations);
+
+  // print device summary
+  print_lsusb();
+}
+
+//--------------------------------------------------------------------+
+// String Descriptor Helper
+//--------------------------------------------------------------------+
+
+static void _convert_utf16le_to_utf8(const uint16_t *utf16, size_t utf16_len, uint8_t *utf8, size_t utf8_len) {
+  // TODO: Check for runover.
+  (void) utf8_len;
+  // Get the UTF-16 length out of the data itself.
+
+  for (size_t i = 0; i < utf16_len; i++) {
+    uint16_t chr = utf16[i];
+    if (chr < 0x80) {
+      *utf8++ = chr & 0xff;
+    } else if (chr < 0x800) {
+      *utf8++ = (uint8_t) (0xC0 | (chr >> 6 & 0x1F));
+      *utf8++ = (uint8_t) (0x80 | (chr >> 0 & 0x3F));
+    } else {
+      // TODO: Verify surrogate.
+      *utf8++ = (uint8_t) (0xE0 | (chr >> 12 & 0x0F));
+      *utf8++ = (uint8_t) (0x80 | (chr >> 6 & 0x3F));
+      *utf8++ = (uint8_t) (0x80 | (chr >> 0 & 0x3F));
+    }
+    // TODO: Handle UTF-16 code points that take two entries.
+  }
+}
+
+// Count how many bytes a utf-16-le encoded string will take in utf-8.
+static int _count_utf8_bytes(const uint16_t *buf, size_t len) {
+  size_t total_bytes = 0;
+  for (size_t i = 0; i < len; i++) {
+    uint16_t chr = buf[i];
+    if (chr < 0x80) {
+      total_bytes += 1;
+    } else if (chr < 0x800) {
+      total_bytes += 2;
+    } else {
+      total_bytes += 3;
+    }
+    // TODO: Handle UTF-16 code points that take two entries.
+  }
+  return total_bytes;
+}
+
+void utf16_to_utf8(uint16_t *temp_buf, size_t buf_len) {
+  size_t utf16_len = ((temp_buf[0] & 0xff) - 2) / sizeof(uint16_t);
+  size_t utf8_len = _count_utf8_bytes(temp_buf + 1, utf16_len);
+
+  _convert_utf16le_to_utf8(temp_buf + 1, utf16_len, (uint8_t *) temp_buf, buf_len);
+  ((uint8_t *) temp_buf)[utf8_len] = '\0';
+}
+
 // Invoked when device is mounted (configured)
 void tuh_hid_mount_cb (uint8_t dev_addr, uint8_t instance, uint8_t const* desc_report, uint16_t desc_len)
 {
+  (void)desc_report;
+  (void)desc_len;
+
   Serial.printf("Device attached, address = %d\r\n", dev_addr);
 
   uint8_t const itf_protocol = tuh_hid_interface_protocol(dev_addr, instance);
 
   const char* protocol_str[] = { "None", "Keyboard", "Mouse" };
   Serial.printf("HID Interface Protocol = %s\r\n", protocol_str[itf_protocol]);
+
+  uint16_t vid, pid;
+  tuh_vid_pid_get(dev_addr, &vid, &pid);
 
   if ( itf_protocol == HID_ITF_PROTOCOL_NONE )
   {
