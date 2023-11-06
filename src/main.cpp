@@ -1,11 +1,13 @@
 #include <Arduino.h>
-#include "Adafruit_SPIFlash.h"
-#include <ArduinoJson.h>
+#include <SPI.h>
+#include <Wire.h>
+#include <PioSPI.h>
 #include <SparkFun_PCA9536_Arduino_Library.h>
 #include <DS3231.h>
-
-// pio-usb is required for rp2040 host
+#include "SdFat.h"
+#include "Adafruit_TinyUSB.h"
 #include "pio_usb.h"
+
 #define HOST_PIN_DP   25 // pin 37 // gpio 25  
 
 #define PIN_MCU_SPI_SCK 22 // pin 35
@@ -13,11 +15,11 @@
 #define PIN_MCU_SPI_RX 20 // pin 32
 #define PIN_MCU_SPI_TX 23 // pin 31
 
-#define PIN_SD_SPI_SCK 10 // pin 12
-#define PIN_SD_SPI_CS 9 // pin 11
-#define PIN_SD_SPI_RX 8 // pin 14
-#define PIN_SD_SPI_TX 11 // pin 13
-//#define SD_CHIP_SELECT_PIN PIN_SD_SPI_CS
+#define PIN_SD_SPI_SCK 9 // 10 // pin 12
+#define PIN_SD_SPI_CS 8 // 9 // pin 11
+#define PIN_SD_SPI_RX 11 // 8 // pin 14
+#define PIN_SD_SPI_TX 10 // 11 // pin 13
+#define SD_CS_PIN PIN_SD_SPI_CS
 
 #define PIN_I2C_SDA 12 // pin 15
 #define PIN_I2C_SCL 13 // pin 16
@@ -33,19 +35,60 @@
 #define PIN_CONF_CLK 17 // pin 28
 #define PIN_CONF_DONE 19 // pin 30
 
-#include <SPI.h>
-#include <Wire.h>
-#include "SdFat.h"
-#include "sdios.h"
+PioSPI sd_spi(PIN_SD_SPI_TX, PIN_SD_SPI_RX, PIN_SD_SPI_SCK, PIN_SD_SPI_CS, SPI_MODE0, SD_SCK_MHZ(20));
+
+class MySpiClass : public SdSpiBaseClass {
+ public:
+  // Activate SPI hardware with correct speed and mode.
+  void activate() {
+    sd_spi.beginTransaction(m_spiSettings);
+  }
+  // Initialize the SPI bus.
+  void begin(SdSpiConfig config) {
+    (void)config;
+    sd_spi.begin();
+  }
+  // Deactivate SPI hardware.
+  void deactivate() {
+    sd_spi.endTransaction();
+  }
+  // Receive a byte.
+  uint8_t receive() {
+    return sd_spi.transfer(0XFF);
+  }
+  // Receive multiple bytes.
+  // Replace this function if your board has multiple byte receive.
+  uint8_t receive(uint8_t* buf, size_t count) {
+    for (size_t i = 0; i < count; i++) {
+      buf[i] = sd_spi.transfer(0XFF);
+    }
+    return 0;
+  }
+  // Send a byte.
+  void send(uint8_t data) {
+    sd_spi.transfer(data);
+  }
+  // Send multiple bytes.
+  // Replace this function if your board has multiple byte send.
+  void send(const uint8_t* buf, size_t count) {
+    sd_spi.transfer(&buf, count);
+    /*for (size_t i = 0; i < count; i++) {
+      sd_spi.transfer(buf[i]);
+    }*/
+  }
+  // Save SPISettings for new max SCK frequency
+  void setSckSpeed(uint32_t maxSck) {
+    m_spiSettings = SPISettings(maxSck, MSBFIRST, SPI_MODE0);
+  }
+
+ private:
+  SPISettings m_spiSettings;
+} mySpi;
+
+#define SD_CONFIG SdSpiConfig(SD_CS_PIN, SHARED_SPI, SD_SCK_MHZ(1), &mySpi)
 
 SdFs sd;
-typedef FsFile file_t;
-#define SPI_CLOCK SD_SCK_MHZ(50)
-#define SD_CONFIG SdSpiConfig(PIN_SD_SPI_CS, DEDICATED_SPI, SPI_CLOCK)
-FsFile bitstream;
-FsFile config;
-
-#include "Adafruit_TinyUSB.h"
+FsFile file;
 
 #define MAX_REPORT  4
 
@@ -89,14 +132,15 @@ tusb_desc_device_t desc_device;
 // the setup function runs once when you press reset or power the board
 void setup()
 {
+  pinMode(PIN_SD_SPI_CS, OUTPUT_12MA); digitalWrite(PIN_SD_SPI_CS, HIGH);
+  pinMode(PIN_SD_SPI_SCK, OUTPUT_12MA); digitalWrite(PIN_SD_SPI_SCK, HIGH);
+  pinMode(PIN_SD_SPI_RX, INPUT_PULLUP);
+  pinMode(PIN_SD_SPI_TX, OUTPUT_12MA); digitalWrite(PIN_SD_SPI_TX, HIGH);
+
   while ( !Serial ) delay(10);   // wait for native usb
 
   Serial.begin(115200);
   Serial.println("Karabas Go rp2040 core");
-
-  // TODO: изменить ноги на GPIO в конфигк
-  // TODO: поменять местами согласно разрешенным ногам PIO
-  // 
 
   // SPI0 to FPGA
   SPI.setSCK(PIN_MCU_SPI_SCK);
@@ -105,29 +149,32 @@ void setup()
   SPI.setCS(PIN_MCU_SPI_CS);
   SPI.begin(PIN_MCU_SPI_CS);
 
-  // SPI1 for SD
-  SPI1.setSCK(PIN_SD_SPI_SCK);
-  SPI1.setRX(PIN_SD_SPI_RX);
-  SPI1.setTX(PIN_SD_SPI_TX);
-  SPI1.setCS(PIN_SD_SPI_CS);
-  SPI1.begin();
-
-  if (!sd.begin(SD_CONFIG)) {
-    Serial.println("Error init SD card");
+  // SD
+  Serial.println("Mounting SD card");
+  while (!sd.begin(SD_CONFIG)) {
+    sd.initErrorPrint(&Serial);
+    delay(100);
   }
 
-  if (!sd.exists("karabas/boot.bit")) {
-    Serial.println("File karabas/boot.bit does not exists");
+  sd.ls(&Serial, LS_SIZE);
+
+  if (!sd.exists("karabas.bit")) {
+    Serial.println("karabas.bit does not exists on SD card");
   }
 
-  if (bitstream.open("karabas/boot.bit", FILE_READ)) {
-    while(bitstream.available()) {
-      // TODO: config spartan
-      char c = bitstream.read();
-      //Serial.print(c);
-    }
-    bitstream.close();
+  if (!file.open("karabas.bit", FILE_READ)) {
+    Serial.println("Unable to open file to read");
   }
+
+  int i = 0;
+  int n;
+  char buf[255];
+
+  while ((n = file.read(buf, sizeof(buf)))) {
+    i += n;
+  }
+
+  Serial.print("Total "); Serial.print(i, DEC); Serial.println(" bytes");
 
   // I2C
   Wire.setSDA(PIN_I2C_SDA);
@@ -137,16 +184,14 @@ void setup()
   if (extender.begin() == false)
   {
     Serial.println("PCA9536 not detected. Please check wiring. Freezing...");
-    while (1)
-      ;
+    while (true)
+    ;
   }
 
   extender.pinMode(0, INPUT_PULLUP);
   extender.pinMode(1, INPUT_PULLUP);
   extender.pinMode(2, OUTPUT);
   extender.pinMode(3, OUTPUT);
-
-  //delay(2000);
 
   Serial.println("Done");
 }
