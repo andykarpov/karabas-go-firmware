@@ -35,6 +35,11 @@
 #define PIN_CONF_CLK 17 // pin 28
 #define PIN_CONF_DONE 19 // pin 30
 
+#define PIN_EXT_BTN1 0
+#define PIN_EXT_BTN2 1
+#define PIN_EXT_LED1 2
+#define PIN_EXT_LED2 3
+
 PioSPI sd_spi(PIN_SD_SPI_TX, PIN_SD_SPI_RX, PIN_SD_SPI_SCK, PIN_SD_SPI_CS, SPI_MODE0, SD_SCK_MHZ(20));
 
 class MySpiClass : public SdSpiBaseClass {
@@ -71,10 +76,9 @@ class MySpiClass : public SdSpiBaseClass {
   // Send multiple bytes.
   // Replace this function if your board has multiple byte send.
   void send(const uint8_t* buf, size_t count) {
-    sd_spi.transfer(&buf, count);
-    /*for (size_t i = 0; i < count; i++) {
+    for (size_t i = 0; i < count; i++) {
       sd_spi.transfer(buf[i]);
-    }*/
+    }
   }
   // Save SPISettings for new max SCK frequency
   void setSckSpeed(uint32_t maxSck) {
@@ -85,7 +89,7 @@ class MySpiClass : public SdSpiBaseClass {
   SPISettings m_spiSettings;
 } mySpi;
 
-#define SD_CONFIG SdSpiConfig(SD_CS_PIN, SHARED_SPI, SD_SCK_MHZ(1), &mySpi)
+#define SD_CONFIG SdSpiConfig(SD_CS_PIN, SHARED_SPI, SD_SCK_MHZ(10), &mySpi)
 
 SdFs sd;
 FsFile file;
@@ -149,33 +153,6 @@ void setup()
   SPI.setCS(PIN_MCU_SPI_CS);
   SPI.begin(PIN_MCU_SPI_CS);
 
-  // SD
-  Serial.println("Mounting SD card");
-  while (!sd.begin(SD_CONFIG)) {
-    sd.initErrorPrint(&Serial);
-    delay(100);
-  }
-
-  sd.ls(&Serial, LS_SIZE);
-
-  if (!sd.exists("karabas.bit")) {
-    Serial.println("karabas.bit does not exists on SD card");
-  }
-
-  if (!file.open("karabas.bit", FILE_READ)) {
-    Serial.println("Unable to open file to read");
-  }
-
-  int i = 0;
-  int n;
-  char buf[255];
-
-  while ((n = file.read(buf, sizeof(buf)))) {
-    i += n;
-  }
-
-  Serial.print("Total "); Serial.print(i, DEC); Serial.println(" bytes");
-
   // I2C
   Wire.setSDA(PIN_I2C_SDA);
   Wire.setSCL(PIN_I2C_SCL);
@@ -188,10 +165,47 @@ void setup()
     ;
   }
 
-  extender.pinMode(0, INPUT_PULLUP);
-  extender.pinMode(1, INPUT_PULLUP);
-  extender.pinMode(2, OUTPUT);
-  extender.pinMode(3, OUTPUT);
+  extender.pinMode(PIN_EXT_BTN1, INPUT_PULLUP);
+  extender.pinMode(PIN_EXT_BTN2, INPUT_PULLUP);
+  extender.pinMode(PIN_EXT_LED1, OUTPUT);
+  extender.pinMode(PIN_EXT_LED2, OUTPUT);
+
+  // SD
+  Serial.println("Mounting SD card");
+  if (!sd.begin(SD_CONFIG)) {
+    sd.initErrorPrint(&Serial);
+  }
+
+  sd.ls(&Serial, LS_SIZE);
+
+  if (!sd.exists("karabas.bit")) {
+    Serial.println("karabas.bit does not exists on SD card");
+  }
+
+  if (!file.open("karabas.bit", FILE_READ)) {
+    Serial.println("Unable to open file to read");
+  }
+
+  Serial.println("Reading karabas.bit");
+  file.rewind();
+
+  int i = 0;
+  bool blink = false;
+
+  while (file.available()) {
+    char line[512];
+    size_t n = file.readBytes(line, sizeof(line));
+    i +=n;
+    if (i % 4096 == 0) {
+      blink = !blink;
+      extender.digitalWrite(PIN_EXT_LED1, blink);
+      extender.digitalWrite(PIN_EXT_LED2, blink);
+    }
+  }
+  file.close();
+
+  Serial.print("Total "); Serial.print(i, DEC); Serial.println(" bytes");
+  Serial.flush();
 
   Serial.println("Done");
 }
@@ -200,9 +214,7 @@ uint8_t counter = 0;
 
 void loop()
 {
-  delay(1000);
-  Serial.print("Counter: ");
-  Serial.println(counter);
+  Serial.print("Counter: "); Serial.println(counter);
   counter++;
 
   extender.digitalWrite(2, counter %2 == 0);
@@ -210,11 +222,11 @@ void loop()
 
   if (extender.digitalRead(0) == LOW) {
     Serial.println("Pushed button 0");
-    delay(500);
+    delay(100);
   }
-    if (extender.digitalRead(1) == LOW) {
+  if (extender.digitalRead(1) == LOW) {
     Serial.println("Pushed button 1");
-    delay(500);
+    delay(100);
   }
 
   bool century;
@@ -230,6 +242,7 @@ void loop()
 	Serial.print(" "); Serial.print(rtc_clock.getMinute(), DEC);
 	Serial.print(" "); Serial.println(rtc_clock.getSecond(), DEC);
 
+  delay(1000);
 }
 
 // core1's setup
