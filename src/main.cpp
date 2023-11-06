@@ -153,6 +153,13 @@ void setup()
   SPI.setCS(PIN_MCU_SPI_CS);
   SPI.begin(PIN_MCU_SPI_CS);
 
+  // FPGA bitstream loader
+  pinMode(PIN_CONF_INIT_B, INPUT_PULLUP);
+  pinMode(PIN_CONF_PRG_B, OUTPUT);
+  pinMode(PIN_CONF_DONE, INPUT);
+  pinMode(PIN_CONF_CLK, OUTPUT);
+  pinMode(PIN_CONF_IO1, OUTPUT);
+
   // I2C
   Wire.setSDA(PIN_I2C_SDA);
   Wire.setSCL(PIN_I2C_SCL);
@@ -171,31 +178,60 @@ void setup()
   extender.pinMode(PIN_EXT_LED2, OUTPUT);
 
   // SD
-  Serial.println("Mounting SD card");
+  Serial.print("Mounting SD card... ");
   if (!sd.begin(SD_CONFIG)) {
-    sd.initErrorPrint(&Serial);
+    sd.initErrorHalt(&Serial);
+  }
+  Serial.println("Done");
+
+  //sd.ls(&Serial, LS_SIZE);
+
+  if (!file.open("karabas.bin", FILE_READ)) {
+    Serial.println("Unable to open karabas.bin to read");
+    while(1)
+    ;
   }
 
-  sd.ls(&Serial, LS_SIZE);
+  // pulse PROG_B 1-0-1
+  digitalWrite(PIN_CONF_PRG_B, HIGH);
+  delayMicroseconds(100);
+  digitalWrite(PIN_CONF_PRG_B, LOW);
+  delayMicroseconds(100);
+  digitalWrite(PIN_CONF_PRG_B, HIGH);
 
-  if (!sd.exists("karabas.bit")) {
-    Serial.println("karabas.bit does not exists on SD card");
-  }
+  // wait for INIT_B = 0
+  delay(100);
 
-  if (!file.open("karabas.bit", FILE_READ)) {
-    Serial.println("Unable to open file to read");
-  }
-
-  Serial.println("Reading karabas.bit");
+  Serial.println("Configuring FPGA by karabas.bin... ");
   file.rewind();
 
   int i = 0;
   bool blink = false;
 
   while (file.available()) {
-    char line[512];
-    size_t n = file.readBytes(line, sizeof(line));
-    i +=n;
+
+    char line[128];
+    uint8_t n = file.readBytes(line, sizeof(line));
+    i += n;
+
+    for (uint8_t s=0; s<n; s++) {
+      uint8_t c = line[s];
+      for (uint8_t j=0; j<8; ++j) {
+        // Set bit of data
+        digitalWrite(PIN_CONF_IO1, (c & (1<<(7-j))) ? HIGH : LOW);
+
+        // Latch bit of data by CCLK impulse
+        digitalWrite(PIN_CONF_CLK, HIGH);
+        //delayMicroseconds(1);
+        busy_wait_at_least_cycles(1);
+        digitalWrite(PIN_CONF_CLK, LOW);
+        //delayMicroseconds(1);
+        busy_wait_at_least_cycles(1);
+      }
+    }
+
+    if (i % 1024 == 0) { Serial.print("."); Serial.flush(); }
+
     if (i % 4096 == 0) {
       blink = !blink;
       extender.digitalWrite(PIN_EXT_LED1, blink);
@@ -203,10 +239,15 @@ void setup()
     }
   }
   file.close();
+  Serial.println();
 
-  Serial.print("Total "); Serial.print(i, DEC); Serial.println(" bytes");
+  Serial.print(i, DEC); Serial.println(" bytes done");
   Serial.flush();
 
+  Serial.print("Waiting for CONF_DONE... ");
+  while(digitalRead(PIN_CONF_DONE) == LOW) {
+    delay(10);
+  }
   Serial.println("Done");
 }
 
@@ -247,17 +288,6 @@ void loop()
 
 // core1's setup
 void setup1() {
-  while ( !Serial ) delay(10);   // wait for native usb
-  Serial.println("Core1 setup to run TinyUSB host with pio-usb");
-
-  // Check for CPU frequency, must be multiple of 120Mhz for bit-banging USB
-  uint32_t cpu_hz = clock_get_hz(clk_sys);
-  if ( cpu_hz != 120000000UL && cpu_hz != 240000000UL ) {
-    while ( !Serial ) delay(10);   // wait for native usb
-    Serial.printf("Error: CPU Clock = %u, PIO USB require CPU clock must be multiple of 120 Mhz\r\n", cpu_hz);
-    Serial.printf("Change your CPU Clock to either 120 or 240 Mhz in Menu->CPU Speed \r\n", cpu_hz);
-    while(1) delay(1);
-  }
 
   pio_usb_configuration_t pio_cfg = PIO_USB_DEFAULT_CONFIG;
   pio_cfg.pin_dp = HOST_PIN_DP;
@@ -274,7 +304,6 @@ void setup1() {
 void loop1()
 {
   USBHost.task();
-  Serial.flush();
 }
 
 //--------------------------------------------------------------------+
