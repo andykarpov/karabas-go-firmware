@@ -162,6 +162,8 @@ void setup()
   char line[128];
   uint8_t n;
 
+  digitalWrite(PIN_CONF_CLK, LOW);
+
   while ((n = file.read(line, sizeof(line)))) {
     i += n;
 
@@ -169,23 +171,21 @@ void setup()
       uint8_t c = line[s];
       for (uint8_t j=0; j<8; ++j) {
         // Set bit of data
-        digitalWrite(PIN_CONF_IO1, (c & (1<<(7-j))) ? HIGH : LOW);
+        gpio_put(PIN_CONF_IO1, (c & (1<<(7-j))) ? HIGH : LOW);
 
         // Latch bit of data by CCLK impulse
-        digitalWrite(PIN_CONF_CLK, HIGH);
+        gpio_put(PIN_CONF_CLK, HIGH);
         //busy_wait_at_least_cycles(1);
-        digitalWrite(PIN_CONF_CLK, LOW);
+        gpio_put(PIN_CONF_CLK, LOW);
         //busy_wait_at_least_cycles(1);
       }
     }
 
-    /*if (i % 1024 == 0) { Serial.print("."); Serial.flush(); }
-
-    if (i % 4096 == 0) {
+    if (i % 8192 == 0) {
       blink = !blink;
       extender.digitalWrite(PIN_EXT_LED1, blink);
       extender.digitalWrite(PIN_EXT_LED2, blink);
-    }*/
+    }
   }
   file.close();
   Serial.println();
