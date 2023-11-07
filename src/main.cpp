@@ -88,13 +88,16 @@ Adafruit_USBH_Host USBHost;
 // holding device descriptor
 tusb_desc_device_t desc_device;
 
+void fpga_configure(const char* filename);
+void halt(const char* msg);
+
 // the setup function runs once when you press reset or power the board
 void setup()
 {
   while ( !Serial ) delay(10);   // wait for native usb
 
   Serial.begin(115200);
-  Serial.println("Karabas Go rp2040 core");
+  Serial.println("Karabas Go RP2040 firmware");
 
   // SPI0 to FPGA
   SPI.setSCK(PIN_MCU_SPI_SCK);
@@ -117,9 +120,7 @@ void setup()
 
   if (extender.begin() == false)
   {
-    Serial.println("PCA9536 not detected. Please check wiring. Freezing...");
-    while (true)
-    ;
+    halt("PCA9536 unavailable. Please check soldering.");
   }
 
   extender.pinMode(PIN_EXT_BTN1, INPUT_PULLUP);
@@ -136,69 +137,9 @@ void setup()
 
   //sd.ls(&Serial, LS_SIZE);
 
-  if (!file.open("karabas.bin", FILE_READ)) {
-    Serial.println("Unable to open karabas.bin to read");
-    while(1)
-    ;
-  }
+  fpga_configure("karabas.bin");
 
-  // pulse PROG_B 1-0-1
-  digitalWrite(PIN_CONF_PRG_B, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(PIN_CONF_PRG_B, LOW);
-  delayMicroseconds(10);
-  digitalWrite(PIN_CONF_PRG_B, HIGH);
 
-  // wait for INIT_B = 0
-  delay(10);
-
-  Serial.println("Configuring FPGA by karabas.bin... ");
-  file.rewind();
-
-  my_timer.reset();
-
-  int i = 0;
-  bool blink = false;
-  char line[128];
-  uint8_t n;
-
-  digitalWrite(PIN_CONF_CLK, LOW);
-
-  while ((n = file.read(line, sizeof(line)))) {
-    i += n;
-
-    for (uint8_t s=0; s<n; s++) {
-      uint8_t c = line[s];
-      for (uint8_t j=0; j<8; ++j) {
-        // Set bit of data
-        gpio_put(PIN_CONF_IO1, (c & (1<<(7-j))) ? HIGH : LOW);
-
-        // Latch bit of data by CCLK impulse
-        gpio_put(PIN_CONF_CLK, HIGH);
-        //busy_wait_at_least_cycles(1);
-        gpio_put(PIN_CONF_CLK, LOW);
-        //busy_wait_at_least_cycles(1);
-      }
-    }
-
-    if (i % 8192 == 0) {
-      blink = !blink;
-      extender.digitalWrite(PIN_EXT_LED1, blink);
-      extender.digitalWrite(PIN_EXT_LED2, blink);
-    }
-  }
-  file.close();
-  Serial.println();
-
-  Serial.print(i, DEC); Serial.println(" bytes done");
-  Serial.print("Elapsed time: "); Serial.print(my_timer.elapsed_millis(), DEC); Serial.println(" ms");
-  Serial.flush();
-
-  Serial.print("Waiting for CONF_DONE... ");
-  while(digitalRead(PIN_CONF_DONE) == LOW) {
-    delay(10);
-  }
-  Serial.println("Done");
 }
 
 uint8_t counter = 0;
@@ -639,4 +580,86 @@ static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t c
       default: break;
     }
   }
+}
+
+/**
+ * @brief Halt the program execution with message
+ * 
+ * @param msg 
+ */
+void halt(const char* msg) {
+  Serial.println(msg);
+  Serial.flush();
+  bool blink = false;
+  while(true) {
+      blink = !blink;
+      extender.digitalWrite(PIN_EXT_LED1, blink);
+      extender.digitalWrite(PIN_EXT_LED2, blink);
+      delay(100);
+  }
+}
+
+/**
+ * @brief FPGA bitstream uploader
+ * 
+ * @param filename 
+ */
+void fpga_configure(const char* filename) {
+
+  Serial.print("Configuring FPGA by "); Serial.println(filename);
+
+  if (!file.open(filename, FILE_READ)) {
+    halt("Unable to open bitstream file to read");
+  }
+
+  // pulse PROG_B
+  digitalWrite(PIN_CONF_PRG_B, HIGH);
+  digitalWrite(PIN_CONF_PRG_B, LOW);
+  digitalWrite(PIN_CONF_PRG_B, HIGH);
+
+  // wait for INIT_B = 0
+  delay(10);
+
+  file.rewind();
+
+  my_timer.reset();
+
+  int i = 0;
+  bool blink = false;
+  char line[128];
+  uint8_t n;
+
+  digitalWrite(PIN_CONF_CLK, LOW);
+
+  while ((n = file.read(line, sizeof(line)))) {
+    i += n;
+
+    for (uint8_t s=0; s<n; s++) {
+      uint8_t c = line[s];
+      for (uint8_t j=0; j<8; ++j) {
+        // Set bit of data
+        gpio_put(PIN_CONF_IO1, (c & (1<<(7-j))) ? HIGH : LOW);
+        // Latch bit of data by CCLK impulse
+        gpio_put(PIN_CONF_CLK, HIGH);
+        gpio_put(PIN_CONF_CLK, LOW);
+      }
+    }
+
+    if (i % 8192 == 0) {
+      blink = !blink;
+      extender.digitalWrite(PIN_EXT_LED1, blink);
+      extender.digitalWrite(PIN_EXT_LED2, blink);
+    }
+  }
+  file.close();
+
+  Serial.print(i, DEC); Serial.println(" bytes done");
+  Serial.print("Elapsed time: "); Serial.print(my_timer.elapsed_millis(), DEC); Serial.println(" ms");
+  Serial.flush();
+
+  Serial.print("Waiting for CONF_DONE... ");
+  while(digitalRead(PIN_CONF_DONE) == LOW) {
+    delay(10);
+  }
+  Serial.println("Done");
 }
