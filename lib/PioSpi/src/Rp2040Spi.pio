@@ -1,0 +1,83 @@
+;
+; RX pin assignments:
+; - SCK is gpio pin 0 - modify for actual SCK gpio pin.
+; - MISO is IN pin 0
+;
+.program rx_gpio
+.wrap_target
+    wait 0 gpio 0
+    wait 1 gpio 0
+    in pins, 1
+.wrap
+% c-sdk {
+static inline void pio_rx_program_init(PIO pio, uint sm, uint offset, uint rxPin, float clk_div) {
+    pio_gpio_init(pio, rxPin);
+    pio_sm_config c = rx_gpio_program_get_default_config(offset);
+    sm_config_set_in_pins(&c, rxPin);
+    pio_sm_set_consecutive_pindirs(pio, sm, rxPin, 1, false);
+    sm_config_set_in_shift(&c, false, true, 8);
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
+    sm_config_set_clkdiv(&c, clk_div);
+    pio_sm_init(pio, sm, offset, &c);
+}
+
+static inline void pio_make_rx_program(pio_program_t *pg, uint16_t* inst, int sck) {
+  memcpy(inst, rx_gpio_program_instructions, sizeof(rx_gpio_program_instructions));
+  memcpy(pg, &rx_gpio_program, sizeof(rx_gpio_program));
+  inst[0] |= sck;
+  inst[1] |= sck;
+  pg->instructions = inst;
+}
+%}
+
+; TX pin assignments:
+; - SCK is side-set pin 0
+; - MOSI is OUT pin 0
+;
+.program tx_cpha0
+.side_set 1
+.wrap_target
+    out pins, 1 side 0 [1]
+    nop         side 1 [1]
+.wrap
+
+% c-sdk {
+static inline void pio_tx_cpha0_program_init(PIO pio, uint sm, uint offset, uint txPin, uint clk_pin, float clk_div) {
+    pio_gpio_init(pio, txPin);
+    pio_gpio_init(pio, clk_pin);
+    pio_sm_set_consecutive_pindirs(pio, sm, txPin, 1, true);
+    pio_sm_set_consecutive_pindirs(pio, sm, clk_pin, 1, true);
+    pio_sm_config c = tx_cpha0_program_get_default_config(offset);
+    sm_config_set_sideset(&c, 1, false, false);
+    sm_config_set_sideset_pins(&c, clk_pin);
+    sm_config_set_out_pins(&c, txPin, 1);
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_TX);
+    sm_config_set_out_shift(&c, false, true, 8);
+    sm_config_set_clkdiv(&c, clk_div);
+    pio_sm_init(pio, sm, offset, &c);
+}
+%}
+
+.program tx_cpha1
+.side_set 1
+.wrap_target
+    out x, 1    side 0
+    mov pins, x side 1 [1]
+    nop         side 0
+.wrap
+% c-sdk {
+static inline void pio_tx_cpha1_program_init(PIO pio, uint sm, uint offset, uint txPin, uint clk_pin, float clk_div) {
+    pio_gpio_init(pio, txPin);
+    pio_gpio_init(pio, clk_pin);
+    pio_sm_set_consecutive_pindirs(pio, sm, txPin, 1, true);
+    pio_sm_set_consecutive_pindirs(pio, sm, clk_pin, 1, true);
+    pio_sm_config c = tx_cpha1_program_get_default_config(offset);
+    sm_config_set_sideset(&c, 1, false, false);
+    sm_config_set_sideset_pins(&c, clk_pin);
+    sm_config_set_out_pins(&c, txPin, 1);
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_TX);
+    sm_config_set_out_shift(&c, false, true, 8);
+    sm_config_set_clkdiv(&c, clk_div);
+    pio_sm_init(pio, sm, offset, &c);
+}
+%}

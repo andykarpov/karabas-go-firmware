@@ -1,0 +1,30 @@
+Try to support cpol without using instruction space. with INVERT for sck.
+
+/*! \brief Set GPIO output override
+ *  \ingroup hardware_gpio
+ *
+ * \param gpio GPIO number
+ * \param value See \ref gpio_override
+ */
+void gpio_set_outover(uint gpio, uint value);
+
+/*! \brief Select GPIO input override
+ *  \ingroup hardware_gpio
+ *
+ * \param gpio GPIO number
+ * \param value See \ref gpio_override
+ */
+void gpio_set_inover(uint gpio, uint value);
+
+// try this for tx for cpol 0/1.
+gpio_set_outover(pin_sck, cpol ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
+
+// this for rx capture on rising falling true/false
+gpio_set_inover(pin_sck, fall ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
+
+
+-------------------------------------------------------------------------------------
+
+See if this helps or hurts with input program.
+// SPI is synchronous, so bypass input synchroniser to reduce input delay.
+hw_set_bits(&pio->input_sync_bypass, 1u << rxPin);

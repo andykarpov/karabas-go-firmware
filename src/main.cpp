@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include <SPI.h>
 #include <Wire.h>
-#include <PioSPI.h>
+#include "PioSpi.h"
 #include <SparkFun_PCA9536_Arduino_Library.h>
 #include <DS3231.h>
 #include "SdFat.h"
@@ -40,56 +40,9 @@
 #define PIN_EXT_LED1 2
 #define PIN_EXT_LED2 3
 
-PioSPI sd_spi(PIN_SD_SPI_TX, PIN_SD_SPI_RX, PIN_SD_SPI_SCK, PIN_SD_SPI_CS, SPI_MODE0, SD_SCK_MHZ(20));
+PioSpi spi(PIN_SD_SPI_RX, PIN_SD_SPI_SCK, PIN_SD_SPI_TX);
 
-class MySpiClass : public SdSpiBaseClass {
- public:
-  // Activate SPI hardware with correct speed and mode.
-  void activate() {
-    sd_spi.beginTransaction(m_spiSettings);
-  }
-  // Initialize the SPI bus.
-  void begin(SdSpiConfig config) {
-    (void)config;
-    sd_spi.begin();
-  }
-  // Deactivate SPI hardware.
-  void deactivate() {
-    sd_spi.endTransaction();
-  }
-  // Receive a byte.
-  uint8_t receive() {
-    return sd_spi.transfer(0XFF);
-  }
-  // Receive multiple bytes.
-  // Replace this function if your board has multiple byte receive.
-  uint8_t receive(uint8_t* buf, size_t count) {
-    for (size_t i = 0; i < count; i++) {
-      buf[i] = sd_spi.transfer(0XFF);
-    }
-    return 0;
-  }
-  // Send a byte.
-  void send(uint8_t data) {
-    sd_spi.transfer(data);
-  }
-  // Send multiple bytes.
-  // Replace this function if your board has multiple byte send.
-  void send(const uint8_t* buf, size_t count) {
-    for (size_t i = 0; i < count; i++) {
-      sd_spi.transfer(buf[i]);
-    }
-  }
-  // Save SPISettings for new max SCK frequency
-  void setSckSpeed(uint32_t maxSck) {
-    m_spiSettings = SPISettings(maxSck, MSBFIRST, SPI_MODE0);
-  }
-
- private:
-  SPISettings m_spiSettings;
-} mySpi;
-
-#define SD_CONFIG SdSpiConfig(SD_CS_PIN, SHARED_SPI, SD_SCK_MHZ(10), &mySpi)
+#define SD_CONFIG SdSpiConfig(SD_CS_PIN, SHARED_SPI, SD_SCK_MHZ(60), &spi)
 
 SdFs sd;
 FsFile file;
@@ -136,11 +89,6 @@ tusb_desc_device_t desc_device;
 // the setup function runs once when you press reset or power the board
 void setup()
 {
-  pinMode(PIN_SD_SPI_CS, OUTPUT_12MA); digitalWrite(PIN_SD_SPI_CS, HIGH);
-  pinMode(PIN_SD_SPI_SCK, OUTPUT_12MA); digitalWrite(PIN_SD_SPI_SCK, HIGH);
-  pinMode(PIN_SD_SPI_RX, INPUT_PULLUP);
-  pinMode(PIN_SD_SPI_TX, OUTPUT_12MA); digitalWrite(PIN_SD_SPI_TX, HIGH);
-
   while ( !Serial ) delay(10);   // wait for native usb
 
   Serial.begin(115200);
@@ -207,11 +155,10 @@ void setup()
 
   int i = 0;
   bool blink = false;
+  char line[128];
+  uint8_t n;
 
-  while (file.available()) {
-
-    char line[128];
-    uint8_t n = file.readBytes(line, sizeof(line));
+  while ((n = file.read(line, sizeof(line)))) {
     i += n;
 
     for (uint8_t s=0; s<n; s++) {
@@ -230,13 +177,13 @@ void setup()
       }
     }
 
-    if (i % 1024 == 0) { Serial.print("."); Serial.flush(); }
+    /*if (i % 1024 == 0) { Serial.print("."); Serial.flush(); }
 
     if (i % 4096 == 0) {
       blink = !blink;
       extender.digitalWrite(PIN_EXT_LED1, blink);
       extender.digitalWrite(PIN_EXT_LED2, blink);
-    }
+    }*/
   }
   file.close();
   Serial.println();
