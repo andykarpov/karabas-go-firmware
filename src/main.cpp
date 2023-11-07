@@ -3,6 +3,7 @@
 #include <Wire.h>
 #include "PioSpi.h"
 #include <SparkFun_PCA9536_Arduino_Library.h>
+#include <SparkFun_External_EEPROM.h>
 #include <DS3231.h>
 #include "SdFat.h"
 #include "Adafruit_TinyUSB.h"
@@ -72,6 +73,7 @@ dev_info_t dev_info[CFG_TUH_DEVICE_MAX] = { 0 };
 
 PCA9536 extender;
 DS3231 rtc_clock;
+ExternalEEPROM eeprom;
 Elapsed my_timer;
 
 static void process_kbd_report(hid_keyboard_report_t const *report);
@@ -118,15 +120,26 @@ void setup()
   Wire.setSCL(PIN_I2C_SCL);
   Wire.begin();
 
-  if (extender.begin() == false)
-  {
+  if (extender.begin() == false) {
     halt("PCA9536 unavailable. Please check soldering.");
   }
+  Serial.println("I2C PCA9536 extender detected");
 
   extender.pinMode(PIN_EXT_BTN1, INPUT_PULLUP);
   extender.pinMode(PIN_EXT_BTN2, INPUT_PULLUP);
   extender.pinMode(PIN_EXT_LED1, OUTPUT);
   extender.pinMode(PIN_EXT_LED2, OUTPUT);
+
+  eeprom.setMemoryType(8);
+  if (eeprom.begin() == false) {
+    halt("No EEPROM memory detected. Freezing.");
+  }
+
+  Serial.print("I2C EEPROM detected. Size in bytes: ");
+  Serial.println(eeprom.length());
+
+  Serial.print("I2C DS3231 RTC detected. Temperature: ");
+  Serial.println(rtc_clock.getTemperature());
 
   // SD
   Serial.print("Mounting SD card... ");
