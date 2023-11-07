@@ -7,33 +7,34 @@
 #include "SdFat.h"
 #include "Adafruit_TinyUSB.h"
 #include "pio_usb.h"
+#include "elapsed.h"
 
-#define HOST_PIN_DP   25 // pin 37 // gpio 25  
+#define HOST_PIN_DP   25
 
-#define PIN_MCU_SPI_SCK 22 // pin 35
-#define PIN_MCU_SPI_CS 21 // pin 34
-#define PIN_MCU_SPI_RX 20 // pin 32
-#define PIN_MCU_SPI_TX 23 // pin 31
+#define PIN_MCU_SPI_SCK 22
+#define PIN_MCU_SPI_CS 21 
+#define PIN_MCU_SPI_RX 20 
+#define PIN_MCU_SPI_TX 23 
 
-#define PIN_SD_SPI_SCK 9 // 10 // pin 12
-#define PIN_SD_SPI_CS 8 // 9 // pin 11
-#define PIN_SD_SPI_RX 11 // 8 // pin 14
-#define PIN_SD_SPI_TX 10 // 11 // pin 13
+#define PIN_SD_SPI_SCK 9 
+#define PIN_SD_SPI_CS 8 
+#define PIN_SD_SPI_RX 11 
+#define PIN_SD_SPI_TX 10 
 #define SD_CS_PIN PIN_SD_SPI_CS
 
-#define PIN_I2C_SDA 12 // pin 15
-#define PIN_I2C_SCL 13 // pin 16
+#define PIN_I2C_SDA 12 
+#define PIN_I2C_SCL 13 
 
-#define PIN_JOY_SCK 5 // pin 7
-#define PIN_JOY_DATA 6 // pin 8
-#define PIN_JOY_LOAD 4 // pin 6
-#define PIN_JOY_P7 1 // pin 3
+#define PIN_JOY_SCK 5 
+#define PIN_JOY_DATA 6 
+#define PIN_JOY_LOAD 4 
+#define PIN_JOY_P7 1 
 
-#define PIN_CONF_INIT_B 3 // pin 5
-#define PIN_CONF_PRG_B 16 // pin 27
-#define PIN_CONF_IO1 18 // pin 29
-#define PIN_CONF_CLK 17 // pin 28
-#define PIN_CONF_DONE 19 // pin 30
+#define PIN_CONF_INIT_B 3 
+#define PIN_CONF_PRG_B 16 
+#define PIN_CONF_IO1 18 
+#define PIN_CONF_CLK 17 
+#define PIN_CONF_DONE 19 
 
 #define PIN_EXT_BTN1 0
 #define PIN_EXT_BTN2 1
@@ -71,6 +72,7 @@ dev_info_t dev_info[CFG_TUH_DEVICE_MAX] = { 0 };
 
 PCA9536 extender;
 DS3231 rtc_clock;
+Elapsed my_timer;
 
 static void process_kbd_report(hid_keyboard_report_t const *report);
 static void process_mouse_report(hid_mouse_report_t const * report);
@@ -142,16 +144,18 @@ void setup()
 
   // pulse PROG_B 1-0-1
   digitalWrite(PIN_CONF_PRG_B, HIGH);
-  delayMicroseconds(100);
+  delayMicroseconds(10);
   digitalWrite(PIN_CONF_PRG_B, LOW);
-  delayMicroseconds(100);
+  delayMicroseconds(10);
   digitalWrite(PIN_CONF_PRG_B, HIGH);
 
   // wait for INIT_B = 0
-  delay(100);
+  delay(10);
 
   Serial.println("Configuring FPGA by karabas.bin... ");
   file.rewind();
+
+  my_timer.reset();
 
   int i = 0;
   bool blink = false;
@@ -169,11 +173,9 @@ void setup()
 
         // Latch bit of data by CCLK impulse
         digitalWrite(PIN_CONF_CLK, HIGH);
-        //delayMicroseconds(1);
-        busy_wait_at_least_cycles(1);
+        //busy_wait_at_least_cycles(1);
         digitalWrite(PIN_CONF_CLK, LOW);
-        //delayMicroseconds(1);
-        busy_wait_at_least_cycles(1);
+        //busy_wait_at_least_cycles(1);
       }
     }
 
@@ -189,6 +191,7 @@ void setup()
   Serial.println();
 
   Serial.print(i, DEC); Serial.println(" bytes done");
+  Serial.print("Elapsed time: "); Serial.print(my_timer.elapsed_millis(), DEC); Serial.println(" ms");
   Serial.flush();
 
   Serial.print("Waiting for CONF_DONE... ");
