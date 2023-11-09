@@ -3,12 +3,11 @@
 #include <Wire.h>
 #include "PioSpi.h"
 #include <SparkFun_PCA9536_Arduino_Library.h>
-#include <SparkFun_External_EEPROM.h>
-#include <DS3231.h>
 #include "SdFat.h"
 #include "Adafruit_TinyUSB.h"
 #include "pio_usb.h"
 #include "elapsed.h"
+#include <RTC.h>
 
 #define HOST_PIN_DP   25
 
@@ -42,23 +41,23 @@
 #define PIN_EXT_LED1 2
 #define PIN_EXT_LED2 3
 
+#define CMD_USB_KBD 0x01
+#define CMD_USB_MOUSE 0x02
+#define CMD_USB_GAMEPAD 0x03
+
+#define LANGUAGE_ID 0x0409 // Language ID: English
+#define MAX_REPORT  16 // Max USB reports per instance
+
 PioSpi spi(PIN_SD_SPI_RX, PIN_SD_SPI_SCK, PIN_SD_SPI_TX);
-
 #define SD_CONFIG SdSpiConfig(SD_CS_PIN, SHARED_SPI, SD_SCK_MHZ(60), &spi)
-
-SdFs sd;
-FsFile file;
-
-#define MAX_REPORT  4
-
-static uint8_t const keycode2ascii[128][2] =  { HID_KEYCODE_TO_ASCII };
+SPISettings settingsA(SD_SCK_MHZ(50), MSBFIRST, SPI_MODE0); // MCU SPI settings
 
 // Each HID instance can has multiple reports
 static struct
 {
   uint8_t report_count;
   tuh_hid_report_info_t report_info[MAX_REPORT];
-}hid_info[CFG_TUH_HID];
+} hid_info[CFG_TUH_HID];
 
 typedef struct {
   tusb_desc_device_t desc_device;
@@ -72,26 +71,23 @@ typedef struct {
 dev_info_t dev_info[CFG_TUH_DEVICE_MAX] = { 0 };
 
 PCA9536 extender;
-DS3231 rtc_clock;
-ExternalEEPROM eeprom;
 Elapsed my_timer;
+RTC zxrtc;
+SdFs sd;
+FsFile file;
 
+Adafruit_USBH_Host USBHost; // USB Host object
+tusb_desc_device_t desc_device; // holding device descriptor
+
+void fpga_configure(const char* filename);
+void halt(const char* msg);
+void spi_send(uint8_t cmd, uint8_t addr, uint8_t data);
+void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data);
+void on_time();
 static void process_kbd_report(hid_keyboard_report_t const *report);
 static void process_mouse_report(hid_mouse_report_t const * report);
 static void process_gamepad_report(hid_gamepad_report_t const * report);
 static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len);
-
-// Language ID: English
-#define LANGUAGE_ID 0x0409
-
-// USB Host object
-Adafruit_USBH_Host USBHost;
-
-// holding device descriptor
-tusb_desc_device_t desc_device;
-
-void fpga_configure(const char* filename);
-void halt(const char* msg);
 
 // the setup function runs once when you press reset or power the board
 void setup()
@@ -130,16 +126,7 @@ void setup()
   extender.pinMode(PIN_EXT_LED1, OUTPUT);
   extender.pinMode(PIN_EXT_LED2, OUTPUT);
 
-  eeprom.setMemoryType(8);
-  if (eeprom.begin() == false) {
-    halt("No EEPROM memory detected. Freezing.");
-  }
-
-  Serial.print("I2C EEPROM detected. Size in bytes: ");
-  Serial.println(eeprom.length());
-
-  Serial.print("I2C DS3231 RTC detected. Temperature: ");
-  Serial.println(rtc_clock.getTemperature());
+  zxrtc.begin(spi_send, on_time);
 
   // SD
   Serial.print("Mounting SD card... ");
@@ -159,8 +146,7 @@ uint8_t counter = 0;
 
 void loop()
 {
-  Serial.print("Counter: "); Serial.println(counter);
-  counter++;
+  zxrtc.handle();
 
   extender.digitalWrite(2, counter %2 == 0);
   extender.digitalWrite(3, counter %2 != 0);
@@ -173,21 +159,6 @@ void loop()
     Serial.println("Pushed button 1");
     delay(100);
   }
-
-  bool century;
-  bool h12flag;
-  bool pmflag;
-
-  Serial.print("RTC: ");
-  Serial.print(rtc_clock.getYear(), DEC); Serial.print(" ");
-  Serial.print(rtc_clock.getMonth(century), DEC); Serial.print(" ");
-	Serial.print(rtc_clock.getDate(), DEC); Serial.print(" ");
-	Serial.print(rtc_clock.getDoW(), DEC); Serial.print(" ");
-	Serial.print(rtc_clock.getHour(h12flag, pmflag), DEC);
-	Serial.print(" "); Serial.print(rtc_clock.getMinute(), DEC);
-	Serial.print(" "); Serial.println(rtc_clock.getSecond(), DEC);
-
-  delay(1000);
 }
 
 // core1's setup
@@ -404,19 +375,17 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
 {
   uint8_t const itf_protocol = tuh_hid_interface_protocol(dev_addr, instance);
 
-Serial.print('.');
+  //Serial.print('.');
 
   switch (itf_protocol)
   {
     case HID_ITF_PROTOCOL_KEYBOARD:
       //TU_LOG2("HID receive boot keyboard report\r\n");
-      Serial.println("HID receive boot keyboard report");
       process_kbd_report( (hid_keyboard_report_t const*) report );
     break;
 
     case HID_ITF_PROTOCOL_MOUSE:
       //TU_LOG2("HID receive boot mouse report\r\n");
-      Serial.println("HID receive boot mouse report");
       process_mouse_report( (hid_mouse_report_t const*) report );
     break;
 
@@ -434,61 +403,31 @@ Serial.print('.');
   }
 }
 
-// look up new key in previous keys
-static inline bool find_key_in_report(hid_keyboard_report_t const *report, uint8_t keycode)
-{
-  for(uint8_t i=0; i<6; i++)
-  {
-    if (report->keycode[i] == keycode)  return true;
-  }
-
-  return false;
-}
-
 static void process_kbd_report(hid_keyboard_report_t const *report)
 {
-  static hid_keyboard_report_t prev_report = { 0, 0, {0} }; // previous report to check key released
-
-  //------------- example code ignore control (non-printable) key affects -------------//
-  for(uint8_t i=0; i<6; i++)
-  {
-    if ( report->keycode[i] )
-    {
-      if ( find_key_in_report(&prev_report, report->keycode[i]) )
-      {
-        // exist in previous report means the current key is holding
-      } else
-      {
-        // not existed in previous report means the current key is pressed
-        bool const is_shift = report->modifier & (KEYBOARD_MODIFIER_LEFTSHIFT | KEYBOARD_MODIFIER_RIGHTSHIFT);
-        uint8_t ch = keycode2ascii[report->keycode[i]][is_shift ? 1 : 0];
-        Serial.print(ch);
-        if ( ch == '\r' ) Serial.print('\n'); // added new line for enter key
-
-        fflush(stdout); // flush right away, else nanolib will wait for newline
-      }
-    }
-    // TODO example skips key released
+  spi_send(CMD_USB_KBD, 0, report->modifier);
+  for(uint8_t i=0; i<6; i++) {
+    spi_send(CMD_USB_KBD, i+1, report->keycode[i]);
   }
-
-  prev_report = *report;
+  Serial.printf("Keyboard M: %d B: %d %d %d %d %d %d", 
+    report->modifier, 
+    report->keycode[0], 
+    report->keycode[1],
+    report->keycode[2],
+    report->keycode[3],
+    report->keycode[4],
+    report->keycode[5]
+  );
+  Serial.println();
 }
 
 static void process_mouse_report(hid_mouse_report_t const * report) {
-  static hid_mouse_report_t prev_report = { 0 };
-
-  uint8_t button_changed_mask = report->buttons ^ prev_report.buttons;
-  /*if ( button_changed_mask & report->buttons)
-  {
-    printf(" %c%c%c ",
-       report->buttons & MOUSE_BUTTON_LEFT   ? 'L' : '-',
-       report->buttons & MOUSE_BUTTON_MIDDLE ? 'M' : '-',
-       report->buttons & MOUSE_BUTTON_RIGHT  ? 'R' : '-');
-  }*/
-
-  prev_report = *report;
-
-  Serial.printf("X: %d, Y: %d, Z: %d, B: %d", report->x, report->y, report->wheel, report->buttons);
+  spi_send(CMD_USB_MOUSE, 0, report->x);
+  spi_send(CMD_USB_MOUSE, 1, report->y);
+  spi_send(CMD_USB_MOUSE, 2, report->wheel);
+  spi_send(CMD_USB_MOUSE, 3, report->buttons);
+  Serial.printf("Mouse X: %d, Y: %d, Z: %d, B: %d", report->x, report->y, report->wheel, report->buttons);
+  Serial.println();
 }
 
 static void process_gamepad_report(hid_gamepad_report_t const * report) {
@@ -497,6 +436,10 @@ static void process_gamepad_report(hid_gamepad_report_t const * report) {
   uint8_t hat_changed_mask = report->hat ^ prev_report.hat;
   uint8_t buttons_changed_mask = report->buttons ^ prev_report.buttons;
   if ( (hat_changed_mask & report->hat) || (buttons_changed_mask & report->buttons)) {
+    spi_send(CMD_USB_GAMEPAD, 0, report->hat);
+    spi_send(CMD_USB_GAMEPAD, 1, (uint8_t)report->buttons);
+    Serial.printf("Gamepad Hat: %d, Buttons: %d", report->hat, report->buttons);
+    Serial.println();
     // report->hat && GAMEPAD_HAT_CENTERED; // none
     // report->hat && GAMEPAD_HAT_UP; // up
     // report->hat && GAMEPAD_HAT_DOWN; // down
@@ -574,19 +517,19 @@ static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t c
     {
       case HID_USAGE_DESKTOP_KEYBOARD:
         //TU_LOG1("HID receive keyboard report\r\n");
-        Serial.println("HID receive keyboard report");
+        //Serial.println("HID receive keyboard report");
         // Assume keyboard follow boot report layout
         process_kbd_report( (hid_keyboard_report_t const*) report );
       break;
       case HID_USAGE_DESKTOP_MOUSE:
         //TU_LOG1("HID receive mouse report\r\n");
-        Serial.println("HID receive mouse report");
+        //Serial.println("HID receive mouse report");
         // Assume mouse follow boot report layout
         process_mouse_report( (hid_mouse_report_t const*) report );
       break;
       case HID_USAGE_DESKTOP_GAMEPAD:
         //TU_LOG1("HID receive gamepad report\r\n");
-        Serial.println("HID receive gamepad report");
+        //Serial.println("HID receive gamepad report");
         // Assume gamepad follow boot report layout
         process_gamepad_report( (hid_gamepad_report_t const*) report );
       break;
@@ -676,3 +619,27 @@ void fpga_configure(const char* filename) {
   }
   Serial.println("Done");
 }
+
+void spi_send(uint8_t cmd, uint8_t addr, uint8_t data) {
+  SPI.beginTransaction(settingsA);
+  digitalWrite(PIN_MCU_SPI_CS, LOW);
+  uint8_t rx_cmd = SPI.transfer(cmd);
+  uint8_t rx_addr = SPI.transfer(addr);
+  uint8_t rx_data = SPI.transfer(data);
+  digitalWrite(PIN_MCU_SPI_CS, HIGH);
+  SPI.endTransaction();
+  if (rx_cmd > 0) {
+    process_in_cmd(rx_cmd, rx_addr, rx_data);
+  }
+}
+
+void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data) {
+  // TODO
+  // init request
+  // etc
+}
+
+void on_time() {
+  // TODO
+}
+
