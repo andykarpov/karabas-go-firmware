@@ -7,8 +7,8 @@
 // Invoked when device is mounted (configured)
 void tuh_hid_mount_cb (uint8_t dev_addr, uint8_t instance, uint8_t const* desc_report, uint16_t desc_len)
 {
-  (void)desc_report;
-  (void)desc_len;
+  //(void)desc_report;
+  //(void)desc_len;
 
   Serial.printf("HID device mounted, address = %d\r\n", dev_addr);
 
@@ -118,12 +118,19 @@ static void process_mouse_report(hid_mouse_report_t const * report) {
 static void process_gamepad_report(hid_gamepad_report_t const * report) {
   static hid_gamepad_report_t prev_report = { 0 };
 
-  uint8_t hat_changed_mask = report->hat ^ prev_report.hat;
-  uint8_t buttons_changed_mask = report->buttons ^ prev_report.buttons;
-  if ( (hat_changed_mask & report->hat) || (buttons_changed_mask & report->buttons)) {
+  uint8_t hat_changed = report->hat ^ prev_report.hat;
+  uint32_t buttons_changed = report->buttons ^ prev_report.buttons;
+  int8_t rx_changed = report->rx ^ prev_report.rx;
+  int8_t ry_changed = report->ry ^ prev_report.ry;
+  int8_t rz_changed = report->rz ^ prev_report.rz;
+  int8_t x_changed = report->x ^ prev_report.x;
+  int8_t y_changed = report->y ^ prev_report.y;
+  int8_t z_changed = report->z ^ prev_report.z;
+
+  if ( (hat_changed) || (buttons_changed) || (rx_changed) || (ry_changed) || (rz_changed) || (x_changed) || (y_changed) || (z_changed) ) {
     spi_queue(CMD_USB_GAMEPAD, 0, report->hat);
     spi_queue(CMD_USB_GAMEPAD, 1, (uint8_t)report->buttons);
-    Serial.printf("Gamepad Hat: %d, Buttons: %d", report->hat, report->buttons);
+    Serial.printf("Gamepad Hat: %d, Buttons: %d, XYZ %d %d %d, RXRYRZ %d %d %d", report->hat, report->buttons, report->rx, report->ry, report->rz, report->x, report->y, report->z);
     Serial.println();
     // report->hat && GAMEPAD_HAT_CENTERED; // none
     // report->hat && GAMEPAD_HAT_UP; // up
@@ -189,6 +196,8 @@ static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t c
     return;
   }
 
+  //Serial.printf("Generic report usage page %u, usage %u\r\n", rpt_info->usage_page, rpt_info->usage);
+
   // For complete list of Usage Page & Usage checkout src/class/hid/hid.h. For examples:
   // - Keyboard                     : Desktop, Keyboard
   // - Mouse                        : Desktop, Mouse
@@ -212,6 +221,7 @@ static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t c
         // Assume mouse follow boot report layout
         process_mouse_report( (hid_mouse_report_t const*) report );
       break;
+      case HID_USAGE_DESKTOP_JOYSTICK:
       case HID_USAGE_DESKTOP_GAMEPAD:
         //TU_LOG1("HID receive gamepad report\r\n");
         //Serial.println("HID receive gamepad report");
