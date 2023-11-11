@@ -34,81 +34,100 @@ SegaController::SegaController()
     // nothing here
 }
 
-void SegaController::begin(byte db9_pin_7, byte db9_pin_1, byte db9_pin_2, byte db9_pin_3, byte db9_pin_4, byte db9_pin_6, byte db9_pin_9)
+void SegaController::begin(uint8_t joy_sck, uint8_t joy_load, uint8_t joy_data, uint8_t joy_p7)
 {
     // Set pins
-    _selectPin = db9_pin_7;
+    _sckPin = joy_sck;
+    _loadPin = joy_load;
+    _dataPin = joy_data;
+    _selectPin = joy_p7;
 
-    _inputPins[0] = db9_pin_1;
-    _inputPins[1] = db9_pin_2;
-    _inputPins[2] = db9_pin_3;
-    _inputPins[3] = db9_pin_4;
-    _inputPins[4] = db9_pin_6;
-    _inputPins[5] = db9_pin_9;
+    // Setup pins
+    pinMode(_selectPin, OUTPUT); digitalWrite(_selectPin, HIGH);
+    pinMode(_sckPin, OUTPUT); digitalWrite(_sckPin, LOW);
+    pinMode(_loadPin, OUTPUT); digitalWrite(_loadPin, LOW);
+    pinMode(_dataPin, INPUT_PULLUP);
 
-    // Setup output pin
-    // pinMode(_selectPin, OUTPUT);
-    // digitalWrite(_selectPin, HIGH);
-
-    // Setup input pins
-    // for (byte i = 0; i < SC_INPUT_PINS; i++)
-    // {
-    //     pinMode(_inputPins[i], INPUT_PULLUP);
-    // }
-
-    _currentState = 0;
-    _sixButtonMode = false;
-    _lastReadTime = millis();
+    _currentStateL = 0;
+    _currentStateR = 0;
+    _sixButtonModeL = false;
+    _sixButtonModeR = false;
+    _lastReadTime = 0;
 }
 
-word SegaController::getState()
+word SegaController::getState(bool left)
 {
-    if (max(millis() - _lastReadTime, 0) < SC_READ_DELAY_MS)
+    if (max(to_ms_since_boot(get_absolute_time()) - _lastReadTime, 0) < SC_READ_DELAY_MS)
     {
         // Not enough time has elapsed, return previously read state
-        return _currentState;
+        return (left) ? _currentStateL : _currentStateR;
     }
     
-    //noInterrupts();
-    
     // Clear current state
-    _currentState = 0;
+    _currentStateL = 0;
+    _currentStateR = 0;
 
-    for (byte cycle = 0; cycle < SC_CYCLES; cycle++)
+    for (uint8_t cycle = 0; cycle < SC_CYCLES; cycle++)
     {
         readCycle(cycle);
     }
 
     // When a controller disconnects, revert to three-button polling
-    if (!(_currentState & SC_CTL_ON))
+    if (!(_currentStateL & SC_CTL_ON))
     {
-        _sixButtonMode = false;
+        _sixButtonModeL = false;
     }
-    
-    //interrupts();
-    
-    _lastReadTime = millis();
 
-    return _currentState;
+    if (!(_currentStateR & SC_CTL_ON))
+    {
+        _sixButtonModeR = false;
+    }
+
+    _lastReadTime = to_ms_since_boot(get_absolute_time());
+
+    return (left) ? _currentStateL : _currentStateR;
 }
 
-bool SegaController::getIsOn()
+bool SegaController::getIsOn(bool left)
 {
-    return _currentState & SC_CTL_ON;
+    return (left) ? _currentStateL & SC_CTL_ON : _currentStateR & SC_CTL_ON;
 }
 
-bool SegaController::getSixButtonMode()
+bool SegaController::getSixButtonMode(bool left)
 {
-    return _sixButtonMode;
+    return (left) ? _sixButtonModeL : _sixButtonModeR;
+}
+
+uint16_t SegaController::readPins()
+{
+    uint16_t result = 0;
+    
+    // latch
+    gpio_put(_loadPin, HIGH);
+
+    // reading 16 bits of 2 shift registers
+    for (uint8_t i=15; i>0; i--) {
+        gpio_put(_sckPin, HIGH);
+        //delayMicroseconds(1);
+        if (gpio_get(_dataPin) == HIGH) {
+            result |= (1 << i);
+        }
+        gpio_put(_sckPin, LOW);
+    }
+    gpio_put(_loadPin, LOW);
+
+    return result;
 }
 
 void SegaController::readCycle(byte cycle)
 {
     // Set the select pin low/high
-    digitalWrite(_selectPin, cycle % 2);
+    gpio_put(_selectPin, cycle % 2);
 
     // a small delay before reading
-    delayMicroseconds(50);
+    delayMicroseconds(10);
+
+    uint16_t reading = readPins();
 
     // Read flags
     switch (cycle)
@@ -117,58 +136,61 @@ void SegaController::readCycle(byte cycle)
         case 1:
         case 6:
         case 7:
-            digitalRead(_inputPins[0]);
-            digitalRead(_inputPins[1]);
-            digitalRead(_inputPins[2]);
-            digitalRead(_inputPins[3]);
-            digitalRead(_inputPins[4]);
-            digitalRead(_inputPins[5]);
+            // read pins, nothing to do with data
         break;
         case 2:
-
-            digitalRead(_inputPins[0]);
-            digitalRead(_inputPins[1]);
-
             // Check that a controller is connected
-            _currentState |= (digitalRead(_inputPins[2]) == LOW && digitalRead(_inputPins[3]) == LOW) * SC_CTL_ON;
+            _currentStateL |= (bitRead(reading, 2) == LOW && bitRead(reading, 3) == LOW) * SC_CTL_ON;
+            _currentStateR |= (bitRead(reading, 10) == LOW && bitRead(reading, 11) == LOW) * SC_CTL_ON;
             
             // Check controller is connected before reading A/Start to prevent bad reads when inserting/removing cable
-            if (_currentState & SC_CTL_ON)
-            {
+            if (_currentStateL & SC_CTL_ON) {
                 // Read input pins for A, Start
-                if (digitalRead(_inputPins[4]) == LOW) { _currentState |= SC_BTN_A; }
-                if (digitalRead(_inputPins[5]) == LOW) { _currentState |= SC_BTN_START; }
+                if (bitRead(reading, 4) == LOW) { _currentStateL |= SC_BTN_A; }
+                if (bitRead(reading, 5) == LOW) { _currentStateL |= SC_BTN_START; }
+            }
+            if (_currentStateR & SC_CTL_ON) {
+                // Read input pins for A, Start
+                if (bitRead(reading, 12) == LOW) { _currentStateR |= SC_BTN_A; }
+                if (bitRead(reading, 13) == LOW) { _currentStateR |= SC_BTN_START; }
             }
             break;
         case 3:
             // Read input pins for Up, Down, Left, Right, B, C
-            if (digitalRead(_inputPins[0]) == LOW) { _currentState |= SC_BTN_UP; }
-            if (digitalRead(_inputPins[1]) == LOW) { _currentState |= SC_BTN_DOWN; }
-            if (digitalRead(_inputPins[2]) == LOW) { _currentState |= SC_BTN_LEFT; }
-            if (digitalRead(_inputPins[3]) == LOW) { _currentState |= SC_BTN_RIGHT; }
-            if (digitalRead(_inputPins[4]) == LOW) { _currentState |= SC_BTN_B; }
-            if (digitalRead(_inputPins[5]) == LOW) { _currentState |= SC_BTN_C; }
+            if (bitRead(reading, 0) == LOW) { _currentStateL |= SC_BTN_UP; }
+            if (bitRead(reading, 1) == LOW) { _currentStateL |= SC_BTN_DOWN; }
+            if (bitRead(reading, 2) == LOW) { _currentStateL |= SC_BTN_LEFT; }
+            if (bitRead(reading, 3) == LOW) { _currentStateL |= SC_BTN_RIGHT; }
+            if (bitRead(reading, 4) == LOW) { _currentStateL |= SC_BTN_B; }
+            if (bitRead(reading, 5) == LOW) { _currentStateL |= SC_BTN_C; }
+
+            if (bitRead(reading, 8) == LOW) { _currentStateR |= SC_BTN_UP; }
+            if (bitRead(reading, 9) == LOW) { _currentStateR |= SC_BTN_DOWN; }
+            if (bitRead(reading, 10) == LOW) { _currentStateR |= SC_BTN_LEFT; }
+            if (bitRead(reading, 11) == LOW) { _currentStateR |= SC_BTN_RIGHT; }
+            if (bitRead(reading, 12) == LOW) { _currentStateR |= SC_BTN_B; }
+            if (bitRead(reading, 13) == LOW) { _currentStateR |= SC_BTN_C; }
             break;
         case 4:
-            _sixButtonMode = (digitalRead(_inputPins[0]) == LOW && digitalRead(_inputPins[1]) == LOW);
-            digitalRead(_inputPins[2]);
-            digitalRead(_inputPins[3]);
-            digitalRead(_inputPins[4]);
-            digitalRead(_inputPins[5]);
+            _sixButtonModeL = (bitRead(reading, 0) == LOW && bitRead(reading, 1) == LOW);
+            _sixButtonModeR = (bitRead(reading, 8) == LOW && bitRead(reading, 9) == LOW);
             break;
         case 5:
-            if (_sixButtonMode)
+            if (_sixButtonModeL)
             {
                 // Read input pins for X, Y, Z, Mode
-                if (digitalRead(_inputPins[0]) == LOW) { _currentState |= SC_BTN_Z; }
-                if (digitalRead(_inputPins[1]) == LOW) { _currentState |= SC_BTN_Y; }
-                if (digitalRead(_inputPins[2]) == LOW) { _currentState |= SC_BTN_X; }
-                if (digitalRead(_inputPins[3]) == LOW) { _currentState |= SC_BTN_MODE; }
-            } else {
-                digitalRead(_inputPins[2]);
-                digitalRead(_inputPins[3]);
-                digitalRead(_inputPins[4]);
-                digitalRead(_inputPins[5]);
+                if (bitRead(reading, 0) == LOW) { _currentStateL |= SC_BTN_Z; }
+                if (bitRead(reading, 1) == LOW) { _currentStateL |= SC_BTN_Y; }
+                if (bitRead(reading, 2) == LOW) { _currentStateL |= SC_BTN_X; }
+                if (bitRead(reading, 3) == LOW) { _currentStateL |= SC_BTN_MODE; }
+            }
+            if (_sixButtonModeR)
+            {
+                // Read input pins for X, Y, Z, Mode
+                if (bitRead(reading, 8) == LOW) { _currentStateR |= SC_BTN_Z; }
+                if (bitRead(reading, 9) == LOW) { _currentStateR |= SC_BTN_Y; }
+                if (bitRead(reading, 10) == LOW) { _currentStateR |= SC_BTN_X; }
+                if (bitRead(reading, 11) == LOW) { _currentStateR |= SC_BTN_MODE; }
             }
             break;
     }

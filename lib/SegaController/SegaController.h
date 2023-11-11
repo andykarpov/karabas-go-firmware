@@ -59,22 +59,27 @@ const unsigned long SC_READ_DELAY_MS = 5; // Must be >= 3 to give 6-button contr
 class SegaController {
     public:
         SegaController();
-        void begin(byte db9_pin_7, byte db9_pin_1, byte db9_pin_2, byte db9_pin_3, byte db9_pin_4, byte db9_pin_6, byte db9_pin_9);
-        word getState();
-        bool getIsOn();
-        bool getSixButtonMode();
+        void begin(uint8_t joy_sck, uint8_t joy_load, uint8_t joy_data, uint8_t joy_p7);
+        uint16_t getState(bool left);
+        bool getIsOn(bool left);
+        bool getSixButtonMode(bool left);
 
     private:
         void readCycle(byte cycle);
+        uint16_t readPins();
 
-        word _currentState;
+        uint16_t _currentStateL;
+        uint16_t _currentStateR;
 
         unsigned long _lastReadTime;
 
-        boolean _sixButtonMode;
+        boolean _sixButtonModeL;
+        boolean _sixButtonModeR;
 
-        byte _selectPin; // output select pin
-        byte _inputPins[SC_INPUT_PINS];
+        uint8_t _sckPin;
+        uint8_t _loadPin;
+        uint8_t _dataPin;
+        uint8_t _selectPin; // output select pin
 };
 
 #endif

@@ -8,6 +8,7 @@
 #include "Adafruit_TinyUSB.h"
 #include "elapsed.h"
 #include <RTC.h>
+#include <SegaController.h>
 #include "hid_app.h"
 #include "main.h"
 
@@ -20,6 +21,7 @@ Elapsed my_timer;
 RTC zxrtc;
 SdFs sd;
 FsFile file;
+SegaController sega;
 
 static queue_t spi_event_queue;
 
@@ -63,6 +65,7 @@ void setup()
   extender.pinMode(PIN_EXT_LED2, OUTPUT);
 
   zxrtc.begin(spi_send, on_time);
+  sega.begin(PIN_JOY_SCK, PIN_JOY_LOAD, PIN_JOY_DATA, PIN_JOY_P7);
 
   // SD
   Serial.print("Mounting SD card... ");
@@ -104,6 +107,25 @@ void loop()
     Serial.print("Button 2: "); Serial.println((btn2 == LOW) ? "on" : "off");
     prev_btn2 = btn2;
     spi_send(CMD_BTN, 1, !btn2);
+  }
+
+  // joy reading
+  uint16_t joyL = sega.getState(true);
+  uint16_t joyR = sega.getState(false);
+  static uint16_t prevJoyL = 0;
+  static uint16_t prevJoyR = 0;
+
+  if (joyL != prevJoyL) {
+    Serial.printf("SEGA L: %u", joyL); Serial.println();
+    prevJoyL = joyL;
+    spi_send(CMD_JOYSTICK, 0, static_cast<uint8_t>(joyL & 0x00FF));
+    spi_send(CMD_JOYSTICK, 1, static_cast<uint8_t>(joyL & 0xFF00) >> 8);
+  }
+  if (joyR != prevJoyR) {
+    Serial.printf("SEGA R: %u", joyR); Serial.println();
+    prevJoyR = joyR;
+    spi_send(CMD_JOYSTICK, 2, static_cast<uint8_t>(joyR & 0x00FF));
+    spi_send(CMD_JOYSTICK, 3, static_cast<uint8_t>(joyR & 0xFF00) >> 8);
   }
 
   queue_spi_t packet;
