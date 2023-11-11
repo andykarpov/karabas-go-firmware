@@ -57,7 +57,7 @@ void SegaController::begin(uint8_t joy_sck, uint8_t joy_load, uint8_t joy_data, 
 
 word SegaController::getState(bool left)
 {
-    if (max(to_ms_since_boot(get_absolute_time()) - _lastReadTime, 0) < SC_READ_DELAY_MS)
+    if (max(millis() - _lastReadTime, 0) < SC_READ_DELAY_MS)
     {
         // Not enough time has elapsed, return previously read state
         return (left) ? _currentStateL : _currentStateR;
@@ -83,7 +83,7 @@ word SegaController::getState(bool left)
         _sixButtonModeR = false;
     }
 
-    _lastReadTime = to_ms_since_boot(get_absolute_time());
+    _lastReadTime = millis();
 
     return (left) ? _currentStateL : _currentStateR;
 }
@@ -104,14 +104,18 @@ uint16_t SegaController::readPins()
     
     // latch
     gpio_put(_loadPin, HIGH);
+    gpio_put(_loadPin, LOW);
+    
+    // latch
+    gpio_put(_loadPin, HIGH);
 
     // reading 16 bits of 2 shift registers
-    for (uint8_t i=15; i>0; i--) {
-        gpio_put(_sckPin, HIGH);
-        //delayMicroseconds(1);
+    for (uint8_t i=16; i>0; i--) {
+
         if (gpio_get(_dataPin) == HIGH) {
-            result |= (1 << i);
+            result |= (1 << i-1);
         }
+        gpio_put(_sckPin, HIGH);
         gpio_put(_sckPin, LOW);
     }
     gpio_put(_loadPin, LOW);
