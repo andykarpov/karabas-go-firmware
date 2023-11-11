@@ -26,6 +26,8 @@ static queue_t spi_event_queue;
 // the setup function runs once when you press reset or power the board
 void setup()
 {
+  queue_init(&spi_event_queue, sizeof(queue_spi_t), 64);
+
   while ( !Serial ) delay(10);   // wait for native usb
 
   Serial.begin(115200);
