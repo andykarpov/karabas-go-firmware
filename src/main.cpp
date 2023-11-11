@@ -28,11 +28,6 @@ void setup()
 {
   queue_init(&spi_event_queue, sizeof(queue_spi_t), 64);
 
-  while ( !Serial ) delay(10);   // wait for native usb
-
-  Serial.begin(115200);
-  Serial.println("Karabas Go RP2040 firmware");
-
   // SPI0 to FPGA
   SPI.setSCK(PIN_MCU_SPI_SCK);
   SPI.setRX(PIN_MCU_SPI_RX);
@@ -51,6 +46,11 @@ void setup()
   Wire.setSDA(PIN_I2C_SDA);
   Wire.setSCL(PIN_I2C_SCL);
   Wire.begin();
+
+  while ( !Serial ) delay(10);   // wait for native usb
+
+  Serial.begin(115200);
+  Serial.println("Karabas Go RP2040 firmware");
 
   if (extender.begin() == false) {
     halt("PCA9536 unavailable. Please check soldering.");
@@ -89,14 +89,23 @@ void loop()
     my_timer.reset();
   }
 
-  if (extender.digitalRead(0) == LOW) {
-    Serial.println("Pushed button 0");
-    delay(100);
+  static bool prev_btn1 = HIGH;
+  static bool prev_btn2 = HIGH;
+  bool btn1 = extender.digitalRead(0);
+  bool btn2 = extender.digitalRead(1);
+
+  if (prev_btn1 != btn1) {
+    Serial.print("Button 1: "); Serial.println((btn1 == LOW) ? "on" : "off");
+    prev_btn1 = btn1;
+    spi_send(CMD_BTN, 0, !btn1);
   }
-  if (extender.digitalRead(1) == LOW) {
-    Serial.println("Pushed button 1");
-    delay(100);
+
+  if (prev_btn2 != btn2) {
+    Serial.print("Button 2: "); Serial.println((btn2 == LOW) ? "on" : "off");
+    prev_btn2 = btn2;
+    spi_send(CMD_BTN, 1, !btn2);
   }
+
   queue_spi_t packet;
 	while (queue_try_remove(&spi_event_queue, &packet)) {
     spi_send(packet.cmd, packet.addr, packet.data);

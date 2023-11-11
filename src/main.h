@@ -39,6 +39,7 @@
 #define CMD_USB_KBD 0x01
 #define CMD_USB_MOUSE 0x02
 #define CMD_USB_GAMEPAD 0x03
+#define CMD_BTN 0x04
 
 typedef struct {
 	uint8_t cmd;
