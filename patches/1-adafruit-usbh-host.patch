@@ -1,0 +1,8 @@
+133c133
+< TU_ATTR_WEAK void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance,
+---
+> /*TU_ATTR_WEAK void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance,
+156c156
+< }
+---
+> }*/
