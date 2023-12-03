@@ -6,10 +6,10 @@
 
 #define HOST_PIN_DP   25
 
-#define PIN_MCU_SPI_SCK 22
-#define PIN_MCU_SPI_CS 21 
-#define PIN_MCU_SPI_RX 20 
-#define PIN_MCU_SPI_TX 23 
+#define PIN_MCU_SPI_SCK 22 // sck
+#define PIN_MCU_SPI_CS 21  // ss
+#define PIN_MCU_SPI_RX 20 // miso
+#define PIN_MCU_SPI_TX 23 // mosi
 
 #define PIN_SD_SPI_SCK 9 
 #define PIN_SD_SPI_CS 8 
@@ -38,9 +38,12 @@
 
 #define CMD_USB_KBD 0x01
 #define CMD_USB_MOUSE 0x02
-#define CMD_USB_GAMEPAD 0x03
+#define CMD_JOYSTICK 0x03
 #define CMD_BTN 0x04
-#define CMD_JOYSTICK 0x05
+#define CMD_SWITCHES 0x05
+
+#define CMD_USB_GAMEPAD 0x11
+#define CMD_USB_JOYSTICK 0x12
 
 typedef struct {
 	uint8_t cmd;

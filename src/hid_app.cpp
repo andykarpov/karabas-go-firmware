@@ -10,7 +10,7 @@ void tuh_hid_mount_cb (uint8_t dev_addr, uint8_t instance, uint8_t const* desc_r
   //(void)desc_report;
   //(void)desc_len;
 
-  Serial.printf("HID device mounted, address = %d\r\n", dev_addr);
+  Serial.printf("HID device mounted, address = %d, instance = %d\r\n", dev_addr, instance);
 
   uint8_t const itf_protocol = tuh_hid_interface_protocol(dev_addr, instance);
 
@@ -19,6 +19,8 @@ void tuh_hid_mount_cb (uint8_t dev_addr, uint8_t instance, uint8_t const* desc_r
 
   uint16_t vid, pid;
   tuh_vid_pid_get(dev_addr, &vid, &pid);
+  hid_info[instance].vid = vid;
+  hid_info[instance].pid = pid;
 
   if ( itf_protocol == HID_ITF_PROTOCOL_NONE )
   {
@@ -34,7 +36,7 @@ void tuh_hid_mount_cb (uint8_t dev_addr, uint8_t instance, uint8_t const* desc_r
 /// Invoked when device is unmounted (bus reset/unplugged)
 void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
 {
-  Serial.printf("HID device unmounted, address = %d\r\n", dev_addr);
+  Serial.printf("HID device unmounted, address = %d, instance = %d\r\n", dev_addr, instance);
 }
 
 //#################
@@ -49,13 +51,11 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
   switch (itf_protocol)
   {
     case HID_ITF_PROTOCOL_KEYBOARD:
-      //TU_LOG2("HID receive boot keyboard report\r\n");
-      process_kbd_report( (hid_keyboard_report_t const*) report );
+      process_kbd_report( dev_addr, instance, (hid_keyboard_report_t const*) report, len );
     break;
 
     case HID_ITF_PROTOCOL_MOUSE:
-      //TU_LOG2("HID receive boot mouse report\r\n");
-      process_mouse_report( (hid_mouse_report_t const*) report );
+      process_mouse_report( dev_addr, instance, (hid_mouse_report_t const*) report, len );
     break;
 
     default:
@@ -67,12 +67,11 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
   // continue to request to receive report
   if ( !tuh_hid_receive_report(dev_addr, instance) )
   {
-    //printf("Error: cannot request to receive report\r\n");
     Serial.println("Error: cannot request to receive report");
   }
 }
 
-static void process_kbd_report(hid_keyboard_report_t const *report)
+static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_report_t const *report, uint16_t len)
 {
   static hid_keyboard_report_t prev_report = {0};
 
@@ -96,7 +95,7 @@ static void process_kbd_report(hid_keyboard_report_t const *report)
   }
 }
 
-static void process_mouse_report(hid_mouse_report_t const * report) {
+static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_report_t const * report, uint16_t len) {
 
   static hid_mouse_report_t prev_report = {0};
 
@@ -115,22 +114,25 @@ static void process_mouse_report(hid_mouse_report_t const * report) {
   }
 }
 
-static void process_gamepad_report(hid_gamepad_report_t const * report) {
+static void process_gamepad_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len) {
   static hid_gamepad_report_t prev_report = { 0 };
+  const hid_gamepad_report_t* r;
 
-  uint8_t hat_changed = report->hat ^ prev_report.hat;
-  uint32_t buttons_changed = report->buttons ^ prev_report.buttons;
-  int8_t rx_changed = report->rx ^ prev_report.rx;
-  int8_t ry_changed = report->ry ^ prev_report.ry;
-  int8_t rz_changed = report->rz ^ prev_report.rz;
-  int8_t x_changed = report->x ^ prev_report.x;
-  int8_t y_changed = report->y ^ prev_report.y;
-  int8_t z_changed = report->z ^ prev_report.z;
+  r = (hid_gamepad_report_t const*) report;
+
+  uint8_t hat_changed = r->hat ^ prev_report.hat;
+  uint32_t buttons_changed = r->buttons ^ prev_report.buttons;
+  int8_t rx_changed = r->rx ^ prev_report.rx;
+  int8_t ry_changed = r->ry ^ prev_report.ry;
+  int8_t rz_changed = r->rz ^ prev_report.rz;
+  int8_t x_changed = r->x ^ prev_report.x;
+  int8_t y_changed = r->y ^ prev_report.y;
+  int8_t z_changed = r->z ^ prev_report.z;
 
   if ( (hat_changed) || (buttons_changed) || (rx_changed) || (ry_changed) || (rz_changed) || (x_changed) || (y_changed) || (z_changed) ) {
-    spi_queue(CMD_USB_GAMEPAD, 0, report->hat);
-    spi_queue(CMD_USB_GAMEPAD, 1, (uint8_t)report->buttons);
-    Serial.printf("Gamepad Hat: %d, Buttons: %d, XYZ %d %d %d, RXRYRZ %d %d %d", report->hat, report->buttons, report->rx, report->ry, report->rz, report->x, report->y, report->z);
+    spi_queue(CMD_USB_GAMEPAD, 0, r->hat);
+    spi_queue(CMD_USB_GAMEPAD, 1, (uint8_t)r->buttons);
+    Serial.printf("Gamepad Hat: %d, Buttons: %d, XYZ %d %d %d, RXRYRZ %d %d %d", r->hat, r->buttons, r->rx, r->ry, r->rz, r->x, r->y, r->z);
     Serial.println();
     // report->hat && GAMEPAD_HAT_CENTERED; // none
     // report->hat && GAMEPAD_HAT_UP; // up
@@ -150,7 +152,33 @@ static void process_gamepad_report(hid_gamepad_report_t const * report) {
     // report->buttons && GAMEPAD_BUTTON_Z
   }
 
-  prev_report = *report;
+  prev_report = *r;
+
+}
+
+static void process_joystick_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len) {
+  static hid_joystick_report_t prev_report = { 0 };
+  const hid_joystick_report_t* r;
+  r = (hid_joystick_report_t const*) report;
+
+  bool axis_changed = (r->axis[0] ^ prev_report.axis[0]) || (r->axis[1] ^ prev_report.axis[1]) || (r->axis[2] ^ prev_report.axis[2]) || (r->axis[3] ^ prev_report.axis[3]);
+  bool buttons_changed = (r->buttons[0] ^ prev_report.buttons[0]) || (r->buttons[1] ^ prev_report.buttons[1]) || (r->buttons[2] ^ prev_report.buttons[2]) || (r->buttons[3] ^ prev_report.buttons[3]);
+
+  if ( axis_changed || buttons_changed ) {
+    spi_queue(CMD_USB_JOYSTICK, 0, r->axis[0]);
+    spi_queue(CMD_USB_JOYSTICK, 1, r->axis[1]);
+    spi_queue(CMD_USB_JOYSTICK, 2, r->axis[2]);
+    spi_queue(CMD_USB_JOYSTICK, 3, r->axis[3]);
+    spi_queue(CMD_USB_JOYSTICK, 5, r->buttons[0]);
+    spi_queue(CMD_USB_JOYSTICK, 6, r->buttons[1]);
+    spi_queue(CMD_USB_JOYSTICK, 7, r->buttons[2]);
+    spi_queue(CMD_USB_JOYSTICK, 8, r->buttons[3]);
+
+    Serial.printf("Joystick: %d %d %d %d Buttons %d %d %d %d", r->axis[0], r->axis[1], r->axis[2], r->axis[3], r->buttons[0], r->buttons[1], r->buttons[2], r->buttons[3]);
+    Serial.println();
+  }
+
+  prev_report = *r;
 
 }
 
@@ -210,23 +238,16 @@ static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t c
     switch (rpt_info->usage)
     {
       case HID_USAGE_DESKTOP_KEYBOARD:
-        //TU_LOG1("HID receive keyboard report\r\n");
-        //Serial.println("HID receive keyboard report");
-        // Assume keyboard follow boot report layout
-        process_kbd_report( (hid_keyboard_report_t const*) report );
+        process_kbd_report( dev_addr, instance, (hid_keyboard_report_t const*) report, len );
       break;
       case HID_USAGE_DESKTOP_MOUSE:
-        //TU_LOG1("HID receive mouse report\r\n");
-        //Serial.println("HID receive mouse report");
-        // Assume mouse follow boot report layout
-        process_mouse_report( (hid_mouse_report_t const*) report );
+        process_mouse_report( dev_addr, instance, (hid_mouse_report_t const*) report, len );
       break;
       case HID_USAGE_DESKTOP_JOYSTICK:
+        process_joystick_report( dev_addr, instance, report, len );
+      break;
       case HID_USAGE_DESKTOP_GAMEPAD:
-        //TU_LOG1("HID receive gamepad report\r\n");
-        //Serial.println("HID receive gamepad report");
-        // Assume gamepad follow boot report layout
-        process_gamepad_report( (hid_gamepad_report_t const*) report );
+        process_gamepad_report( dev_addr, instance, report, len);
       break;
       default: break;
     }

@@ -8,13 +8,14 @@
 #include "Adafruit_TinyUSB.h"
 #include "elapsed.h"
 #include <RTC.h>
+#include <OSD.h>
 #include <SegaController.h>
 #include "hid_app.h"
 #include "main.h"
 
 PioSpi spi(PIN_SD_SPI_RX, PIN_SD_SPI_SCK, PIN_SD_SPI_TX);
 #define SD_CONFIG SdSpiConfig(SD_CS_PIN, SHARED_SPI, SD_SCK_MHZ(60), &spi)
-SPISettings settingsA(SD_SCK_MHZ(50), MSBFIRST, SPI_MODE0); // MCU SPI settings
+SPISettings settingsA(SD_SCK_MHZ(10), MSBFIRST, SPI_MODE0); // MCU SPI settings
 
 PCA9536 extender;
 Elapsed my_timer;
@@ -22,6 +23,7 @@ RTC zxrtc;
 SdFs sd;
 FsFile file;
 SegaController sega;
+OSD zxosd;
 
 static queue_t spi_event_queue;
 
@@ -34,8 +36,8 @@ void setup()
   SPI.setSCK(PIN_MCU_SPI_SCK);
   SPI.setRX(PIN_MCU_SPI_RX);
   SPI.setTX(PIN_MCU_SPI_TX);
-  SPI.setCS(PIN_MCU_SPI_CS);
-  SPI.begin(PIN_MCU_SPI_CS);
+  SPI.setCS(PIN_MCU_SPI_CS);  
+  SPI.begin(true);
 
   // FPGA bitstream loader
   pinMode(PIN_CONF_INIT_B, INPUT_PULLUP);
@@ -66,6 +68,7 @@ void setup()
 
   zxrtc.begin(spi_send, on_time);
   sega.begin(PIN_JOY_SCK, PIN_JOY_LOAD, PIN_JOY_DATA, PIN_JOY_P7);
+  zxosd.begin(spi_send);
 
   // SD
   Serial.print("Mounting SD card... ");
@@ -77,6 +80,13 @@ void setup()
   //sd.ls(&Serial, LS_SIZE);
 
   fpga_configure("karabas.bin");
+
+  delay(100);
+
+  Serial.println("OSD test");
+  zxosd.setPos(0,0);
+  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+  zxosd.print("Hello Karabas Go");
 }
 
 uint8_t counter = 0;
@@ -85,11 +95,25 @@ void loop()
 {
   zxrtc.handle();
 
-  if (my_timer.elapsed_millis() >= 500) {
+  if (my_timer.elapsed_millis() >= 100) {
     counter++;
     extender.digitalWrite(2, counter %2 == 0);
     extender.digitalWrite(3, counter %2 != 0);
     my_timer.reset();
+
+    zxosd.setPos(0,2);
+    zxosd.setColor(OSD::COLOR_MAGENTA_I, OSD::COLOR_BLACK);
+    zxosd.print("Counter: ");
+    zxosd.setColor(OSD::COLOR_YELLOW_I, OSD::COLOR_BLACK);
+    zxosd.print(counter);
+    zxosd.print("     ");
+
+    zxosd.setPos(0,4);
+    zxosd.setColor(OSD::COLOR_GREEN_I, OSD::COLOR_BLACK);
+    zxosd.print("Time: ");
+    zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_BLACK);
+    zxosd.printf("%d:%d:%d", zxrtc.getHour(), zxrtc.getMinute(), zxrtc.getSecond());
+    zxosd.print("     ");
   }
 
   static bool prev_btn1 = HIGH;
@@ -247,6 +271,7 @@ void spi_queue(uint8_t cmd, uint8_t addr, uint8_t data) {
  * @param data data
  */
 void spi_send(uint8_t cmd, uint8_t addr, uint8_t data) {
+  //Serial.printf("SPI %d %d %d", cmd, addr, data); Serial.println();
   SPI.beginTransaction(settingsA);
   digitalWrite(PIN_MCU_SPI_CS, LOW);
   uint8_t rx_cmd = SPI.transfer(cmd);
