@@ -75,8 +75,14 @@ static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_
 {
   static hid_keyboard_report_t prev_report = {0};
 
-  uint8_t change = report->modifier ^ prev_report.modifier;
+  uint8_t change = ((report->modifier ^ prev_report.modifier) || (report->keycode[0] ^ prev_report.keycode[0]) 
+    || (report->keycode[1] ^ prev_report.keycode[1])
+    || (report->keycode[2] ^ prev_report.keycode[2])
+    || (report->keycode[3] ^ prev_report.keycode[3])
+    || (report->keycode[4] ^ prev_report.keycode[4])
+    || (report->keycode[5] ^ prev_report.keycode[5]));
   if (change != 0) {
+    usb_keyboard_report = *report;
     spi_queue(CMD_USB_KBD, 0, report->modifier);
     for(uint8_t i=0; i<6; i++) {
       spi_queue(CMD_USB_KBD, i+1, report->keycode[i]);
@@ -104,6 +110,7 @@ static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_r
                  (report->buttons ^ prev_report.buttons) ||
                  (report->wheel ^ prev_report.wheel));
   if (change) {
+    usb_mouse_report = *report;
     spi_queue(CMD_USB_MOUSE, 0, report->x);
     spi_queue(CMD_USB_MOUSE, 1, report->y);
     spi_queue(CMD_USB_MOUSE, 2, report->wheel);
