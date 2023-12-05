@@ -7,6 +7,9 @@
 #define LANGUAGE_ID 0x0409 // Language ID: English
 #define MAX_REPORT  4 // Max USB reports per instance
 
+extern hid_keyboard_report_t usb_keyboard_report;
+extern hid_mouse_report_t usb_mouse_report;
+
 // Each HID instance can has multiple reports
 static struct
 {

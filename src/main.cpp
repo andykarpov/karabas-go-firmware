@@ -27,6 +27,9 @@ OSD zxosd;
 
 static queue_t spi_event_queue;
 
+hid_keyboard_report_t usb_keyboard_report;
+hid_mouse_report_t usb_mouse_report;
+
 // the setup function runs once when you press reset or power the board
 void setup()
 {
@@ -79,7 +82,7 @@ void setup()
 
   //sd.ls(&Serial, LS_SIZE);
 
-  fpga_configure("karabas.bin");
+  fpga_configure("boot.kg1");
 
   delay(100);
 
@@ -112,8 +115,23 @@ void loop()
     zxosd.setColor(OSD::COLOR_GREEN_I, OSD::COLOR_BLACK);
     zxosd.print("Time: ");
     zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_BLACK);
-    zxosd.printf("%d:%d:%d", zxrtc.getHour(), zxrtc.getMinute(), zxrtc.getSecond());
+    zxosd.printf("%02d:%02d:%02d", zxrtc.getHour(), zxrtc.getMinute(), zxrtc.getSecond());
     zxosd.print("     ");
+
+    zxosd.setPos(0,6);
+    zxosd.setColor(OSD::COLOR_BLUE_I, OSD::COLOR_BLACK);
+    zxosd.print("Kb: ");
+    zxosd.setColor(OSD::COLOR_YELLOW_I, OSD::COLOR_BLACK);
+    zxosd.printf("%02x %02x %02x %02x %02x %02x %02x"
+    , usb_keyboard_report.modifier
+    , usb_keyboard_report.keycode[0]
+    , usb_keyboard_report.keycode[1]
+    , usb_keyboard_report.keycode[2]
+    , usb_keyboard_report.keycode[3]
+    , usb_keyboard_report.keycode[4]
+    , usb_keyboard_report.keycode[5]
+    );
+    zxosd.print("             ");
   }
 
   static bool prev_btn1 = HIGH;
@@ -203,6 +221,17 @@ void fpga_configure(const char* filename) {
     halt("Unable to open bitstream file to read");
   }
 
+  // get bitstream size
+  file.seek(80);
+  uint8_t buf[4] = {0};
+  uint32_t length = 0;
+  file.readBytes(buf, sizeof(buf));
+  length = buf[3] + buf[2]*256 + buf[1]*256*256 + buf[0]*256*256*256;
+  Serial.print("Bitstream size: "); Serial.println(length, DEC);
+
+  // seek to bitstream start
+  file.seek(1024);
+
   // pulse PROG_B
   digitalWrite(PIN_CONF_PRG_B, HIGH);
   digitalWrite(PIN_CONF_PRG_B, LOW);
@@ -210,8 +239,6 @@ void fpga_configure(const char* filename) {
 
   // wait for INIT_B = 0
   delay(10);
-
-  file.rewind();
 
   my_timer.reset();
 
@@ -222,8 +249,9 @@ void fpga_configure(const char* filename) {
 
   digitalWrite(PIN_CONF_CLK, LOW);
 
-  while ((n = file.read(line, sizeof(line)))) {
+  while ((n = file.read(line, sizeof(line) < length ? sizeof(line) : length ))) {
     i += n;
+    length -=n;
 
     for (uint8_t s=0; s<n; s++) {
       uint8_t c = line[s];
