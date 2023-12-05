@@ -37,22 +37,22 @@ protected:
 
 public:
 
-  static const uint8_t COLOR_BLACK = B0000;
-  static const uint8_t COLOR_FLASH = B0001;
-  static const uint8_t COLOR_WHITE = B1111;
-  static const uint8_t COLOR_GREY  = B1110;
-  static const uint8_t COLOR_RED   = B1000;
-  static const uint8_t COLOR_GREEN = B0100;
-  static const uint8_t COLOR_BLUE  = B0010;
-  static const uint8_t COLOR_RED_I   = B1001;
-  static const uint8_t COLOR_GREEN_I = B0101;
-  static const uint8_t COLOR_BLUE_I  = B0011;
-  static const uint8_t COLOR_YELLOW = B1100;
-  static const uint8_t COLOR_YELLOW_I = B1101;
-  static const uint8_t COLOR_MAGENTA = B1010;
-  static const uint8_t COLOR_MAGENTA_I = B1011;
-  static const uint8_t COLOR_CYAN = B0110;
-  static const uint8_t COLOR_CYAN_I = B0111;
+  static const uint8_t COLOR_BLACK = 0b0000;
+  static const uint8_t COLOR_FLASH = 0b0001;
+  static const uint8_t COLOR_WHITE = 0b1111;
+  static const uint8_t COLOR_GREY  = 0b1110;
+  static const uint8_t COLOR_RED   = 0b1000;
+  static const uint8_t COLOR_GREEN = 0b0100;
+  static const uint8_t COLOR_BLUE  = 0b0010;
+  static const uint8_t COLOR_RED_I   = 0b1001;
+  static const uint8_t COLOR_GREEN_I = 0b0101;
+  static const uint8_t COLOR_BLUE_I  = 0b0011;
+  static const uint8_t COLOR_YELLOW = 0b1100;
+  static const uint8_t COLOR_YELLOW_I = 0b1101;
+  static const uint8_t COLOR_MAGENTA = 0b1010;
+  static const uint8_t COLOR_MAGENTA_I = 0b1011;
+  static const uint8_t COLOR_CYAN = 0b0110;
+  static const uint8_t COLOR_CYAN_I = 0b0111;
 
   /**
    * Constructor
