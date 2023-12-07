@@ -22,6 +22,7 @@ Elapsed my_timer;
 RTC zxrtc;
 SdFs sd;
 FsFile file;
+FsFile root;
 SegaController sega;
 OSD zxosd;
 
@@ -29,6 +30,9 @@ static queue_t spi_event_queue;
 
 hid_keyboard_report_t usb_keyboard_report;
 hid_mouse_report_t usb_mouse_report;
+
+core_list_item_t cores[255];
+uint8_t cores_len = 0;
 
 // the setup function runs once when you press reset or power the board
 void setup()
@@ -90,6 +94,15 @@ void setup()
   zxosd.setPos(0,0);
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
   zxosd.print("Hello Karabas Go");
+
+  uint8_t pos = 2;
+  read_core_list();
+  for(uint8_t i=0; i<cores_len; i++) {
+    Serial.println(cores[i].name);
+    zxosd.setPos(0,pos);
+    zxosd.print(cores[i].name);
+    pos++;
+  }
 }
 
 uint8_t counter = 0;
@@ -104,7 +117,7 @@ void loop()
     extender.digitalWrite(3, counter %2 != 0);
     my_timer.reset();
 
-    zxosd.setPos(0,2);
+    /*zxosd.setPos(0,2);
     zxosd.setColor(OSD::COLOR_MAGENTA_I, OSD::COLOR_BLACK);
     zxosd.print("Counter: ");
     zxosd.setColor(OSD::COLOR_YELLOW_I, OSD::COLOR_BLACK);
@@ -131,7 +144,7 @@ void loop()
     , usb_keyboard_report.keycode[4]
     , usb_keyboard_report.keycode[5]
     );
-    zxosd.print("             ");
+    zxosd.print("             ");*/
   }
 
   static bool prev_btn1 = HIGH;
@@ -149,6 +162,19 @@ void loop()
     Serial.print("Button 2: "); Serial.println((btn2 == LOW) ? "on" : "off");
     prev_btn2 = btn2;
     spi_send(CMD_BTN, 1, !btn2);
+  }
+
+  // debug features
+  // TODO: remove from production / refactor
+  if (btn1 == LOW) {
+    Serial.println("Reboot");
+    Serial.flush();
+    rp2040.reboot();
+  }
+  if (btn2 == LOW) {
+      Serial.println("Reboot to bootloader");
+      Serial.flush();
+      rp2040.rebootToBootloader();
   }
 
   // joy reading
@@ -332,5 +358,31 @@ void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data) {
 void on_time() {
   // TODO 
   // display the current time via OSD
+}
+
+core_list_item_t get_core_list_item() {
+  core_list_item_t core;
+  file.getName(core.filename, 31);
+  file.seek(36); file.read(core.name, 31);
+  uint8_t visible; file.seek(76); visible = file.read(); core.visible = (visible > 0);
+  file.seek(77); core.order = file.read();
+  file.seek(78); core.type = file.read();
+  return core;
+}
+
+void read_core_list() {
+  if (!root.open("/")) {
+    halt("open root");
+  }
+  while (file.openNext(&root, O_RDONLY)) {
+    char filename[32]; file.getName(filename, sizeof(filename));
+    uint8_t len = strlen(filename);
+    if (strstr(strlwr(filename + (len - 4)), ".kg1")) {
+      cores[cores_len] = get_core_list_item();
+      cores_len++;
+    }
+    file.close();
+  }
+  // TODO
 }
 

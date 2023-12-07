@@ -45,14 +45,62 @@
 #define CMD_USB_GAMEPAD 0x11
 #define CMD_USB_JOYSTICK 0x12
 
+#define CORE_TYPE_BOOT 0x0
+#define CORE_TYPE_OSD 0x1
+#define CORE_TYPE_OTHER 0x2
+
+#define CORE_OSD_TYPE_SWITCH 0x0
+#define CORE_OSD_TYPE_NSWITCH 0x1
+#define CORE_OSD_TYPE_TRIGGER 0x2
+#define CORE_OSD_TYPE_HIDDEN 0x3
+
 typedef struct {
 	uint8_t cmd;
 	uint8_t addr;
     uint8_t data;
 } queue_spi_t;
 
+typedef struct {
+	char name[32];
+	char filename[32];
+	uint8_t order;
+	bool visible;
+	uint8_t type;
+} core_list_item_t;
+
+typedef struct {
+	uint32_t address;
+	uint32_t length;
+} core_rom_t;
+
+typedef struct {
+	char name[16];
+} core_osd_option_t;
+
+typedef struct {
+	uint8_t type;
+	uint8_t bits;
+	uint8_t def;
+	char name[16];
+	char hotkey[16];
+	uint8_t keys[3];
+	core_osd_option_t options[8];
+} core_osd_t;
+
+typedef struct {
+	char id[32];
+	char build[8];
+	core_list_item_t head;
+	uint32_t bitstream_length;
+	uint8_t eeprom_bank;
+	core_rom_t roms[16];
+	core_osd_t osd[32];
+} core_item_t;
+
 void spi_queue(uint8_t cmd, uint8_t addr, uint8_t data);
 void spi_send(uint8_t cmd, uint8_t addr, uint8_t data);
+core_list_item_t get_core_list_item();
+void read_core_list();
 void fpga_configure(const char* filename);
 void halt(const char* msg);
 void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data);
