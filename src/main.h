@@ -101,9 +101,16 @@ void spi_queue(uint8_t cmd, uint8_t addr, uint8_t data);
 void spi_send(uint8_t cmd, uint8_t addr, uint8_t data);
 core_list_item_t get_core_list_item();
 void read_core_list();
+void read_core();
 void fpga_configure(const char* filename);
 void halt(const char* msg);
 void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data);
 void on_time();
+void on_keyboard();
+void core_browser(uint8_t vpos);
+
+uint32_t file_read32(uint32_t pos);
+uint32_t file_read24(uint32_t pos);
+uint16_t file_read16(uint32_t pos);
 
 #endif

@@ -12,6 +12,9 @@
 #include <SegaController.h>
 #include "hid_app.h"
 #include "main.h"
+#include "usb_hid_keys.h"
+#include <algorithm>
+#include <tuple>
 
 PioSpi spi(PIN_SD_SPI_RX, PIN_SD_SPI_SCK, PIN_SD_SPI_TX);
 #define SD_CONFIG SdSpiConfig(SD_CS_PIN, SHARED_SPI, SD_SCK_MHZ(60), &spi)
@@ -31,8 +34,15 @@ static queue_t spi_event_queue;
 hid_keyboard_report_t usb_keyboard_report;
 hid_mouse_report_t usb_mouse_report;
 
+bool is_osd;
+
 core_list_item_t cores[255];
+core_item_t core;
 uint8_t cores_len = 0;
+uint8_t core_sel = 0;
+const uint8_t page_size = 16;
+uint8_t core_pages = 1;
+uint8_t core_page = 1;
 
 // the setup function runs once when you press reset or power the board
 void setup()
@@ -87,6 +97,7 @@ void setup()
   //sd.ls(&Serial, LS_SIZE);
 
   fpga_configure("boot.kg1");
+  is_osd = true; // boot is always osd
 
   delay(100);
 
@@ -95,15 +106,96 @@ void setup()
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
   zxosd.print("Hello Karabas Go");
 
-  uint8_t pos = 2;
   read_core_list();
-  for(uint8_t i=0; i<cores_len; i++) {
-    Serial.println(cores[i].name);
-    zxosd.setPos(0,pos);
-    zxosd.print(cores[i].name);
+  core_browser(3);  
+}
+
+void core_browser(uint8_t vpos) {
+  //Serial.print("Cores: "); Serial.println(cores_len);
+  core_pages = ceil((float)cores_len / page_size);
+  //Serial.print("Pages: "); Serial.println(core_pages);
+  core_page = ceil((float)(core_sel+1)/page_size);
+  //Serial.print("Core page: "); Serial.println(core_page);
+  uint8_t core_from = (core_page-1)*page_size;
+  uint8_t core_to = core_page*page_size > cores_len ? cores_len : core_page*page_size;
+  uint8_t core_fill = core_page*page_size;
+  uint8_t pos = vpos;
+  //Serial.print("From: "); Serial.print(core_from); Serial.print(" to: "); Serial.println(core_to);
+  //Serial.print("Selected: "); Serial.println(core_sel);
+  for(uint8_t i=core_from; i < core_to; i++) {
+    Serial.print(cores[i].name); Serial.println(cores[i].order);
+    zxosd.setPos(0, pos);
+    if (core_sel == i) {
+      zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLUE);
+    } else {
+      zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+    }
+    char name[29]; memcpy(name, cores[i].name, 28); name[28] = '\0';
+    zxosd.printf("%-3d ", i+1); 
+    zxosd.print(name);
     pos++;
   }
+  //Serial.print("Fill: "); Serial.println(core_fill);
+  if (core_fill > core_to) {
+    for (uint8_t i=core_to; i<core_fill; i++) {
+      zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+      for (uint8_t j=0; j<32; j++) {
+        zxosd.print(" ");
+      }
+    }
+  }
+  zxosd.setPos(8, vpos + page_size + 1); zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+  zxosd.printf("Page %02d of %02d", core_page, core_pages);
 }
+
+// kbd event handler
+void on_keyboard() {
+  if (cores_len > 0) {
+    // down
+    if (usb_keyboard_report.keycode[0] == KEY_DOWN) {
+      if (core_sel < cores_len-1) {
+        core_sel++;
+      } else {
+        core_sel = 0;
+      }
+    }
+
+    // up
+    if (usb_keyboard_report.keycode[0] == KEY_UP) {
+       if (core_sel > 0) {
+        core_sel--;
+       } else {
+        core_sel = cores_len-1;
+       }
+    }
+
+    // right
+    if (usb_keyboard_report.keycode[0] == KEY_RIGHT) {
+       if (core_sel + page_size <= cores_len-1) {
+        core_sel += page_size;
+       } else {
+        core_sel = cores_len-1;
+       }
+    }
+
+    // left
+    if (usb_keyboard_report.keycode[0] == KEY_LEFT) {
+       if (core_sel - page_size >= 0) {
+        core_sel -= page_size;
+       } else {
+        core_sel = 0;
+       }
+    }
+    
+    // enter
+    if (usb_keyboard_report.keycode[0] == KEY_ENTER) {
+      read_core();
+    }
+    Serial.println("On keyboard");
+    core_browser(3);
+  }
+}
+
 
 uint8_t counter = 0;
 
@@ -198,7 +290,13 @@ void loop()
 
   queue_spi_t packet;
 	while (queue_try_remove(&spi_event_queue, &packet)) {
-    spi_send(packet.cmd, packet.addr, packet.data);
+    if (is_osd && packet.cmd == CMD_USB_KBD) {
+      if (packet.addr == 1 && packet.data != 0) {
+        on_keyboard();
+      }
+    } else {
+      spi_send(packet.cmd, packet.addr, packet.data);
+    }
   }
 }
 
@@ -234,6 +332,33 @@ void halt(const char* msg) {
   }
 }
 
+uint16_t file_read16(uint32_t pos) {
+  file.seek(pos);
+  uint8_t buf[2] = {0};
+  uint16_t res = 0;
+  file.readBytes(buf, sizeof(buf));
+  res = buf[1] + buf[0]*256;
+  return res;
+}
+
+uint32_t file_read24(uint32_t pos) {
+  file.seek(pos);
+  uint8_t buf[3] = {0};
+  uint32_t res = 0;
+  file.readBytes(buf, sizeof(buf));
+  res = buf[2] + buf[1]*256 + buf[0]*256*256;
+  return res;
+}
+
+uint32_t file_read32(uint32_t pos) {
+  file.seek(pos);
+  uint8_t buf[4] = {0};
+  uint32_t res = 0;
+  file.readBytes(buf, sizeof(buf));
+  res = buf[3] + buf[2]*256 + buf[1]*256*256 + buf[0]*256*256*256;
+  return res;
+}
+
 /**
  * @brief FPGA bitstream uploader
  * 
@@ -248,11 +373,7 @@ void fpga_configure(const char* filename) {
   }
 
   // get bitstream size
-  file.seek(80);
-  uint8_t buf[4] = {0};
-  uint32_t length = 0;
-  file.readBytes(buf, sizeof(buf));
-  length = buf[3] + buf[2]*256 + buf[1]*256*256 + buf[0]*256*256*256;
+  uint32_t length = file_read32(80);
   Serial.print("Bitstream size: "); Serial.println(length, DEC);
 
   // seek to bitstream start
@@ -383,6 +504,33 @@ void read_core_list() {
     }
     file.close();
   }
+  // sort by core order number
+  std::sort(cores, cores + cores_len);
   // TODO
 }
+
+void read_core() {
+  core.head = cores[core_sel];
+  String f = String(core.head.filename);
+  f.trim();
+  char buf[32];
+  f.toCharArray(buf, sizeof(buf));
+  // todo: read more data to fill
+  // 
+  // core.bitstream_length
+  // core.build
+  // core.eeprom_bank
+  // core.id
+  // core.osd
+  // core.roms
+
+  fpga_configure(buf);
+}
+
+bool operator<(const core_list_item_t a, const core_list_item_t b) {
+  // Lexicographically compare the tuples (hour, minute)
+  return a.order < b.order;
+}
+
+
 
