@@ -54,6 +54,25 @@
 #define CORE_OSD_TYPE_TRIGGER 0x2
 #define CORE_OSD_TYPE_HIDDEN 0x3
 
+#define MAX_CORES 255
+#define MAX_CORES_PER_PAGE 16
+
+#define FILE_POS_CORE_ID 4
+#define FILE_POS_CORE_NAME 36
+#define FILE_POS_CORE_BUILD 68
+#define FILE_POS_CORE_VISIBLE 76
+#define FILE_POS_CORE_ORDER 77
+#define FILE_POS_CORE_TYPE 78
+#define FILE_POS_CORE_EEPROM_BANK 79
+#define FILE_POS_BITSTREAM_LEN 80
+#define FILE_POS_ROM_LEN 84
+#define FILE_POS_EEPROM_DATA 256
+#define FILE_POS_SWITCHES_DATA 512
+#define FILE_POS_BITSTREAM_START 1024
+#define FILENAME_BOOT "boot.kg1"
+
+#define APP_COREBROWSER_MENU_OFFSET 3
+
 typedef struct {
 	uint8_t cmd;
 	uint8_t addr;
@@ -69,11 +88,6 @@ typedef struct {
 } core_list_item_t;
 
 typedef struct {
-	uint32_t address;
-	uint32_t length;
-} core_rom_t;
-
-typedef struct {
 	char name[16];
 } core_osd_option_t;
 
@@ -85,29 +99,35 @@ typedef struct {
 	char hotkey[16];
 	uint8_t keys[3];
 	core_osd_option_t options[8];
+	uint8_t options_len;
 } core_osd_t;
 
 typedef struct {
 	char id[32];
 	char build[8];
-	core_list_item_t head;
+	char name[32];
+	char filename[32];
+	uint8_t order;
+	bool visible;
+	uint8_t type;
 	uint32_t bitstream_length;
 	uint8_t eeprom_bank;
-	core_rom_t roms[16];
 	core_osd_t osd[32];
+	uint8_t osd_len;
 } core_item_t;
 
 void spi_queue(uint8_t cmd, uint8_t addr, uint8_t data);
 void spi_send(uint8_t cmd, uint8_t addr, uint8_t data);
 core_list_item_t get_core_list_item();
 void read_core_list();
-void read_core();
-void fpga_configure(const char* filename);
+void read_core(const char* filename);
+uint32_t fpga_configure(const char* filename);
 void halt(const char* msg);
 void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data);
 void on_time();
 void on_keyboard();
 void core_browser(uint8_t vpos);
+void send_rom_byte(uint32_t addr, uint8_t data);
 
 uint32_t file_read32(uint32_t pos);
 uint32_t file_read24(uint32_t pos);
