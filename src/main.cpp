@@ -100,7 +100,6 @@ void setup()
   fpga_configure(FILENAME_BOOT);
   read_core(FILENAME_BOOT);
   //read_roms(FILENAME_BOOT);
-  is_osd = (core.type == CORE_TYPE_BOOT) ? true : false;
 
   zxosd.setPos(0,0);
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
@@ -294,6 +293,7 @@ void loop()
 
   queue_spi_t packet;
 	while (queue_try_remove(&spi_event_queue, &packet)) {
+    // capture keyboard events to osd when active
     if (is_osd && packet.cmd == CMD_USB_KBD) {
       if (packet.addr == 1 && packet.data != 0) {
         on_keyboard();
@@ -526,6 +526,8 @@ void read_core(const char* filename) {
   uint8_t visible; file.seek(FILE_POS_CORE_VISIBLE); visible = file.read(); core.visible = (visible > 0);
   file.seek(FILE_POS_CORE_ORDER); core.order = file.read();
   file.seek(FILE_POS_CORE_TYPE); core.type = file.read();
+  is_osd = (core.type == CORE_TYPE_BOOT) ? true : false;
+  is_osd = true; // debug  
   Serial.print("Core type: ");
   switch (core.type) {
     case 0: Serial.println("Boot"); break;
@@ -572,6 +574,12 @@ void read_core(const char* filename) {
   }
 
   file.close();
+
+  if (is_osd) {
+    zxosd.showMenu();
+  } else {
+    zxosd.hideMenu();
+  }
 }
 
 void read_roms(const char* filename) {

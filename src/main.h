@@ -47,6 +47,8 @@
 #define CMD_USB_GAMEPAD 0x11
 #define CMD_USB_JOYSTICK 0x12
 
+#define CMD_OSD 0x20
+
 #define CORE_TYPE_BOOT 0x0
 #define CORE_TYPE_OSD 0x1
 #define CORE_TYPE_OTHER 0x2
@@ -58,6 +60,8 @@
 
 #define MAX_CORES 255
 #define MAX_CORES_PER_PAGE 16
+#define MAX_OSD_ITEMS 32
+#define MAX_OSD_ITEM_OPTIONS 8
 
 #define FILE_POS_CORE_ID 4
 #define FILE_POS_CORE_NAME 36
@@ -100,7 +104,7 @@ typedef struct {
 	char name[16+1];
 	char hotkey[16+1];
 	uint8_t keys[2];
-	core_osd_option_t options[8];
+	core_osd_option_t options[MAX_OSD_ITEM_OPTIONS];
 	uint8_t options_len;
 } core_osd_t;
 
@@ -114,7 +118,7 @@ typedef struct {
 	uint8_t type;
 	uint32_t bitstream_length;
 	uint8_t eeprom_bank;
-	core_osd_t osd[32];
+	core_osd_t osd[MAX_OSD_ITEMS];
 	uint8_t osd_len;
 } core_item_t;
 
