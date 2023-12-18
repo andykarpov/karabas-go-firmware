@@ -99,6 +99,11 @@ public:
   void fill(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, uint8_t chr);
   void frame(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, uint8_t thickness);
 
+  void showMenu();
+  void hideMenu();
+  void showPopup();
+  void hidePopup();
+
 };
 
 #endif // __OSD_H__

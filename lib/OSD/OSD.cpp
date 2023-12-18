@@ -22,6 +22,9 @@
 
 const uint8_t CMD_OSD = 0x20;
 
+const uint8_t ADDR_SHOW = 0x01;
+const uint8_t ADDR_POPUP = 0x02;
+
 const uint8_t ADDR_CLEAR = 0x0F;
 const uint8_t ADDR_SET_POS_X = 0x10;
 const uint8_t ADDR_SET_POS_Y = 0x11;
@@ -98,23 +101,23 @@ void OSD::frame(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, uint8_t thicknes
         setPos(x1, y);
         for(uint8_t x=x1; x<=x2; x++) {
             if (y==y1 && x==x1) {
-                write(thickness ? 201 : 218); // lt
+                write(210); // lt
             }
             else if (y==y2 && x==x1) {
-                write(thickness ? 200 : 192); // lb
+                write(212); // lb
             }
             else if (y==y1 && x==x2) {
-                write(thickness ? 187 : 191); // rt
+                write(211); // rt
             }
             else if (y==y2 && x==x2) {
-                write(thickness ? 188 : 217); // rb
+                write(213); // rb
             }
             else if (y==y1 || y == y2) {
-                write(thickness ? 205 : 196); // t / b
+                write(209); // t / b
             }
             else if ((x==x1 && y>y1 && y<y2) || (x==x2 && y>y1 && y<y2)) {
                 setPos(x,y);
-                write(thickness ? 186 : 179); // l / r
+                write(208); // l / r
             }
         }
     }
@@ -143,5 +146,22 @@ void OSD::setColor(uint8_t color, uint8_t bgcolor)
 }
 
 /****************************************************************************/
+
+void OSD::showMenu() {
+  action(CMD_OSD, ADDR_SHOW, 1);
+}
+
+void OSD::hideMenu() {
+  action(CMD_OSD, ADDR_SHOW, 0);
+}
+
+void OSD::showPopup() {
+  action(CMD_OSD, ADDR_POPUP, 1);
+}
+
+void OSD::hidePopup() {
+  action(CMD_OSD, ADDR_POPUP, 0);
+}
+
 
 // vim:cin:ai:sts=2 sw=2 ft=cpp
