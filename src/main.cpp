@@ -99,6 +99,7 @@ void setup()
   // load boot
   fpga_configure(FILENAME_BOOT);
   read_core(FILENAME_BOOT);
+  //read_roms(FILENAME_BOOT);
   is_osd = (core.type == CORE_TYPE_BOOT) ? true : false;
 
   zxosd.setPos(0,0);
@@ -192,6 +193,7 @@ void on_keyboard() {
       char buf[32]; f.toCharArray(buf, sizeof(buf));
       fpga_configure(buf);
       read_core(buf);
+      read_roms(buf);
     }
     Serial.println("On keyboard");
     core_browser(APP_COREBROWSER_MENU_OFFSET);
@@ -487,8 +489,8 @@ void on_time() {
 
 core_list_item_t get_core_list_item() {
   core_list_item_t core;
-  file.getName(core.filename, sizeof(core.filename)-1);
-  file.seek(FILE_POS_CORE_NAME); file.read(core.name, sizeof(core.name)-1);
+  file.getName(core.filename, sizeof(core.filename));
+  file.seek(FILE_POS_CORE_NAME); file.readBytes(core.name, 32); core.name[32] = '\0';
   uint8_t visible; file.seek(FILE_POS_CORE_VISIBLE); visible = file.read(); core.visible = (visible > 0);
   file.seek(FILE_POS_CORE_ORDER); core.order = file.read();
   file.seek(FILE_POS_CORE_TYPE); core.type = file.read();
@@ -519,8 +521,8 @@ void read_core(const char* filename) {
     halt("Unable to open bitstream file to read");
   }
 
-  file.getName(core.filename, sizeof(core.filename)-1);
-  file.seek(FILE_POS_CORE_NAME); file.read(core.name, sizeof(core.name)-1);
+  file.getName(core.filename, 32); core.filename[32] = '\0';
+  file.seek(FILE_POS_CORE_NAME); file.readBytes(core.name, 32); core.name[32] = '\0';
   uint8_t visible; file.seek(FILE_POS_CORE_VISIBLE); visible = file.read(); core.visible = (visible > 0);
   file.seek(FILE_POS_CORE_ORDER); core.order = file.read();
   file.seek(FILE_POS_CORE_TYPE); core.type = file.read();
@@ -531,52 +533,37 @@ void read_core(const char* filename) {
     default: Serial.println("Reserved");
   }
   core.bitstream_length = file_read32(FILE_POS_BITSTREAM_LEN);
-  char buf[32];
-  file.seek(FILE_POS_CORE_ID); file.read(buf, 31); strcpy(core.id, buf);
-  file.seek(FILE_POS_CORE_BUILD); file.read(buf, 8); strcpy(core.build, buf);
+  file.seek(FILE_POS_CORE_ID); file.readBytes(core.id, 32); core.id[32] = '\0';
+  file.seek(FILE_POS_CORE_BUILD); file.readBytes(core.build, 8); core.build[8] = '\0';
   file.seek(FILE_POS_CORE_EEPROM_BANK); core.eeprom_bank = file.read();
-
   uint32_t roms_len = file_read32(FILE_POS_ROM_LEN);
-  Serial.print("ROMS len "); Serial.println(roms_len);
-  uint32_t offset = 0;
-  uint32_t rom_idx = 0;
-  while (roms_len > 0) {
-    uint32_t rom_len = file_read32(FILE_POS_BITSTREAM_START + core.bitstream_length + offset);
-    uint32_t rom_addr = file_read32(FILE_POS_BITSTREAM_START + core.bitstream_length + offset + 4);
-    Serial.print("ROM #"); Serial.print(rom_idx); Serial.print(": addr="); Serial.print(rom_addr); Serial.print(", len="); Serial.println(rom_len);
-    for (uint32_t i=0; i<rom_len; i++) {
-      uint8_t r = file.read();
-      send_rom_byte(rom_addr + i, r);
-    }
-    offset = offset + rom_len + 8;
-    roms_len = roms_len - rom_len - 8;
-    rom_idx++;
-  }
-
-  offset = FILE_POS_BITSTREAM_START + core.bitstream_length + roms_len + offset;
-  Serial.print("OSD section "); Serial.println(FILE_POS_BITSTREAM_START + core.bitstream_length + roms_len + offset);
+  uint32_t offset = FILE_POS_BITSTREAM_START + core.bitstream_length + roms_len;
+  Serial.print("OSD section: "); Serial.println(offset);
   file.seek(offset); core.osd_len = file.read();
-  Serial.print("OSD len "); Serial.println(core.osd_len);
-  char buf16[16];
+  Serial.print("OSD len: "); Serial.println(core.osd_len);
   for (uint8_t i=0; i<core.osd_len; i++) {
-    file.seek(offset+1); core.osd[i].type = file.read();
-    file.seek(offset+2); core.osd[i].bits = file.read();
-    file.seek(offset+3); file.read(buf16, 15); strcpy(core.osd[i].name, buf16);
-    file.seek(offset+19); core.osd[i].def = file.read();
-    file.seek(offset+20); core.osd[i].options_len = file.read();
+    core.osd[i].type = file.read();
+    core.osd[i].bits = file.read();
+    file.readBytes(core.osd[i].name, 16); core.osd[i].name[16] = '\0';
+    core.osd[i].def = file.read();
+    core.osd[i].options_len = file.read();
+    if (core.osd[i].options_len > 8) {
+      core.osd[i].options_len = 8; // something goes wrong
+    } 
     for (uint8_t j=0; j<core.osd[i].options_len; j++) {
-      file.seek(offset+21+j*16); file.read(buf16, 15); strcpy(core.osd[i].options[j].name, buf16);
+      file.readBytes(core.osd[i].options[j].name, 16); core.osd[i].options[j].name[16] = '\0';
     }
-    offset = offset + 21 + (core.osd[i].options_len*16);
-    file.seek(offset); file.read(buf16, 15); strcpy(core.osd[i].hotkey, buf16);
-    file.seek(offset+16); core.osd[i].keys[0] = file.read();
-    file.seek(offset+17); core.osd[i].keys[1] = file.read();
-    file.seek(offset+18); core.osd[i].keys[2] = file.read();
-    offset = offset + 16 + 3 + 1;
+    file.readBytes(core.osd[i].hotkey, 16); core.osd[i].hotkey[16] = '\0';
+    core.osd[i].keys[0] = file.read();
+    core.osd[i].keys[1] = file.read();
+    file.read(); // reserved
+    file.read(); 
+    file.read();
   }
 
+  // dump parsed OSD items
   for(uint8_t i=0; i<core.osd_len; i++) {
-    Serial.printf("OSD %d: %s", i, core.osd[i].name); Serial.println();
+    Serial.printf("OSD %d: type: %d name: %s def: %d len: %d", i, core.osd[i].type, core.osd[i].name, core.osd[i].def, core.osd[i].options_len); Serial.println();
     for (uint8_t j=0; j<core.osd[i].options_len; j++) {
       Serial.print(core.osd[i].options[j].name); Serial.print(", "); 
     } 
@@ -584,14 +571,52 @@ void read_core(const char* filename) {
     Serial.print(core.osd[i].hotkey); Serial.println();
   }
 
-  // TODO: 
+  file.close();
+}
+
+void read_roms(const char* filename) {
+  if (!file.open(filename, FILE_READ)) {
+    halt("Unable to open bitstream file to read");
+  }
+
+  uint32_t bitstream_length = file_read32(FILE_POS_BITSTREAM_LEN);
+  uint32_t roms_len = file_read32(FILE_POS_ROM_LEN);
+  Serial.print("ROMS len "); Serial.println(roms_len);
+  uint32_t offset = 0;
+  uint32_t rom_idx = 0;
+  while (roms_len > 0) {
+    uint32_t rom_len = file_read32(FILE_POS_BITSTREAM_START + bitstream_length + offset);
+    uint32_t rom_addr = file_read32(FILE_POS_BITSTREAM_START + bitstream_length + offset + 4);
+    Serial.print("ROM #"); Serial.print(rom_idx); Serial.print(": addr="); Serial.print(rom_addr); Serial.print(", len="); Serial.println(rom_len);
+    for (uint32_t i=0; i<rom_len/256; i++) {
+      uint8_t buf[256];
+      int c = file.readBytes(buf, sizeof(buf));
+      for (int j=0; j<256; j++) {
+        send_rom_byte(rom_addr + i*256 + j, buf[j]);
+      }
+    }
+    offset = offset + rom_len + 8;
+    roms_len = roms_len - rom_len - 8;
+    rom_idx++;
+  }
 
   file.close();
 }
 
 void send_rom_byte(uint32_t addr, uint8_t data) {
-  // Serial.print("ROM "); Serial.print(addr, HEX); Serial.print(": "); Serial.print(data, HEX); Serial.println();
-  // todo: send via SPI
+  // send rombank address every 256 bytes
+  if (addr % 256 == 0) {
+    uint8_t rombank3 = (uint8_t)((addr & 0xFF000000) >> 24);
+    uint8_t rombank2 = (uint8_t)((addr & 0x00FF0000) >> 16);
+    uint8_t rombank1 = (uint8_t)((addr & 0x0000FF00) >> 8);
+    //Serial.printf("ROM bank %d %d %d", rombank1, rombank2, rombank3); Serial.println();
+    spi_send(CMD_ROMBANK, 0, rombank1);
+    spi_send(CMD_ROMBANK, 1, rombank2);
+    spi_send(CMD_ROMBANK, 2, rombank3);
+  }
+  // send lower 256 bytes
+  uint8_t romaddr = (uint8_t)((addr & 0x000000FF));
+  spi_send(CMD_ROMDATA, romaddr, data);
 }
 
 bool operator<(const core_list_item_t a, const core_list_item_t b) {

@@ -41,6 +41,8 @@
 #define CMD_JOYSTICK 0x03
 #define CMD_BTN 0x04
 #define CMD_SWITCHES 0x05
+#define CMD_ROMBANK 0x06
+#define CMD_ROMDATA 0x07
 
 #define CMD_USB_GAMEPAD 0x11
 #define CMD_USB_JOYSTICK 0x12
@@ -80,33 +82,33 @@ typedef struct {
 } queue_spi_t;
 
 typedef struct {
-	char name[32];
-	char filename[32];
+	char name[32+1];
+	char filename[32+1];
 	uint8_t order;
 	bool visible;
 	uint8_t type;
 } core_list_item_t;
 
 typedef struct {
-	char name[16];
+	char name[16+1];
 } core_osd_option_t;
 
 typedef struct {
 	uint8_t type;
 	uint8_t bits;
 	uint8_t def;
-	char name[16];
-	char hotkey[16];
-	uint8_t keys[3];
+	char name[16+1];
+	char hotkey[16+1];
+	uint8_t keys[2];
 	core_osd_option_t options[8];
 	uint8_t options_len;
 } core_osd_t;
 
 typedef struct {
-	char id[32];
-	char build[8];
-	char name[32];
-	char filename[32];
+	char id[32+1];
+	char build[8+1];
+	char name[32+1];
+	char filename[32+1];
 	uint8_t order;
 	bool visible;
 	uint8_t type;
@@ -127,6 +129,8 @@ void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data);
 void on_time();
 void on_keyboard();
 void core_browser(uint8_t vpos);
+
+void read_roms(const char* filename);
 void send_rom_byte(uint32_t addr, uint8_t data);
 
 uint32_t file_read32(uint32_t pos);
