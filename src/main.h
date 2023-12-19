@@ -77,7 +77,7 @@
 #define FILE_POS_BITSTREAM_START 1024
 #define FILENAME_BOOT "boot.kg1"
 
-#define APP_COREBROWSER_MENU_OFFSET 3
+#define APP_COREBROWSER_MENU_OFFSET 5
 
 typedef struct {
 	uint8_t cmd;
@@ -106,6 +106,7 @@ typedef struct {
 	uint8_t keys[2];
 	core_osd_option_t options[MAX_OSD_ITEM_OPTIONS];
 	uint8_t options_len;
+	uint8_t val;
 } core_osd_t;
 
 typedef struct {
@@ -120,7 +121,26 @@ typedef struct {
 	uint8_t eeprom_bank;
 	core_osd_t osd[MAX_OSD_ITEMS];
 	uint8_t osd_len;
+	uint8_t eeprom[256];
 } core_item_t;
+
+enum osd_state_e {
+    state_main = 0,
+    state_rtc,
+	state_core_browser,
+    state_about,
+    state_info,
+};
+
+enum osd_rtc_state_e {
+    state_rtc_hour = 0,
+    state_rtc_minute,
+    state_rtc_second,
+    state_rtc_day,
+    state_rtc_month,
+    state_rtc_year,
+    state_rtc_dow
+};
 
 void spi_queue(uint8_t cmd, uint8_t addr, uint8_t data);
 void spi_send(uint8_t cmd, uint8_t addr, uint8_t data);
@@ -140,5 +160,21 @@ void send_rom_byte(uint32_t addr, uint8_t data);
 uint32_t file_read32(uint32_t pos);
 uint32_t file_read24(uint32_t pos);
 uint16_t file_read16(uint32_t pos);
+
+void osd_print_header();
+void osd_print_logo(uint8_t x, uint8_t y);
+void osd_print_line(uint8_t y);
+void osd_print_space();
+void osd_print_footer();
+void osd_clear();
+
+void osd_init_overlay();
+void osd_init_popup(uint8_t event_type);
+void osd_init_rtc_overlay();
+void osd_init_about_overlay();
+void osd_init_info_overlay();
+void osd_init_core_browser_overlay();
+
+void popupFooter();
 
 #endif
