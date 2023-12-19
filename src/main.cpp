@@ -105,11 +105,10 @@ void setup()
   // load boot
   fpga_configure(FILENAME_BOOT);
   read_core(FILENAME_BOOT);
-  //read_roms(FILENAME_BOOT);
+  read_roms(FILENAME_BOOT);
   osd_state = state_core_browser;
-  osd_prev_state = state_core_browser;
   read_core_list();
-  osd_init_core_browser_overlay();
+  //osd_init_core_browser_overlay();
 }
 
 void core_browser(uint8_t vpos) {
@@ -150,56 +149,197 @@ void core_browser(uint8_t vpos) {
   zxosd.printf("Page %02d of %02d", core_page, core_pages);
 }
 
+void menu(uint8_t vpos) {
+  for (uint8_t i=0; i<core.osd_len; i++) {
+    String name = String(core.osd[i].name);
+    zxosd.setPos(0, i+vpos);
+    zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+    zxosd.print(name.substring(0,10));
+
+    String option = String(core.osd[i].options[core.osd[i].val].name);
+    zxosd.setPos(11, i+vpos);
+    if (curr_osd_item == i) {
+      zxosd.setColor(OSD::COLOR_BLACK, OSD::COLOR_YELLOW_I);
+    } else {
+      zxosd.setColor(OSD::COLOR_YELLOW_I, OSD::COLOR_BLACK);
+    }
+    zxosd.print(option.substring(0, 10));
+
+    String hotkey = String(core.osd[i].hotkey);
+    zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_BLACK);
+    if (core.osd[i].options_len > 0) {
+      zxosd.setPos(22, i+vpos);
+      zxosd.print(hotkey.substring(0,10));
+    } else {
+      zxosd.setPos(11, i+vpos);
+      zxosd.print(hotkey);
+    }
+  }
+}
+
+bool on_global_hotkeys() {
+  
+  // menu+esc to toggle osd
+  if (core.type != 0 && ((usb_keyboard_report.modifier & KEY_MOD_LMETA) || (usb_keyboard_report.modifier & KEY_MOD_RMETA)) && usb_keyboard_report.keycode[0] == KEY_ESC) {
+    is_osd = !is_osd;
+    if (is_osd) {
+      zxosd.showMenu();
+    } else {
+      zxosd.hideMenu();
+    }
+    return true;
+  }
+
+  // ctrl+alt+backspace to global reset rp2040
+  if (
+      ((usb_keyboard_report.modifier & KEY_MOD_LCTRL) || (usb_keyboard_report.modifier & KEY_MOD_RCTRL)) && 
+      ((usb_keyboard_report.modifier & KEY_MOD_LALT) || (usb_keyboard_report.modifier & KEY_MOD_RALT)) && 
+        usb_keyboard_report.keycode[0] == KEY_BACKSPACE) {
+     rp2040.reboot();
+     return true;
+  }
+
+  // ctrl+alt+del to core reset
+  if (
+      ((usb_keyboard_report.modifier & KEY_MOD_LCTRL) || (usb_keyboard_report.modifier & KEY_MOD_RCTRL)) && 
+      ((usb_keyboard_report.modifier & KEY_MOD_LALT) || (usb_keyboard_report.modifier & KEY_MOD_RALT)) && 
+        usb_keyboard_report.keycode[0] == KEY_DELETE) {
+     // todo: send reset somehow
+     return true;
+  }
+
+  // osd hotkey
+  for (uint8_t i=0; i<core.osd_len; i++) {
+    if (core.osd[i].keys[0] != 0 && (usb_keyboard_report.modifier & core.osd[i].keys[0])) {
+      if (core.osd[i].keys[1] != 0 && (usb_keyboard_report.keycode[0] == core.osd[i].keys[1])) {
+        if (core.osd[i].options_len > 0) {
+          curr_osd_item = i;
+        }
+        core.osd[i].val++; 
+        if (core.osd[i].val > core.osd[i].options_len-1) {
+          core.osd[i].val = 0;
+        }
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 // kbd event handler
 void on_keyboard() {
 
-  if (osd_state == state_core_browser) {
-    if (cores_len > 0) {
-      // down
-      if (usb_keyboard_report.keycode[0] == KEY_DOWN) {
-        if (core_sel < cores_len-1) {
-          core_sel++;
-        } else {
-          core_sel = 0;
-        }
-      }
+  bool need_redraw = on_global_hotkeys();
 
-      // up
-      if (usb_keyboard_report.keycode[0] == KEY_UP) {
-        if (core_sel > 0) {
-          core_sel--;
-        } else {
-          core_sel = cores_len-1;
+  // in-osd keyboard handle
+  if (is_osd) {
+    switch (osd_state) {
+      case state_core_browser:
+      if (cores_len > 0) {
+        // down
+        if (usb_keyboard_report.keycode[0] == KEY_DOWN) {
+          if (core_sel < cores_len-1) {
+            core_sel++;
+          } else {
+            core_sel = 0;
+          }
         }
-      }
 
-      // right
-      if (usb_keyboard_report.keycode[0] == KEY_RIGHT) {
-        if (core_sel + core_page_size <= cores_len-1) {
-          core_sel += core_page_size;
-        } else {
-          core_sel = cores_len-1;
+        // up
+        if (usb_keyboard_report.keycode[0] == KEY_UP) {
+          if (core_sel > 0) {
+            core_sel--;
+          } else {
+            core_sel = cores_len-1;
+          }
         }
-      }
 
-      // left
-      if (usb_keyboard_report.keycode[0] == KEY_LEFT) {
-        if (core_sel - core_page_size >= 0) {
-          core_sel -= core_page_size;
-        } else {
-          core_sel = 0;
+        // right
+        if (usb_keyboard_report.keycode[0] == KEY_RIGHT) {
+          if (core_sel + core_page_size <= cores_len-1) {
+            core_sel += core_page_size;
+          } else {
+            core_sel = cores_len-1;
+          }
+        }
+
+        // left
+        if (usb_keyboard_report.keycode[0] == KEY_LEFT) {
+          if (core_sel - core_page_size >= 0) {
+            core_sel -= core_page_size;
+          } else {
+            core_sel = 0;
+          }
+        }
+        
+        // enter
+        if (usb_keyboard_report.keycode[0] == KEY_ENTER) {
+          String f = String(cores[core_sel].filename); f.trim(); 
+          char buf[32]; f.toCharArray(buf, sizeof(buf));
+          fpga_configure(buf);
+          read_core(buf);
+          read_roms(buf);
+          osd_state = (core.type == 0) ? state_core_browser : state_main;
+        }
+        // redraw core browser
+        if (osd_state == state_core_browser) {
+          core_browser(APP_COREBROWSER_MENU_OFFSET);
         }
       }
-      
-      // enter
-      if (usb_keyboard_report.keycode[0] == KEY_ENTER) {
-        String f = String(cores[core_sel].filename); f.trim(); 
-        char buf[32]; f.toCharArray(buf, sizeof(buf));
-        fpga_configure(buf);
-        read_core(buf);
-        read_roms(buf);
-      }
-      core_browser(APP_COREBROWSER_MENU_OFFSET);
+      break;
+
+      case state_main:
+
+        // down
+        if (usb_keyboard_report.keycode[0] == KEY_DOWN) {
+          if (curr_osd_item < core.osd_len-1 && core.osd[curr_osd_item+1].options_len > 0) {
+            curr_osd_item++;
+          } else {
+            curr_osd_item = 0;
+          }
+          need_redraw = true;
+        }
+
+        // up
+        if (usb_keyboard_report.keycode[0] == KEY_UP) {
+          if (curr_osd_item > 0) {
+            curr_osd_item--;
+          } else {
+            // get last item with options
+            uint8_t last_osd_item = 0;
+            for (uint8_t i = 0; i < core.osd_len; i++) {
+              if (core.osd[i].options_len > 0) last_osd_item = i;
+            }
+            curr_osd_item = last_osd_item;
+          }
+          need_redraw = true;
+        }
+
+        // right, enter
+        if (usb_keyboard_report.keycode[0] == KEY_RIGHT || usb_keyboard_report.keycode[0] == KEY_ENTER) {
+          core.osd[curr_osd_item].val++; 
+          if (core.osd[curr_osd_item].val > core.osd[curr_osd_item].options_len-1) {
+            core.osd[curr_osd_item].val = 0;
+          }
+          need_redraw = true;
+        }
+
+        // left
+        if (usb_keyboard_report.keycode[0] == KEY_LEFT) {
+          if (core.osd[curr_osd_item].val > 0) {
+            core.osd[curr_osd_item].val--;
+          } else {
+            core.osd[curr_osd_item].val = core.osd[curr_osd_item].options_len-1;
+          }
+          need_redraw = true;
+        }
+
+        if (need_redraw) {
+          menu(APP_COREBROWSER_MENU_OFFSET);
+        }
+      break;
+
     }
   }
 }
@@ -216,35 +356,6 @@ void loop()
     extender.digitalWrite(2, counter %2 == 0);
     extender.digitalWrite(3, counter %2 != 0);
     my_timer.reset();
-
-    /*zxosd.setPos(0,2);
-    zxosd.setColor(OSD::COLOR_MAGENTA_I, OSD::COLOR_BLACK);
-    zxosd.print("Counter: ");
-    zxosd.setColor(OSD::COLOR_YELLOW_I, OSD::COLOR_BLACK);
-    zxosd.print(counter);
-    zxosd.print("     ");
-
-    zxosd.setPos(0,4);
-    zxosd.setColor(OSD::COLOR_GREEN_I, OSD::COLOR_BLACK);
-    zxosd.print("Time: ");
-    zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_BLACK);
-    zxosd.printf("%02d:%02d:%02d", zxrtc.getHour(), zxrtc.getMinute(), zxrtc.getSecond());
-    zxosd.print("     ");
-
-    zxosd.setPos(0,6);
-    zxosd.setColor(OSD::COLOR_BLUE_I, OSD::COLOR_BLACK);
-    zxosd.print("Kb: ");
-    zxosd.setColor(OSD::COLOR_YELLOW_I, OSD::COLOR_BLACK);
-    zxosd.printf("%02x %02x %02x %02x %02x %02x %02x"
-    , usb_keyboard_report.modifier
-    , usb_keyboard_report.keycode[0]
-    , usb_keyboard_report.keycode[1]
-    , usb_keyboard_report.keycode[2]
-    , usb_keyboard_report.keycode[3]
-    , usb_keyboard_report.keycode[4]
-    , usb_keyboard_report.keycode[5]
-    );
-    zxosd.print("             ");*/
   }
 
   static bool prev_btn1 = HIGH;
@@ -296,12 +407,17 @@ void loop()
     spi_send(CMD_JOYSTICK, 3, static_cast<uint8_t>(joyR & 0xFF00) >> 8);
   }
 
+  osd_handle();
+
   queue_spi_t packet;
 	while (queue_try_remove(&spi_event_queue, &packet)) {
     // capture keyboard events to osd when active
-    if (is_osd && packet.cmd == CMD_USB_KBD) {
+    if (packet.cmd == CMD_USB_KBD) {
       if (packet.addr == 1 && packet.data != 0) {
-        on_keyboard();
+          on_keyboard();
+      }
+      if (!is_osd) {
+        spi_send(packet.cmd, packet.addr, packet.data);
       }
     } else {
       spi_send(packet.cmd, packet.addr, packet.data);
@@ -744,32 +860,11 @@ void osd_init_overlay()
 
   osd_print_header();
 
-  // TODO: foreach core.osd
-  for (uint8_t i=0; i<core.osd_len; i++) {
-    zxosd.setPos(0, i+5);
-    zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-    zxosd.print(core.osd[i].name);
-
-    if (curr_osd_item == i) {
-      zxosd.setColor(OSD::COLOR_BLACK, OSD::COLOR_YELLOW_I);
-    } else {
-      zxosd.setColor(OSD::COLOR_YELLOW_I, OSD::COLOR_BLACK);
-    }
-    zxosd.print(core.osd[i].options[core.osd[i].val].name);
-
-    zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_BLACK);
-    zxosd.print(core.osd[i].hotkey);
-  }
-
-  // OSD / Core / Setup / Info / About / Test
-  zxosd.setPos(0,22); 
-  zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_BLACK);
-  zxosd.print("OSD Core Setup Info About Test");
-
-  osd_print_line(23);
+  menu(APP_COREBROWSER_MENU_OFFSET);
 
   // footer
-  zxosd.setPos(0,24); zxosd.print("Press Ctrl+Alt+Del to reboot");
+  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+  osd_print_line(24);
   zxosd.setPos(0,25); zxosd.print("Press Menu+Esc to toggle OSD");
 }
 
@@ -846,6 +941,30 @@ void osd_init_core_browser_overlay() {
   zxosd.setPos(1,25); zxosd.print("Press Enter to load selection");
 }
 
+void osd_handle() {
+  if (is_osd) {
+    if (osd_prev_state != osd_state) {
+      osd_prev_state = osd_state;
+      switch(osd_state) {
+        case state_core_browser:
+          osd_init_core_browser_overlay();
+        break;
+        case state_main:
+          osd_init_overlay();
+        break;
+        case state_rtc:
+          osd_init_rtc_overlay();
+        break;
+        case state_about:
+          osd_init_about_overlay();
+        break;
+        case state_info:
+          osd_init_info_overlay();
+        break;
+      }
+    }
+  }
+}
 
 
 

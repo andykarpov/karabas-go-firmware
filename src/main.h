@@ -153,6 +153,7 @@ void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data);
 void on_time();
 void on_keyboard();
 void core_browser(uint8_t vpos);
+void menu(uint8_t vpos);
 
 void read_roms(const char* filename);
 void send_rom_byte(uint32_t addr, uint8_t data);
@@ -160,6 +161,8 @@ void send_rom_byte(uint32_t addr, uint8_t data);
 uint32_t file_read32(uint32_t pos);
 uint32_t file_read24(uint32_t pos);
 uint16_t file_read16(uint32_t pos);
+
+void osd_handle();
 
 void osd_print_header();
 void osd_print_logo(uint8_t x, uint8_t y);
