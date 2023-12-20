@@ -648,7 +648,7 @@ void read_core(const char* filename) {
   file.seek(FILE_POS_CORE_ORDER); core.order = file.read();
   file.seek(FILE_POS_CORE_TYPE); core.type = file.read();
   is_osd = (core.type == CORE_TYPE_BOOT) ? true : false;
-  is_osd = true; // debug  
+  //is_osd = true; // debug  
   Serial.print("Core type: ");
   switch (core.type) {
     case 0: Serial.println("Boot"); break;
