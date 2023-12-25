@@ -43,6 +43,7 @@
 #define CMD_SWITCHES 0x05
 #define CMD_ROMBANK 0x06
 #define CMD_ROMDATA 0x07
+#define CMD_ROMLOADER 0x08
 
 #define CMD_USB_GAMEPAD 0x11
 #define CMD_USB_JOYSTICK 0x12
@@ -107,6 +108,7 @@ typedef struct {
 	core_osd_option_t options[MAX_OSD_ITEM_OPTIONS];
 	uint8_t options_len;
 	uint8_t val;
+	uint8_t prev_val;
 } core_osd_t;
 
 typedef struct {
@@ -122,6 +124,8 @@ typedef struct {
 	core_osd_t osd[MAX_OSD_ITEMS];
 	uint8_t osd_len;
 	uint8_t eeprom[256];
+	bool osd_need_save;
+	bool eeprom_need_save;
 } core_item_t;
 
 enum osd_state_e {
@@ -154,6 +158,16 @@ void on_time();
 void on_keyboard();
 void core_browser(uint8_t vpos);
 void menu(uint8_t vpos);
+
+void core_osd_save(uint8_t pos);
+void core_osd_send(uint8_t pos);
+void core_osd_trigger(uint8_t pos);
+void core_osd_send_all();
+
+uint8_t core_eeprom_get(uint8_t pos);
+void core_eeprom_set(uint8_t pos, uint8_t val);
+void core_eeprom_send(uint8_t pos);
+void core_eeprom_send_all();
 
 void read_roms(const char* filename);
 void send_rom_byte(uint32_t addr, uint8_t data);

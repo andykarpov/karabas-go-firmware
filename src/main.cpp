@@ -200,28 +200,40 @@ bool on_global_hotkeys() {
   }
 
   // ctrl+alt+del to core reset
-  if (
+  /*if (
       ((usb_keyboard_report.modifier & KEY_MOD_LCTRL) || (usb_keyboard_report.modifier & KEY_MOD_RCTRL)) && 
       ((usb_keyboard_report.modifier & KEY_MOD_LALT) || (usb_keyboard_report.modifier & KEY_MOD_RALT)) && 
         usb_keyboard_report.keycode[0] == KEY_DELETE) {
      // todo: send reset somehow
      return true;
-  }
+  }*/
 
   // osd hotkey
   for (uint8_t i=0; i<core.osd_len; i++) {
     if (core.osd[i].keys[0] != 0 && (usb_keyboard_report.modifier & core.osd[i].keys[0])) {
       if (core.osd[i].keys[1] != 0 && (usb_keyboard_report.keycode[0] == core.osd[i].keys[1])) {
-        if (core.osd[i].options_len > 0) {
-          curr_osd_item = i;
-        }
-        core.osd[i].val++; 
-        if (core.osd[i].val > core.osd[i].options_len-1) {
-          core.osd[i].val = 0;
+        if (core.osd[i].type == CORE_OSD_TYPE_SWITCH || core.osd[i].type == CORE_OSD_TYPE_NSWITCH) {
+          if (core.osd[i].options_len > 0) {
+            curr_osd_item = i;
+            core.osd[i].val++; 
+            if (core.osd[i].val > core.osd[i].options_len-1) {
+              core.osd[i].val = 0;
+            }
+            core_osd_send(i);
+            if (core.osd[i].type == CORE_OSD_TYPE_SWITCH) {
+              core.osd_need_save = true;
+            }
+          }
+        } else if (core.osd[i].type == CORE_OSD_TYPE_TRIGGER) {
+            core_osd_trigger(i);
         }
         return true;
       }
     }
+  }
+
+  if (core.osd_need_save) {
+    core_osd_save(curr_osd_item);
   }
 
   return false;
@@ -322,6 +334,10 @@ void on_keyboard() {
           if (core.osd[curr_osd_item].val > core.osd[curr_osd_item].options_len-1) {
             core.osd[curr_osd_item].val = 0;
           }
+          core_osd_send(curr_osd_item);
+          if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_SWITCH) {
+            core.osd_need_save = true;
+          }
           need_redraw = true;
         }
 
@@ -332,11 +348,19 @@ void on_keyboard() {
           } else {
             core.osd[curr_osd_item].val = core.osd[curr_osd_item].options_len-1;
           }
+          core_osd_send(curr_osd_item);
+          if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_SWITCH) {
+            core.osd_need_save = true;
+          }
           need_redraw = true;
         }
 
         if (need_redraw) {
           menu(APP_COREBROWSER_MENU_OFFSET);
+        }
+
+        if (core.osd_need_save) {
+          core_osd_save(curr_osd_item);
         }
       break;
 
@@ -344,6 +368,50 @@ void on_keyboard() {
   }
 }
 
+void core_osd_save(uint8_t pos)
+{
+  core.osd_need_save = false;
+  core.osd[pos].prev_val = core.osd[pos].val;
+  // TODO: save into file
+}
+
+void core_osd_send(uint8_t pos)
+{
+  spi_send(CMD_SWITCHES, pos, core.osd[pos].val);
+}
+
+void core_osd_send_all() 
+{
+  for (uint8_t i=0; i<core.osd_len; i++) {
+    spi_send(CMD_SWITCHES, i, core.osd[i].val);
+  }
+}
+
+void core_osd_trigger(uint8_t pos)
+{
+  spi_send(CMD_SWITCHES, pos, 1);
+  delay(100);
+  spi_send(CMD_SWITCHES, pos, 0);
+}
+
+uint8_t core_eeprom_get(uint8_t pos) {
+  return core.eeprom[pos];
+}
+
+void core_eeprom_set(uint8_t pos, uint8_t val) {
+  core.eeprom[pos] = val;
+  // TODO: save into file
+}
+
+void core_eeprom_send(uint8_t pos) {
+  spi_send(CMD_RTC, pos, core.eeprom[pos]);
+}
+
+void core_eeprom_send_all() {
+  for (uint8_t i=0; i<255; i++) {
+    spi_send(CMD_RTC, i, core.eeprom[i]);
+  }
+}
 
 uint8_t counter = 0;
 
@@ -596,7 +664,7 @@ void spi_send(uint8_t cmd, uint8_t addr, uint8_t data) {
 void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data) {
   // TODO
   // init request
-  // etc
+  // etc 
 }
 
 /**
@@ -689,6 +757,7 @@ void read_core(const char* filename) {
     file.seek(FILE_POS_EEPROM_DATA + i);
     core.eeprom[i] = file.read();
   }
+  core_eeprom_send_all();
 
   // read saved switches
   for(uint8_t i=0; i<core.osd_len; i++) {
@@ -697,7 +766,9 @@ void read_core(const char* filename) {
     if (core.osd[i].val > core.osd[i].options_len-1) {
       core.osd[i].val = core.osd[i].def;
     }
+    core.osd[i].prev_val = core.osd[i].val;
   }
+  core_osd_send_all();
 
   // dump parsed OSD items
   for(uint8_t i=0; i<core.osd_len; i++) {
@@ -727,6 +798,9 @@ void read_roms(const char* filename) {
   uint32_t bitstream_length = file_read32(FILE_POS_BITSTREAM_LEN);
   uint32_t roms_len = file_read32(FILE_POS_ROM_LEN);
   Serial.print("ROMS len "); Serial.println(roms_len);
+  if (roms_len > 0) {
+    spi_send(CMD_ROMLOADER, 0, 1);
+  }
   uint32_t offset = 0;
   uint32_t rom_idx = 0;
   while (roms_len > 0) {
@@ -744,6 +818,7 @@ void read_roms(const char* filename) {
     roms_len = roms_len - rom_len - 8;
     rom_idx++;
   }
+  spi_send(CMD_ROMLOADER, 0, 0);
 
   file.close();
 }
@@ -762,11 +837,6 @@ void send_rom_byte(uint32_t addr, uint8_t data) {
   // send lower 256 bytes
   uint8_t romaddr = (uint8_t)((addr & 0x000000FF));
   spi_send(CMD_ROMDATA, romaddr, data);
-}
-
-bool operator<(const core_list_item_t a, const core_list_item_t b) {
-  // Lexicographically compare the tuples (hour, minute)
-  return a.order < b.order;
 }
 
 void osd_print_logo(uint8_t x, uint8_t y)
@@ -966,5 +1036,8 @@ void osd_handle() {
   }
 }
 
-
+bool operator<(const core_list_item_t a, const core_list_item_t b) {
+  // Lexicographically compare the tuples (hour, minute)
+  return a.order < b.order;
+}
 
