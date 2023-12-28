@@ -210,7 +210,7 @@ bool on_global_hotkeys() {
 
   // osd hotkey
   for (uint8_t i=0; i<core.osd_len; i++) {
-    if (core.osd[i].keys[0] != 0 && (usb_keyboard_report.modifier & core.osd[i].keys[0])) {
+    if (core.osd[i].keys[0] != 0 && (usb_keyboard_report.modifier & core.osd[i].keys[0]) || (core.osd[i].keys[0] == 0)) {
       if (core.osd[i].keys[1] != 0 && (usb_keyboard_report.keycode[0] == core.osd[i].keys[1])) {
         if (core.osd[i].type == CORE_OSD_TYPE_SWITCH || core.osd[i].type == CORE_OSD_TYPE_NSWITCH) {
           if (core.osd[i].options_len > 0) {
@@ -378,6 +378,7 @@ void core_osd_save(uint8_t pos)
 void core_osd_send(uint8_t pos)
 {
   spi_send(CMD_SWITCHES, pos, core.osd[pos].val);
+  Serial.printf("Switch: %s %d", core.osd[pos].name, core.osd[pos].val); Serial.println();
 }
 
 void core_osd_send_all() 
@@ -392,6 +393,7 @@ void core_osd_trigger(uint8_t pos)
   spi_send(CMD_SWITCHES, pos, 1);
   delay(100);
   spi_send(CMD_SWITCHES, pos, 0);
+  Serial.printf("Trigger: %s", core.osd[pos].name); Serial.println();
 }
 
 uint8_t core_eeprom_get(uint8_t pos) {
@@ -772,7 +774,7 @@ void read_core(const char* filename) {
 
   // dump parsed OSD items
   for(uint8_t i=0; i<core.osd_len; i++) {
-    Serial.printf("OSD %d: type: %d name: %s def: %d len: %d", i, core.osd[i].type, core.osd[i].name, core.osd[i].def, core.osd[i].options_len); Serial.println();
+    Serial.printf("OSD %d: type: %d name: %s def: %d len: %d keys: [%d %d %d]", i, core.osd[i].type, core.osd[i].name, core.osd[i].def, core.osd[i].options_len, core.osd[i].keys[0], core.osd[i].keys[1], core.osd[i].keys[2]); Serial.println();
     for (uint8_t j=0; j<core.osd[i].options_len; j++) {
       Serial.print(core.osd[i].options[j].name); Serial.print(", "); 
     } 
