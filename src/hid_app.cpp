@@ -55,7 +55,12 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
     break;
 
     case HID_ITF_PROTOCOL_MOUSE:
-      process_mouse_report( dev_addr, instance, (hid_mouse_report_t const*) report, len );
+        if (len == 3 || len == 4) {
+          process_mouse_report( dev_addr, instance, (hid_mouse_report_t const*) report, len );
+        } else if (len == 8) {
+          process_mouse_report_ext(dev_addr, instance, (hid_mouse_report_ext_t const*) report, len);
+        }
+      //process_mouse_report( dev_addr, instance, (hid_mouse_report_t const*) report, len );
     break;
 
     default:
@@ -110,7 +115,29 @@ static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_r
                  (report->buttons ^ prev_report.buttons) ||
                  (report->wheel ^ prev_report.wheel));
   if (change) {
+    Serial.print("Mouse protocol len="); Serial.println(len);
     usb_mouse_report = *report;
+    spi_queue(CMD_USB_MOUSE, 0, report->x);
+    spi_queue(CMD_USB_MOUSE, 1, report->y);
+    spi_queue(CMD_USB_MOUSE, 2, report->wheel);
+    spi_queue(CMD_USB_MOUSE, 3, report->buttons);
+    Serial.printf("Mouse X: %d, Y: %d, Z: %d, B: %d", report->x, report->y, report->wheel, report->buttons);
+    Serial.println();
+    prev_report = *report;
+  }
+}
+
+static void process_mouse_report_ext(uint8_t dev_addr, uint8_t instance, hid_mouse_report_ext_t const * report, uint16_t len) {
+
+  static hid_mouse_report_ext_t prev_report = {0};
+
+  bool change = ((report->x ^ prev_report.x) || 
+                 (report->y ^ prev_report.y) || 
+                 (report->buttons ^ prev_report.buttons) ||
+                 (report->wheel ^ prev_report.wheel));
+  if (change) {
+    Serial.print("Mouse protocol len="); Serial.println(len);
+    //usb_mouse_report = *report;
     spi_queue(CMD_USB_MOUSE, 0, report->x);
     spi_queue(CMD_USB_MOUSE, 1, report->y);
     spi_queue(CMD_USB_MOUSE, 2, report->wheel);
@@ -248,7 +275,11 @@ static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t c
         process_kbd_report( dev_addr, instance, (hid_keyboard_report_t const*) report, len );
       break;
       case HID_USAGE_DESKTOP_MOUSE:
-        process_mouse_report( dev_addr, instance, (hid_mouse_report_t const*) report, len );
+        if (len == 3 || len == 4) {
+          process_mouse_report( dev_addr, instance, (hid_mouse_report_t const*) report, len );
+        } else if (len == 8) {
+          process_mouse_report_ext(dev_addr, instance, (hid_mouse_report_ext_t const*) report, len);
+        }
       break;
       case HID_USAGE_DESKTOP_JOYSTICK:
         process_joystick_report( dev_addr, instance, report, len );
