@@ -115,7 +115,7 @@ static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_r
                  (report->buttons ^ prev_report.buttons) ||
                  (report->wheel ^ prev_report.wheel));
   if (change) {
-    Serial.print("Mouse protocol len="); Serial.println(len);
+    //Serial.print("Mouse protocol len="); Serial.println(len);
     usb_mouse_report = *report;
     spi_queue(CMD_USB_MOUSE, 0, report->x);
     spi_queue(CMD_USB_MOUSE, 1, report->y);
@@ -136,7 +136,7 @@ static void process_mouse_report_ext(uint8_t dev_addr, uint8_t instance, hid_mou
                  (report->buttons ^ prev_report.buttons) ||
                  (report->wheel ^ prev_report.wheel));
   if (change) {
-    Serial.print("Mouse protocol len="); Serial.println(len);
+    //Serial.print("Mouse protocol len="); Serial.println(len);
     //usb_mouse_report = *report;
     spi_queue(CMD_USB_MOUSE, 0, report->x);
     spi_queue(CMD_USB_MOUSE, 1, report->y);

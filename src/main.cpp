@@ -124,7 +124,7 @@ void core_browser(uint8_t vpos) {
   //Serial.print("From: "); Serial.print(core_from); Serial.print(" to: "); Serial.println(core_to);
   //Serial.print("Selected: "); Serial.println(core_sel);
   for(uint8_t i=core_from; i < core_to; i++) {
-    Serial.print(cores[i].name); Serial.println(cores[i].order);
+    //Serial.print(cores[i].name); Serial.println(cores[i].order);
     zxosd.setPos(0, pos);
     if (core_sel == i) {
       zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLUE);
@@ -723,9 +723,9 @@ void read_core(const char* filename) {
   file.seek(FILE_POS_CORE_EEPROM_BANK); core.eeprom_bank = file.read();
   uint32_t roms_len = file_read32(FILE_POS_ROM_LEN);
   uint32_t offset = FILE_POS_BITSTREAM_START + core.bitstream_length + roms_len;
-  Serial.print("OSD section: "); Serial.println(offset);
+  //Serial.print("OSD section: "); Serial.println(offset);
   file.seek(offset); core.osd_len = file.read();
-  Serial.print("OSD len: "); Serial.println(core.osd_len);
+  //Serial.print("OSD len: "); Serial.println(core.osd_len);
   for (uint8_t i=0; i<core.osd_len; i++) {
     core.osd[i].type = file.read();
     core.osd[i].bits = file.read();
@@ -768,14 +768,14 @@ void read_core(const char* filename) {
   core_osd_send_all();
 
   // dump parsed OSD items
-  for(uint8_t i=0; i<core.osd_len; i++) {
+  /*for(uint8_t i=0; i<core.osd_len; i++) {
     Serial.printf("OSD %d: type: %d name: %s def: %d len: %d keys: [%d %d %d]", i, core.osd[i].type, core.osd[i].name, core.osd[i].def, core.osd[i].options_len, core.osd[i].keys[0], core.osd[i].keys[1], core.osd[i].keys[2]); Serial.println();
     for (uint8_t j=0; j<core.osd[i].options_len; j++) {
       Serial.print(core.osd[i].options[j].name); Serial.print(", "); 
     } 
     Serial.println();
     Serial.print(core.osd[i].hotkey); Serial.println();
-  }
+  }*/
 
   file.close();
 
@@ -796,7 +796,7 @@ void read_roms(const char* filename) {
 
   uint32_t bitstream_length = file_read32(FILE_POS_BITSTREAM_LEN);
   uint32_t roms_len = file_read32(FILE_POS_ROM_LEN);
-  Serial.print("ROMS len "); Serial.println(roms_len);
+  //Serial.print("ROMS len "); Serial.println(roms_len);
   if (roms_len > 0) {
     spi_send(CMD_ROMLOADER, 0, 1);
   }
@@ -805,7 +805,7 @@ void read_roms(const char* filename) {
   while (roms_len > 0) {
     uint32_t rom_len = file_read32(FILE_POS_BITSTREAM_START + bitstream_length + offset);
     uint32_t rom_addr = file_read32(FILE_POS_BITSTREAM_START + bitstream_length + offset + 4);
-    Serial.print("ROM #"); Serial.print(rom_idx); Serial.print(": addr="); Serial.print(rom_addr); Serial.print(", len="); Serial.println(rom_len);
+    //Serial.print("ROM #"); Serial.print(rom_idx); Serial.print(": addr="); Serial.print(rom_addr); Serial.print(", len="); Serial.println(rom_len);
     for (uint32_t i=0; i<rom_len/256; i++) {
       uint8_t buf[256];
       int c = file.readBytes(buf, sizeof(buf));

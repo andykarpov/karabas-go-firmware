@@ -113,7 +113,7 @@ void RTC::sendTime() {
 }
 
 void RTC::sendAll() {
-  Serial.println("RTC.sendAll()");
+  //Serial.println("RTC.sendAll()");
   uint8_t data;
   for (int reg = 0; reg <= 255; reg++) {
     switch (reg) {
@@ -128,14 +128,14 @@ void RTC::sendAll() {
       case 8: data = rtc_is_bcd ? bin2bcd(rtc_month) : rtc_month; break;
       case 9: data = rtc_is_bcd ? bin2bcd(get_year(rtc_year)) : get_year(rtc_year); break;
       case 0xA: data = getEepromReg(reg); bitClear(data, 7); break;
-      case 0xB: data = getEepromReg(reg); break;
+      case 0xB: data = getEepromReg(reg); bitSet(data, 1); break; // always 24h mode
       case 0xC: data = 0x0; break;
       case 0xD: data = 0x80; break; // 10000000
       default: data = getEepromReg(reg); send(reg, data);
     }
     send(reg,data);
-    Serial.printf("%02x ", data); 
-    if ((reg > 0) && ((reg+1) % 16 == 0)) Serial.println();
+    //Serial.printf("%02x ", data); 
+    //if ((reg > 0) && ((reg+1) % 16 == 0)) Serial.println();
   }
 }
 
@@ -143,9 +143,9 @@ void RTC::setData(uint8_t addr, uint8_t data) {
   // skip multiple writes for clock registers
   if (rtc_last_write_reg == addr && rtc_last_write_data == data && addr <= 0xD) return;
 
-   if (addr != 0x0C && addr != 0x0D && addr < 0x0A) {
-     Serial.printf("Set rtc reg %02x = %02x", addr, data); Serial.println();
-   }
+   //if (addr != 0x0C && addr != 0x0D && addr < 0x0A) {
+   //  Serial.printf("Set rtc reg %02x = %02x", addr, data); Serial.println();
+   //}
 
     rtc_last_write_reg = addr;
     rtc_last_write_data = data;
@@ -164,7 +164,8 @@ void RTC::setData(uint8_t addr, uint8_t data) {
       case 9: rtc_year = (rtc_is_bcd ? bcd2bin(data) : data); rtc_clock.setYear(rtc_year); break;
       case 0xA: bitClear(data, 7); setEepromReg(addr, data); break;
       case 0xB: rtc_is_bcd = !bitRead(data, 2); 
-                rtc_is_24h = bitRead(data, 1); 
+                rtc_is_24h = true; //bitRead(data, 1);  
+                bitSet(data, 1); // always 24-h format
                 bitClear(data, 7);
                 prev = getEepromReg(addr);
                 if (prev != data) {
@@ -272,7 +273,7 @@ uint8_t RTC::getEepromReg(uint8_t reg) {
 }
 
 void RTC::setEepromReg(uint8_t reg, uint8_t val) {
-  Serial.printf("Set eeprom reg %02x = %02x", reg, val); Serial.println();
+  //Serial.printf("Set eeprom reg %02x = %02x", reg, val); Serial.println();
   if (eeprom_bank < 4) {
     eeprom.put(eeprom_bank*256 + reg, val);
   } else {
