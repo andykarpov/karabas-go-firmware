@@ -74,7 +74,7 @@ void setup()
   Wire.setSCL(PIN_I2C_SCL);
   Wire.begin();
 
-  while ( !Serial ) delay(10);   // wait for native usb
+  //while ( !Serial ) delay(10);   // wait for native usb
 
   Serial.begin(115200);
   Serial.println("Karabas Go RP2040 firmware");
