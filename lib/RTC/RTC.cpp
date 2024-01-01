@@ -36,11 +36,11 @@ void RTC::begin(spi_cb act, osd_cb evt)
   action = act;
   event = evt;
 
+  rtc_clock.setClockMode(false); // 24h format always
+
   readAll();
   sendTime();
-  if (!getInitDone()) {
-    sendAll();
-  }
+  sendAll();
   is_started = true;
 }
 
@@ -90,7 +90,6 @@ void RTC::save() {
 void RTC::fixInvalidTime() {
   if (rtc_day < 1 || rtc_day > 31) rtc_day = 1;
   if (rtc_month < 1 || rtc_month > 12) rtc_month = 1;
-  if (rtc_year < 2000 || rtc_year > 4095) rtc_year = 2000;
   if (rtc_hours > 23) rtc_hours = 0;
   if (rtc_minutes > 59) rtc_minutes = 0;
   if (rtc_seconds > 59) rtc_seconds = 0;
@@ -103,6 +102,7 @@ void RTC::send(uint8_t reg, uint8_t data) {
 }
 
 void RTC::sendTime() {
+  //Serial.printf("Time: %02d:%02d:%02d %02d-%02d-%02d", rtc_hours, rtc_minutes, rtc_seconds, rtc_day, rtc_month, rtc_year); Serial.println();
   send(0, rtc_is_bcd ? bin2bcd(rtc_seconds) : rtc_seconds);
   send(2, rtc_is_bcd ? bin2bcd(rtc_minutes) : rtc_minutes);
   send(4, rtc_is_24h ? (rtc_is_bcd ? bin2bcd(rtc_hours) : rtc_hours) : (rtc_is_bcd ? bin2bcd(time_to12h(rtc_hours)) : time_to12h(rtc_hours)));
@@ -113,26 +113,29 @@ void RTC::sendTime() {
 }
 
 void RTC::sendAll() {
+  Serial.println("RTC.sendAll()");
   uint8_t data;
   for (int reg = 0; reg <= 255; reg++) {
     switch (reg) {
-      case 0: send(reg, rtc_is_bcd ? bin2bcd(rtc_seconds) : rtc_seconds); break;
-      case 1: send(reg, rtc_is_bcd ? bin2bcd(rtc_seconds_alarm) : rtc_seconds_alarm); break;
-      case 2: send(reg, rtc_is_bcd ? bin2bcd(rtc_minutes) : rtc_minutes); break;
-      case 3: send(reg, rtc_is_bcd ? bin2bcd(rtc_minutes_alarm) : rtc_minutes_alarm); break;
-      case 4: send(reg, rtc_is_24h ? (rtc_is_bcd ? bin2bcd(rtc_hours) : rtc_hours) : (rtc_is_bcd ? bin2bcd(time_to12h(rtc_hours)) : time_to12h(rtc_hours))); break;
-      case 5: send(reg, rtc_is_24h ? (rtc_is_bcd ? bin2bcd(rtc_hours_alarm) : rtc_hours_alarm) : (rtc_is_bcd ? bin2bcd(time_to12h(rtc_hours_alarm)) : time_to12h(rtc_hours_alarm))); break;
-      case 6: send(reg, rtc_is_bcd ? bin2bcd(rtc_week) : rtc_week); break;
-      case 7: send(reg, rtc_is_bcd ? bin2bcd(rtc_day) : rtc_day); break;
-      case 8: send(reg, rtc_is_bcd ? bin2bcd(rtc_month) : rtc_month); break;
-      case 9: send(reg, rtc_is_bcd ? bin2bcd(get_year(rtc_year)) : get_year(rtc_year)); break;
-      case 0xA: data = eeprom.read(EEPROM_RTC_OFFSET + reg); bitClear(data, 7); send(reg, data); break;
-      case 0xB: data = eeprom.read(EEPROM_RTC_OFFSET + reg); send(reg, data); break;
-      case 0xC: send(reg, 0x0); break;
-      case 0xD: send(reg, 0x80); break;
-      default: send(reg, eeprom.read(EEPROM_RTC_OFFSET + reg));
-      //default: send(reg, reg); // test!!!
+      case 0: data = rtc_is_bcd ? bin2bcd(rtc_seconds) : rtc_seconds; break;
+      case 1: data = rtc_is_bcd ? bin2bcd(rtc_seconds_alarm) : rtc_seconds_alarm; break;
+      case 2: data = rtc_is_bcd ? bin2bcd(rtc_minutes) : rtc_minutes; break;
+      case 3: data = rtc_is_bcd ? bin2bcd(rtc_minutes_alarm) : rtc_minutes_alarm; break;
+      case 4: data = rtc_is_24h ? (rtc_is_bcd ? bin2bcd(rtc_hours) : rtc_hours) : (rtc_is_bcd ? bin2bcd(time_to12h(rtc_hours)) : time_to12h(rtc_hours)); break;
+      case 5: data = rtc_is_24h ? (rtc_is_bcd ? bin2bcd(rtc_hours_alarm) : rtc_hours_alarm) : (rtc_is_bcd ? bin2bcd(time_to12h(rtc_hours_alarm)) : time_to12h(rtc_hours_alarm)); break;
+      case 6: data = rtc_is_bcd ? bin2bcd(rtc_week) : rtc_week; break;
+      case 7: data = rtc_is_bcd ? bin2bcd(rtc_day) : rtc_day; break;
+      case 8: data = rtc_is_bcd ? bin2bcd(rtc_month) : rtc_month; break;
+      case 9: data = rtc_is_bcd ? bin2bcd(get_year(rtc_year)) : get_year(rtc_year); break;
+      case 0xA: data = getEepromReg(reg); bitClear(data, 7); break;
+      case 0xB: data = getEepromReg(reg); break;
+      case 0xC: data = 0x0; break;
+      case 0xD: data = 0x80; break; // 10000000
+      default: data = getEepromReg(reg); send(reg, data);
     }
+    send(reg,data);
+    Serial.printf("%02x ", data); 
+    if ((reg > 0) && ((reg+1) % 16 == 0)) Serial.println();
   }
 }
 
@@ -140,8 +143,13 @@ void RTC::setData(uint8_t addr, uint8_t data) {
   // skip multiple writes for clock registers
   if (rtc_last_write_reg == addr && rtc_last_write_data == data && addr <= 0xD) return;
 
+   if (addr != 0x0C && addr != 0x0D && addr < 0x0A) {
+     Serial.printf("Set rtc reg %02x = %02x", addr, data); Serial.println();
+   }
+
     rtc_last_write_reg = addr;
     rtc_last_write_data = data;
+    uint8_t prev;
 
     switch (addr) {
       case 0: rtc_seconds = rtc_is_bcd ? bcd2bin(data) : data; rtc_clock.setSecond(rtc_seconds); break;
@@ -153,12 +161,19 @@ void RTC::setData(uint8_t addr, uint8_t data) {
       case 6: rtc_week = rtc_is_bcd ? bcd2bin(data) : data; rtc_clock.setDoW(rtc_week); break;
       case 7: rtc_day = rtc_is_bcd ? bcd2bin(data) : data; rtc_clock.setDate(rtc_day); break;
       case 8: rtc_month = rtc_is_bcd ? bcd2bin(data) : data; rtc_clock.setMonth(rtc_month); break;
-      case 9: rtc_year = 2000 + (rtc_is_bcd ? bcd2bin(data) : data); rtc_clock.setYear(rtc_year); break;
-      case 0xA: bitClear(data, 7); eeprom.put(EEPROM_RTC_OFFSET + addr, data); break;
-      case 0xB: rtc_is_bcd = !bitRead(data, 2); rtc_is_24h = bitRead(data, 1); eeprom.put(EEPROM_RTC_OFFSET + addr, data); break;
+      case 9: rtc_year = (rtc_is_bcd ? bcd2bin(data) : data); rtc_clock.setYear(rtc_year); break;
+      case 0xA: bitClear(data, 7); setEepromReg(addr, data); break;
+      case 0xB: rtc_is_bcd = !bitRead(data, 2); 
+                rtc_is_24h = bitRead(data, 1); 
+                bitClear(data, 7);
+                prev = getEepromReg(addr);
+                if (prev != data) {
+                  setEepromReg(addr, data); 
+                }
+                break;
       case 0xC: // C and D are read-only registers
       case 0xD: break;
-      default: eeprom.put(EEPROM_RTC_OFFSET + addr, data);
+      default: setEepromReg(addr, data);
     }
 }
 
@@ -175,7 +190,7 @@ void RTC::readAll() {
   rtc_seconds = rtc_clock.getSecond();
 
   // read is_bcd, is_24h
-  uint8_t reg_b = eeprom.read(EEPROM_RTC_OFFSET + 0xB);
+  uint8_t reg_b = getEepromReg(0xB);
   rtc_is_bcd = !bitRead(reg_b, 2);
   rtc_is_24h = bitRead(reg_b, 1);
 }
@@ -236,14 +251,6 @@ void RTC::setYear(int val) {
   rtc_year = val;
 }
 
-  bool RTC::getInitDone() {
-    return rtc_init_done;
-  }
-
-  void RTC::setInitDone(bool val) {
-    rtc_init_done = val;
-  }
-
 bool RTC::getTimeIsValid() {
   return (rtc_hours <= 23 && rtc_minutes <= 59 && rtc_seconds <= 59);
 }
@@ -251,6 +258,28 @@ bool RTC::getTimeIsValid() {
 bool RTC::getDateIsValid() {
   return (rtc_year < 9999 && rtc_month <= 12 && rtc_day <= 31 && rtc_week <= 7);
 }
+
+void RTC::setEepromBank(uint8_t val) {
+  eeprom_bank = val;
+}
+
+uint8_t RTC::getEepromReg(uint8_t reg) {
+  if (eeprom_bank < 4) {
+    return eeprom.read(eeprom_bank*256 + reg);
+  } else {
+    return core_eeprom_get(reg);
+  }
+}
+
+void RTC::setEepromReg(uint8_t reg, uint8_t val) {
+  Serial.printf("Set eeprom reg %02x = %02x", reg, val); Serial.println();
+  if (eeprom_bank < 4) {
+    eeprom.put(eeprom_bank*256 + reg, val);
+  } else {
+    core_eeprom_set(reg, val);
+  }
+}
+
 
 /****************************************************************************/
 

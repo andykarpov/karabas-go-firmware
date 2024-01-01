@@ -50,6 +50,10 @@
 
 #define CMD_OSD 0x20
 
+#define CMD_INIT_START 0xFD
+#define CMD_INIT_DONE 0xFE
+#define CMD_NOP 0xFF
+
 #define CORE_TYPE_BOOT 0x0
 #define CORE_TYPE_OSD 0x1
 #define CORE_TYPE_OTHER 0x2
@@ -193,5 +197,8 @@ void osd_init_info_overlay();
 void osd_init_core_browser_overlay();
 
 void popupFooter();
+
+uint8_t core_eeprom_get(uint8_t pos);
+void core_eeprom_set(uint8_t pos, uint8_t val);
 
 #endif

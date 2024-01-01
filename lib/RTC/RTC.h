@@ -15,10 +15,8 @@
 
 /****************************************************************************/
 
-#define EEPROM_RTC_OFFSET 0x0
-
-// RTC INIT command
-#define CMD_RTC_INIT_REQ 0xFC
+extern uint8_t core_eeprom_get(uint8_t pos);
+extern void core_eeprom_set(uint8_t pos, uint8_t val);
 
 // RTC DATA XCHANGE command
 #define CMD_RTC 0xFA
@@ -48,10 +46,11 @@ private:
   uint8_t rtc_hours_alarm = 0;
   uint8_t rtc_week = 1;
 
+  uint8_t eeprom_bank = 0;
+
   volatile int rtc_last_write_reg = 0;
   volatile uint8_t rtc_last_write_data = 0;
 
-  bool rtc_init_done = false;
   bool rtc_is_bcd = false;
   bool rtc_is_24h = true;
 
@@ -93,11 +92,12 @@ public:
   void setMonth(uint8_t val);
   void setYear(int val);
 
-  bool getInitDone();
-  void setInitDone(bool val);
-
   bool getTimeIsValid();
   bool getDateIsValid();
+
+  void setEepromBank(uint8_t val);
+  uint8_t getEepromReg(uint8_t reg);
+  void setEepromReg(uint8_t reg, uint8_t val);
 
 };
 

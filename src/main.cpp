@@ -405,16 +405,6 @@ void core_eeprom_set(uint8_t pos, uint8_t val) {
   // TODO: save into file
 }
 
-void core_eeprom_send(uint8_t pos) {
-  spi_send(CMD_RTC, pos, core.eeprom[pos]);
-}
-
-void core_eeprom_send_all() {
-  for (uint8_t i=0; i<255; i++) {
-    spi_send(CMD_RTC, i, core.eeprom[i]);
-  }
-}
-
 uint8_t counter = 0;
 
 void loop()
@@ -493,6 +483,8 @@ void loop()
       spi_send(packet.cmd, packet.addr, packet.data);
     }
   }
+
+  spi_send(CMD_NOP, 0 ,0);
 }
 
 // core1's setup
@@ -664,9 +656,9 @@ void spi_send(uint8_t cmd, uint8_t addr, uint8_t data) {
  * @param data data
  */
 void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data) {
-  // TODO
-  // init request
-  // etc 
+  if (cmd == CMD_RTC) {
+    zxrtc.setData(addr, data);
+  }
 }
 
 /**
@@ -755,11 +747,14 @@ void read_core(const char* filename) {
   }
 
   // read eeprom data
-  for (uint8_t i=0; i<255; i++) {
-    file.seek(FILE_POS_EEPROM_DATA + i);
-    core.eeprom[i] = file.read();
+  if (core.eeprom_bank >= 4) {
+    for (uint8_t i=0; i<255; i++) {
+      file.seek(FILE_POS_EEPROM_DATA + i);
+      core.eeprom[i] = file.read();
+    }
   }
-  core_eeprom_send_all();
+  zxrtc.setEepromBank(core.eeprom_bank);
+  zxrtc.sendAll();
 
   // read saved switches
   for(uint8_t i=0; i<core.osd_len; i++) {
@@ -790,6 +785,8 @@ void read_core(const char* filename) {
   } else {
     zxosd.hideMenu();
   }
+  delay(20);
+  spi_send(CMD_INIT_DONE, 0, 0);
 }
 
 void read_roms(const char* filename) {
