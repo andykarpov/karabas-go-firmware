@@ -267,8 +267,10 @@ void RTC::setEepromBank(uint8_t val) {
 uint8_t RTC::getEepromReg(uint8_t reg) {
   if (eeprom_bank < 4) {
     return eeprom.read(eeprom_bank*256 + reg);
-  } else {
+  } else if (eeprom_bank < 255) {
     return core_eeprom_get(reg);
+  } else {
+    return 0xFF;
   }
 }
 
@@ -276,8 +278,10 @@ void RTC::setEepromReg(uint8_t reg, uint8_t val) {
   //Serial.printf("Set eeprom reg %02x = %02x", reg, val); Serial.println();
   if (eeprom_bank < 4) {
     eeprom.put(eeprom_bank*256 + reg, val);
-  } else {
+  } else if (eeprom_bank < 255) {
     core_eeprom_set(reg, val);
+  } else {
+    // noting here, 255 means no eeprom allowed
   }
 }
 

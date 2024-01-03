@@ -397,12 +397,12 @@ void core_osd_trigger(uint8_t pos)
 }
 
 uint8_t core_eeprom_get(uint8_t pos) {
-  return core.eeprom[pos];
+  return core.eeprom[pos].val;
 }
 
 void core_eeprom_set(uint8_t pos, uint8_t val) {
-  core.eeprom[pos] = val;
-  // TODO: save into file
+  core.eeprom[pos].val = val;
+  core.eeprom_need_save = true;
 }
 
 uint8_t counter = 0;
@@ -467,7 +467,7 @@ void loop()
     spi_send(CMD_JOYSTICK, 3, static_cast<uint8_t>(joyR & 0xFF00) >> 8);
   }
 
-  osd_handle();
+  osd_handle(false);
 
   queue_spi_t packet;
 	while (queue_try_remove(&spi_event_queue, &packet)) {
@@ -746,11 +746,13 @@ void read_core(const char* filename) {
     file.read();
   }
 
-  // read eeprom data
-  if (core.eeprom_bank >= 4) {
+  // read eeprom data from file (in case rombank = 4 and up)
+  // 255 means no eeprom allowed by core
+  if (core.eeprom_bank >= MAX_EEPROM_BANKS && core.eeprom_bank != NO_EEPROM_BANK) {
     for (uint8_t i=0; i<255; i++) {
       file.seek(FILE_POS_EEPROM_DATA + i);
-      core.eeprom[i] = file.read();
+      core.eeprom[i].val = file.read();
+      core.eeprom[i].prev_val = core.eeprom[i].val;
     }
   }
   zxrtc.setEepromBank(core.eeprom_bank);
@@ -787,6 +789,8 @@ void read_core(const char* filename) {
   }
   delay(20);
   spi_send(CMD_INIT_DONE, 0, 0);
+
+  osd_handle(true);
 }
 
 void read_roms(const char* filename) {
@@ -1010,9 +1014,9 @@ void osd_init_core_browser_overlay() {
   zxosd.setPos(1,25); zxosd.print("Press Enter to load selection");
 }
 
-void osd_handle() {
+void osd_handle(bool force) {
   if (is_osd) {
-    if (osd_prev_state != osd_state) {
+    if ((osd_prev_state != osd_state) || force) {
       osd_prev_state = osd_state;
       switch(osd_state) {
         case state_core_browser:

@@ -67,6 +67,9 @@
 #define MAX_CORES_PER_PAGE 16
 #define MAX_OSD_ITEMS 32
 #define MAX_OSD_ITEM_OPTIONS 8
+#define MAX_EEPROM_ITEMS 256
+#define MAX_EEPROM_BANKS 4
+#define NO_EEPROM_BANK 255
 
 #define FILE_POS_CORE_ID 4
 #define FILE_POS_CORE_NAME 36
@@ -116,6 +119,11 @@ typedef struct {
 } core_osd_t;
 
 typedef struct {
+	uint8_t val;
+	uint8_t prev_val;
+} core_eeprom_t;
+
+typedef struct {
 	char id[32+1];
 	char build[8+1];
 	char name[32+1];
@@ -127,7 +135,7 @@ typedef struct {
 	uint8_t eeprom_bank;
 	core_osd_t osd[MAX_OSD_ITEMS];
 	uint8_t osd_len;
-	uint8_t eeprom[256];
+	core_eeprom_t eeprom[MAX_EEPROM_ITEMS];
 	bool osd_need_save;
 	bool eeprom_need_save;
 } core_item_t;
@@ -180,7 +188,7 @@ uint32_t file_read32(uint32_t pos);
 uint32_t file_read24(uint32_t pos);
 uint16_t file_read16(uint32_t pos);
 
-void osd_handle();
+void osd_handle(bool force);
 
 void osd_print_header();
 void osd_print_logo(uint8_t x, uint8_t y);
