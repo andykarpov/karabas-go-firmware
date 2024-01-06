@@ -103,12 +103,18 @@ void setup()
   //sd.ls(&Serial, LS_SIZE);
 
   // load boot
-  fpga_configure(FILENAME_BOOT);
-  read_core(FILENAME_BOOT);
-  read_roms(FILENAME_BOOT);
+  do_configure(FILENAME_BOOT);
   osd_state = state_core_browser;
   read_core_list();
   //osd_init_core_browser_overlay();
+}
+
+void do_configure(const char* filename) {
+  fpga_configure(filename);
+  spi_send(CMD_INIT_START, 0, 0);
+  read_core(filename);
+  read_roms(filename);
+  spi_send(CMD_INIT_DONE, 0, 0);
 }
 
 void core_browser(uint8_t vpos) {
@@ -289,9 +295,7 @@ void on_keyboard() {
         if (usb_keyboard_report.keycode[0] == KEY_ENTER) {
           String f = String(cores[core_sel].filename); f.trim(); 
           char buf[32]; f.toCharArray(buf, sizeof(buf));
-          fpga_configure(buf);
-          read_core(buf);
-          read_roms(buf);
+          do_configure(buf);
           osd_state = (core.type == 0) ? state_core_browser : state_main;
         }
         // redraw core browser
@@ -405,16 +409,12 @@ void core_eeprom_set(uint8_t pos, uint8_t val) {
   core.eeprom_need_save = true;
 }
 
-uint8_t counter = 0;
-
 void loop()
 {
   zxrtc.handle();
 
   if (my_timer.elapsed_millis() >= 100) {
-    counter++;
-    extender.digitalWrite(2, counter %2 == 0);
-    extender.digitalWrite(3, counter %2 != 0);
+    extender.digitalWrite(2, LOW);
     my_timer.reset();
   }
 
@@ -442,11 +442,11 @@ void loop()
     Serial.flush();
     rp2040.reboot();
   }
-  if (btn2 == LOW) {
+  /*if (btn2 == LOW) {
       Serial.println("Reboot to bootloader");
       Serial.flush();
       rp2040.rebootToBootloader();
-  }
+  }*/
 
   // joy reading
   uint16_t joyL = sega.getState(true);
@@ -473,6 +473,7 @@ void loop()
 	while (queue_try_remove(&spi_event_queue, &packet)) {
     // capture keyboard events to osd when active
     if (packet.cmd == CMD_USB_KBD) {
+      extender.digitalWrite(3, !(usb_keyboard_report.modifier != 0 || usb_keyboard_report.keycode[0] != 0));
       if (packet.addr == 1 && packet.data != 0) {
           on_keyboard();
       }
@@ -787,8 +788,6 @@ void read_core(const char* filename) {
   } else {
     zxosd.hideMenu();
   }
-  delay(20);
-  spi_send(CMD_INIT_DONE, 0, 0);
 
   osd_handle(true);
 }

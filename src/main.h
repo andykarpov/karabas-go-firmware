@@ -50,6 +50,8 @@
 
 #define CMD_OSD 0x20
 
+#define CMD_RTC 0xFA
+
 #define CMD_INIT_START 0xFD
 #define CMD_INIT_DONE 0xFE
 #define CMD_NOP 0xFF
@@ -164,6 +166,7 @@ core_list_item_t get_core_list_item();
 void read_core_list();
 void read_core(const char* filename);
 uint32_t fpga_configure(const char* filename);
+void do_configure(const char* filename);
 void halt(const char* msg);
 void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data);
 void on_time();
