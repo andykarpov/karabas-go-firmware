@@ -374,9 +374,20 @@ void on_keyboard() {
 
 void core_osd_save(uint8_t pos)
 {
+  if (!file.open(core.filename, FILE_WRITE)) {
+    halt("Unable to open bitstream file to write");
+  }  
+  if (!file.isWritable()) {
+    halt("File is not writable");
+  }
+
   core.osd_need_save = false;
   core.osd[pos].prev_val = core.osd[pos].val;
-  // TODO: save into file
+
+  file.seek(FILE_POS_SWITCHES_DATA + pos);
+  file.write(core.osd[pos].val);
+
+  file.close();
 }
 
 void core_osd_send(uint8_t pos)
@@ -732,6 +743,8 @@ void read_core(const char* filename) {
     core.osd[i].bits = file.read();
     file.readBytes(core.osd[i].name, 16); core.osd[i].name[16] = '\0';
     core.osd[i].def = file.read();
+    core.osd[i].val = core.osd[i].def;
+    core.osd[i].prev_val = core.osd[i].def;
     core.osd[i].options_len = file.read();
     if (core.osd[i].options_len > 8) {
       core.osd[i].options_len = 8; // something goes wrong
