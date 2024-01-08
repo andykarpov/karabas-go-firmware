@@ -185,8 +185,8 @@ void menu(uint8_t vpos) {
 
 bool on_global_hotkeys() {
   
-  // menu+esc to toggle osd
-  if (core.type != 0 && ((usb_keyboard_report.modifier & KEY_MOD_LMETA) || (usb_keyboard_report.modifier & KEY_MOD_RMETA)) && usb_keyboard_report.keycode[0] == KEY_ESC) {
+  // menu+esc to toggle osd only for osd supported cores
+  if (core.type != 0 && core.type != 255 && ((usb_keyboard_report.modifier & KEY_MOD_LMETA) || (usb_keyboard_report.modifier & KEY_MOD_RMETA)) && usb_keyboard_report.keycode[0] == KEY_ESC) {
     is_osd = !is_osd;
     if (is_osd) {
       zxosd.showMenu();
