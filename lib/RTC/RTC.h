@@ -33,6 +33,7 @@ private:
   spi_cb action;
   osd_cb event;
   bool is_started = false;
+  bool has_eeprom = false;
 
   int rtc_year = 0;
   uint8_t rtc_month = 0;
@@ -67,7 +68,6 @@ public:
   void handle();
 
   void save();
-  void fixInvalidTime();
   void send(uint8_t reg, uint8_t data);
   void sendTime();
   void sendAll();

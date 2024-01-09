@@ -55,6 +55,7 @@ uint8_t curr_osd_item = 0;
 
 bool has_extender = false;
 bool has_sd = false;
+bool has_fs = false;
 
 // the setup function runs once when you press reset or power the board
 void setup()
@@ -80,7 +81,7 @@ void setup()
   Wire.setSCL(PIN_I2C_SCL);
   Wire.begin();
 
-  while ( !Serial ) delay(10);   // wait for native usb
+  //while ( !Serial ) delay(10);   // wait for native usb
 
   Serial.begin(115200);
   Serial.println("Karabas Go RP2040 firmware");
@@ -105,10 +106,17 @@ void setup()
   zxosd.begin(spi_send);
 
   // LittleFS
+  Serial.print("Mounting Flash... ");
   LittleFSConfig cfg;
   cfg.setAutoFormat(true);
   LittleFS.setConfig(cfg);
-  LittleFS.begin();
+  if (!LittleFS.begin()) {
+    has_fs = false;
+    Serial.println("Failed");
+  } else {
+    has_fs = true;
+    Serial.println("Done");
+  }
 
   // SD
   Serial.print("Mounting SD card... ");
@@ -126,7 +134,7 @@ void setup()
   // load boot
   if (has_sd && sd.exists(FILENAME_BOOT)) {  
     do_configure(FILENAME_BOOT);
-  } else if (LittleFS.exists(FILENAME_FBOOT)) {
+  } else if (has_fs && LittleFS.exists(FILENAME_FBOOT)) {
     do_configure(FILENAME_FBOOT);
   } else {
     halt("Boot file not found. System stopped");
@@ -404,9 +412,11 @@ void on_keyboard() {
 void core_osd_save(uint8_t pos)
 {
   bool is_flash = is_flashfs(core.filename);
+  //Serial.print("Core osd "); Serial.print(core.osd[pos].name); Serial.print("="); Serial.println(core.osd[pos].val);
+  //Serial.print(core.filename); Serial.print(" type "); Serial.println(is_flash ? " flash" : " sd");
 
   if (is_flash) {
-    ffile = LittleFS.open(core.filename, "w");
+    ffile = LittleFS.open(core.filename, "r+"); // read+write
     core.osd_need_save = false;
     core.osd[pos].prev_val = core.osd[pos].val;
     ffile.seek(FILE_POS_SWITCHES_DATA + pos);
@@ -828,18 +838,20 @@ core_list_item_t get_core_list_item(bool is_flash) {
 void read_core_list() {
 
   // files from flash
-  fs::Dir dir = LittleFS.openDir("/");
-  dir.rewind();
-  while (dir.next()) {
-    if (dir.isFile()) {
-      ffile = dir.openFile("r");
-      char filename[32]; file_get_name(filename, sizeof(filename), true);
-      uint8_t len = strlen(filename);
-      if (strstr(strlwr(filename + (len - 4)), ".kg1")) {
-        cores[cores_len] = get_core_list_item(true);
-        cores_len++;
+  if (has_fs) {
+    fs::Dir dir = LittleFS.openDir("/");
+    dir.rewind();
+    while (dir.next()) {
+      if (dir.isFile()) {
+        ffile = dir.openFile("r");
+        char filename[32]; file_get_name(filename, sizeof(filename), true);
+        uint8_t len = strlen(filename);
+        if (strstr(strlwr(filename + (len - 4)), ".kg1")) {
+          cores[cores_len] = get_core_list_item(true);
+          cores_len++;
+        }
+        ffile.close();
       }
-      ffile.close();
     }
   }
 
@@ -877,7 +889,14 @@ void read_core(const char* filename) {
   }
 
   core.flash = is_flash;
-  file_get_name(core.filename, 32, is_flash); core.filename[32] = '\0';
+  if (is_flash) {
+    String s = String(ffile.fullName());
+    s = "/" + s;
+    s.toCharArray(core.filename, sizeof(core.filename));
+  } else {
+    file.getName(core.filename, sizeof(core.filename));
+  }
+  core.filename[32] = '\0';
   file_seek(FILE_POS_CORE_NAME, is_flash); file_read_bytes(core.name, 32, is_flash); core.name[32] = '\0';
   uint8_t visible; file_seek(FILE_POS_CORE_VISIBLE, is_flash); visible = file_read(is_flash); core.visible = (visible > 0);
   file_seek(FILE_POS_CORE_ORDER, is_flash); core.order = file_read(is_flash);

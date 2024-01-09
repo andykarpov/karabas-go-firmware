@@ -25,9 +25,11 @@ void RTC::begin(spi_cb act, osd_cb evt)
   eeprom.setMemoryType(8);
   if (eeprom.begin() == false) {
     Serial.println("No EEPROM memory detected.");
+    has_eeprom = false;
   } else {
     Serial.print("I2C EEPROM detected. Size in bytes: ");
     Serial.println(eeprom.length());
+    has_eeprom = true;
   }
 
   Serial.print("I2C DS3231 RTC detected. Temperature: ");
@@ -38,9 +40,12 @@ void RTC::begin(spi_cb act, osd_cb evt)
 
   rtc_clock.setClockMode(false); // 24h format always
 
+  // run the clock in case of OFS flag is on
+  if (!rtc_clock.oscillatorCheck()) {
+    rtc_clock.setSecond(0);
+  }
+
   readAll();
-  sendTime();
-  sendAll();
   is_started = true;
 }
 
@@ -85,16 +90,6 @@ void RTC::save() {
   rtc_clock.setHour(rtc_hours);
   rtc_clock.setMinute(rtc_minutes);
   rtc_clock.setSecond(rtc_seconds);
-}
-
-void RTC::fixInvalidTime() {
-  if (rtc_day < 1 || rtc_day > 31) rtc_day = 1;
-  if (rtc_month < 1 || rtc_month > 12) rtc_month = 1;
-  if (rtc_hours > 23) rtc_hours = 0;
-  if (rtc_minutes > 59) rtc_minutes = 0;
-  if (rtc_seconds > 59) rtc_seconds = 0;
-  if (rtc_week < 1 || rtc_week > 7) rtc_week = 1;
-  save();
 }
 
 void RTC::send(uint8_t reg, uint8_t data) {
@@ -265,9 +260,9 @@ void RTC::setEepromBank(uint8_t val) {
 }
 
 uint8_t RTC::getEepromReg(uint8_t reg) {
-  if (eeprom_bank < 4) {
+  if (has_eeprom && eeprom_bank < 4) {
     return eeprom.read(eeprom_bank*256 + reg);
-  } else if (eeprom_bank < 255) {
+  } else if (eeprom_bank >=4 && eeprom_bank < 255) {
     return core_eeprom_get(reg);
   } else {
     return 0xFF;
@@ -276,9 +271,9 @@ uint8_t RTC::getEepromReg(uint8_t reg) {
 
 void RTC::setEepromReg(uint8_t reg, uint8_t val) {
   //Serial.printf("Set eeprom reg %02x = %02x", reg, val); Serial.println();
-  if (eeprom_bank < 4) {
+  if (has_eeprom && eeprom_bank < 4) {
     eeprom.put(eeprom_bank*256 + reg, val);
-  } else if (eeprom_bank < 255) {
+  } else if (eeprom_bank >= 4 && eeprom_bank < 255) {
     core_eeprom_set(reg, val);
   } else {
     // noting here, 255 means no eeprom allowed
