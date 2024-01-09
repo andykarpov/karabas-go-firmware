@@ -86,6 +86,7 @@
 #define FILE_POS_SWITCHES_DATA 512
 #define FILE_POS_BITSTREAM_START 1024
 #define FILENAME_BOOT "boot.kg1"
+#define FILENAME_FBOOT "/boot.kg1"
 
 #define APP_COREBROWSER_MENU_OFFSET 5
 
@@ -96,8 +97,10 @@ typedef struct {
 } queue_spi_t;
 
 typedef struct {
+	bool flash;
 	char name[32+1];
 	char filename[32+1];
+	char build[8+1];
 	uint8_t order;
 	bool visible;
 	uint8_t type;
@@ -130,6 +133,7 @@ typedef struct {
 	char build[8+1];
 	char name[32+1];
 	char filename[32+1];
+	bool flash;
 	uint8_t order;
 	bool visible;
 	uint8_t type;
@@ -162,7 +166,7 @@ enum osd_rtc_state_e {
 
 void spi_queue(uint8_t cmd, uint8_t addr, uint8_t data);
 void spi_send(uint8_t cmd, uint8_t addr, uint8_t data);
-core_list_item_t get_core_list_item();
+core_list_item_t get_core_list_item(bool is_flash);
 void read_core_list();
 void read_core(const char* filename);
 uint32_t fpga_configure(const char* filename);
@@ -173,6 +177,7 @@ void on_time();
 void on_keyboard();
 void core_browser(uint8_t vpos);
 void menu(uint8_t vpos);
+bool is_flashfs(const char* filename);
 
 void core_osd_save(uint8_t pos);
 void core_osd_send(uint8_t pos);
@@ -187,9 +192,14 @@ void core_eeprom_send_all();
 void read_roms(const char* filename);
 void send_rom_byte(uint32_t addr, uint8_t data);
 
-uint32_t file_read32(uint32_t pos);
-uint32_t file_read24(uint32_t pos);
-uint16_t file_read16(uint32_t pos);
+void file_seek(uint32_t pos, bool is_flash);
+uint8_t file_read(bool is_flash);
+size_t file_read_bytes(char *buf, size_t len, bool is_flash);
+void file_get_name(char *buf, size_t len, bool is_flash);
+int file_read_buf(char *buf, size_t len, bool is_flash);
+uint32_t file_read32(uint32_t pos, bool is_flash);
+uint32_t file_read24(uint32_t pos, bool is_flash);
+uint16_t file_read16(uint32_t pos, bool is_flash);
 
 void osd_handle(bool force);
 

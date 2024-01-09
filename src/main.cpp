@@ -4,6 +4,7 @@
 #include "PioSpi.h"
 #include <SparkFun_PCA9536_Arduino_Library.h>
 #include "SdFat.h"
+#include "LittleFS.h"
 #include "pio_usb.h"
 #include "Adafruit_TinyUSB.h"
 #include "elapsed.h"
@@ -24,8 +25,10 @@ PCA9536 extender;
 Elapsed my_timer;
 RTC zxrtc;
 SdFs sd;
-FsFile file;
+FsFile file;  
 FsFile root;
+fs::Dir froot;
+fs::File ffile;
 SegaController sega;
 OSD zxosd;
 
@@ -49,6 +52,9 @@ uint8_t osd_prev_state = state_main;
 uint8_t osd_rtc_state = state_rtc_dow;
 uint8_t osd_prev_rtc_state = state_rtc_dow;
 uint8_t curr_osd_item = 0;
+
+bool has_extender = false;
+bool has_sd = false;
 
 // the setup function runs once when you press reset or power the board
 void setup()
@@ -74,36 +80,57 @@ void setup()
   Wire.setSCL(PIN_I2C_SCL);
   Wire.begin();
 
-  //while ( !Serial ) delay(10);   // wait for native usb
+  while ( !Serial ) delay(10);   // wait for native usb
 
   Serial.begin(115200);
   Serial.println("Karabas Go RP2040 firmware");
 
   if (extender.begin() == false) {
-    halt("PCA9536 unavailable. Please check soldering.");
+    has_extender = false;
+    Serial.println("PCA9536 unavailable. Please check soldering.");
+  } else {
+    Serial.println("I2C PCA9536 extender detected");
+    has_extender = true;
   }
-  Serial.println("I2C PCA9536 extender detected");
 
-  extender.pinMode(PIN_EXT_BTN1, INPUT_PULLUP);
-  extender.pinMode(PIN_EXT_BTN2, INPUT_PULLUP);
-  extender.pinMode(PIN_EXT_LED1, OUTPUT);
-  extender.pinMode(PIN_EXT_LED2, OUTPUT);
+  if (has_extender) {
+    extender.pinMode(PIN_EXT_BTN1, INPUT_PULLUP);
+    extender.pinMode(PIN_EXT_BTN2, INPUT_PULLUP);
+    extender.pinMode(PIN_EXT_LED1, OUTPUT);
+    extender.pinMode(PIN_EXT_LED2, OUTPUT);
+  }
 
   zxrtc.begin(spi_send, on_time);
   sega.begin(PIN_JOY_SCK, PIN_JOY_LOAD, PIN_JOY_DATA, PIN_JOY_P7);
   zxosd.begin(spi_send);
 
+  // LittleFS
+  LittleFSConfig cfg;
+  cfg.setAutoFormat(true);
+  LittleFS.setConfig(cfg);
+  LittleFS.begin();
+
   // SD
   Serial.print("Mounting SD card... ");
   if (!sd.begin(SD_CONFIG)) {
-    sd.initErrorHalt(&Serial);
+    has_sd = false;
+    //sd.initErrorHalt(&Serial);
+    Serial.println("Failed");
+  } else {
+    has_sd = true;
+    Serial.println("Done");
   }
-  Serial.println("Done");
 
   //sd.ls(&Serial, LS_SIZE);
 
   // load boot
-  do_configure(FILENAME_BOOT);
+  if (has_sd && sd.exists(FILENAME_BOOT)) {  
+    do_configure(FILENAME_BOOT);
+  } else if (LittleFS.exists(FILENAME_FBOOT)) {
+    do_configure(FILENAME_FBOOT);
+  } else {
+    halt("Boot file not found. System stopped");
+  }
   osd_state = state_core_browser;
   read_core_list();
   //osd_init_core_browser_overlay();
@@ -137,9 +164,11 @@ void core_browser(uint8_t vpos) {
     } else {
       zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
     }
-    char name[29]; memcpy(name, cores[i].name, 28); name[28] = '\0';
+    char name[18]; memcpy(name, cores[i].name, 17); name[17] = '\0';
     zxosd.printf("%-3d ", i+1); 
     zxosd.print(name);
+    zxosd.print(cores[i].build);
+    zxosd.print(cores[i].flash ? "  F" : " SD");
     pos++;
   }
   //Serial.print("Fill: "); Serial.println(core_fill);
@@ -374,20 +403,28 @@ void on_keyboard() {
 
 void core_osd_save(uint8_t pos)
 {
-  if (!file.open(core.filename, FILE_WRITE)) {
-    halt("Unable to open bitstream file to write");
-  }  
-  if (!file.isWritable()) {
-    halt("File is not writable");
+  bool is_flash = is_flashfs(core.filename);
+
+  if (is_flash) {
+    ffile = LittleFS.open(core.filename, "w");
+    core.osd_need_save = false;
+    core.osd[pos].prev_val = core.osd[pos].val;
+    ffile.seek(FILE_POS_SWITCHES_DATA + pos);
+    ffile.write(core.osd[pos].val);
+    ffile.close();
+  } else {
+    if (!file.open(core.filename, FILE_WRITE)) {
+      halt("Unable to open bitstream file to write");
+    }  
+    if (!file.isWritable()) {
+      halt("File is not writable");
+    }
+    core.osd_need_save = false;
+    core.osd[pos].prev_val = core.osd[pos].val;
+    file.seek(FILE_POS_SWITCHES_DATA + pos);
+    file.write(core.osd[pos].val);
+    file.close();
   }
-
-  core.osd_need_save = false;
-  core.osd[pos].prev_val = core.osd[pos].val;
-
-  file.seek(FILE_POS_SWITCHES_DATA + pos);
-  file.write(core.osd[pos].val);
-
-  file.close();
 }
 
 void core_osd_send(uint8_t pos)
@@ -424,15 +461,15 @@ void loop()
 {
   zxrtc.handle();
 
-  if (my_timer.elapsed_millis() >= 100) {
+  if (has_extender && my_timer.elapsed_millis() >= 100) {
     extender.digitalWrite(2, LOW);
     my_timer.reset();
   }
 
   static bool prev_btn1 = HIGH;
   static bool prev_btn2 = HIGH;
-  bool btn1 = extender.digitalRead(0);
-  bool btn2 = extender.digitalRead(1);
+  bool btn1 = has_extender ? extender.digitalRead(0) : HIGH;
+  bool btn2 = has_extender ? extender.digitalRead(1) : HIGH;
 
   if (prev_btn1 != btn1) {
     Serial.print("Button 1: "); Serial.println((btn1 == LOW) ? "on" : "off");
@@ -484,7 +521,7 @@ void loop()
 	while (queue_try_remove(&spi_event_queue, &packet)) {
     // capture keyboard events to osd when active
     if (packet.cmd == CMD_USB_KBD) {
-      extender.digitalWrite(3, !(usb_keyboard_report.modifier != 0 || usb_keyboard_report.keycode[0] != 0));
+      if (has_extender) extender.digitalWrite(3, !(usb_keyboard_report.modifier != 0 || usb_keyboard_report.keycode[0] != 0));
       if (packet.addr == 1 && packet.data != 0) {
           on_keyboard();
       }
@@ -525,37 +562,112 @@ void halt(const char* msg) {
   bool blink = false;
   while(true) {
       blink = !blink;
-      extender.digitalWrite(PIN_EXT_LED1, blink);
-      extender.digitalWrite(PIN_EXT_LED2, blink);
+      if (has_extender) {
+        extender.digitalWrite(PIN_EXT_LED1, blink);
+        extender.digitalWrite(PIN_EXT_LED2, blink);
+      }
       delay(100);
   }
 }
 
-uint16_t file_read16(uint32_t pos) {
-  file.seek(pos);
-  uint8_t buf[2] = {0};
+void file_seek(uint32_t pos, bool is_flash) {
+  if (is_flash) {
+    ffile.seek(pos);
+  } else {
+    file.seek(pos);
+  }
+}
+
+uint8_t file_read(bool is_flash) {
+  if (is_flash) {
+    return ffile.read();
+  } else {
+    return file.read();
+  }
+}
+
+size_t file_read_bytes(char *buf, size_t len, bool is_flash) {
+  if (is_flash) {
+    return ffile.readBytes(buf, len);
+  } else {
+    return file.readBytes(buf, len);
+  }
+}
+
+int file_read_buf(char *buf, size_t len, bool is_flash) {
+  if (is_flash) {
+    return ffile.readBytes(buf, len);
+  } else {
+    return file.read(buf, len);
+  }
+}
+
+uint16_t file_read16(uint32_t pos, bool is_flash) {
+  file_seek(pos, is_flash);
+  
   uint16_t res = 0;
-  file.readBytes(buf, sizeof(buf));
-  res = buf[1] + buf[0]*256;
+
+  if (is_flash) {
+    char buf[2] = {0};
+    ffile.readBytes(buf, sizeof(buf));
+    res = buf[1] + buf[0]*256;
+  } else {
+    uint8_t buf[2] = {0};
+    file.readBytes(buf, sizeof(buf));
+    res = buf[1] + buf[0]*256;
+  }
+  
   return res;
 }
 
-uint32_t file_read24(uint32_t pos) {
-  file.seek(pos);
-  uint8_t buf[3] = {0};
+uint32_t file_read24(uint32_t pos, bool is_flash) {
+  file_seek(pos, is_flash);
+
   uint32_t res = 0;
-  file.readBytes(buf, sizeof(buf));
-  res = buf[2] + buf[1]*256 + buf[0]*256*256;
+
+  if (is_flash) {
+    char buf[3] = {0};
+    ffile.readBytes(buf, sizeof(buf));
+    res = buf[2] + buf[1]*256 + buf[0]*256*256;
+  } else {
+    uint8_t buf[3] = {0};
+    file.readBytes(buf, sizeof(buf));
+    res = buf[2] + buf[1]*256 + buf[0]*256*256;
+  }
+
   return res;
 }
 
-uint32_t file_read32(uint32_t pos) {
-  file.seek(pos);
-  uint8_t buf[4] = {0};
+uint32_t file_read32(uint32_t pos, bool is_flash) {
+  file_seek(pos, is_flash);
+
   uint32_t res = 0;
-  file.readBytes(buf, sizeof(buf));
-  res = buf[3] + buf[2]*256 + buf[1]*256*256 + buf[0]*256*256*256;
+  if (is_flash) {
+    char buf[4] = {0};
+    ffile.readBytes(buf, sizeof(buf));
+    res = buf[3] + buf[2]*256 + buf[1]*256*256 + buf[0]*256*256*256;
+  } else {
+    uint8_t buf[4] = {0};
+    file.readBytes(buf, sizeof(buf));
+    res = buf[3] + buf[2]*256 + buf[1]*256*256 + buf[0]*256*256*256;
+  }
+
   return res;
+}
+
+void file_get_name(char *buf, size_t len, bool is_flash) {
+  if (is_flash) {
+    String s = String(ffile.fullName());
+    s = "/" + s;
+    s.toCharArray(buf, len);
+  } else {
+    file.getName(buf, sizeof(buf));
+  }
+}
+
+bool is_flashfs(const char* filename) {
+  String s = String(filename);
+  return (s.charAt(0) == '/');
 }
 
 /**
@@ -567,16 +679,22 @@ uint32_t fpga_configure(const char* filename) {
 
   Serial.print("Configuring FPGA by "); Serial.println(filename);
 
-  if (!file.open(filename, FILE_READ)) {
-    halt("Unable to open bitstream file to read");
-  }
+  bool is_flash = is_flashfs(filename);
+
+  if (is_flash) {
+    ffile = LittleFS.open(filename, "r");
+   } else {
+    if (!file.open(filename, FILE_READ)) {
+      halt("Unable to open bitstream file to read");
+    }
+   }
 
   // get bitstream size
-  uint32_t length = file_read32(FILE_POS_BITSTREAM_LEN);
+  uint32_t length = file_read32(FILE_POS_BITSTREAM_LEN, is_flash);
   Serial.print("Bitstream size: "); Serial.println(length, DEC);
 
   // seek to bitstream start
-  file.seek(FILE_POS_BITSTREAM_START);
+  file_seek(FILE_POS_BITSTREAM_START, is_flash);
 
   // pulse PROG_B
   digitalWrite(PIN_CONF_PRG_B, HIGH);
@@ -595,7 +713,7 @@ uint32_t fpga_configure(const char* filename) {
 
   digitalWrite(PIN_CONF_CLK, LOW);
 
-  while ((n = file.read(line, sizeof(line) < length ? sizeof(line) : length ))) {
+  while ((n = file_read_buf(line, (sizeof(line) < length ? sizeof(line) : length), is_flash ))) {
     i += n;
     length -=n;
 
@@ -612,11 +730,17 @@ uint32_t fpga_configure(const char* filename) {
 
     if (i % 8192 == 0) {
       blink = !blink;
-      extender.digitalWrite(PIN_EXT_LED1, blink);
-      extender.digitalWrite(PIN_EXT_LED2, blink);
+      if (has_extender) {
+        extender.digitalWrite(PIN_EXT_LED1, blink);
+        extender.digitalWrite(PIN_EXT_LED2, blink);
+      }
     }
   }
-  file.close();
+  if (is_flash) {
+    ffile.close();
+  } else {
+    file.close();
+  }
 
   Serial.print(i, DEC); Serial.println(" bytes done");
   Serial.print("Elapsed time: "); Serial.print(my_timer.elapsed_millis(), DEC); Serial.println(" ms");
@@ -682,28 +806,58 @@ void on_time() {
   // display the current time via OSD
 }
 
-core_list_item_t get_core_list_item() {
+core_list_item_t get_core_list_item(bool is_flash) {
   core_list_item_t core;
-  file.getName(core.filename, sizeof(core.filename));
-  file.seek(FILE_POS_CORE_NAME); file.readBytes(core.name, 32); core.name[32] = '\0';
-  uint8_t visible; file.seek(FILE_POS_CORE_VISIBLE); visible = file.read(); core.visible = (visible > 0);
-  file.seek(FILE_POS_CORE_ORDER); core.order = file.read();
-  file.seek(FILE_POS_CORE_TYPE); core.type = file.read();
+  if (is_flash) {
+    String s = String(ffile.fullName());
+    s = "/" + s;
+    s.toCharArray(core.filename, sizeof(core.filename));
+    core.flash = true;
+  } else {
+    file.getName(core.filename, sizeof(core.filename));
+    core.flash = false;
+  }
+  file_seek(FILE_POS_CORE_NAME, is_flash); file_read_bytes(core.name, 32, is_flash); core.name[32] = '\0';
+  uint8_t visible; file_seek(FILE_POS_CORE_VISIBLE, is_flash); visible = file_read(is_flash); core.visible = (visible > 0);
+  file_seek(FILE_POS_CORE_ORDER, is_flash); core.order = file_read(is_flash);
+  file_seek(FILE_POS_CORE_TYPE, is_flash); core.type = file_read(is_flash);
+  file_seek(FILE_POS_CORE_BUILD, is_flash); file_read_bytes(core.build, 8, is_flash); core.build[8] = '\0';
   return core;
 }
 
 void read_core_list() {
-  if (!root.open("/")) {
-    halt("open root");
-  }
-  while (file.openNext(&root, O_RDONLY)) {
-    char filename[32]; file.getName(filename, sizeof(filename));
-    uint8_t len = strlen(filename);
-    if (strstr(strlwr(filename + (len - 4)), ".kg1")) {
-      cores[cores_len] = get_core_list_item();
-      cores_len++;
+
+  // files from flash
+  fs::Dir dir = LittleFS.openDir("/");
+  dir.rewind();
+  while (dir.next()) {
+    if (dir.isFile()) {
+      ffile = dir.openFile("r");
+      char filename[32]; file_get_name(filename, sizeof(filename), true);
+      uint8_t len = strlen(filename);
+      if (strstr(strlwr(filename + (len - 4)), ".kg1")) {
+        cores[cores_len] = get_core_list_item(true);
+        cores_len++;
+      }
+      ffile.close();
     }
-    file.close();
+  }
+
+  // files from sd card
+  if (has_sd) {
+    if (!root.open("/")) {
+      halt("open root");
+    }
+    root.rewind();
+    while (file.openNext(&root, O_RDONLY)) {
+      char filename[32]; file.getName(filename, sizeof(filename));
+      uint8_t len = strlen(filename);
+      if (strstr(strlwr(filename + (len - 4)), ".kg1")) {
+        cores[cores_len] = get_core_list_item(false);
+        cores_len++;
+      }
+      file.close();
+    }
   }
   // sort by core order number
   std::sort(cores, cores + cores_len);
@@ -712,60 +866,68 @@ void read_core_list() {
 
 void read_core(const char* filename) {
 
-  if (!file.open(filename, FILE_READ)) {
-    halt("Unable to open bitstream file to read");
+  bool is_flash = is_flashfs(filename);
+
+  if (is_flash) {
+    ffile = LittleFS.open(filename, "r");
+  } else {
+    if (!file.open(filename, FILE_READ)) {
+      halt("Unable to open bitstream file to read");
+    }
   }
 
-  file.getName(core.filename, 32); core.filename[32] = '\0';
-  file.seek(FILE_POS_CORE_NAME); file.readBytes(core.name, 32); core.name[32] = '\0';
-  uint8_t visible; file.seek(FILE_POS_CORE_VISIBLE); visible = file.read(); core.visible = (visible > 0);
-  file.seek(FILE_POS_CORE_ORDER); core.order = file.read();
-  file.seek(FILE_POS_CORE_TYPE); core.type = file.read();
+  core.flash = is_flash;
+  file_get_name(core.filename, 32, is_flash); core.filename[32] = '\0';
+  file_seek(FILE_POS_CORE_NAME, is_flash); file_read_bytes(core.name, 32, is_flash); core.name[32] = '\0';
+  uint8_t visible; file_seek(FILE_POS_CORE_VISIBLE, is_flash); visible = file_read(is_flash); core.visible = (visible > 0);
+  file_seek(FILE_POS_CORE_ORDER, is_flash); core.order = file_read(is_flash);
+  file_seek(FILE_POS_CORE_TYPE, is_flash); core.type = file_read(is_flash);
   is_osd = (core.type == CORE_TYPE_BOOT) ? true : false;
   //is_osd = true; // debug  
   Serial.print("Core type: ");
   switch (core.type) {
     case 0: Serial.println("Boot"); break;
     case 1: Serial.println("Normal"); break;
+    case 255: Serial.println("Hidden"); break;
     default: Serial.println("Reserved");
   }
-  core.bitstream_length = file_read32(FILE_POS_BITSTREAM_LEN);
-  file.seek(FILE_POS_CORE_ID); file.readBytes(core.id, 32); core.id[32] = '\0';
-  file.seek(FILE_POS_CORE_BUILD); file.readBytes(core.build, 8); core.build[8] = '\0';
-  file.seek(FILE_POS_CORE_EEPROM_BANK); core.eeprom_bank = file.read();
-  uint32_t roms_len = file_read32(FILE_POS_ROM_LEN);
+  core.bitstream_length = file_read32(FILE_POS_BITSTREAM_LEN, is_flash);
+  file_seek(FILE_POS_CORE_ID, is_flash); file_read_bytes(core.id, 32, is_flash); core.id[32] = '\0';
+  file_seek(FILE_POS_CORE_BUILD, is_flash); file_read_bytes(core.build, 8, is_flash); core.build[8] = '\0';
+  file_seek(FILE_POS_CORE_EEPROM_BANK, is_flash); core.eeprom_bank = file_read(is_flash);
+  uint32_t roms_len = file_read32(FILE_POS_ROM_LEN, is_flash);
   uint32_t offset = FILE_POS_BITSTREAM_START + core.bitstream_length + roms_len;
   //Serial.print("OSD section: "); Serial.println(offset);
-  file.seek(offset); core.osd_len = file.read();
+  file_seek(offset, is_flash); core.osd_len = file_read(is_flash);
   //Serial.print("OSD len: "); Serial.println(core.osd_len);
   for (uint8_t i=0; i<core.osd_len; i++) {
-    core.osd[i].type = file.read();
-    core.osd[i].bits = file.read();
-    file.readBytes(core.osd[i].name, 16); core.osd[i].name[16] = '\0';
-    core.osd[i].def = file.read();
+    core.osd[i].type = file_read(is_flash);
+    core.osd[i].bits = file_read(is_flash);
+    file_read_bytes(core.osd[i].name, 16, is_flash); core.osd[i].name[16] = '\0';
+    core.osd[i].def = file_read(is_flash);
     core.osd[i].val = core.osd[i].def;
     core.osd[i].prev_val = core.osd[i].def;
-    core.osd[i].options_len = file.read();
+    core.osd[i].options_len = file_read(is_flash);
     if (core.osd[i].options_len > 8) {
       core.osd[i].options_len = 8; // something goes wrong
     } 
     for (uint8_t j=0; j<core.osd[i].options_len; j++) {
-      file.readBytes(core.osd[i].options[j].name, 16); core.osd[i].options[j].name[16] = '\0';
+      file_read_bytes(core.osd[i].options[j].name, 16, is_flash); core.osd[i].options[j].name[16] = '\0';
     }
-    file.readBytes(core.osd[i].hotkey, 16); core.osd[i].hotkey[16] = '\0';
-    core.osd[i].keys[0] = file.read();
-    core.osd[i].keys[1] = file.read();
-    file.read(); // reserved
-    file.read(); 
-    file.read();
+    file_read_bytes(core.osd[i].hotkey, 16, is_flash); core.osd[i].hotkey[16] = '\0';
+    core.osd[i].keys[0] = file_read(is_flash);
+    core.osd[i].keys[1] = file_read(is_flash);
+    file_read(is_flash); // reserved
+    file_read(is_flash); 
+    file_read(is_flash);
   }
 
   // read eeprom data from file (in case rombank = 4 and up)
   // 255 means no eeprom allowed by core
   if (core.eeprom_bank >= MAX_EEPROM_BANKS && core.eeprom_bank != NO_EEPROM_BANK) {
     for (uint8_t i=0; i<255; i++) {
-      file.seek(FILE_POS_EEPROM_DATA + i);
-      core.eeprom[i].val = file.read();
+      file_seek(FILE_POS_EEPROM_DATA + i, is_flash);
+      core.eeprom[i].val = file_read(is_flash);
       core.eeprom[i].prev_val = core.eeprom[i].val;
     }
   }
@@ -774,8 +936,8 @@ void read_core(const char* filename) {
 
   // read saved switches
   for(uint8_t i=0; i<core.osd_len; i++) {
-    file.seek(FILE_POS_SWITCHES_DATA + i);
-    core.osd[i].val = file.read();
+    file_seek(FILE_POS_SWITCHES_DATA + i, is_flash);
+    core.osd[i].val = file_read(is_flash);
     if (core.osd[i].val > core.osd[i].options_len-1) {
       core.osd[i].val = core.osd[i].def;
     }
@@ -793,7 +955,11 @@ void read_core(const char* filename) {
     Serial.print(core.osd[i].hotkey); Serial.println();
   }*/
 
-  file.close();
+  if (is_flash) {
+    ffile.close();
+  } else {
+    file.close();
+  }
 
   zxosd.hidePopup();
   if (is_osd) {
@@ -806,12 +972,19 @@ void read_core(const char* filename) {
 }
 
 void read_roms(const char* filename) {
-  if (!file.open(filename, FILE_READ)) {
-    halt("Unable to open bitstream file to read");
+
+  bool is_flash = is_flashfs(filename);
+
+  if (is_flash) {
+    ffile = LittleFS.open(filename, "r");
+  } else {
+    if (!file.open(filename, FILE_READ)) {
+      halt("Unable to open bitstream file to read");
+    }
   }
 
-  uint32_t bitstream_length = file_read32(FILE_POS_BITSTREAM_LEN);
-  uint32_t roms_len = file_read32(FILE_POS_ROM_LEN);
+  uint32_t bitstream_length = file_read32(FILE_POS_BITSTREAM_LEN, is_flash);
+  uint32_t roms_len = file_read32(FILE_POS_ROM_LEN, is_flash);
   //Serial.print("ROMS len "); Serial.println(roms_len);
   if (roms_len > 0) {
     spi_send(CMD_ROMLOADER, 0, 1);
@@ -819,12 +992,12 @@ void read_roms(const char* filename) {
   uint32_t offset = 0;
   uint32_t rom_idx = 0;
   while (roms_len > 0) {
-    uint32_t rom_len = file_read32(FILE_POS_BITSTREAM_START + bitstream_length + offset);
-    uint32_t rom_addr = file_read32(FILE_POS_BITSTREAM_START + bitstream_length + offset + 4);
+    uint32_t rom_len = file_read32(FILE_POS_BITSTREAM_START + bitstream_length + offset, is_flash);
+    uint32_t rom_addr = file_read32(FILE_POS_BITSTREAM_START + bitstream_length + offset + 4, is_flash);
     //Serial.print("ROM #"); Serial.print(rom_idx); Serial.print(": addr="); Serial.print(rom_addr); Serial.print(", len="); Serial.println(rom_len);
     for (uint32_t i=0; i<rom_len/256; i++) {
-      uint8_t buf[256];
-      int c = file.readBytes(buf, sizeof(buf));
+      char buf[256];
+      int c = file_read_bytes(buf, sizeof(buf), is_flash);
       for (int j=0; j<256; j++) {
         send_rom_byte(rom_addr + i*256 + j, buf[j]);
       }
@@ -835,7 +1008,11 @@ void read_roms(const char* filename) {
   }
   spi_send(CMD_ROMLOADER, 0, 0);
 
-  file.close();
+  if (is_flash) {
+    ffile.close();
+  } else {
+    file.close();
+  }
 }
 
 void send_rom_byte(uint32_t addr, uint8_t data) {
