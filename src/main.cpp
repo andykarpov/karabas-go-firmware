@@ -812,8 +812,27 @@ void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data) {
  * 
  */
 void on_time() {
-  // TODO 
-  // display the current time via OSD
+  zxosd.setPos(24, 0);
+  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+  static bool dots_blink = !dots_blink;
+  String dots = String(dots_blink ? ':' : ' ');
+  uint8_t h = zxrtc.getHour();
+  uint8_t m = zxrtc.getMinute();
+  uint8_t s = zxrtc.getSecond();
+  if (h < 10) zxosd.print(0); zxosd.print(h);
+  if (dots_blink) zxosd.print(":"); else zxosd.print(" ");
+  if (m < 10) zxosd.print(0); zxosd.print(m);
+  if (dots_blink) zxosd.print(":"); else zxosd.print(" ");
+  if (s < 10) zxosd.print(0); zxosd.print(s);
+
+  zxosd.setPos(24, 1);
+  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+  uint8_t d = zxrtc.getDay();
+  uint8_t mo = zxrtc.getMonth();
+  uint8_t y = zxrtc.getYear();
+  if (d < 10) zxosd.print(0); zxosd.print(d); zxosd.print("/");
+  if (mo < 10) zxosd.print(0); zxosd.print(mo); zxosd.print("/");
+  if (y < 10) zxosd.print(0); zxosd.print(y);
 }
 
 core_list_item_t get_core_list_item(bool is_flash) {
