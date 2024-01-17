@@ -7,7 +7,7 @@
 #include "LittleFS.h"
 #include "pio_usb.h"
 #include "Adafruit_TinyUSB.h"
-#include "elapsed.h"
+#include <ElapsedTimer.h>
 #include <RTC.h>
 #include <OSD.h>
 #include <SegaController.h>
@@ -22,7 +22,8 @@ PioSpi spi(PIN_SD_SPI_RX, PIN_SD_SPI_SCK, PIN_SD_SPI_TX);
 SPISettings settingsA(SD_SCK_MHZ(50), MSBFIRST, SPI_MODE0); // MCU SPI settings
 
 PCA9536 extender;
-Elapsed my_timer;
+ElapsedTimer my_timer;
+ElapsedTimer hide_timer;
 RTC zxrtc;
 SdFs sd;
 FsFile file;  
@@ -38,6 +39,7 @@ hid_keyboard_report_t usb_keyboard_report;
 hid_mouse_report_t usb_mouse_report;
 
 bool is_osd = false;
+bool is_osd_hiding = false; 
 
 core_list_item_t cores[MAX_CORES];
 core_item_t core;
@@ -224,10 +226,12 @@ bool on_global_hotkeys() {
   
   // menu+esc to toggle osd only for osd supported cores
   if (core.type != 0 && core.type != 255 && ((usb_keyboard_report.modifier & KEY_MOD_LMETA) || (usb_keyboard_report.modifier & KEY_MOD_RMETA)) && usb_keyboard_report.keycode[0] == KEY_ESC) {
-    is_osd = !is_osd;
-    if (is_osd) {
+    if (!is_osd) {
+      is_osd = true;
       zxosd.showMenu();
-    } else {
+    } else if (!is_osd_hiding) {
+      is_osd_hiding = true;
+      hide_timer.reset();
       zxosd.hideMenu();
     }
     return true;
@@ -471,7 +475,14 @@ void loop()
 {
   zxrtc.handle();
 
-  if (has_extender && my_timer.elapsed_millis() >= 100) {
+  // set is_osd off after 200ms of real switching off 
+  // to avoid esc keypress passes to the host
+  if (is_osd_hiding && hide_timer.elapsed() >= 200) {
+    is_osd = false;
+    is_osd_hiding = false;
+  }
+
+  if (has_extender && my_timer.elapsed() >= 100) {
     extender.digitalWrite(2, LOW);
     my_timer.reset();
   }
@@ -753,7 +764,7 @@ uint32_t fpga_configure(const char* filename) {
   }
 
   Serial.print(i, DEC); Serial.println(" bytes done");
-  Serial.print("Elapsed time: "); Serial.print(my_timer.elapsed_millis(), DEC); Serial.println(" ms");
+  Serial.print("Elapsed time: "); Serial.print(my_timer.elapsed(), DEC); Serial.println(" ms");
   Serial.flush();
 
   Serial.print("Waiting for CONF_DONE... ");
