@@ -24,6 +24,7 @@ SPISettings settingsA(SD_SCK_MHZ(50), MSBFIRST, SPI_MODE0); // MCU SPI settings
 PCA9536 extender;
 ElapsedTimer my_timer;
 ElapsedTimer hide_timer;
+ElapsedTimer popup_timer;
 RTC zxrtc;
 SdFs sd;
 FsFile file;  
@@ -40,6 +41,7 @@ hid_mouse_report_t usb_mouse_report;
 
 bool is_osd = false;
 bool is_osd_hiding = false; 
+bool is_popup_hiding = false;
 
 core_list_item_t cores[MAX_CORES];
 core_item_t core;
@@ -150,7 +152,19 @@ void do_configure(const char* filename) {
   fpga_configure(filename);
   spi_send(CMD_INIT_START, 0, 0);
   read_core(filename);
+  if (!is_osd) {
+    zxosd.clear();
+    osd_print_logo(0,0);
+    zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+    zxosd.setPos(0,5);
+    zxosd.print("LOADING ROM..."); // todo %
+    zxosd.showPopup();
+  }
   read_roms(filename);
+  if (!is_osd) {
+    zxosd.hidePopup();
+    osd_handle(true); // reinit osd
+  }
   spi_send(CMD_INIT_DONE, 0, 0);
 }
 
@@ -267,6 +281,18 @@ bool on_global_hotkeys() {
               core.osd[i].val = 0;
             }
             core_osd_send(i);
+            if (!is_osd) {
+              zxosd.clear();
+              osd_print_logo(0, 0);
+              zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+              zxosd.setPos(0, 5);
+              zxosd.print(core.osd[i].name);
+              zxosd.setPos(0,6);
+              zxosd.print(core.osd[i].options[core.osd[i].val].name);
+              is_popup_hiding = true;
+              popup_timer.reset();
+              zxosd.showPopup();
+            }
             if (core.osd[i].type == CORE_OSD_TYPE_SWITCH) {
               core.osd_need_save = true;
             }
@@ -480,6 +506,13 @@ void loop()
   if (is_osd_hiding && hide_timer.elapsed() >= 200) {
     is_osd = false;
     is_osd_hiding = false;
+  }
+
+  // hide popup after 500 ms
+  if (is_popup_hiding && popup_timer.elapsed() >= 500) {
+    is_popup_hiding = false;
+    zxosd.hidePopup();
+    osd_handle(true); // reinit osd
   }
 
   if (has_extender && my_timer.elapsed() >= 100) {
@@ -1253,7 +1286,7 @@ void osd_init_core_browser_overlay() {
 }
 
 void osd_handle(bool force) {
-  if (is_osd) {
+  if (is_osd || force) {
     if ((osd_prev_state != osd_state) || force) {
       osd_prev_state = osd_state;
       switch(osd_state) {
