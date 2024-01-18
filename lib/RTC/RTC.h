@@ -11,7 +11,7 @@
 
 #include <Arduino.h>
 #include <SparkFun_External_EEPROM.h>
-#include <DS3231.h>
+#include <DS3231-RTC.h>
 
 /****************************************************************************/
 
@@ -29,13 +29,14 @@ class RTC
 private:
 
   DS3231 rtc_clock;
+  RTClib rtc_lib;
   ExternalEEPROM eeprom;
   spi_cb action;
   osd_cb event;
   bool is_started = false;
   bool has_eeprom = false;
 
-  int rtc_year = 0;
+  uint8_t rtc_year = 0;
   uint8_t rtc_month = 0;
   uint8_t rtc_day = 1;
   uint8_t rtc_hours = 0;
@@ -82,7 +83,7 @@ public:
   uint8_t getSecond();
   uint8_t getDay();
   uint8_t getMonth();
-  int getYear();
+  uint8_t getYear();
 
   void setWeek(uint8_t val);
   void setHour(uint8_t val);
@@ -90,10 +91,7 @@ public:
   void setSecond(uint8_t val);
   void setDay(uint8_t val);
   void setMonth(uint8_t val);
-  void setYear(int val);
-
-  bool getTimeIsValid();
-  bool getDateIsValid();
+  void setYear(uint8_t val);
 
   void setEepromBank(uint8_t val);
   uint8_t getEepromReg(uint8_t reg);

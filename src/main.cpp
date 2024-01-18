@@ -81,20 +81,22 @@ void setup()
   pinMode(PIN_CONF_IO1, OUTPUT);
 
   // I2C
+  delay(100);
   Wire.setSDA(PIN_I2C_SDA);
   Wire.setSCL(PIN_I2C_SCL);
+  Wire.setClock(100000);
   Wire.begin();
 
   //while ( !Serial ) delay(10);   // wait for native usb
 
-  Serial.begin(115200);
-  Serial.println("Karabas Go RP2040 firmware");
+  d_begin(115200);
+  d_println("Karabas Go RP2040 firmware");
 
   if (extender.begin() == false) {
     has_extender = false;
-    Serial.println("PCA9536 unavailable. Please check soldering.");
+    d_println("PCA9536 unavailable. Please check soldering.");
   } else {
-    Serial.println("I2C PCA9536 extender detected");
+    d_println("I2C PCA9536 extender detected");
     has_extender = true;
   }
 
@@ -110,27 +112,27 @@ void setup()
   zxosd.begin(spi_send);
 
   // LittleFS
-  Serial.print("Mounting Flash... ");
+  d_print("Mounting Flash... ");
   LittleFSConfig cfg;
   cfg.setAutoFormat(true);
   LittleFS.setConfig(cfg);
   if (!LittleFS.begin()) {
     has_fs = false;
-    Serial.println("Failed");
+    d_println("Failed");
   } else {
     has_fs = true;
-    Serial.println("Done");
+    d_println("Done");
   }
 
   // SD
-  Serial.print("Mounting SD card... ");
+  d_print("Mounting SD card... ");
   if (!sd.begin(SD_CONFIG)) {
     has_sd = false;
     //sd.initErrorHalt(&Serial);
-    Serial.println("Failed");
+    d_println("Failed");
   } else {
     has_sd = true;
-    Serial.println("Done");
+    d_println("Done");
   }
 
   //sd.ls(&Serial, LS_SIZE);
@@ -169,19 +171,19 @@ void do_configure(const char* filename) {
 }
 
 void core_browser(uint8_t vpos) {
-  //Serial.print("Cores: "); Serial.println(cores_len);
+  //d_print("Cores: "); d_println(cores_len);
   core_pages = ceil((float)cores_len / core_page_size);
-  //Serial.print("Pages: "); Serial.println(core_pages);
+  //d_print("Pages: "); d_println(core_pages);
   core_page = ceil((float)(core_sel+1)/core_page_size);
-  //Serial.print("Core page: "); Serial.println(core_page);
+  //d_print("Core page: "); d_println(core_page);
   uint8_t core_from = (core_page-1)*core_page_size;
   uint8_t core_to = core_page*core_page_size > cores_len ? cores_len : core_page*core_page_size;
   uint8_t core_fill = core_page*core_page_size;
   uint8_t pos = vpos;
-  //Serial.print("From: "); Serial.print(core_from); Serial.print(" to: "); Serial.println(core_to);
-  //Serial.print("Selected: "); Serial.println(core_sel);
+  //d_print("From: "); d_print(core_from); d_print(" to: "); d_println(core_to);
+  //d_print("Selected: "); d_println(core_sel);
   for(uint8_t i=core_from; i < core_to; i++) {
-    //Serial.print(cores[i].name); Serial.println(cores[i].order);
+    //d_print(cores[i].name); d_println(cores[i].order);
     zxosd.setPos(0, pos);
     if (core_sel == i) {
       zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLUE);
@@ -195,7 +197,7 @@ void core_browser(uint8_t vpos) {
     zxosd.print(cores[i].flash ? "  F" : " SD");
     pos++;
   }
-  //Serial.print("Fill: "); Serial.println(core_fill);
+  //d_print("Fill: "); d_println(core_fill);
   if (core_fill > core_to) {
     for (uint8_t i=core_to; i<core_fill; i++) {
       zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
@@ -442,8 +444,8 @@ void on_keyboard() {
 void core_osd_save(uint8_t pos)
 {
   bool is_flash = is_flashfs(core.filename);
-  //Serial.print("Core osd "); Serial.print(core.osd[pos].name); Serial.print("="); Serial.println(core.osd[pos].val);
-  //Serial.print(core.filename); Serial.print(" type "); Serial.println(is_flash ? " flash" : " sd");
+  //d_print("Core osd "); d_print(core.osd[pos].name); d_print("="); d_println(core.osd[pos].val);
+  //d_print(core.filename); d_print(" type "); d_println(is_flash ? " flash" : " sd");
 
   if (is_flash) {
     ffile = LittleFS.open(core.filename, "r+"); // read+write
@@ -470,7 +472,7 @@ void core_osd_save(uint8_t pos)
 void core_osd_send(uint8_t pos)
 {
   spi_send(CMD_SWITCHES, pos, core.osd[pos].val);
-  Serial.printf("Switch: %s %d", core.osd[pos].name, core.osd[pos].val); Serial.println();
+  d_printf("Switch: %s %d\n", core.osd[pos].name, core.osd[pos].val);
 }
 
 void core_osd_send_all() 
@@ -485,7 +487,7 @@ void core_osd_trigger(uint8_t pos)
   spi_send(CMD_SWITCHES, pos, 1);
   delay(100);
   spi_send(CMD_SWITCHES, pos, 0);
-  Serial.printf("Trigger: %s", core.osd[pos].name); Serial.println();
+  d_printf("Trigger: %s\n", core.osd[pos].name);
 }
 
 uint8_t core_eeprom_get(uint8_t pos) {
@@ -526,13 +528,13 @@ void loop()
   bool btn2 = has_extender ? extender.digitalRead(1) : HIGH;
 
   if (prev_btn1 != btn1) {
-    Serial.print("Button 1: "); Serial.println((btn1 == LOW) ? "on" : "off");
+    d_print("Button 1: "); d_println((btn1 == LOW) ? "on" : "off");
     prev_btn1 = btn1;
     spi_send(CMD_BTN, 0, !btn1);
   }
 
   if (prev_btn2 != btn2) {
-    Serial.print("Button 2: "); Serial.println((btn2 == LOW) ? "on" : "off");
+    d_print("Button 2: "); d_println((btn2 == LOW) ? "on" : "off");
     prev_btn2 = btn2;
     spi_send(CMD_BTN, 1, !btn2);
   }
@@ -540,13 +542,13 @@ void loop()
   // debug features
   // TODO: remove from production / refactor
   if (btn1 == LOW) {
-    Serial.println("Reboot");
-    Serial.flush();
+    d_println("Reboot");
+    d_flush();
     rp2040.reboot();
   }
   /*if (btn2 == LOW) {
-      Serial.println("Reboot to bootloader");
-      Serial.flush();
+      d_println("Reboot to bootloader");
+      d_flush();
       rp2040.rebootToBootloader();
   }*/
 
@@ -557,13 +559,13 @@ void loop()
   static uint16_t prevJoyR = 0;
 
   if (joyL != prevJoyL) {
-    Serial.printf("SEGA L: %u", joyL); Serial.println();
+    d_printf("SEGA L: %u", joyL); d_println();
     prevJoyL = joyL;
     spi_send(CMD_JOYSTICK, 0, static_cast<uint8_t>(joyL & 0x00FF));
     spi_send(CMD_JOYSTICK, 1, static_cast<uint8_t>(joyL & 0xFF00) >> 8);
   }
   if (joyR != prevJoyR) {
-    Serial.printf("SEGA R: %u", joyR); Serial.println();
+    d_printf("SEGA R: %u", joyR); d_println();
     prevJoyR = joyR;
     spi_send(CMD_JOYSTICK, 2, static_cast<uint8_t>(joyR & 0x00FF));
     spi_send(CMD_JOYSTICK, 3, static_cast<uint8_t>(joyR & 0xFF00) >> 8);
@@ -611,8 +613,8 @@ void loop1()
  * @param msg 
  */
 void halt(const char* msg) {
-  Serial.println(msg);
-  Serial.flush();
+  d_println(msg);
+  d_flush();
   bool blink = false;
   while(true) {
       blink = !blink;
@@ -731,7 +733,7 @@ bool is_flashfs(const char* filename) {
  */
 uint32_t fpga_configure(const char* filename) {
 
-  Serial.print("Configuring FPGA by "); Serial.println(filename);
+  d_print("Configuring FPGA by "); d_println(filename);
 
   bool is_flash = is_flashfs(filename);
 
@@ -745,7 +747,7 @@ uint32_t fpga_configure(const char* filename) {
 
   // get bitstream size
   uint32_t length = file_read32(FILE_POS_BITSTREAM_LEN, is_flash);
-  Serial.print("Bitstream size: "); Serial.println(length, DEC);
+  d_print("Bitstream size: "); d_println(length, DEC);
 
   // seek to bitstream start
   file_seek(FILE_POS_BITSTREAM_START, is_flash);
@@ -796,15 +798,15 @@ uint32_t fpga_configure(const char* filename) {
     file.close();
   }
 
-  Serial.print(i, DEC); Serial.println(" bytes done");
-  Serial.print("Elapsed time: "); Serial.print(my_timer.elapsed(), DEC); Serial.println(" ms");
-  Serial.flush();
+  d_print(i, DEC); d_println(" bytes done");
+  d_print("Elapsed time: "); d_print(my_timer.elapsed(), DEC); d_println(" ms");
+  d_flush();
 
-  Serial.print("Waiting for CONF_DONE... ");
+  d_print("Waiting for CONF_DONE... ");
   while(digitalRead(PIN_CONF_DONE) == LOW) {
     delay(10);
   }
-  Serial.println("Done");
+  d_println("Done");
 
   return length;
 }
@@ -825,7 +827,7 @@ void spi_queue(uint8_t cmd, uint8_t addr, uint8_t data) {
  * @param data data
  */
 void spi_send(uint8_t cmd, uint8_t addr, uint8_t data) {
-  //Serial.printf("SPI %d %d %d", cmd, addr, data); Serial.println();
+  //d_printf("SPI %d %d %d", cmd, addr, data); d_println();
   SPI.beginTransaction(settingsA);
   digitalWrite(PIN_MCU_SPI_CS, LOW);
   uint8_t rx_cmd = SPI.transfer(cmd);
@@ -966,12 +968,12 @@ void read_core(const char* filename) {
   file_seek(FILE_POS_CORE_TYPE, is_flash); core.type = file_read(is_flash);
   is_osd = (core.type == CORE_TYPE_BOOT) ? true : false;
   //is_osd = true; // debug  
-  Serial.print("Core type: ");
+  d_print("Core type: ");
   switch (core.type) {
-    case 0: Serial.println("Boot"); break;
-    case 1: Serial.println("Normal"); break;
-    case 255: Serial.println("Hidden"); break;
-    default: Serial.println("Reserved");
+    case 0: d_println("Boot"); break;
+    case 1: d_println("Normal"); break;
+    case 255: d_println("Hidden"); break;
+    default: d_println("Reserved");
   }
   core.bitstream_length = file_read32(FILE_POS_BITSTREAM_LEN, is_flash);
   file_seek(FILE_POS_CORE_ID, is_flash); file_read_bytes(core.id, 32, is_flash); core.id[32] = '\0';
@@ -979,9 +981,9 @@ void read_core(const char* filename) {
   file_seek(FILE_POS_CORE_EEPROM_BANK, is_flash); core.eeprom_bank = file_read(is_flash);
   uint32_t roms_len = file_read32(FILE_POS_ROM_LEN, is_flash);
   uint32_t offset = FILE_POS_BITSTREAM_START + core.bitstream_length + roms_len;
-  //Serial.print("OSD section: "); Serial.println(offset);
+  //d_print("OSD section: "); d_println(offset);
   file_seek(offset, is_flash); core.osd_len = file_read(is_flash);
-  //Serial.print("OSD len: "); Serial.println(core.osd_len);
+  //d_print("OSD len: "); d_println(core.osd_len);
   for (uint8_t i=0; i<core.osd_len; i++) {
     core.osd[i].type = file_read(is_flash);
     core.osd[i].bits = file_read(is_flash);
@@ -1029,12 +1031,13 @@ void read_core(const char* filename) {
 
   // dump parsed OSD items
   /*for(uint8_t i=0; i<core.osd_len; i++) {
-    Serial.printf("OSD %d: type: %d name: %s def: %d len: %d keys: [%d %d %d]", i, core.osd[i].type, core.osd[i].name, core.osd[i].def, core.osd[i].options_len, core.osd[i].keys[0], core.osd[i].keys[1], core.osd[i].keys[2]); Serial.println();
+    d_printf("OSD %d: type: %d name: %s def: %d len: %d keys: [%d %d %d]", i, core.osd[i].type, core.osd[i].name, core.osd[i].def, core.osd[i].options_len, core.osd[i].keys[0], core.osd[i].keys[1], core.osd[i].keys[2]); 
+    d_println();
     for (uint8_t j=0; j<core.osd[i].options_len; j++) {
-      Serial.print(core.osd[i].options[j].name); Serial.print(", "); 
+      d_print(core.osd[i].options[j].name); d_print(", "); 
     } 
-    Serial.println();
-    Serial.print(core.osd[i].hotkey); Serial.println();
+    d_println();
+    d_print(core.osd[i].hotkey); d_println();
   }*/
 
   if (is_flash) {
@@ -1067,7 +1070,7 @@ void read_roms(const char* filename) {
 
   uint32_t bitstream_length = file_read32(FILE_POS_BITSTREAM_LEN, is_flash);
   uint32_t roms_len = file_read32(FILE_POS_ROM_LEN, is_flash);
-  //Serial.print("ROMS len "); Serial.println(roms_len);
+  //d_print("ROMS len "); d_println(roms_len);
   if (roms_len > 0) {
     spi_send(CMD_ROMLOADER, 0, 1);
   }
@@ -1076,7 +1079,7 @@ void read_roms(const char* filename) {
   while (roms_len > 0) {
     uint32_t rom_len = file_read32(FILE_POS_BITSTREAM_START + bitstream_length + offset, is_flash);
     uint32_t rom_addr = file_read32(FILE_POS_BITSTREAM_START + bitstream_length + offset + 4, is_flash);
-    //Serial.print("ROM #"); Serial.print(rom_idx); Serial.print(": addr="); Serial.print(rom_addr); Serial.print(", len="); Serial.println(rom_len);
+    //d_print("ROM #"); d_print(rom_idx); d_print(": addr="); d_print(rom_addr); d_print(", len="); d_println(rom_len);
     for (uint32_t i=0; i<rom_len/256; i++) {
       char buf[256];
       int c = file_read_bytes(buf, sizeof(buf), is_flash);
@@ -1103,7 +1106,7 @@ void send_rom_byte(uint32_t addr, uint8_t data) {
     uint8_t rombank3 = (uint8_t)((addr & 0xFF000000) >> 24);
     uint8_t rombank2 = (uint8_t)((addr & 0x00FF0000) >> 16);
     uint8_t rombank1 = (uint8_t)((addr & 0x0000FF00) >> 8);
-    //Serial.printf("ROM bank %d %d %d", rombank1, rombank2, rombank3); Serial.println();
+    //d_printf("ROM bank %d %d %d", rombank1, rombank2, rombank3); d_println();
     spi_send(CMD_ROMBANK, 0, rombank1);
     spi_send(CMD_ROMBANK, 1, rombank2);
     spi_send(CMD_ROMBANK, 2, rombank3);

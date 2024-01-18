@@ -90,6 +90,24 @@
 
 #define APP_COREBROWSER_MENU_OFFSET 5
 
+#define DEBUG 1
+
+#if DEBUG
+#define d_begin(...) Serial.begin(__VA_ARGS__);
+#define d_print(...)    Serial.print(__VA_ARGS__)
+#define d_printf(...)    Serial.printf(__VA_ARGS__)
+#define d_write(...)    Serial.write(__VA_ARGS__)
+#define d_println(...)  Serial.println(__VA_ARGS__)
+#define d_flush(...)  Serial.flush(__VA_ARGS__)
+#else
+#define d_begin(...)
+#define d_print(...)
+#define d_printf(...)
+#define d_write(...)
+#define d_println(...)
+#define d_flush(...)
+#endif
+
 typedef struct {
 	uint8_t cmd;
 	uint8_t addr;
