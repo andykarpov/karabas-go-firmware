@@ -159,7 +159,7 @@ void do_configure(const char* filename) {
     osd_print_logo(0,0);
     zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
     zxosd.setPos(0,5);
-    zxosd.print("LOADING ROM..."); // todo %
+    zxosd.print("ROM ");
     zxosd.showPopup();
   }
   read_roms(filename);
@@ -456,10 +456,12 @@ void core_osd_save(uint8_t pos)
     ffile.close();
   } else {
     if (!file.open(core.filename, FILE_WRITE)) {
-      halt("Unable to open bitstream file to write");
+      d_println("Unable to open bitstream file to write");
+      return;
     }  
     if (!file.isWritable()) {
-      halt("File is not writable");
+      d_println("File is not writable");
+      return;
     }
     core.osd_need_save = false;
     core.osd[pos].prev_val = core.osd[pos].val;
@@ -1086,11 +1088,23 @@ void read_roms(const char* filename) {
       for (int j=0; j<256; j++) {
         send_rom_byte(rom_addr + i*256 + j, buf[j]);
       }
+      if (rom_len > 0) {
+        zxosd.setPos(4,5+rom_idx);
+        //uint8_t perc = ceil((float) i*256 * (100.0 / rom_len));
+        zxosd.print(rom_idx+1); zxosd.print(": ");
+        zxosd.print((i+1)*256); zxosd.print(" ");
+      }
     }
     offset = offset + rom_len + 8;
     roms_len = roms_len - rom_len - 8;
     rom_idx++;
+    if (roms_len > 0) {
+      // next rom
+      zxosd.setPos(0, 5+rom_idx);
+      zxosd.print("ROM ");
+    }
   }
+  //delay(100);
   spi_send(CMD_ROMLOADER, 0, 0);
 
   if (is_flash) {

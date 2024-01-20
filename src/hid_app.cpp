@@ -124,6 +124,7 @@ static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_r
     d_printf("Mouse X: %d, Y: %d, Z: %d, B: %d", report->x, report->y, report->wheel, report->buttons);
     d_println();
     prev_report = *report;
+    prev_report.wheel = 0;
   }
 }
 
@@ -153,6 +154,7 @@ static void process_mouse_report_ext(uint8_t dev_addr, uint8_t instance, hid_mou
       d_println();
     }
     prev_report = *report;
+    prev_report.wheel = 0;
   }
 }
 
