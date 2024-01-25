@@ -82,6 +82,7 @@
 #define FILE_POS_CORE_EEPROM_BANK 79
 #define FILE_POS_BITSTREAM_LEN 80
 #define FILE_POS_ROM_LEN 84
+#define FILE_POS_RTC_TYPE 88
 #define FILE_POS_EEPROM_DATA 256
 #define FILE_POS_SWITCHES_DATA 512
 #define FILE_POS_BITSTREAM_START 1024
@@ -157,6 +158,7 @@ typedef struct {
 	uint8_t type;
 	uint32_t bitstream_length;
 	uint8_t eeprom_bank;
+	uint8_t rtc_type;
 	core_osd_t osd[MAX_OSD_ITEMS];
 	uint8_t osd_len;
 	core_eeprom_t eeprom[MAX_EEPROM_ITEMS];

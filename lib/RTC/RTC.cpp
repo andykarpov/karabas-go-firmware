@@ -89,79 +89,124 @@ void RTC::send(uint8_t reg, uint8_t data) {
 
 void RTC::sendTime() {
   //d_printf("Time: %02d:%02d:%02d %02d-%02d-%02d", rtc_hours, rtc_minutes, rtc_seconds, rtc_day, rtc_month, rtc_year); d_println();
-  send(0, rtc_is_bcd ? bin2bcd(rtc_seconds) : rtc_seconds);
-  send(2, rtc_is_bcd ? bin2bcd(rtc_minutes) : rtc_minutes);
-  send(4, rtc_is_24h ? (rtc_is_bcd ? bin2bcd(rtc_hours) : rtc_hours) : (rtc_is_bcd ? bin2bcd(time_to12h(rtc_hours)) : time_to12h(rtc_hours)));
-  send(6, rtc_is_bcd ? bin2bcd(rtc_week) : rtc_week);
-  send(7, rtc_is_bcd ? bin2bcd(rtc_day) : rtc_day);
-  send(8, rtc_is_bcd ? bin2bcd(rtc_month) : rtc_month);
-  send(9, rtc_is_bcd ? bin2bcd(rtc_year) : rtc_year);
+
+  if (rtc_type == RTC_TYPE_DS1307) {
+    // send ds1307 time registers
+    send(0, bin2bcd(rtc_seconds));
+    send(1, bin2bcd(rtc_minutes));
+    send(2, bin2bcd(rtc_hours));
+    send(3, bin2bcd(rtc_week));
+    send(4, bin2bcd(rtc_day));
+    send(5, bin2bcd(rtc_month));
+    send(6, bin2bcd(rtc_year));
+  } else {
+    // send mc146818a time registers
+    send(0, rtc_is_bcd ? bin2bcd(rtc_seconds) : rtc_seconds);
+    send(2, rtc_is_bcd ? bin2bcd(rtc_minutes) : rtc_minutes);
+    send(4, rtc_is_24h ? (rtc_is_bcd ? bin2bcd(rtc_hours) : rtc_hours) : (rtc_is_bcd ? bin2bcd(time_to12h(rtc_hours)) : time_to12h(rtc_hours)));
+    send(6, rtc_is_bcd ? bin2bcd(rtc_week) : rtc_week);
+    send(7, rtc_is_bcd ? bin2bcd(rtc_day) : rtc_day);
+    send(8, rtc_is_bcd ? bin2bcd(rtc_month) : rtc_month);
+    send(9, rtc_is_bcd ? bin2bcd(rtc_year) : rtc_year);
+  }
 }
 
 void RTC::sendAll() {
   //d_println("RTC.sendAll()");
-  uint8_t data;
-  for (int reg = 0; reg <= 255; reg++) {
-    switch (reg) {
-      case 0: data = rtc_is_bcd ? bin2bcd(rtc_seconds) : rtc_seconds; break;
-      case 1: data = rtc_is_bcd ? bin2bcd(rtc_seconds_alarm) : rtc_seconds_alarm; break;
-      case 2: data = rtc_is_bcd ? bin2bcd(rtc_minutes) : rtc_minutes; break;
-      case 3: data = rtc_is_bcd ? bin2bcd(rtc_minutes_alarm) : rtc_minutes_alarm; break;
-      case 4: data = rtc_is_24h ? (rtc_is_bcd ? bin2bcd(rtc_hours) : rtc_hours) : (rtc_is_bcd ? bin2bcd(time_to12h(rtc_hours)) : time_to12h(rtc_hours)); break;
-      case 5: data = rtc_is_24h ? (rtc_is_bcd ? bin2bcd(rtc_hours_alarm) : rtc_hours_alarm) : (rtc_is_bcd ? bin2bcd(time_to12h(rtc_hours_alarm)) : time_to12h(rtc_hours_alarm)); break;
-      case 6: data = rtc_is_bcd ? bin2bcd(rtc_week) : rtc_week; break;
-      case 7: data = rtc_is_bcd ? bin2bcd(rtc_day) : rtc_day; break;
-      case 8: data = rtc_is_bcd ? bin2bcd(rtc_month) : rtc_month; break;
-      case 9: data = rtc_is_bcd ? bin2bcd(rtc_year) : rtc_year; break;
-      case 0xA: data = getEepromReg(reg); bitClear(data, 7); break;
-      case 0xB: data = getEepromReg(reg); bitSet(data, 1); break; // always 24h mode
-      case 0xC: data = 0x0; break;
-      case 0xD: data = 0x80; break; // 10000000
-      default: data = getEepromReg(reg); send(reg, data);
+
+  if (rtc_type == RTC_TYPE_DS1307) {
+    sendTime();
+    // control register is always 0 (sqw, prescalers, etc)
+    for (int reg = 8; reg < 64; reg++) {
+      // eeprom
+      send(reg, getEepromReg(reg));
     }
-    send(reg,data);
-    //d_printf("%02x ", data); 
-    //if ((reg > 0) && ((reg+1) % 16 == 0)) d_println();
+  } else {
+    sendTime();
+    uint8_t data;
+    for (int reg = 0; reg <= 255; reg++) {
+      switch (reg) {
+        // alara
+        case 1: data = rtc_is_bcd ? bin2bcd(rtc_seconds_alarm) : rtc_seconds_alarm; send(reg,data); break;
+        case 3: data = rtc_is_bcd ? bin2bcd(rtc_minutes_alarm) : rtc_minutes_alarm; send(reg,data); break;
+        case 5: data = rtc_is_24h ? (rtc_is_bcd ? bin2bcd(rtc_hours_alarm) : rtc_hours_alarm) : (rtc_is_bcd ? bin2bcd(time_to12h(rtc_hours_alarm)) : time_to12h(rtc_hours_alarm)); send(reg,data); break;
+        // control registers
+        case 0xA: data = getEepromReg(reg); bitClear(data, 7); send(reg,data); break;
+        case 0xB: data = getEepromReg(reg); bitSet(data, 1); send(reg,data); break; // always 24h mode
+        case 0xC: data = 0x0; send(reg,data); break;
+        case 0xD: data = 0x80; send(reg,data); break; // 10000000
+        // eeprom
+        default: data = getEepromReg(reg); send(reg, data);
+      }
+      //d_printf("%02x ", data); 
+      //if ((reg > 0) && ((reg+1) % 16 == 0)) d_println();
+    }
   }
+
+  
 }
 
 void RTC::setData(uint8_t addr, uint8_t data) {
-  // skip multiple writes for clock registers
-  if (rtc_last_write_reg == addr && rtc_last_write_data == data && addr <= 0xD) return;
 
-   //if (addr != 0x0C && addr != 0x0D && addr < 0x0A) {
-   //  d_printf("Set rtc reg %02x = %02x", addr, data); d_println();
-   //}
+  if (rtc_type == RTC_TYPE_DS1307) {
 
-    rtc_last_write_reg = addr;
-    rtc_last_write_data = data;
-    uint8_t prev;
+    // skip multiple writes for clock registers
+    if (rtc_last_write_reg == addr && rtc_last_write_data == data && addr <= 0x08) return;
 
-    switch (addr) {
-      case 0: rtc_seconds = rtc_is_bcd ? bcd2bin(data) : data; rtc_clock.setSecond(rtc_seconds); break;
-      case 1: rtc_seconds_alarm = rtc_is_bcd ? bcd2bin(data) : data; break;
-      case 2: rtc_minutes = rtc_is_bcd ? bcd2bin(data) : data; rtc_clock.setMinute(rtc_minutes); break;
-      case 3: rtc_minutes_alarm = rtc_is_bcd ? bcd2bin(data) : data;  break;
-      case 4: rtc_hours = rtc_is_bcd ? bcd2bin(data) : data; rtc_clock.setClockMode(false); rtc_clock.setHour(rtc_hours); break;
-      case 5: rtc_hours_alarm = rtc_is_bcd ? bcd2bin(data) : data; break;
-      case 6: rtc_week = rtc_is_bcd ? bcd2bin(data) : data; rtc_clock.setDoW(rtc_week); break;
-      case 7: rtc_day = rtc_is_bcd ? bcd2bin(data) : data; rtc_clock.setDate(rtc_day); break;
-      case 8: rtc_month = rtc_is_bcd ? bcd2bin(data) : data; rtc_clock.setMonth(rtc_month); break;
-      case 9: rtc_year = (rtc_is_bcd ? bcd2bin(data) : data); rtc_clock.setYear(rtc_year); break;
-      case 0xA: bitClear(data, 7); setEepromReg(addr, data); break;
-      case 0xB: rtc_is_bcd = !bitRead(data, 2); 
-                rtc_is_24h = true; //bitRead(data, 1);  
-                bitSet(data, 1); // always 24-h format
-                bitClear(data, 7);
-                prev = getEepromReg(addr);
-                if (prev != data) {
-                  setEepromReg(addr, data); 
-                }
-                break;
-      case 0xC: // C and D are read-only registers
-      case 0xD: break;
-      default: setEepromReg(addr, data);
-    }
+      rtc_last_write_reg = addr;
+      rtc_last_write_data = data;
+
+      switch (addr) {
+        case 0: rtc_seconds = bcd2bin(data); rtc_clock.setSecond(rtc_seconds); break;
+        case 1: rtc_minutes = bcd2bin(data); rtc_clock.setMinute(rtc_minutes); break;
+        case 2: data = bitClear(data, 7); data = bitClear(data, 6); rtc_hours = bcd2bin(data); rtc_clock.setClockMode(false); rtc_clock.setHour(rtc_hours); break;
+        case 3: rtc_week = bcd2bin(data); rtc_clock.setDoW(rtc_week); break;
+        case 4: rtc_day = bcd2bin(data); rtc_clock.setDate(rtc_day); break;
+        case 5: rtc_month = bcd2bin(data); rtc_clock.setMonth(rtc_month); break;
+        case 6: rtc_year = bcd2bin(data); rtc_clock.setYear(rtc_year); break;
+        case 7: break; // control register
+        default: setEepromReg(addr, data);
+      }
+
+  } else {
+
+    // skip multiple writes for clock registers
+    if (rtc_last_write_reg == addr && rtc_last_write_data == data && addr <= 0xD) return;
+
+    //if (addr != 0x0C && addr != 0x0D && addr < 0x0A) {
+    //  d_printf("Set rtc reg %02x = %02x", addr, data); d_println();
+    //}
+
+      rtc_last_write_reg = addr;
+      rtc_last_write_data = data;
+      uint8_t prev;
+
+      switch (addr) {
+        case 0: rtc_seconds = rtc_is_bcd ? bcd2bin(data) : data; rtc_clock.setSecond(rtc_seconds); break;
+        case 1: rtc_seconds_alarm = rtc_is_bcd ? bcd2bin(data) : data; break;
+        case 2: rtc_minutes = rtc_is_bcd ? bcd2bin(data) : data; rtc_clock.setMinute(rtc_minutes); break;
+        case 3: rtc_minutes_alarm = rtc_is_bcd ? bcd2bin(data) : data;  break;
+        case 4: rtc_hours = rtc_is_bcd ? bcd2bin(data) : data; rtc_clock.setClockMode(false); rtc_clock.setHour(rtc_hours); break;
+        case 5: rtc_hours_alarm = rtc_is_bcd ? bcd2bin(data) : data; break;
+        case 6: rtc_week = rtc_is_bcd ? bcd2bin(data) : data; rtc_clock.setDoW(rtc_week); break;
+        case 7: rtc_day = rtc_is_bcd ? bcd2bin(data) : data; rtc_clock.setDate(rtc_day); break;
+        case 8: rtc_month = rtc_is_bcd ? bcd2bin(data) : data; rtc_clock.setMonth(rtc_month); break;
+        case 9: rtc_year = (rtc_is_bcd ? bcd2bin(data) : data); rtc_clock.setYear(rtc_year); break;
+        case 0xA: bitClear(data, 7); setEepromReg(addr, data); break;
+        case 0xB: rtc_is_bcd = !bitRead(data, 2); 
+                  rtc_is_24h = true; //bitRead(data, 1);  
+                  bitSet(data, 1); // always 24-h format
+                  bitClear(data, 7);
+                  prev = getEepromReg(addr);
+                  if (prev != data) {
+                    setEepromReg(addr, data); 
+                  }
+                  break;
+        case 0xC: // C and D are read-only registers
+        case 0xD: break;
+        default: setEepromReg(addr, data);
+      }
+  }
 }
 
 void RTC::readAll() {
@@ -179,7 +224,11 @@ void RTC::readAll() {
 
   // read is_bcd, is_24h
   uint8_t reg_b = getEepromReg(0xB);
-  rtc_is_bcd = !bitRead(reg_b, 2);
+  if (rtc_type == RTC_TYPE_DS1307) {
+    rtc_is_bcd = true;
+  } else {
+    rtc_is_bcd = !bitRead(reg_b, 2);
+  }
   rtc_is_24h = true; //bitRead(reg_b, 1);
 }
 
@@ -241,6 +290,10 @@ void RTC::setYear(uint8_t val) {
 
 void RTC::setEepromBank(uint8_t val) {
   eeprom_bank = val;
+}
+
+void RTC::setRtcType(uint8_t val) {
+  rtc_type = val;
 }
 
 uint8_t RTC::getEepromReg(uint8_t reg) {

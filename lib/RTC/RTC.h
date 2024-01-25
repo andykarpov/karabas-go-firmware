@@ -20,6 +20,8 @@ extern void core_eeprom_set(uint8_t pos, uint8_t val);
 
 // RTC DATA XCHANGE command
 #define CMD_RTC 0xFA
+#define RTC_TYPE_DS1307 1
+#define RTC_TYPE_MC146818A 0
 
 class RTC
 {
@@ -49,6 +51,7 @@ private:
   uint8_t rtc_week = 1;
 
   uint8_t eeprom_bank = 0;
+  uint8_t rtc_type = 0;
 
   volatile int rtc_last_write_reg = 0;
   volatile uint8_t rtc_last_write_data = 0;
@@ -94,6 +97,7 @@ public:
   void setYear(uint8_t val);
 
   void setEepromBank(uint8_t val);
+  void setRtcType(uint8_t val);
   uint8_t getEepromReg(uint8_t reg);
   void setEepromReg(uint8_t reg, uint8_t val);
 

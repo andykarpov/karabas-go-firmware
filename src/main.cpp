@@ -981,6 +981,7 @@ void read_core(const char* filename) {
   file_seek(FILE_POS_CORE_ID, is_flash); file_read_bytes(core.id, 32, is_flash); core.id[32] = '\0';
   file_seek(FILE_POS_CORE_BUILD, is_flash); file_read_bytes(core.build, 8, is_flash); core.build[8] = '\0';
   file_seek(FILE_POS_CORE_EEPROM_BANK, is_flash); core.eeprom_bank = file_read(is_flash);
+  file_seek(FILE_POS_RTC_TYPE, is_flash); core.rtc_type = file_read(is_flash);
   uint32_t roms_len = file_read32(FILE_POS_ROM_LEN, is_flash);
   uint32_t offset = FILE_POS_BITSTREAM_START + core.bitstream_length + roms_len;
   //d_print("OSD section: "); d_println(offset);
@@ -1018,6 +1019,7 @@ void read_core(const char* filename) {
     }
   }
   zxrtc.setEepromBank(core.eeprom_bank);
+  zxrtc.setRtcType(core.rtc_type);
   zxrtc.sendAll();
 
   // read saved switches
