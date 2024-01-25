@@ -117,7 +117,7 @@ void RTC::sendAll() {
   if (rtc_type == RTC_TYPE_DS1307) {
     sendTime();
     // control register is always 0 (sqw, prescalers, etc)
-    for (int reg = 8; reg < 64; reg++) {
+    for (int reg = 7; reg < 64; reg++) {
       // eeprom
       send(reg, getEepromReg(reg));
     }
@@ -156,16 +156,24 @@ void RTC::setData(uint8_t addr, uint8_t data) {
       rtc_last_write_reg = addr;
       rtc_last_write_data = data;
 
-      switch (addr) {
-        case 0: rtc_seconds = bcd2bin(data); rtc_clock.setSecond(rtc_seconds); break;
-        case 1: rtc_minutes = bcd2bin(data); rtc_clock.setMinute(rtc_minutes); break;
-        case 2: data = bitClear(data, 7); data = bitClear(data, 6); rtc_hours = bcd2bin(data); rtc_clock.setClockMode(false); rtc_clock.setHour(rtc_hours); break;
-        case 3: rtc_week = bcd2bin(data); rtc_clock.setDoW(rtc_week); break;
-        case 4: rtc_day = bcd2bin(data); rtc_clock.setDate(rtc_day); break;
-        case 5: rtc_month = bcd2bin(data); rtc_clock.setMonth(rtc_month); break;
-        case 6: rtc_year = bcd2bin(data); rtc_clock.setYear(rtc_year); break;
-        case 7: break; // control register
-        default: setEepromReg(addr, data);
+      // addressable only 64 registers
+      addr = bitClear(data, 7);
+      addr = bitClear(data, 6);
+        switch (addr) {
+          case 0: rtc_seconds = bcd2bin(data); rtc_clock.setSecond(rtc_seconds); break;
+          case 1: rtc_minutes = bcd2bin(data); rtc_clock.setMinute(rtc_minutes); break;
+          case 2: data = bitClear(data, 7); data = bitClear(data, 6); rtc_hours = bcd2bin(data); rtc_clock.setClockMode(false); rtc_clock.setHour(rtc_hours); break;
+          case 3: rtc_week = bcd2bin(data); rtc_clock.setDoW(rtc_week); break;
+          case 4: rtc_day = bcd2bin(data); rtc_clock.setDate(rtc_day); break;
+          case 5: rtc_month = bcd2bin(data); rtc_clock.setMonth(rtc_month); break;
+          case 6: rtc_year = bcd2bin(data); rtc_clock.setYear(rtc_year); break;
+          case 7: data = bitClear(data,6); // control register
+                  data = bitClear(data, 5); 
+                  data = bitClear(data, 3); 
+                  data = bitClear(data, 2);
+                  setEepromReg(addr, data);
+                  break;
+          default: setEepromReg(addr, data); // eeprom
       }
 
   } else {
