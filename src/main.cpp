@@ -1033,6 +1033,9 @@ void read_core(const char* filename) {
   }
   core_osd_send_all();
 
+  // re-send rtc registers
+  zxrtc.sendAll();
+
   // dump parsed OSD items
   /*for(uint8_t i=0; i<core.osd_len; i++) {
     d_printf("OSD %d: type: %d name: %s def: %d len: %d keys: [%d %d %d]", i, core.osd[i].type, core.osd[i].name, core.osd[i].def, core.osd[i].options_len, core.osd[i].keys[0], core.osd[i].keys[1], core.osd[i].keys[2]); 

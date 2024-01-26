@@ -30,13 +30,6 @@ void RTC::begin(spi_cb act, osd_cb evt)
   event = evt;
 
   rtc_clock.setClockMode(false); // 24h format always
-
-  // run the clock in case of OFS flag is on
-  //if (!rtc_clock.oscillatorCheck()) {
-  //  rtc_clock.setSecond(0);
-  //}
-
-  readAll();
   is_started = true;
 }
 
@@ -114,19 +107,28 @@ void RTC::sendTime() {
 void RTC::sendAll() {
   //d_println("RTC.sendAll()");
 
+  // actualize time
+  readAll();
+
   if (rtc_type == RTC_TYPE_DS1307) {
+    // time
     sendTime();
     // control register is always 0 (sqw, prescalers, etc)
-    for (int reg = 7; reg < 64; reg++) {
+    send(7, 0);
+    // eeprom registers
+    for (int reg = 8; reg < 64; reg++) {
       // eeprom
-      send(reg, getEepromReg(reg));
+      uint8_t data = getEepromReg(reg);
+      //Serial.printf("<== rtc reg %02x = %02x", reg, data); Serial.println();
+      send(reg, data);
     }
   } else {
     sendTime();
+    // control registers and eeprom
     uint8_t data;
     for (int reg = 0; reg <= 255; reg++) {
       switch (reg) {
-        // alara
+        // alarms
         case 1: data = rtc_is_bcd ? bin2bcd(rtc_seconds_alarm) : rtc_seconds_alarm; send(reg,data); break;
         case 3: data = rtc_is_bcd ? bin2bcd(rtc_minutes_alarm) : rtc_minutes_alarm; send(reg,data); break;
         case 5: data = rtc_is_24h ? (rtc_is_bcd ? bin2bcd(rtc_hours_alarm) : rtc_hours_alarm) : (rtc_is_bcd ? bin2bcd(time_to12h(rtc_hours_alarm)) : time_to12h(rtc_hours_alarm)); send(reg,data); break;
@@ -151,14 +153,16 @@ void RTC::setData(uint8_t addr, uint8_t data) {
   if (rtc_type == RTC_TYPE_DS1307) {
 
     // skip multiple writes for clock registers
-    if (rtc_last_write_reg == addr && rtc_last_write_data == data && addr <= 0x08) return;
+    //if (rtc_last_write_reg == addr && rtc_last_write_data == data && addr <= 0x08) return;
+
+    //Serial.printf("==> rtc reg %02x = %02x", addr, data); Serial.println();
 
       rtc_last_write_reg = addr;
       rtc_last_write_data = data;
 
-      // addressable only 64 registers
-      addr = bitClear(data, 7);
-      addr = bitClear(data, 6);
+        // addressable only 64 registers
+        addr = bitClear(addr, 7);
+        addr = bitClear(addr, 6);
         switch (addr) {
           case 0: rtc_seconds = bcd2bin(data); rtc_clock.setSecond(rtc_seconds); break;
           case 1: rtc_minutes = bcd2bin(data); rtc_clock.setMinute(rtc_minutes); break;
@@ -306,7 +310,10 @@ void RTC::setRtcType(uint8_t val) {
 
 uint8_t RTC::getEepromReg(uint8_t reg) {
   if (has_eeprom && eeprom_bank < 4) {
-    return eeprom.read(eeprom_bank*256 + reg);
+    uint32_t addr = (uint32_t)eeprom_bank*256 + reg;
+    uint8_t data = eeprom.read(addr);
+    //Serial.printf("<== eeprom %08x = %02x", addr, data); Serial.println();
+    return data;
   } else if (eeprom_bank >=4 && eeprom_bank < 255) {
     return core_eeprom_get(reg);
   } else {
@@ -317,7 +324,9 @@ uint8_t RTC::getEepromReg(uint8_t reg) {
 void RTC::setEepromReg(uint8_t reg, uint8_t val) {
   //d_printf("Set eeprom reg %02x = %02x", reg, val); d_println();
   if (has_eeprom && eeprom_bank < 4) {
-    eeprom.put(eeprom_bank*256 + reg, val);
+    uint32_t addr = (uint32_t)eeprom_bank*256 + reg;
+    //Serial.printf("==> eeprom %08x = %02x", addr, val); Serial.println();
+    eeprom.write(addr, val);
   } else if (eeprom_bank >= 4 && eeprom_bank < 255) {
     core_eeprom_set(reg, val);
   } else {
