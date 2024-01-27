@@ -52,6 +52,8 @@
 
 #define CMD_RTC 0xFA
 
+#define CMD_FLASHBOOT 0xFB
+
 #define CMD_INIT_START 0xFD
 #define CMD_INIT_DONE 0xFE
 #define CMD_NOP 0xFF

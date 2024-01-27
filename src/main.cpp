@@ -850,7 +850,17 @@ void spi_send(uint8_t cmd, uint8_t addr, uint8_t data) {
  * @param data data
  */
 void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data) {
-  if (cmd == CMD_RTC) {
+  if (cmd == CMD_FLASHBOOT) {
+    uint8_t flashboot_coreid = data;
+    d_printf("Flashboot core id: %02x", data); d_println();
+    d_flush(); delay(100);
+    // todo: add flashboot_id to the core structure, search for desired id and boot it
+    // now it's implemented as hach: reload the same core (required for zx next hard reset)
+    String f = String(core.filename); f.trim(); 
+    char buf[32]; f.toCharArray(buf, sizeof(buf));
+    do_configure(buf);
+  }
+  else if (cmd == CMD_RTC) {
     zxrtc.setData(addr, data);
   }
 }
