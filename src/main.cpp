@@ -61,6 +61,8 @@ bool has_extender = false;
 bool has_sd = false;
 bool has_fs = false;
 
+uint8_t uart_idx = 0;
+
 // the setup function runs once when you press reset or power the board
 void setup()
 {
@@ -591,7 +593,15 @@ void loop()
     }
   }
 
-  spi_send(CMD_NOP, 0 ,0);
+  if (Serial.available() > 0) {
+    uart_idx++;
+    int uart_rx = Serial.read();
+    if (uart_rx != -1) {
+      spi_send(CMD_UART, uart_idx, (uint8_t) uart_rx);
+    }
+  } else {
+    spi_send(CMD_NOP, 0 ,0);
+  }
 }
 
 // core1's setup
@@ -850,6 +860,7 @@ void spi_send(uint8_t cmd, uint8_t addr, uint8_t data) {
  * @param data data
  */
 void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data) {
+
   if (cmd == CMD_FLASHBOOT) {
     uint8_t flashboot_coreid = data;
     d_printf("Flashboot core id: %02x", data); d_println();
@@ -860,6 +871,11 @@ void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data) {
     char buf[32]; f.toCharArray(buf, sizeof(buf));
     do_configure(buf);
   }
+
+  else if (cmd == CMD_UART) {
+    Serial.write(data);
+  }
+
   else if (cmd == CMD_RTC) {
     zxrtc.setData(addr, data);
   }

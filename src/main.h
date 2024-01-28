@@ -51,9 +51,8 @@
 #define CMD_OSD 0x20
 
 #define CMD_RTC 0xFA
-
 #define CMD_FLASHBOOT 0xFB
-
+#define CMD_UART 0xFC
 #define CMD_INIT_START 0xFD
 #define CMD_INIT_DONE 0xFE
 #define CMD_NOP 0xFF
@@ -93,7 +92,7 @@
 
 #define APP_COREBROWSER_MENU_OFFSET 5
 
-#define DEBUG 1
+#define DEBUG 0
 
 #if DEBUG
 #define d_begin(...) Serial.begin(__VA_ARGS__);

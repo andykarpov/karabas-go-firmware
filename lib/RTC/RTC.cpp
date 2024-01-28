@@ -119,7 +119,7 @@ void RTC::sendAll() {
     for (int reg = 8; reg < 64; reg++) {
       // eeprom
       uint8_t data = getEepromReg(reg);
-      Serial.printf("<== rtc reg %02x = %02x", reg, data); Serial.println();
+      //Serial.printf("<== rtc reg %02x = %02x", reg, data); Serial.println();
       send(reg, data);
     }
   } else {
@@ -155,7 +155,7 @@ void RTC::setData(uint8_t addr, uint8_t data) {
     // skip multiple writes for clock registers
     //if (rtc_last_write_reg == addr && rtc_last_write_data == data && addr <= 0x08) return;
 
-    Serial.printf("==> rtc reg %02x = %02x", addr, data); Serial.println();
+    //Serial.printf("==> rtc reg %02x = %02x", addr, data); Serial.println();
 
       rtc_last_write_reg = addr;
       rtc_last_write_data = data;
