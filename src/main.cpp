@@ -62,6 +62,9 @@ bool has_sd = false;
 bool has_fs = false;
 
 uint8_t uart_idx = 0;
+uint8_t evo_rs232_dll = 0;
+uint8_t evo_rs232_dlm = 0;
+uint32_t serial_speed = 115200;
 
 // the setup function runs once when you press reset or power the board
 void setup()
@@ -852,6 +855,61 @@ void spi_send(uint8_t cmd, uint8_t addr, uint8_t data) {
   }
 }
 
+void flashboot (uint8_t data) {
+  uint8_t flashboot_coreid = data;
+  d_printf("Flashboot core id: %02x", data); d_println();
+  d_flush(); delay(100);
+  // todo: add flashboot_id to the core structure, search for desired id and boot it
+  // now it's implemented as hach: reload the same core (required for zx next hard reset)
+  String f = String(core.filename); f.trim(); 
+  char buf[32]; f.toCharArray(buf, sizeof(buf));
+  do_configure(buf);
+}
+
+void serial_set_speed(uint8_t dll, uint8_t dlm) {
+  uint32_t speed = 0;
+  if (dll == 0 && dlm == 0) {
+    speed = 256000; // zx evo special case
+  } else if (bitRead(dlm, 7) == 1) {
+    // native atmega mode
+    dlm = bitClear(dlm, 7);
+    // (uint16)((DLM&0x7F)*256+DLL) = (691200/<скорость в бодах>)-1 
+    speed = 691200 / ((dlm*256) + dll + 1);
+  } else {
+    // standard mode
+    speed = 115200 / ((dlm*256) + dll);
+  }
+  // switch serial spseed
+  if (serial_speed != speed) {
+    serial_speed = speed;
+    Serial.end();
+    Serial.begin(speed);
+  }
+}
+
+void serial_data(uint8_t addr, uint8_t data) {
+    if (addr == 0) {
+      // ts zifi 115200
+      if (serial_speed != 115200) {
+        serial_speed = 115200;
+        Serial.end();
+        Serial.begin(serial_speed);
+      }
+      Serial.write(data);
+    } else if (addr == 1) {
+      // evo rs232 dll
+      evo_rs232_dll = data;
+      serial_set_speed(evo_rs232_dll, evo_rs232_dlm);
+    } else if (addr == 2) {
+      // evo rs232 set dlm
+      evo_rs232_dlm = data;
+      serial_set_speed(evo_rs232_dll, evo_rs232_dlm);
+    } else if (addr == 3) {
+      // evo rs232 data
+      Serial.write(data);
+    }
+}
+
 /**
  * @brief Process incoming command from FPGA
  * 
@@ -862,21 +920,10 @@ void spi_send(uint8_t cmd, uint8_t addr, uint8_t data) {
 void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data) {
 
   if (cmd == CMD_FLASHBOOT) {
-    uint8_t flashboot_coreid = data;
-    d_printf("Flashboot core id: %02x", data); d_println();
-    d_flush(); delay(100);
-    // todo: add flashboot_id to the core structure, search for desired id and boot it
-    // now it's implemented as hach: reload the same core (required for zx next hard reset)
-    String f = String(core.filename); f.trim(); 
-    char buf[32]; f.toCharArray(buf, sizeof(buf));
-    do_configure(buf);
-  }
-
-  else if (cmd == CMD_UART) {
-    Serial.write(data);
-  }
-
-  else if (cmd == CMD_RTC) {
+    flashboot(data);
+  } else if (cmd == CMD_UART) {
+    serial_data(addr, data);
+  } else if (cmd == CMD_RTC) {
     zxrtc.setData(addr, data);
   }
 }
