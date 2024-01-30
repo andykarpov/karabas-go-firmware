@@ -1170,7 +1170,7 @@ void read_roms(const char* filename) {
         zxosd.setPos(4,5+rom_idx);
         //uint8_t perc = ceil((float) i*256 * (100.0 / rom_len));
         zxosd.print(rom_idx+1); zxosd.print(": ");
-        zxosd.print((i+1)*256); zxosd.print(" ");
+        zxosd.printf("%05d", (i+1)*256); zxosd.print(" ");
       }
     }
     offset = offset + rom_len + 8;
