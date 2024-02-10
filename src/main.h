@@ -44,6 +44,8 @@
 #define CMD_ROMBANK 0x06
 #define CMD_ROMDATA 0x07
 #define CMD_ROMLOADER 0x08
+#define CMD_FT812 	  0x09
+#define CMD_FT812_DATA 0x0A
 
 #define CMD_USB_GAMEPAD 0x11
 #define CMD_USB_JOYSTICK 0x12
@@ -92,7 +94,9 @@
 
 #define APP_COREBROWSER_MENU_OFFSET 5
 
-#define DEBUG 0
+#ifndef DEBUG
+#define DEBUG 1
+#endif
 
 #if DEBUG
 #define d_begin(...) Serial.begin(__VA_ARGS__);

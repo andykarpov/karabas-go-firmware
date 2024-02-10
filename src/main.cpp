@@ -10,6 +10,7 @@
 #include <ElapsedTimer.h>
 #include <RTC.h>
 #include <OSD.h>
+#include <FT812.h>
 #include <SegaController.h>
 #include "hid_app.h"
 #include "main.h"
@@ -33,6 +34,7 @@ fs::Dir froot;
 fs::File ffile;
 SegaController sega;
 OSD zxosd;
+FT812 ft;
 
 static queue_t spi_event_queue;
 
@@ -115,6 +117,7 @@ void setup()
   zxrtc.begin(spi_send, on_time);
   sega.begin(PIN_JOY_SCK, PIN_JOY_LOAD, PIN_JOY_DATA, PIN_JOY_P7);
   zxosd.begin(spi_send);
+  ft.begin(spi_send);
 
   // LittleFS
   d_print("Mounting Flash... ");
@@ -479,7 +482,8 @@ void core_osd_save(uint8_t pos)
 void core_osd_send(uint8_t pos)
 {
   spi_send(CMD_SWITCHES, pos, core.osd[pos].val);
-  d_printf("Switch: %s %d\n", core.osd[pos].name, core.osd[pos].val);
+  d_printf("Switch: %s %d", core.osd[pos].name, core.osd[pos].val);
+  d_println();
 }
 
 void core_osd_send_all() 
@@ -491,10 +495,21 @@ void core_osd_send_all()
 
 void core_osd_trigger(uint8_t pos)
 {
+  d_printf("Trigger: %s", core.osd[pos].name);
+  d_println();
+
+  // reset FT812 on reset
+  // todo: replace hardcode with something else
+  if (memcmp(core.osd[pos].name, "Rese", 4) == 0) {
+    d_println("Reset FT812");
+    ft.reset();
+    delay(100);
+  }
+
+  d_println("Reset Host");
   spi_send(CMD_SWITCHES, pos, 1);
   delay(100);
   spi_send(CMD_SWITCHES, pos, 0);
-  d_printf("Trigger: %s\n", core.osd[pos].name);
 }
 
 uint8_t core_eeprom_get(uint8_t pos) {
@@ -925,6 +940,8 @@ void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data) {
     serial_data(addr, data);
   } else if (cmd == CMD_RTC) {
     zxrtc.setData(addr, data);
+  } else if (cmd == CMD_FT812_DATA) {
+    ft.setData(addr, data);
   }
 }
 
@@ -1108,6 +1125,9 @@ void read_core(const char* filename) {
 
   // re-send rtc registers
   zxrtc.sendAll();
+
+  // reset ft812
+  ft.reset();
 
   // dump parsed OSD items
   /*for(uint8_t i=0; i<core.osd_len; i++) {
