@@ -104,10 +104,13 @@ uint16_t SegaController::readPins()
     
     // latch
     gpio_put(_loadPin, HIGH);
+    delayMicroseconds(2);
     gpio_put(_loadPin, LOW);
+    delayMicroseconds(2);
     
     // latch
     gpio_put(_loadPin, HIGH);
+    delayMicroseconds(2);
 
     // reading 16 bits of 2 shift registers
     for (uint8_t i=16; i>0; i--) {
@@ -116,9 +119,12 @@ uint16_t SegaController::readPins()
             result |= (1 << i-1);
         }
         gpio_put(_sckPin, HIGH);
+        delayMicroseconds(2);
         gpio_put(_sckPin, LOW);
+        delayMicroseconds(2);
     }
     gpio_put(_loadPin, LOW);
+    delayMicroseconds(2);
 
     return result;
 }
@@ -129,7 +135,7 @@ void SegaController::readCycle(byte cycle)
     gpio_put(_selectPin, cycle % 2);
 
     // a small delay before reading
-    delayMicroseconds(10);
+    delayMicroseconds(50);
 
     uint16_t reading = readPins();
 
