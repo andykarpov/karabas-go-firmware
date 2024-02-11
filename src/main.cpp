@@ -857,7 +857,6 @@ void spi_queue(uint8_t cmd, uint8_t addr, uint8_t data) {
  * @param data data
  */
 void spi_send(uint8_t cmd, uint8_t addr, uint8_t data) {
-  //d_printf("SPI %d %d %d", cmd, addr, data); d_println();
   SPI.beginTransaction(settingsA);
   digitalWrite(PIN_MCU_SPI_CS, LOW);
   uint8_t rx_cmd = SPI.transfer(cmd);
@@ -940,8 +939,13 @@ void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data) {
     serial_data(addr, data);
   } else if (cmd == CMD_RTC) {
     zxrtc.setData(addr, data);
+  } else if (cmd == CMD_FT812) {
+    d_printf("FT_ACK  %02x : %02x", addr, data); d_println();
   } else if (cmd == CMD_FT812_DATA) {
+    d_printf("FT_DATA %02x : %02x", addr, data); d_println();
     ft.setData(addr, data);
+  } else if (cmd == CMD_NOP) {
+    //d_println("Nop");
   }
 }
 
@@ -1128,6 +1132,24 @@ void read_core(const char* filename) {
 
   // reset ft812
   ft.reset();
+
+  if (core.type == 0) {
+    ft.wait();
+    delay(100); // delay after reset is a must
+    // ft test
+    ft.exclusive(true, false);
+    
+    ft.read(0x302000, 1); // read chip id = 7C
+    ft.wait();
+    uint8_t chip_id = ft.getData(0);
+    d_printf("Chip ID: %02x", chip_id); d_println();
+    
+    ft.read(0x30200C, 4); // read clock freq
+    ft.wait();
+    d_printf("Clock Freq: %02x%02x%02x%02x", ft.getData(3), ft.getData(2), ft.getData(1), ft.getData(0)); d_println();
+
+    ft.exclusive(false, false);
+  }
 
   // dump parsed OSD items
   /*for(uint8_t i=0; i<core.osd_len; i++) {

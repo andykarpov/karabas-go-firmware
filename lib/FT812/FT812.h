@@ -29,6 +29,7 @@ class FT812
 private:
   uint8_t transaction_len;
   bool transaction_active;
+  bool data_transaction;
   m_cb action;
   uint8_t buf[256];
 
@@ -48,12 +49,14 @@ public:
    */
   void begin(m_cb act);
 
-  void exclusive(bool on, bool ft);
+  void exclusive(bool spi_on, bool vga_on);
   void reset();
   void command(uint8_t cmd1, uint8_t cmd2, uint8_t cmd3);
   void write(uint32_t addr, uint8_t *data, uint8_t len);
   void read(uint32_t addr, uint8_t len);
   void setData(uint8_t pos, uint8_t val);
+  uint8_t getData(uint8_t pos);
+  void wait();
 
 };
 
