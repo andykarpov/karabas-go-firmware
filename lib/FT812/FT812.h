@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2021 Andy Karpov <andy.karpov@gmail.com>
+ Copyright (C) 2024 Andy Karpov <andy.karpov@gmail.com>
 
  This program is free software; you can redistribute it and/or
  modify it under the terms of the GNU General Public License
@@ -213,10 +213,6 @@ typedef struct
   uint16_t v_visible;  // Vertical visible area size
 } ft_mode_t;
 
-/**
- * Driver library for OSD overlay on FPGA sideA
- */
-
 class FT812
 {
 
@@ -297,27 +293,82 @@ public:
    */
   FT812();
 
-  /**
-   * Begin operation
-   *
-   * Sets pins correctly, and prepares SPI bus.
+  /*!
+      @brief  Begin operation
+      @param  act spi callback
    */
   void begin(m_cb act);
 
+  /*!
+      @brief  Set FT SPI on / off
+      @param  on boolean state of the MCU SPI bus
+  */
   void spi(bool on);
+
+  /*!
+      @brief  Switch VGA to FT
+      @param  on boolean state of the MCU VGA buffers
+  */
   void vga(bool on);
+
+  /*!
+      @brief  Performs a FT812 reset with no wait cycles
+  */
   void reset();
+
+  /*!
+      @brief  Send FT812 command
+      @param  cmd1 high byte
+      @param  cmd2 mid byte (parameters)
+      @param  cmd3 low byte (usually 0)
+  */
   void command(uint8_t cmd1, uint8_t cmd2, uint8_t cmd3);
+
+  /*!
+      @brief  Send FT812 command with no wait cycle
+      @param  cmd1 high byte
+      @param  cmd2 mid byte (parameters)
+      @param  cmd3 low byte (usually 0)
+  */
   void commandNoWait(uint8_t cmd1, uint8_t cmd2, uint8_t cmd3);
+
+  /*!
+      @brief  Performs a write data transaction
+      @param  addr 32-bit address
+      @param  data data to send
+      @param  len length of data to send
+  */
   void write(uint32_t addr, uint8_t *data, uint8_t len);
+
+  /*!
+      @brief  Performs a read data transaction
+      @param  addr 32-bit address
+      @param  len length of data to send
+  */
   void read(uint32_t addr, uint8_t len);
+ 
+  /*!
+      @brief  Set data val at pos
+      @param  pos byte position
+      @param  val byte value
+  */
   void setData(uint8_t pos, uint8_t val);
+
+  /*!
+      @brief  Get data at pos
+      @param  pos byte position
+      @return byte balue
+  */
   uint8_t getData(uint8_t pos);
+
+  /*!
+      @brief  Wait the SPI transaction to complete
+  */
   void wait();
 
   /*************************************/
 
-/*!
+    /*!
         @brief  Send single command to FT81x chip
         @param  cmd 32-bit command
     */
@@ -370,6 +421,11 @@ public:
         @param  color Clear display using this color
     */
     void clear(const uint32_t color);
+
+    /*!
+        @brief  Draw logo animation
+    */
+    void drawLogo();
 
     /*!
         @brief  Draw circle in current display list

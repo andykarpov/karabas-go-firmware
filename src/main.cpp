@@ -20,7 +20,7 @@
 
 PioSpi spi(PIN_SD_SPI_RX, PIN_SD_SPI_SCK, PIN_SD_SPI_TX);
 #define SD_CONFIG SdSpiConfig(SD_CS_PIN, SHARED_SPI, SD_SCK_MHZ(60), &spi)
-SPISettings settingsA(SD_SCK_MHZ(50), MSBFIRST, SPI_MODE0); // MCU SPI settings
+SPISettings settingsA(SD_SCK_MHZ(20), MSBFIRST, SPI_MODE0); // MCU SPI settings
 
 PCA9536 extender;
 ElapsedTimer my_timer;
@@ -1138,18 +1138,25 @@ void read_core(const char* filename) {
     
     ft.init(0); // 640x480
 
-    ft.beginDisplayList();
-    ft.clear(FT81x_COLOR_RGB(0, 0, 0));
-    ft.swapScreen();
+    ft.drawLogo();
 
-    ft.beginDisplayList();
+    delay(3500);
+
+    ft.vga(false);
+    ft.spi(false);
+
+    /*ft.beginDisplayList();
+    ft.clear(FT81x_COLOR_RGB(0, 0, 0));
+    ft.swapScreen();*/
+
+    /*ft.beginDisplayList();
     ft.clear(FT81x_COLOR_RGB(255, 255, 255));
     ft.drawText(240, 150, 31, FT81x_COLOR_RGB(0, 0, 0), FT81x_OPT_CENTER, "Hello World\0");
     ft.drawText(240, 210, 22, FT81x_COLOR_RGB(0, 0, 0), FT81x_OPT_CENTER, "FT812 on Karabas-Go!\0");
     ft.drawCircle(120, 350, 40, FT81x_COLOR_RGB(255, 0, 0));
     ft.drawCircle(240, 350, 40, FT81x_COLOR_RGB(0, 255, 0));
     ft.drawCircle(360, 350, 40, FT81x_COLOR_RGB(0, 0, 255));
-    ft.swapScreen();
+    ft.swapScreen();*/
 
     /*ft.setAudioVolume(64);
 

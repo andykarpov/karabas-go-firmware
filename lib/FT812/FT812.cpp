@@ -6,20 +6,11 @@
  version 2 as published by the Free Software Foundation.
  */
 
-// STL headers
-// C headers
-// Framework headers
-// Library headers
 #include <SPI.h>
-// Project headers
-// This component's header
 #include <FT812.h>
 #include <Arduino.h>
 
 /****************************************************************************/
-
-#define DISPLAY_WIDTH  800  ///< Width of the display in pixels
-#define DISPLAY_HEIGHT 600  ///< Height of the display in pixels
 
 #define READ  0x000000  ///< Bitmask address reading
 #define WRITE 0x800000  ///< Bitmask for address writing
@@ -56,7 +47,8 @@
 #define SPINNER()                    0xFFFFFF16                                                                                                                             ///< Draw spinner
 #define LOADIMAGE()                  0xFFFFFF24                                                                                                                             ///< Load image data
 #define MEDIAFIFO()                  0xFFFFFF39                                                                                                                             ///< Set up media FIFO in general purpose graphics RAM
-#define ROMFONT()                    0xFFFFFF3F                                                                                                                             ///< Load a ROM font into bitmap handle
+#define ROMFONT()                    0xFFFFFF3F   
+#define LOGO()                       0xffffff31                                                                                                                          ///< Load a ROM font into bitmap handle
 
 // KTOME addition
 #define BLEND_FUNC(src, dst) ((0x0BL << 24) | (src << 3) | (dst))
@@ -319,6 +311,11 @@ void FT812::init(uint8_t m) {
 void FT812::clear(const uint32_t color) {
     startCmd(CLEAR_COLOR(color));
     endCmd(CLEAR(1, 1, 1));
+}
+
+void FT812::drawLogo() {
+    startCmd(LOGO());
+    endCmd(END());
 }
 
 void FT812::drawCircle(const int16_t x, const int16_t y, const uint8_t size, const uint32_t color) {
@@ -693,18 +690,20 @@ uint8_t FT812::initBitmapHandleForFont(uint8_t font) {
 }
 
 void FT812::writeGRAM(const uint32_t offset, const uint32_t size, const uint8_t *data, const bool useProgmem) {
-    uint32_t cmd = (FT81x_RAM_G + offset); // | WRITE;
-    uint8_t dbuf[256];
-    if (useProgmem) {
-        for (uint32_t i = 0; i < size; i++) {
-            dbuf[i] = DATA(data, i);
-        }
-    } else {
-        for (uint32_t i = 0; i < size; i++) {
-            dbuf[i] = data[i];
-        }
+    uint32_t chunk_size = 128;
+    uint32_t chunks = ceil((float)size / chunk_size);
+    uint8_t dbuf[128];
+
+    uint32_t cmd = FT81x_RAM_G + offset;
+
+    for (uint32_t j=0; j<chunks; j++) {
+      uint32_t to = (size - j*chunk_size > chunk_size) ? chunk_size : size - j*chunk_size;
+      for (uint32_t i = 0; i < to; i++) {
+          dbuf[i] = (useProgmem) ? DATA(data, i + j*chunk_size) : data[i + j*chunk_size];
+      }
+      write(cmd, dbuf, to);
+      cmd += chunk_size; // next cmd + 32
     }
-    write(cmd, dbuf, size);
 }
 
 void FT812::startCmd(const uint32_t cmd) {
