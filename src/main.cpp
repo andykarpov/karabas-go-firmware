@@ -20,7 +20,7 @@
 
 PioSpi spi(PIN_SD_SPI_RX, PIN_SD_SPI_SCK, PIN_SD_SPI_TX);
 #define SD_CONFIG SdSpiConfig(SD_CS_PIN, SHARED_SPI, SD_SCK_MHZ(60), &spi)
-SPISettings settingsA(SD_SCK_MHZ(5), MSBFIRST, SPI_MODE0); // MCU SPI settings
+SPISettings settingsA(SD_SCK_MHZ(50), MSBFIRST, SPI_MODE0); // MCU SPI settings
 
 PCA9536 extender;
 ElapsedTimer my_timer;
@@ -940,9 +940,7 @@ void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data) {
   } else if (cmd == CMD_RTC) {
     zxrtc.setData(addr, data);
   } else if (cmd == CMD_FT812) {
-    d_printf("FT_ACK  %02x : %02x", addr, data); d_println();
   } else if (cmd == CMD_FT812_DATA) {
-    d_printf("FT_DATA %02x : %02x", addr, data); d_println();
     ft.setData(addr, data);
   } else if (cmd == CMD_NOP) {
     //d_println("Nop");
@@ -1130,25 +1128,37 @@ void read_core(const char* filename) {
   // re-send rtc registers
   zxrtc.sendAll();
 
-  // reset ft812
+  // reset ft812 (nowait)
   ft.reset();
 
   if (core.type == 0) {
-    ft.wait();
-    delay(100); // delay after reset is a must
     // ft test
-    ft.exclusive(true, false);
+    ft.spi(true);
+    ft.vga(true);
     
-    ft.read(0x302000, 1); // read chip id = 7C
-    ft.wait();
-    uint8_t chip_id = ft.getData(0);
-    d_printf("Chip ID: %02x", chip_id); d_println();
-    
-    ft.read(0x30200C, 4); // read clock freq
-    ft.wait();
-    d_printf("Clock Freq: %02x%02x%02x%02x", ft.getData(3), ft.getData(2), ft.getData(1), ft.getData(0)); d_println();
+    ft.init(0); // 640x480
 
-    ft.exclusive(false, false);
+    ft.beginDisplayList();
+    ft.clear(FT81x_COLOR_RGB(0, 0, 0));
+    ft.swapScreen();
+
+    ft.beginDisplayList();
+    ft.clear(FT81x_COLOR_RGB(255, 255, 255));
+    ft.drawText(240, 150, 31, FT81x_COLOR_RGB(0, 0, 0), FT81x_OPT_CENTER, "Hello World\0");
+    ft.drawText(240, 210, 22, FT81x_COLOR_RGB(0, 0, 0), FT81x_OPT_CENTER, "FT812 on Karabas-Go!\0");
+    ft.drawCircle(120, 350, 40, FT81x_COLOR_RGB(255, 0, 0));
+    ft.drawCircle(240, 350, 40, FT81x_COLOR_RGB(0, 255, 0));
+    ft.drawCircle(360, 350, 40, FT81x_COLOR_RGB(0, 0, 255));
+    ft.swapScreen();
+
+    /*ft.setAudioVolume(64);
+
+    for (uint8_t pitch = 36; pitch <= 44; pitch++) {
+        ft.setSound(FT81x_SOUND_GLOCKENSPIEL, pitch);
+        ft.playSound();
+        //delay(500);
+    }*/
+
   }
 
   // dump parsed OSD items
