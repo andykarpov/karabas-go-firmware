@@ -456,6 +456,8 @@ void FT812::drawBitmap(const uint32_t offset, const uint16_t x, const uint16_t y
     intermediateCmd((uint32_t)65536 * -(width / 2));
     intermediateCmd((uint32_t)65536 * -(height / 2));
     intermediateCmd(SETMATRIX());
+    intermediateCmd(BLEND_FUNC(1, 1));
+    endCmd(VERTEX2II(x, y, 0, 0));
 }
 
 void FT812::overlayBitmap(const uint32_t offset, const uint16_t x, const uint16_t y, const uint16_t width, const uint16_t height, const uint8_t scale, const uint8_t rot) {
