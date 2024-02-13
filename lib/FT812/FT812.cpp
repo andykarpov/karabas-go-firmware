@@ -466,6 +466,7 @@ void FT812::drawBitmap(const uint32_t offset, const uint16_t x, const uint16_t y
     intermediateCmd(SCALE());
     intermediateCmd((uint32_t)scale * 65536);
     intermediateCmd((uint32_t)scale * 65536);
+
     intermediateCmd(CMD_TRANSLATE());
     intermediateCmd((uint32_t)65536 * (width / 2));
     intermediateCmd((uint32_t)65536 * (height / 2));
