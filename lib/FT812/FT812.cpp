@@ -699,7 +699,8 @@ void FT812::writeGRAM(const uint32_t offset, const uint32_t size, const uint8_t 
     uint32_t cmd = FT81x_RAM_G + offset;
 
     for (uint32_t j=0; j<chunks; j++) {
-      uint32_t to = (size - j*chunk_size > chunk_size) ? chunk_size : size - j*chunk_size;
+      uint32_t tail = size - j*chunk_size;
+      uint32_t to = (j == chunks-1) ? tail : chunk_size;
       for (uint32_t i = 0; i < to; i++) {
           dbuf[i] = (useProgmem) ? DATA(data, i + j*chunk_size) : data[i + j*chunk_size];
       }
