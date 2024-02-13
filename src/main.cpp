@@ -20,7 +20,7 @@
 
 PioSpi spi(PIN_SD_SPI_RX, PIN_SD_SPI_SCK, PIN_SD_SPI_TX);
 #define SD_CONFIG SdSpiConfig(SD_CS_PIN, SHARED_SPI, SD_SCK_MHZ(60), &spi)
-SPISettings settingsA(SD_SCK_MHZ(60), MSBFIRST, SPI_MODE0); // MCU SPI settings
+SPISettings settingsA(SD_SCK_MHZ(30), MSBFIRST, SPI_MODE0); // MCU SPI settings
 
 PCA9536 extender;
 ElapsedTimer my_timer;
@@ -215,12 +215,12 @@ void ft_core_browser(uint8_t vpos) {
     char name[18];
     String n = String(cores[i].name); n.trim(); n.toCharArray(name, 18);
     const uint32_t color = i == core_sel ? FT81x_COLOR_RGB(0, 0, 200) : FT81x_COLOR_RGB(64, 64, 92);
-    ft.drawButton(160, offset + pos*40, 320, 32, 28, FT81x_COLOR_RGB(255, 255, 255), color, FT81x_OPT_3D, name);
+    ft.drawButton(140, offset + pos*40, 320, 32, 28, FT81x_COLOR_RGB(255, 255, 255), color, FT81x_OPT_3D, name);
     pos++;
   }
 
   char b[40]; sprintf(b, "Page %d of %d\0", core_page, core_pages);
-  ft.drawText(320, 440, 27, FT81x_COLOR_RGB(100, 100, 120), FT81x_OPT_CENTER, b);
+  ft.drawText(300, 440, 27, FT81x_COLOR_RGB(100, 100, 120), FT81x_OPT_CENTER, b);
   ft.playSound();
 
   ft.drawLine(0, 64+8, 640-1, 64+8, 1, FT81x_COLOR_RGB(100,100,120));
@@ -1482,7 +1482,7 @@ void osd_init_core_browser_overlay() {
 }
 
 void ft_osd_init_core_browser_overlay() {
-  ft.setSound(FT81x_SOUND_GLOCKENSPIEL, 40);
+  ft.setSound(FT81x_SOUND_SWITCH, 40);
   ft.loadImage(0, LOGO_SIZE, logoData, false);
   ft_core_browser(APP_COREBROWSER_MENU_OFFSET);  
 }
