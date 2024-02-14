@@ -238,6 +238,7 @@ class FT812
   using m_cb = void (*)(uint8_t cmd, uint8_t addr, uint8_t data); // alias function pointer
 
 private:
+  ft_mode_t mode;
   uint8_t ctrl_reg;
   uint32_t cmd_addr;
   uint8_t transaction_len;
@@ -254,11 +255,21 @@ protected:
 
 public:
 
-/*!
+    /*!
         @brief  Initialize the FT81x chip
         @param m video mode
     */
     void init(uint8_t m);
+
+    /*!
+        @brief  Get current horizontal resolution 
+    */
+    uint16_t width();
+
+    /*!
+        @brief  Get current vertical resolution
+    */
+    uint16_t height();
 
     /*!
         @brief  Write single command to the command buffer of the FT81x chip
