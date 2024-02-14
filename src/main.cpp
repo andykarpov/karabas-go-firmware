@@ -435,6 +435,15 @@ void on_keyboard() {
           }
         }
       }
+
+      // return back to classic osd
+      if (usb_keyboard_report.keycode[0] == KEY_SPACE && has_ft == true) {
+        has_ft = false;
+        ft.vga(false);
+        ft.spi(false);
+        osd_init_core_browser_overlay();
+      }
+
       break;
 
       case state_main:
@@ -1197,25 +1206,22 @@ void read_core(const char* filename) {
   zxrtc.sendAll();
 
   has_ft = false;
+  ft.spi(true);
+  ft.reset();
+  ft.spi(false);
 
   // boot core tries to use FT812 as osd handler
   if (core.type == CORE_TYPE_BOOT && is_osd) {
-    ft.spi(true);    
-    has_ft = (ft.read8(FT81x_REG_ID) == 0x7c);
+    ft.spi(true);
+    has_ft = ft.init(0); // 640x480
     if (has_ft) {
       d_println("Found FT81x IC, switching to FT OSD");
       ft.vga(true);
-      ft.init(0); // 640x480
     } else {
       d_println("FT81x IC did not found");
       ft.vga(false);
       ft.spi(false);
     }
-  } else {
-    // reset ft812 (nowait), for other cores
-    ft.spi(true);
-    ft.reset();
-    ft.spi(false);
   }
 
   // dump parsed OSD items
