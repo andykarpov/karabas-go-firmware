@@ -259,7 +259,7 @@ public:
         @brief  Initialize the FT81x chip
         @param m video mode
     */
-    void init(uint8_t m);
+    bool init(uint8_t m);
 
     /*!
         @brief  Get current horizontal resolution 

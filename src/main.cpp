@@ -162,6 +162,8 @@ void setup()
 }
 
 void do_configure(const char* filename) {
+  ft.vga(false);
+  ft.spi(false);
   fpga_configure(filename);
   spi_send(CMD_INIT_START, 0, 0);
   read_core(filename);

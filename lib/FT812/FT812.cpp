@@ -274,7 +274,7 @@ void FT812::wait()
 
 /**************************************************************************************************/
 
-void FT812::init(uint8_t m) {
+bool FT812::init(uint8_t m) {
 
     mode = ft_modes[m];
 
@@ -292,6 +292,11 @@ void FT812::init(uint8_t m) {
 
     // wait for boot-up to complete
     delay(100);
+
+    if (read8(FT81x_REG_ID) != 0x7C) {
+      return false;
+    }
+
     while (read8(FT81x_REG_ID) != 0x7C) {
         __asm__ volatile("nop");
     }
@@ -325,6 +330,8 @@ void FT812::init(uint8_t m) {
     // int setup
     write8(FT81x_REG_INT_MASK, 1);
     write8(FT81x_REG_INT_EN, 1);
+
+    return true;
 }
 
 uint16_t FT812::width() {
