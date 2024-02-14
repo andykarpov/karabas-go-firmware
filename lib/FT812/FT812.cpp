@@ -153,9 +153,9 @@ void FT812::vga(bool on)
 
 void FT812::reset()
 {
-  spi(true);
+  //spi(true);
   commandNoWait(0x68, 0, 0);
-  spi(false);
+  //spi(false);
 }
 
 void FT812::command(uint8_t cmd1, uint8_t cmd2, uint8_t cmd3)

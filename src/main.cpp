@@ -551,11 +551,13 @@ void core_osd_trigger(uint8_t pos)
   d_printf("Trigger: %s", core.osd[pos].name);
   d_println();
 
-  // reset FT812 on reset
+  // reset FT812 on soft reset
   // todo: replace hardcode with something else
   if (memcmp(core.osd[pos].name, "Rese", 4) == 0) {
     d_println("Reset FT812");
+    ft.spi(true);
     ft.reset();
+    ft.spi(false);
     delay(100);
   }
 
@@ -1194,29 +1196,24 @@ void read_core(const char* filename) {
 
   has_ft = false;
 
-  // reset ft812 (nowait)
-  ft.reset();
-
   // boot core tries to use FT812 as osd handler
   if (core.type == CORE_TYPE_BOOT && is_osd) {
-    // ft init
     ft.spi(true);    
-    ft.init(0); // 640x480
-
-    // ft exists
     has_ft = (ft.read8(FT81x_REG_ID) == 0x7c);
-
     if (has_ft) {
       d_println("Found FT81x IC, switching to FT OSD");
       ft.vga(true);
-      //ft.drawLogo();
-      //delay(3500);
+      ft.init(0); // 640x480
     } else {
-      // disable ft vga and spi
       d_println("FT81x IC did not found");
       ft.vga(false);
       ft.spi(false);
     }
+  } else {
+    // reset ft812 (nowait), for other cores
+    ft.spi(true);
+    ft.reset();
+    ft.spi(false);
   }
 
   // dump parsed OSD items
