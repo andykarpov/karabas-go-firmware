@@ -1212,15 +1212,20 @@ void read_core(const char* filename) {
 
   // boot core tries to use FT812 as osd handler
   if (core.type == CORE_TYPE_BOOT && is_osd) {
-    ft.spi(true);
-    has_ft = ft.init(0); // 640x480
-    if (has_ft) {
-      d_println("Found FT81x IC, switching to FT OSD");
-      ft.vga(true);
+    // space skip ft osd
+    if (usb_keyboard_report.keycode[0] == KEY_SPACE) {
+      d_println("Space pressed: skip FT81x detection, fallback to classic OSD");
     } else {
-      d_println("FT81x IC did not found");
-      ft.vga(false);
-      ft.spi(false);
+      ft.spi(true);
+      has_ft = ft.init(0); // 640x480
+      if (has_ft) {
+        d_println("Found FT81x IC, switching to FT OSD");
+        ft.vga(true);
+      } else {
+        d_println("FT81x IC did not found");
+        ft.vga(false);
+        ft.spi(false);
+      }
     }
   }
 
