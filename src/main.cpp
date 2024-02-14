@@ -181,7 +181,7 @@ void do_configure(const char* filename) {
   spi_send(CMD_INIT_DONE, 0, 0);
 }
 
-void ft_core_browser(uint8_t vpos) {
+void ft_core_browser(bool play_sounds) {
 
   ft.beginDisplayList();
   ft.clear(FT81x_COLOR_RGB(1, 1, 1));
@@ -207,7 +207,9 @@ void ft_core_browser(uint8_t vpos) {
   char b[40]; sprintf(b, "Page %d of %d\0", core_page, core_pages);
   ft.drawText(320, 440, 27, FT81x_COLOR_RGB(100, 100, 120), FT81x_OPT_CENTER, b);
 
-  ft.playSound();
+  if (play_sounds) {
+    ft.playSound();
+  }
 
   //ft.drawLine(0, 64+8, 640-1, 64+8, 1, FT81x_COLOR_RGB(100,100,120));
   //ft.drawLine(0, 440-12, 640-1, 440-12, 1, FT81x_COLOR_RGB(100,100,120));
@@ -215,6 +217,12 @@ void ft_core_browser(uint8_t vpos) {
   ft.drawBitmap(0, 0, 0, 56, 16, 4, 0); 
   //ft.overlayBitmap(LOGO_BITMAP_SIZE, 640-200, 480-143, 200, 143, 1, 0);
   ft.overlayBitmap(LOGO_BITMAP_SIZE, 640-160, 480-200, 160, 200, 1, 0);
+
+  uint16_t h = (uint16_t) (zxrtc.getHour() % 12);
+  uint16_t m = (uint16_t) (zxrtc.getMinute() % 60);
+  uint16_t s = (uint16_t) (zxrtc.getSecond() % 60);
+
+  ft.drawClock(640 - 80, 80, 80, FT81x_COLOR_RGB(255,255,255), FT81x_COLOR_RGB(1,1,1), FT81x_OPT_NOBACK | FT81x_OPT_FLAT, h, m, s);
 
   ft.swapScreen();
 }
@@ -419,7 +427,7 @@ void on_keyboard() {
         // redraw core browser
         if (osd_state == state_core_browser) {
           if (has_ft) {
-            ft_core_browser(APP_COREBROWSER_MENU_OFFSET);
+            ft_core_browser(true);
           } else {
             core_browser(APP_COREBROWSER_MENU_OFFSET);
           }
@@ -666,7 +674,7 @@ void loop()
     spi_send(CMD_NOP, 0 ,0);
   }
 
-  if (core.type == CORE_TYPE_BOOT && has_ft == true) {
+  if (core.type == CORE_TYPE_BOOT && has_ft == true && is_osd == true) {
     // todo: playSound
     // todo: timer
   }
@@ -1024,6 +1032,11 @@ void on_time() {
   if (d < 10) zxosd.print(0); zxosd.print(d); zxosd.print("/");
   if (mo < 10) zxosd.print(0); zxosd.print(mo); zxosd.print("/");
   if (y < 10) zxosd.print(0); zxosd.print(y);
+
+  if (core.type == CORE_TYPE_BOOT && has_ft == true && is_osd == true) {
+    // redraw core browser
+    ft_core_browser(false);
+  }
 }
 
 core_list_item_t get_core_list_item(bool is_flash) {
@@ -1179,11 +1192,13 @@ void read_core(const char* filename) {
   // re-send rtc registers
   zxrtc.sendAll();
 
+  has_ft = false;
+
   // reset ft812 (nowait)
   ft.reset();
 
   // boot core tries to use FT812 as osd handler
-  if (core.type == 0) {
+  if (core.type == CORE_TYPE_BOOT && is_osd) {
     // ft init
     ft.spi(true);    
     ft.init(0); // 640x480
@@ -1481,7 +1496,7 @@ void ft_osd_init_core_browser_overlay() {
 //  ft.loadImage(LOGO_BITMAP_SIZE, BURATO_SIZE, buratoData, false);
   ft.loadImage(LOGO_BITMAP_SIZE, BURATO3_SIZE, burato3Data, false);
 
-  ft_core_browser(APP_COREBROWSER_MENU_OFFSET);  
+  ft_core_browser(false);  
 }
 
 void osd_handle(bool force) {
