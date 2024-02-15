@@ -209,6 +209,10 @@ void ft_core_browser(bool play_sounds) {
   char b[40]; sprintf(b, "Page %d of %d\0", core_page, core_pages);
   ft.drawText(320, 440, 27, FT81x_COLOR_RGB(100, 100, 120), FT81x_OPT_CENTER, b);
 
+  char time[9];
+  sprintf(time, "%02d:%02d:%02d\0", zxrtc.getHour(), zxrtc.getMinute(), zxrtc.getSecond());
+  ft.drawText(ft.width()-88, 40, 30, FT81x_COLOR_RGB(255,255,255), FT81x_OPT_CENTER, time);
+
   if (play_sounds) {
     ft.playSound();
   }
@@ -220,11 +224,10 @@ void ft_core_browser(bool play_sounds) {
   //ft.overlayBitmap(LOGO_BITMAP_SIZE, 640-200, 480-143, 200, 143, 1, 0);
   ft.overlayBitmap(LOGO_BITMAP_SIZE, 640-160-8, 480-200-8, 160, 200, 1, 0);
 
-  uint16_t h = (uint16_t) (zxrtc.getHour() % 12);
+  /*uint16_t h = (uint16_t) (zxrtc.getHour() % 12);
   uint16_t m = (uint16_t) (zxrtc.getMinute() % 60);
   uint16_t s = (uint16_t) (zxrtc.getSecond() % 60);
-
-  ft.drawClock(640 - 80-8, 80+8, 80, FT81x_COLOR_RGB(255,255,255), FT81x_COLOR_RGB(1,1,1), FT81x_OPT_NOBACK | FT81x_OPT_FLAT, h, m, s);
+  ft.drawClock(640 - 80-8, 80+8, 80, FT81x_COLOR_RGB(255,255,255), FT81x_COLOR_RGB(1,1,1), FT81x_OPT_NOBACK | FT81x_OPT_FLAT, h, m, s);*/
 
   ft.swapScreen();
 }
