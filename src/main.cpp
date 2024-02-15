@@ -187,7 +187,7 @@ void ft_core_browser(bool play_sounds) {
 
   ft.beginDisplayList();
   ft.clear(FT81x_COLOR_RGB(1, 1, 1));
-  //ft.drawText(320, 16, 31, FT81x_COLOR_RGB(255, 255, 255), FT81x_OPT_CENTER, "Karabas Go Menu\0");
+  ft.drawGradient(ft.width()/2, 0, FT81x_COLOR_RGB(0, 0, 200), ft.width()/2, ft.height()-1, FT81x_COLOR_RGB(1, 1, 1));
 
   core_pages = ceil((float)cores_len / ft_core_page_size);
   core_page = ceil((float)(core_sel+1)/ft_core_page_size);
@@ -195,12 +195,12 @@ void ft_core_browser(bool play_sounds) {
   uint8_t core_to = core_page*ft_core_page_size > cores_len ? cores_len : core_page*ft_core_page_size;
   uint8_t core_fill = core_page*ft_core_page_size;
   uint8_t pos = 0;
-  uint8_t offset = 64 + 16;
+  uint8_t offset = 64 + 16 + 8;
   for(uint8_t i=core_from; i < core_to; i++) {
     char name[18];
     String n = String(cores[i].name); n.trim(); n.toCharArray(name, 18);
     const uint32_t color = i == core_sel ? FT81x_COLOR_RGB(0, 0, 200) : FT81x_COLOR_RGB(64, 64, 92);
-    ft.drawButton(160, offset + pos*40, 320, 32, 28, FT81x_COLOR_RGB(255, 255, 255), color, FT81x_OPT_3D, name);
+    ft.drawButton(160+8, offset + pos*40, 320-16, 32, 28, FT81x_COLOR_RGB(255, 255, 255), color, FT81x_OPT_3D, name);
     pos++;
   }
 
@@ -216,15 +216,15 @@ void ft_core_browser(bool play_sounds) {
   //ft.drawLine(0, 64+8, 640-1, 64+8, 1, FT81x_COLOR_RGB(100,100,120));
   //ft.drawLine(0, 440-12, 640-1, 440-12, 1, FT81x_COLOR_RGB(100,100,120));
 
-  ft.drawBitmap(0, 0, 0, 56, 16, 4, 0); 
+  ft.drawBitmap(0, 8, 8, 56, 16, 4, 0); 
   //ft.overlayBitmap(LOGO_BITMAP_SIZE, 640-200, 480-143, 200, 143, 1, 0);
-  ft.overlayBitmap(LOGO_BITMAP_SIZE, 640-160, 480-200, 160, 200, 1, 0);
+  ft.overlayBitmap(LOGO_BITMAP_SIZE, 640-160-8, 480-200-8, 160, 200, 1, 0);
 
   uint16_t h = (uint16_t) (zxrtc.getHour() % 12);
   uint16_t m = (uint16_t) (zxrtc.getMinute() % 60);
   uint16_t s = (uint16_t) (zxrtc.getSecond() % 60);
 
-  ft.drawClock(640 - 80, 80, 80, FT81x_COLOR_RGB(255,255,255), FT81x_COLOR_RGB(1,1,1), FT81x_OPT_NOBACK | FT81x_OPT_FLAT, h, m, s);
+  ft.drawClock(640 - 80-8, 80+8, 80, FT81x_COLOR_RGB(255,255,255), FT81x_COLOR_RGB(1,1,1), FT81x_OPT_NOBACK | FT81x_OPT_FLAT, h, m, s);
 
   ft.swapScreen();
 }
