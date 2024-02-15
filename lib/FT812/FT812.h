@@ -342,6 +342,12 @@ public:
   void vga(bool on);
 
   /*!
+      @brief  Switch SPI to slow mode
+      @param  on boolean state of SLOW SPI mode
+  */
+  void slow(bool on);
+
+  /*!
       @brief  Performs a FT812 reset with no wait cycles
   */
   void reset();

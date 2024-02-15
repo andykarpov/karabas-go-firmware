@@ -569,9 +569,7 @@ void core_osd_trigger(uint8_t pos)
   // todo: replace hardcode with something else
   if (memcmp(core.osd[pos].name, "Rese", 4) == 0) {
     d_println("Reset FT812");
-    ft.spi(true);
     ft.reset();
-    ft.spi(false);
     delay(100);
   }
 
@@ -1209,9 +1207,7 @@ void read_core(const char* filename) {
   zxrtc.sendAll();
 
   has_ft = false;
-  ft.spi(true);
   ft.reset();
-  ft.spi(false);
 
   // boot core tries to use FT812 as osd handler
   if (core.type == CORE_TYPE_BOOT && is_osd) {
@@ -1220,7 +1216,7 @@ void read_core(const char* filename) {
       d_println("Space pressed: skip FT81x detection, fallback to classic OSD");
     } else {
       ft.spi(true);
-      has_ft = ft.init(0); // 640x480
+      has_ft = ft.init(1); // 640x480x75
       if (has_ft) {
         d_println("Found FT81x IC, switching to FT OSD");
         ft.vga(true);

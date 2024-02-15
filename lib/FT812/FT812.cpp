@@ -111,8 +111,8 @@ const uint8_t ADDR_DATA_BYTE = 0x00; // ... + ADDR_TRANSACTION_LEN-1 for CMD_FT8
 const ft_mode_t ft_modes[] =
 {
   // f_mul, f_div, h_fporch, h_sync, h_bporch, h_visible, v_fporch, v_sync, v_bporch, v_visible
-  {6,  2, 16, 96,  48,  640,  11, 2, 31, 480},   //  0: 640x480@57Hz (48MHz)
-  {8,  2, 24, 40,  128, 640,  9,  3, 28, 480},   //  1: 640x480@74Hz (64MHz)
+  {6,  2, 16, 96,  48,  640,  18, 2, 24, 480},   //  0: 640x480@57Hz (48MHz)
+  {8,  2, 16, 64,  120, 640,  1,  3, 16, 480},   //  1: 640x480@75Hz (64MHz)
   {8,  2, 16, 96,  48,  640,  11, 2, 31, 480},   //  2: 640x480@76Hz (64MHz)
   {5,  1, 40, 128, 88,  800,  1,  4, 23, 600},   //  3: 800x600@60Hz (40MHz)
   {10, 2, 40, 128, 88,  800,  1,  4, 23, 600},   //  4: 800x600@60Hz (80MHz)
@@ -151,11 +151,18 @@ void FT812::vga(bool on)
   action(CMD_FT812, ADDR_EXCLUSIVE, ctrl_reg);
 }
 
+void FT812::slow(bool on)
+{
+  ctrl_reg = bitWrite(ctrl_reg, 2, on);
+  action(CMD_FT812, ADDR_EXCLUSIVE, ctrl_reg);
+}
+
 void FT812::reset()
 {
-  //spi(true);
+  spi(true);
+  slow(true);
   commandNoWait(0x68, 0, 0);
-  //spi(false);
+  spi(false);
 }
 
 void FT812::command(uint8_t cmd1, uint8_t cmd2, uint8_t cmd3)
@@ -278,20 +285,16 @@ bool FT812::init(uint8_t m) {
 
     mode = ft_modes[m];
 
+    slow(true);
+
     // reset
     sendCommand(FT81x_CMD_RST_PULSE);
     delay(300);
 
-    // select clock
     sendCommand(FT81x_CMD_CLKEXT);
-
     sendCommand(FT81x_CMD_CLKSEL + ((mode.f_mul | 0xC0) << 8)); // f_mul
-
-    // activate
     sendCommand(FT81x_CMD_ACTIVE);
-
-    // wait for boot-up to complete
-    delay(100);
+    delay(300);
 
     if (read8(FT81x_REG_ID) != 0x7C) {
       return false;
@@ -328,8 +331,10 @@ bool FT812::init(uint8_t m) {
     write8(FT81x_REG_PCLK, mode.f_div); // f_div 1
 
     // int setup
-    write8(FT81x_REG_INT_MASK, 1);
-    write8(FT81x_REG_INT_EN, 1);
+    //write8(FT81x_REG_INT_MASK, 1);
+    //write8(FT81x_REG_INT_EN, 1);
+
+    slow(false);
 
     return true;
 }
