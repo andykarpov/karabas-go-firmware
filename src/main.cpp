@@ -183,11 +183,19 @@ void do_configure(const char* filename) {
   spi_send(CMD_INIT_DONE, 0, 0);
 }
 
-void ft_core_browser(bool play_sounds) {
+void ft_core_browser(uint8_t play_sounds) {
 
   ft.beginDisplayList();
-  ft.clear(FT81x_COLOR_RGB(1, 1, 1));
-  ft.drawGradient(ft.width()/2, 0, FT81x_COLOR_RGB(0, 0, 200), ft.width()/2, ft.height()-1, FT81x_COLOR_RGB(1, 1, 1));
+
+  uint32_t color_black = FT81x_COLOR_RGB(1, 1, 1);
+  uint32_t color_gradient = FT81x_COLOR_RGB(0, 0, 200);
+  uint32_t color_button = FT81x_COLOR_RGB(64, 64, 92);
+  uint32_t color_button_active = FT81x_COLOR_RGB(0, 0, 200);
+  uint32_t color_text = FT81x_COLOR_RGB(255,255,255);
+  uint32_t color_copyright = FT81x_COLOR_RGB(120, 120, 120);
+
+  ft.clear(color_black);
+  ft.drawGradient(ft.width()/2, 0, color_gradient, ft.width()/2, ft.height()-1, color_black);
 
   core_pages = ceil((float)cores_len / ft_core_page_size);
   core_page = ceil((float)(core_sel+1)/ft_core_page_size);
@@ -199,26 +207,30 @@ void ft_core_browser(bool play_sounds) {
   for(uint8_t i=core_from; i < core_to; i++) {
     char name[18];
     String n = String(cores[i].name); n.trim(); n.toCharArray(name, 18);
-    const uint32_t color = i == core_sel ? FT81x_COLOR_RGB(0, 0, 200) : FT81x_COLOR_RGB(64, 64, 92);
-    ft.drawButton(160+8, offset + pos*40, 320-16, 32, 28, FT81x_COLOR_RGB(255, 255, 255), color, FT81x_OPT_3D, name);
+    const uint32_t color = i == core_sel ? color_button_active : color_button;
+    ft.drawButton(160+8, offset + pos*40, 320-16, 32, 28, color_text, color, FT81x_OPT_3D, name);
+    if (cores[i].flash) {
+      ft.drawText(160+320-16-24, offset + pos*40 + 16, 28, color_text, FT81x_OPT_CENTERY, "F\0");
+    }
     pos++;
   }
 
-  ft.drawText(112, 440, 27, FT81x_COLOR_RGB(100, 100, 120), FT81x_OPT_CENTER, "www.karabas.uk\0");
-  ft.drawText(112, 460, 27, FT81x_COLOR_RGB(100, 100, 120), FT81x_OPT_CENTER, "(c) 2024 andykarpov\0");
+  ft.drawText(112, 440, 27, color_copyright, FT81x_OPT_CENTER, "www.karabas.uk\0");
+  ft.drawText(112, 460, 27, color_copyright, FT81x_OPT_CENTER, "(c) 2024 andykarpov\0");
   char b[40]; sprintf(b, "Page %d of %d\0", core_page, core_pages);
-  ft.drawText(320, 440, 27, FT81x_COLOR_RGB(100, 100, 120), FT81x_OPT_CENTER, b);
+  ft.drawText(320, 440, 27, color_copyright, FT81x_OPT_CENTER, b);
 
   char time[9];
   sprintf(time, "%02d:%02d:%02d\0", zxrtc.getHour(), zxrtc.getMinute(), zxrtc.getSecond());
-  ft.drawText(ft.width()-88, 40, 30, FT81x_COLOR_RGB(255,255,255), FT81x_OPT_CENTER, time);
+  ft.drawText(ft.width()-88, 40, 30, color_text, FT81x_OPT_CENTER, time);
 
-  if (play_sounds) {
-    ft.playSound();
+  if (play_sounds == 1) {
+      // play synth sound
+      ft.playSound();
+  } else if (play_sounds == 2) {
+    // play wav
+    ft.playAudio(LOGO_BITMAP_SIZE + BURATO3_BITMAP_SIZE, KEY_SIZE, 22050, FT81x_AUDIO_FORMAT_ULAW, false);
   }
-
-  //ft.drawLine(0, 64+8, 640-1, 64+8, 1, FT81x_COLOR_RGB(100,100,120));
-  //ft.drawLine(0, 440-12, 640-1, 440-12, 1, FT81x_COLOR_RGB(100,100,120));
 
   ft.drawBitmap(0, 8, 8, 56, 16, 4, 0); 
   //ft.overlayBitmap(LOGO_BITMAP_SIZE, 640-200, 480-143, 200, 143, 1, 0);
@@ -424,15 +436,21 @@ void on_keyboard() {
         
         // enter
         if (usb_keyboard_report.keycode[0] == KEY_ENTER) {
+          if (FT_OSD == 1 && has_ft == true) {
+            ft_core_browser(2); // play wav
+            delay(500);
+          }
           String f = String(cores[core_sel].filename); f.trim(); 
           char buf[32]; f.toCharArray(buf, sizeof(buf));
+          has_ft = false;
           do_configure(buf);
           osd_state = (core.type == 0) ? state_core_browser : state_main;
         }
-        // redraw core browser
+
+        // redraw core browser on keypress
         if (osd_state == state_core_browser) {
-          if (has_ft) {
-            ft_core_browser(true);
+          if (FT_OSD == 1 && has_ft == true) {
+            ft_core_browser(1);
           } else {
             core_browser(APP_COREBROWSER_MENU_OFFSET);
           }
@@ -440,7 +458,7 @@ void on_keyboard() {
       }
 
       // return back to classic osd
-      if (usb_keyboard_report.keycode[0] == KEY_SPACE && has_ft == true) {
+      if (usb_keyboard_report.keycode[0] == KEY_SPACE && has_ft == true && FT_OSD == 1) {
         has_ft = false;
         ft.vga(false);
         ft.spi(false);
@@ -1049,7 +1067,7 @@ void on_time() {
 
   if (core.type == CORE_TYPE_BOOT && has_ft == true && is_osd == true) {
     // redraw core browser
-    ft_core_browser(false);
+    ft_core_browser(0);
   }
 }
 
@@ -1211,19 +1229,21 @@ void read_core(const char* filename) {
 
   // boot core tries to use FT812 as osd handler
   if (core.type == CORE_TYPE_BOOT && is_osd) {
-    // space skip ft osd
-    if (usb_keyboard_report.keycode[0] == KEY_SPACE) {
-      d_println("Space pressed: skip FT81x detection, fallback to classic OSD");
-    } else {
-      ft.spi(true);
-      has_ft = ft.init(1); // 640x480x75
-      if (has_ft) {
-        d_println("Found FT81x IC, switching to FT OSD");
-        ft.vga(true);
+    if (FT_OSD == 1) {
+      // space skip ft osd
+      if (usb_keyboard_report.keycode[0] == KEY_SPACE) {
+        d_println("Space pressed: skip FT81x detection, fallback to classic OSD");
       } else {
-        d_println("FT81x IC did not found");
-        ft.vga(false);
-        ft.spi(false);
+        ft.spi(true);
+        has_ft = ft.init(1); // 640x480x75
+        if (has_ft) {
+          d_println("Found FT81x IC, switching to FT OSD");
+          ft.vga(true);
+        } else {
+          d_println("FT81x IC did not found");
+          ft.vga(false);
+          ft.spi(false);
+        }
       }
     }
   }
@@ -1501,11 +1521,13 @@ void osd_init_core_browser_overlay() {
 
 void ft_osd_init_core_browser_overlay() {
   ft.setSound(FT81x_SOUND_SWITCH, 40);
-  ft.loadImage(0, LOGO_SIZE, logoData, false);
-//  ft.loadImage(LOGO_BITMAP_SIZE, BURATO_SIZE, buratoData, false);
-  ft.loadImage(LOGO_BITMAP_SIZE, BURATO3_SIZE, burato3Data, false);
+  // load png/jpegs with extraction bitmaps to GRAM
+  ft.loadImage(0, LOGO_SIZE, logoData, false); // karabas logo, starts from 0 in GRAM
+  ft.loadImage(LOGO_BITMAP_SIZE, BURATO3_SIZE, burato3Data, false); // karabas bg, starts from 1792 in GRAM
+  // load pcm audio
+  ft.writeGRAM(LOGO_BITMAP_SIZE + BURATO3_BITMAP_SIZE, KEY_SIZE, keyData); // pcm sound, starts from 65792 in GRAM
 
-  ft_core_browser(false);  
+  ft_core_browser(0);  
 }
 
 void osd_handle(bool force) {
@@ -1514,7 +1536,7 @@ void osd_handle(bool force) {
       osd_prev_state = osd_state;
       switch(osd_state) {
         case state_core_browser:
-          if (has_ft) {
+          if (FT_OSD == 1 && has_ft == true) {
             ft_osd_init_core_browser_overlay();
           } else {
             osd_init_core_browser_overlay();
