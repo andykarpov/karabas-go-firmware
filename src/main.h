@@ -98,6 +98,10 @@
 #define DEBUG 1
 #endif
 
+#ifndef FT_OSD 
+#define FT_OSD 0
+#endif
+
 #if DEBUG
 #define d_begin(...) Serial.begin(__VA_ARGS__);
 #define d_print(...)    Serial.print(__VA_ARGS__)

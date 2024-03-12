@@ -15,12 +15,13 @@
 #include "hid_app.h"
 #include "main.h"
 #include "usb_hid_keys.h"
+#include "bitmaps.h"
 #include <algorithm>
 #include <tuple>
 
 PioSpi spi(PIN_SD_SPI_RX, PIN_SD_SPI_SCK, PIN_SD_SPI_TX);
 #define SD_CONFIG SdSpiConfig(SD_CS_PIN, SHARED_SPI, SD_SCK_MHZ(60), &spi)
-SPISettings settingsA(SD_SCK_MHZ(5), MSBFIRST, SPI_MODE0); // MCU SPI settings
+SPISettings settingsA(SD_SCK_MHZ(30), MSBFIRST, SPI_MODE0); // MCU SPI settings
 
 PCA9536 extender;
 ElapsedTimer my_timer;
@@ -50,6 +51,7 @@ core_item_t core;
 uint8_t cores_len = 0;
 uint8_t core_sel = 0;
 const uint8_t core_page_size = MAX_CORES_PER_PAGE;
+const uint8_t ft_core_page_size = MAX_CORES_PER_PAGE/2;
 uint8_t core_pages = 1;
 uint8_t core_page = 1;
 
@@ -62,6 +64,7 @@ uint8_t curr_osd_item = 0;
 bool has_extender = false;
 bool has_sd = false;
 bool has_fs = false;
+bool has_ft = false;
 
 uint8_t uart_idx = 0;
 uint8_t evo_rs232_dll = 0;
@@ -159,6 +162,8 @@ void setup()
 }
 
 void do_configure(const char* filename) {
+  ft.vga(false);
+  ft.spi(false);
   fpga_configure(filename);
   spi_send(CMD_INIT_START, 0, 0);
   read_core(filename);
@@ -176,6 +181,67 @@ void do_configure(const char* filename) {
     osd_handle(true); // reinit osd
   }
   spi_send(CMD_INIT_DONE, 0, 0);
+}
+
+void ft_core_browser(uint8_t play_sounds) {
+
+  ft.beginDisplayList();
+
+  uint32_t color_black = FT81x_COLOR_RGB(1, 1, 1);
+  uint32_t color_gradient = FT81x_COLOR_RGB(0, 0, 200);
+  uint32_t color_button = FT81x_COLOR_RGB(64, 64, 92);
+  uint32_t color_button_active = FT81x_COLOR_RGB(0, 0, 200);
+  uint32_t color_text = FT81x_COLOR_RGB(255,255,255);
+  uint32_t color_copyright = FT81x_COLOR_RGB(120, 120, 120);
+
+  ft.clear(color_black);
+  ft.drawGradient(ft.width()/2, 0, color_gradient, ft.width()/2, ft.height()-1, color_black);
+
+  core_pages = ceil((float)cores_len / ft_core_page_size);
+  core_page = ceil((float)(core_sel+1)/ft_core_page_size);
+  uint8_t core_from = (core_page-1)*ft_core_page_size;
+  uint8_t core_to = core_page*ft_core_page_size > cores_len ? cores_len : core_page*ft_core_page_size;
+  uint8_t core_fill = core_page*ft_core_page_size;
+  uint8_t pos = 0;
+  uint8_t offset = 64 + 16 + 8;
+  for(uint8_t i=core_from; i < core_to; i++) {
+    char name[18];
+    String n = String(cores[i].name); n.trim(); n.toCharArray(name, 18);
+    const uint32_t color = i == core_sel ? color_button_active : color_button;
+    ft.drawButton(160+8, offset + pos*40, 320-16, 32, 28, color_text, color, FT81x_OPT_3D, name);
+    if (cores[i].flash) {
+      ft.drawText(160+320-16-24, offset + pos*40 + 16, 28, color_text, FT81x_OPT_CENTERY, "F\0");
+    }
+    pos++;
+  }
+
+  ft.drawText(112, 440, 27, color_copyright, FT81x_OPT_CENTER, "www.karabas.uk\0");
+  ft.drawText(112, 460, 27, color_copyright, FT81x_OPT_CENTER, "(c) 2024 andykarpov\0");
+  char b[40]; sprintf(b, "Page %d of %d\0", core_page, core_pages);
+  ft.drawText(320, 440, 27, color_copyright, FT81x_OPT_CENTER, b);
+
+  char time[9];
+  sprintf(time, "%02d:%02d:%02d\0", zxrtc.getHour(), zxrtc.getMinute(), zxrtc.getSecond());
+  ft.drawText(ft.width()-88, 40, 30, color_text, FT81x_OPT_CENTER, time);
+
+  if (play_sounds == 1) {
+      // play synth sound
+      ft.playSound();
+  } else if (play_sounds == 2) {
+    // play wav
+    ft.playAudio(LOGO_BITMAP_SIZE + BURATO3_BITMAP_SIZE, KEY_SIZE, 22050, FT81x_AUDIO_FORMAT_ULAW, false);
+  }
+
+  ft.drawBitmap(0, 8, 8, 56, 16, 4, 0); 
+  //ft.overlayBitmap(LOGO_BITMAP_SIZE, 640-200, 480-143, 200, 143, 1, 0);
+  ft.overlayBitmap(LOGO_BITMAP_SIZE, 640-160-8, 480-200-8, 160, 200, 1, 0);
+
+  /*uint16_t h = (uint16_t) (zxrtc.getHour() % 12);
+  uint16_t m = (uint16_t) (zxrtc.getMinute() % 60);
+  uint16_t s = (uint16_t) (zxrtc.getSecond() % 60);
+  ft.drawClock(640 - 80-8, 80+8, 80, FT81x_COLOR_RGB(255,255,255), FT81x_COLOR_RGB(1,1,1), FT81x_OPT_NOBACK | FT81x_OPT_FLAT, h, m, s);*/
+
+  ft.swapScreen();
 }
 
 void core_browser(uint8_t vpos) {
@@ -370,16 +436,35 @@ void on_keyboard() {
         
         // enter
         if (usb_keyboard_report.keycode[0] == KEY_ENTER) {
+          if (FT_OSD == 1 && has_ft == true) {
+            ft_core_browser(2); // play wav
+            delay(500);
+          }
           String f = String(cores[core_sel].filename); f.trim(); 
           char buf[32]; f.toCharArray(buf, sizeof(buf));
+          has_ft = false;
           do_configure(buf);
           osd_state = (core.type == 0) ? state_core_browser : state_main;
         }
-        // redraw core browser
+
+        // redraw core browser on keypress
         if (osd_state == state_core_browser) {
-          core_browser(APP_COREBROWSER_MENU_OFFSET);
+          if (FT_OSD == 1 && has_ft == true) {
+            ft_core_browser(1);
+          } else {
+            core_browser(APP_COREBROWSER_MENU_OFFSET);
+          }
         }
       }
+
+      // return back to classic osd
+      if (usb_keyboard_report.keycode[0] == KEY_SPACE && has_ft == true && FT_OSD == 1) {
+        has_ft = false;
+        ft.vga(false);
+        ft.spi(false);
+        osd_init_core_browser_overlay();
+      }
+
       break;
 
       case state_main:
@@ -498,7 +583,7 @@ void core_osd_trigger(uint8_t pos)
   d_printf("Trigger: %s", core.osd[pos].name);
   d_println();
 
-  // reset FT812 on reset
+  // reset FT812 on soft reset
   // todo: replace hardcode with something else
   if (memcmp(core.osd[pos].name, "Rese", 4) == 0) {
     d_println("Reset FT812");
@@ -620,6 +705,12 @@ void loop()
   } else {
     spi_send(CMD_NOP, 0 ,0);
   }
+
+  if (core.type == CORE_TYPE_BOOT && has_ft == true && is_osd == true) {
+    // todo: playSound
+    // todo: timer
+  }
+
 }
 
 // core1's setup
@@ -857,7 +948,6 @@ void spi_queue(uint8_t cmd, uint8_t addr, uint8_t data) {
  * @param data data
  */
 void spi_send(uint8_t cmd, uint8_t addr, uint8_t data) {
-  //d_printf("SPI %d %d %d", cmd, addr, data); d_println();
   SPI.beginTransaction(settingsA);
   digitalWrite(PIN_MCU_SPI_CS, LOW);
   uint8_t rx_cmd = SPI.transfer(cmd);
@@ -940,8 +1030,11 @@ void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data) {
     serial_data(addr, data);
   } else if (cmd == CMD_RTC) {
     zxrtc.setData(addr, data);
+  } else if (cmd == CMD_FT812) {
   } else if (cmd == CMD_FT812_DATA) {
     ft.setData(addr, data);
+  } else if (cmd == CMD_NOP) {
+    //d_println("Nop");
   }
 }
 
@@ -971,6 +1064,11 @@ void on_time() {
   if (d < 10) zxosd.print(0); zxosd.print(d); zxosd.print("/");
   if (mo < 10) zxosd.print(0); zxosd.print(mo); zxosd.print("/");
   if (y < 10) zxosd.print(0); zxosd.print(y);
+
+  if (core.type == CORE_TYPE_BOOT && has_ft == true && is_osd == true) {
+    // redraw core browser
+    ft_core_browser(0);
+  }
 }
 
 core_list_item_t get_core_list_item(bool is_flash) {
@@ -1126,8 +1224,29 @@ void read_core(const char* filename) {
   // re-send rtc registers
   zxrtc.sendAll();
 
-  // reset ft812
+  has_ft = false;
   ft.reset();
+
+  // boot core tries to use FT812 as osd handler
+  if (core.type == CORE_TYPE_BOOT && is_osd) {
+    if (FT_OSD == 1) {
+      // space skip ft osd
+      if (usb_keyboard_report.keycode[0] == KEY_SPACE) {
+        d_println("Space pressed: skip FT81x detection, fallback to classic OSD");
+      } else {
+        ft.spi(true);
+        has_ft = ft.init(1); // 640x480x75
+        if (has_ft) {
+          d_println("Found FT81x IC, switching to FT OSD");
+          ft.vga(true);
+        } else {
+          d_println("FT81x IC did not found");
+          ft.vga(false);
+          ft.spi(false);
+        }
+      }
+    }
+  }
 
   // dump parsed OSD items
   /*for(uint8_t i=0; i<core.osd_len; i++) {
@@ -1400,13 +1519,28 @@ void osd_init_core_browser_overlay() {
   zxosd.setPos(1,25); zxosd.print("Press Enter to load selection");
 }
 
+void ft_osd_init_core_browser_overlay() {
+  ft.setSound(FT81x_SOUND_SWITCH, 40);
+  // load png/jpegs with extraction bitmaps to GRAM
+  ft.loadImage(0, LOGO_SIZE, logoData, false); // karabas logo, starts from 0 in GRAM
+  ft.loadImage(LOGO_BITMAP_SIZE, BURATO3_SIZE, burato3Data, false); // karabas bg, starts from 1792 in GRAM
+  // load pcm audio
+  ft.writeGRAM(LOGO_BITMAP_SIZE + BURATO3_BITMAP_SIZE, KEY_SIZE, keyData); // pcm sound, starts from 65792 in GRAM
+
+  ft_core_browser(0);  
+}
+
 void osd_handle(bool force) {
   if (is_osd || force) {
     if ((osd_prev_state != osd_state) || force) {
       osd_prev_state = osd_state;
       switch(osd_state) {
         case state_core_browser:
-          osd_init_core_browser_overlay();
+          if (FT_OSD == 1 && has_ft == true) {
+            ft_osd_init_core_browser_overlay();
+          } else {
+            osd_init_core_browser_overlay();
+          }
         break;
         case state_main:
           osd_init_overlay();
