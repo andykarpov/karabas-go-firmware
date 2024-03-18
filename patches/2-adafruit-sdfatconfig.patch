@@ -1,0 +1,15 @@
+--- SdFatConfig_orig.h	2024-03-18 13:50:03.466938076 +0200
++++ SdFatConfig.h	2024-03-18 13:51:09.638116800 +0200
+@@ -36,8 +36,12 @@
+ //------------- Adafruit configuration -------------//
+ #define USE_BLOCK_DEVICE_INTERFACE 1
+ #define FAT12_SUPPORT 1
++#ifndef SDFAT_FILE_TYPE 
+ #define SDFAT_FILE_TYPE 1
++#endif
++#ifndef USE_SPI_ARRAY_TRANSFER
+ #define USE_SPI_ARRAY_TRANSFER 1
++#endif
+ 
+ // This option will take around 2K of flash, skip for AVR
+ #ifndef __AVR__
