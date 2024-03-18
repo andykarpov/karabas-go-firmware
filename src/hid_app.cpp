@@ -3,13 +3,11 @@
 #include "Adafruit_TinyUSB.h"
 #include "hid_app.h"
 #include "main.h"
+#include "host/usbh.h"
 
 // Invoked when device is mounted (configured)
 void tuh_hid_mount_cb (uint8_t dev_addr, uint8_t instance, uint8_t const* desc_report, uint16_t desc_len)
 {
-  //(void)desc_report;
-  //(void)desc_len;
-
   d_printf("HID device mounted, address = %d, instance = %d\r\n", dev_addr, instance);
 
   uint8_t const itf_protocol = tuh_hid_interface_protocol(dev_addr, instance);
