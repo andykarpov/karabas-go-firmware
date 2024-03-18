@@ -27,9 +27,13 @@ void tuh_hid_mount_cb (uint8_t dev_addr, uint8_t instance, uint8_t const* desc_r
     hid_info[instance].report_count = tuh_hid_parse_report_descriptor(hid_info[instance].report_info, MAX_REPORT, desc_report, desc_len);
     d_printf("HID has %u reports \r\n", hid_info[instance].report_count);
   }
-
   // Receive report
   tuh_hid_receive_report(dev_addr, instance);
+}
+
+void tuh_hid_set_protocol_complete_cb(uint8_t dev_addr, uint8_t instance, uint8_t protocol)
+{
+  d_printf("HID device set protocol complete, address = %d, instance = %d, protocol = %d\r\n", dev_addr, instance, protocol);
 }
 
 /// Invoked when device is unmounted (bus reset/unplugged)
@@ -50,18 +54,26 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
   switch (itf_protocol)
   {
     case HID_ITF_PROTOCOL_KEYBOARD:
-      d_printf("HID protocol keyboard, len=%d", len); d_println();
-      process_kbd_report( dev_addr, instance, (hid_keyboard_report_t const*) report, len );
+      if (len > 0) {
+        d_printf("HID protocol keyboard, len=%d", len); d_println();
+        if (len == 8) {
+          process_kbd_report( dev_addr, instance, (hid_keyboard_report_t const*) report, len );
+        } else {
+          // nkro
+          process_kbd_report_ext( dev_addr, instance, (hid_keyboard_report_ext_t const*) report, len );
+        }
+      }
     break;
 
     case HID_ITF_PROTOCOL_MOUSE:
-        d_printf("HID protocol mouse, len=%d", len); d_println();
-        if (len == 3 || len == 4) {
-          process_mouse_report( dev_addr, instance, (hid_mouse_report_t const*) report, len );
-        } else if (len == 8) {
-          process_mouse_report_ext(dev_addr, instance, (hid_mouse_report_ext_t const*) report, len);
+        if (len > 0) {
+          d_printf("HID protocol mouse, len=%d", len); d_println();
+          if (len == 3 || len == 4) {
+            process_mouse_report( dev_addr, instance, (hid_mouse_report_t const*) report, len );
+          } else if (len == 8) {
+            process_mouse_report_ext(dev_addr, instance, (hid_mouse_report_ext_t const*) report, len);
+          }
         }
-      //process_mouse_report( dev_addr, instance, (hid_mouse_report_t const*) report, len );
     break;
 
     default:
@@ -72,10 +84,7 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
   }
 
   // continue to request to receive report
-  if ( !tuh_hid_receive_report(dev_addr, instance) )
-  {
-    d_println("Error: cannot request to receive report");
-  }
+  tuh_hid_receive_report(dev_addr, instance);
 }
 
 static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_report_t const *report, uint16_t len)
@@ -106,6 +115,42 @@ static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_
     d_println();
     prev_report = *report;
   }
+}
+
+static void convert_nkro_to_6kro(hid_keyboard_report_ext_t const *nkro_report, hid_keyboard_report_t *report)
+{
+  report->modifier = nkro_report->mod;
+  uint8_t idx = 0;
+  for (uint8_t code = 0x04; code < 0xA4; code++) {
+      if (idx < 6 && ((code >> 3) < 16) && nkro_report->bits[code >> 3] > 0 && (nkro_report->bits[code >> 3] & (1 << (code & 7)))) {
+        report->keycode[idx] = code;
+        idx++;
+    }
+  }
+}
+
+static void convert_nkro_to_6kro2(hid_keyboard_report_ext_t const *nkro_report, hid_keyboard_report_t *report)
+{
+  report->modifier = nkro_report->mod;
+  uint8_t idx = 0;
+  for (uint8_t b = 0; b < 16; b++) {
+    if (nkro_report->bits[b] == 0) continue;
+    uint8_t bits = nkro_report->bits[b];
+    uint8_t code = b << 3;
+    for(uint8_t i = 0; i<8; i++) {
+      if (bitRead(bits, i) == 1 && idx < 6) {
+        report->keycode[idx] = code + i;
+        idx++;
+      }
+    }
+  }
+}
+
+static void process_kbd_report_ext(uint8_t dev_addr, uint8_t instance, hid_keyboard_report_ext_t const *report, uint16_t len)
+{
+  hid_keyboard_report_t std_report = {0};
+  convert_nkro_to_6kro2(report, &std_report);
+  process_kbd_report(dev_addr, instance, &std_report, 8);
 }
 
 static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_report_t const * report, uint16_t len) {
