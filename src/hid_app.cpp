@@ -20,10 +20,11 @@ void tuh_hid_mount_cb (uint8_t dev_addr, uint8_t instance, uint8_t const* desc_r
   hid_info[instance].vid = vid;
   hid_info[instance].pid = pid;
 
+  d_printf("HID VID/PID = %04x/%04x\r\n", vid, pid);
+
   if ( itf_protocol == HID_ITF_PROTOCOL_NONE )
   {
-    hid_info[instance].report_count = tuh_hid_parse_report_descriptor(hid_info[instance].report_info,
-    MAX_REPORT, desc_report, desc_len);
+    hid_info[instance].report_count = tuh_hid_parse_report_descriptor(hid_info[instance].report_info, MAX_REPORT, desc_report, desc_len);
     d_printf("HID has %u reports \r\n", hid_info[instance].report_count);
   }
 
@@ -49,10 +50,12 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
   switch (itf_protocol)
   {
     case HID_ITF_PROTOCOL_KEYBOARD:
+      d_printf("HID protocol keyboard, len=%d", len); d_println();
       process_kbd_report( dev_addr, instance, (hid_keyboard_report_t const*) report, len );
     break;
 
     case HID_ITF_PROTOCOL_MOUSE:
+        d_printf("HID protocol mouse, len=%d", len); d_println();
         if (len == 3 || len == 4) {
           process_mouse_report( dev_addr, instance, (hid_mouse_report_t const*) report, len );
         } else if (len == 8) {
@@ -63,6 +66,7 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
 
     default:
       // Generic report requires matching ReportID and contents with previous parsed report info
+      d_printf("HID protocol generic, len=%d", len); d_println();
       process_generic_report(dev_addr, instance, report, len);
     break;
   }
@@ -90,7 +94,7 @@ static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_
     for(uint8_t i=0; i<6; i++) {
       spi_queue(CMD_USB_KBD, i+1, report->keycode[i]);
     }
-    d_printf("Keyboard M: %d B: %d %d %d %d %d %d", 
+    d_printf("Keyboard M: %02x B: %02x %02x %02x %02x %02x %02x", 
       report->modifier, 
       report->keycode[0], 
       report->keycode[1],
@@ -119,7 +123,7 @@ static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_r
     spi_queue(CMD_USB_MOUSE, 1, report->y);
     spi_queue(CMD_USB_MOUSE, 2, report->wheel);
     spi_queue(CMD_USB_MOUSE, 3, report->buttons);
-    d_printf("Mouse X: %d, Y: %d, Z: %d, B: %d", report->x, report->y, report->wheel, report->buttons);
+    d_printf("Mouse X: %02x, Y: %02x, Z: %02x, B: %02x", report->x, report->y, report->wheel, report->buttons);
     d_println();
     prev_report = *report;
     prev_report.wheel = 0;
@@ -143,12 +147,12 @@ static void process_mouse_report_ext(uint8_t dev_addr, uint8_t instance, hid_mou
     spi_queue(CMD_USB_MOUSE, 2, report->wheel);
     spi_queue(CMD_USB_MOUSE, 3, report->buttons);
     // to avoid stuck on previous wheel position - let's send a wheel to 0 after an event
-    d_printf("Mouse X: %d, Y: %d, Z: %d, B: %d, Pan: %d", report->x, report->y, report->wheel, report->buttons, report->pan);
+    d_printf("Mouse X: %04x, Y: %04x, Z: %02x, B: %02x, Pan: %02x", report->x, report->y, report->wheel, report->buttons, report->pan);
     d_println();
 
     if (report->wheel != 0) {
-      spi_queue(CMD_USB_MOUSE, 2, report->wheel);
-      d_printf("Mouse X: %d, Y: %d, Z: %d, B: %d, Pan: %d", report->x, report->y, 0, report->buttons, report->pan);
+      spi_queue(CMD_USB_MOUSE, 2, 0);
+      d_printf("Mouse X: %04x, Y: %04x, Z: %02x, B: %02x, Pan: %02x", report->x, report->y, 0, report->buttons, report->pan);
       d_println();
     }
     prev_report = *report;
@@ -174,7 +178,7 @@ static void process_gamepad_report(uint8_t dev_addr, uint8_t instance, uint8_t c
   if ( (hat_changed) || (buttons_changed) || (rx_changed) || (ry_changed) || (rz_changed) || (x_changed) || (y_changed) || (z_changed) ) {
     spi_queue(CMD_USB_GAMEPAD, 0, r->hat);
     spi_queue(CMD_USB_GAMEPAD, 1, (uint8_t)r->buttons);
-    d_printf("Gamepad Hat: %d, Buttons: %d, XYZ %d %d %d, RXRYRZ %d %d %d", r->hat, r->buttons, r->rx, r->ry, r->rz, r->x, r->y, r->z);
+    d_printf("Gamepad Hat: %02x, Buttons: %08x, XYZ %02x %02x %02x, RXRYRZ %02x %02x %02x", r->hat, r->buttons, r->rx, r->ry, r->rz, r->x, r->y, r->z);
     d_println();
     // report->hat && GAMEPAD_HAT_CENTERED; // none
     // report->hat && GAMEPAD_HAT_UP; // up
@@ -216,7 +220,7 @@ static void process_joystick_report(uint8_t dev_addr, uint8_t instance, uint8_t 
     spi_queue(CMD_USB_JOYSTICK, 7, r->buttons[2]);
     spi_queue(CMD_USB_JOYSTICK, 8, r->buttons[3]);
 
-    d_printf("Joystick: %d %d %d %d Buttons %d %d %d %d", r->axis[0], r->axis[1], r->axis[2], r->axis[3], r->buttons[0], r->buttons[1], r->buttons[2], r->buttons[3]);
+    d_printf("Joystick: %02x %02x %02x %02x Buttons %02x %02x %02x %02x", r->axis[0], r->axis[1], r->axis[2], r->axis[3], r->buttons[0], r->buttons[1], r->buttons[2], r->buttons[3]);
     d_println();
   }
 
@@ -280,9 +284,11 @@ static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t c
     switch (rpt_info->usage)
     {
       case HID_USAGE_DESKTOP_KEYBOARD:
+        d_printf("HID usage desktop keyboard, len=%d", len); d_println();
         process_kbd_report( dev_addr, instance, (hid_keyboard_report_t const*) report, len );
       break;
       case HID_USAGE_DESKTOP_MOUSE:
+        d_printf("HID usage desktop mouse, len=%d", len); d_println();
         if (len == 3 || len == 4) {
           process_mouse_report( dev_addr, instance, (hid_mouse_report_t const*) report, len );
         } else if (len == 8) {
@@ -290,9 +296,11 @@ static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t c
         }
       break;
       case HID_USAGE_DESKTOP_JOYSTICK:
+        d_printf("HID usage desktop joystick, len=%d", len); d_println();
         process_joystick_report( dev_addr, instance, report, len );
       break;
       case HID_USAGE_DESKTOP_GAMEPAD:
+        d_printf("HID usage desktop gamepad, len=%d", len); d_println();
         process_gamepad_report( dev_addr, instance, report, len);
       break;
       default: break;
