@@ -1,3 +1,5 @@
+#pragma once
+
 #ifndef MAIN_H
 #define MAIN_H
 
@@ -30,6 +32,12 @@
 #define PIN_CONF_IO1 18 
 #define PIN_CONF_CLK 17 
 #define PIN_CONF_DONE 19 
+
+#define PIN_FT_RESET 0
+#define PIN_MCU_SPI_CS1 2
+#define PIN_MCU_SPI_CS2 7
+#define PIN_MCU_SPI_CS3 14
+#define PIN_MCU_SPI_CS4 15
 
 #define PIN_EXT_BTN1 0
 #define PIN_EXT_BTN2 1

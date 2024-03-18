@@ -90,8 +90,16 @@ void setup()
   pinMode(PIN_CONF_CLK, OUTPUT);
   pinMode(PIN_CONF_IO1, OUTPUT);
 
+  // FT Hard Reset
+  pinMode(PIN_FT_RESET, OUTPUT); digitalWrite(PIN_FT_RESET, LOW); delay(1); digitalWrite(PIN_FT_RESET, HIGH);
+
+  // Additional MCU SPI CS pins (for exclusive access to FT, SD2, something else)
+  pinMode(PIN_MCU_SPI_CS1, OUTPUT); digitalWrite(PIN_MCU_SPI_CS1, HIGH);
+  pinMode(PIN_MCU_SPI_CS2, OUTPUT); digitalWrite(PIN_MCU_SPI_CS2, HIGH);
+  pinMode(PIN_MCU_SPI_CS3, OUTPUT); digitalWrite(PIN_MCU_SPI_CS3, HIGH);
+  pinMode(PIN_MCU_SPI_CS4, OUTPUT); digitalWrite(PIN_MCU_SPI_CS4, HIGH);
+
   // I2C
-  delay(100);
   Wire.setSDA(PIN_I2C_SDA);
   Wire.setSCL(PIN_I2C_SCL);
   Wire.setClock(100000);
@@ -1225,6 +1233,10 @@ void read_core(const char* filename) {
   zxrtc.sendAll();
 
   has_ft = false;
+
+  // hw ft reset
+  digitalWrite(PIN_FT_RESET, LOW); delay(1); digitalWrite(PIN_FT_RESET, HIGH); delay(5);
+
   ft.reset();
 
   // boot core tries to use FT812 as osd handler
