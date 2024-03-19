@@ -4,6 +4,7 @@
 #include "hid_app.h"
 #include "main.h"
 #include "host/usbh.h"
+#include "ps2kbd.h"
 
 // Invoked when device is mounted (configured)
 void tuh_hid_mount_cb (uint8_t dev_addr, uint8_t instance, uint8_t const* desc_report, uint16_t desc_len)
@@ -103,6 +104,7 @@ static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_
     for(uint8_t i=0; i<6; i++) {
       spi_queue(CMD_USB_KBD, i+1, report->keycode[i]);
     }
+    kb_usb_receive(report);
     d_printf("Keyboard M: %02x B: %02x %02x %02x %02x %02x %02x", 
       report->modifier, 
       report->keycode[0], 

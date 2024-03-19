@@ -54,6 +54,7 @@
 #define CMD_ROMLOADER 0x08
 #define CMD_FT812 	  0x09
 #define CMD_FT812_DATA 0x0A
+#define CMD_PS2_SCANCODE 0x0B
 
 #define CMD_USB_GAMEPAD 0x11
 #define CMD_USB_JOYSTICK 0x12
