@@ -699,7 +699,12 @@ void loop()
       if (!is_osd) {
         spi_send(packet.cmd, packet.addr, packet.data);
       }
-    } else {
+    } else if (packet.cmd == CMD_PS2_SCANCODE) {
+      if (!is_osd) {
+        spi_send(packet.cmd, packet.addr, packet.data);
+      }
+    }    
+    else {
       spi_send(packet.cmd, packet.addr, packet.data);
     }
   }
