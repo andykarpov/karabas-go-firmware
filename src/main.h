@@ -33,11 +33,11 @@
 #define PIN_CONF_CLK 17 
 #define PIN_CONF_DONE 19 
 
-#define PIN_FT_RESET 0
-#define PIN_MCU_SPI_CS1 2
-#define PIN_MCU_SPI_CS2 7
-#define PIN_MCU_SPI_CS3 14
-#define PIN_MCU_SPI_CS4 15
+#define PIN_FT_RESET 0     // TP9 - /FT_PD
+#define PIN_MCU_SPI2_SCK 2 // TP10 - FPGA TP1 (N9)
+#define PIN_MCU_SPI2_CS 7  // TP11 - FPGA TP2 (M9)
+#define PIN_MCU_SPI2_RX 14 // TP12 - FPGA TP4 (M11)
+#define PIN_MCU_SPI2_TX 15 // TP13 - FPGA TP3 (M10)
 
 #define PIN_EXT_BTN1 0
 #define PIN_EXT_BTN2 1
@@ -52,8 +52,7 @@
 #define CMD_ROMBANK 0x06
 #define CMD_ROMDATA 0x07
 #define CMD_ROMLOADER 0x08
-#define CMD_FT812 	  0x09
-#define CMD_FT812_DATA 0x0A
+#define CMD_SPI_CONTROL 0x09
 #define CMD_PS2_SCANCODE 0x0B
 
 #define CMD_USB_GAMEPAD 0x11

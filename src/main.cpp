@@ -19,9 +19,10 @@
 #include <algorithm>
 #include <tuple>
 
-PioSpi spi(PIN_SD_SPI_RX, PIN_SD_SPI_SCK, PIN_SD_SPI_TX);
-#define SD_CONFIG SdSpiConfig(SD_CS_PIN, SHARED_SPI, SD_SCK_MHZ(60), &spi)
-SPISettings settingsA(SD_SCK_MHZ(10), MSBFIRST, SPI_MODE0); // MCU SPI settings
+PioSpi spi(PIN_SD_SPI_RX, PIN_SD_SPI_SCK, PIN_SD_SPI_TX); // dedicated SD1 SPI
+#define SD_CONFIG SdSpiConfig(SD_CS_PIN, SHARED_SPI, SD_SCK_MHZ(60), &spi) // SD1 SPI Settings
+PioSpi ftspi(PIN_MCU_SPI2_RX, PIN_MCU_SPI2_SCK, PIN_MCU_SPI2_TX); // dedicated FT812 SPI / SD2 SPI
+SPISettings settingsA(SD_SCK_MHZ(24), MSBFIRST, SPI_MODE0); // MCU SPI settings
 
 PCA9536 extender;
 ElapsedTimer my_timer;
@@ -35,7 +36,7 @@ fs::Dir froot;
 fs::File ffile;
 SegaController sega;
 OSD zxosd;
-FT812 ft;
+FT812 ft(PIN_MCU_SPI2_CS, PIN_FT_RESET);
 
 static queue_t spi_event_queue;
 
@@ -90,14 +91,11 @@ void setup()
   pinMode(PIN_CONF_CLK, OUTPUT);
   pinMode(PIN_CONF_IO1, OUTPUT);
 
+  // init in the FT812 constructor:
   // FT Hard Reset
-  pinMode(PIN_FT_RESET, OUTPUT); digitalWrite(PIN_FT_RESET, LOW); delay(1); digitalWrite(PIN_FT_RESET, HIGH);
-
-  // Additional MCU SPI CS pins (for exclusive access to FT, SD2, something else)
-  pinMode(PIN_MCU_SPI_CS1, OUTPUT); digitalWrite(PIN_MCU_SPI_CS1, HIGH);
-  pinMode(PIN_MCU_SPI_CS2, OUTPUT); digitalWrite(PIN_MCU_SPI_CS2, HIGH);
-  pinMode(PIN_MCU_SPI_CS3, OUTPUT); digitalWrite(PIN_MCU_SPI_CS3, HIGH);
-  pinMode(PIN_MCU_SPI_CS4, OUTPUT); digitalWrite(PIN_MCU_SPI_CS4, HIGH);
+  //pinMode(PIN_FT_RESET, OUTPUT); digitalWrite(PIN_FT_RESET, LOW); delay(1); digitalWrite(PIN_FT_RESET, HIGH);
+  // FT CS Pin (exclusive mode over dedicated PioSpi)
+  //pinMode(PIN_FT_SPI_CS, OUTPUT); digitalWrite(PIN_FT_SPI_CS, HIGH);
 
   // I2C
   Wire.setSDA(PIN_I2C_SDA);
@@ -128,7 +126,7 @@ void setup()
   zxrtc.begin(spi_send, on_time);
   sega.begin(PIN_JOY_SCK, PIN_JOY_LOAD, PIN_JOY_DATA, PIN_JOY_P7);
   zxosd.begin(spi_send);
-  ft.begin(spi_send);
+  ft.begin(&ftspi, spi_send);
 
   // LittleFS
   d_print("Mounting Flash... ");
@@ -1043,9 +1041,6 @@ void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data) {
     serial_data(addr, data);
   } else if (cmd == CMD_RTC) {
     zxrtc.setData(addr, data);
-  } else if (cmd == CMD_FT812) {
-  } else if (cmd == CMD_FT812_DATA) {
-    ft.setData(addr, data);
   } else if (cmd == CMD_NOP) {
     //d_println("Nop");
   }
@@ -1240,8 +1235,6 @@ void read_core(const char* filename) {
   has_ft = false;
 
   // hw ft reset
-  digitalWrite(PIN_FT_RESET, LOW); delay(1); digitalWrite(PIN_FT_RESET, HIGH); delay(5);
-
   ft.reset();
 
   // boot core tries to use FT812 as osd handler
