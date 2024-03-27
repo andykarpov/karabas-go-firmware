@@ -66,6 +66,7 @@ bool has_extender = false;
 bool has_sd = false;
 bool has_fs = false;
 bool has_ft = false;
+bool is_flashboot = false;
 
 uint8_t uart_idx = 0;
 uint8_t evo_rs232_dll = 0;
@@ -187,6 +188,7 @@ void do_configure(const char* filename) {
     osd_handle(true); // reinit osd
   }
   spi_send(CMD_INIT_DONE, 0, 0);
+  is_flashboot = false;
 }
 
 void ft_core_browser(uint8_t play_sounds) {
@@ -674,14 +676,14 @@ void loop()
   if (joyL != prevJoyL) {
     d_printf("SEGA L: %u", joyL); d_println();
     prevJoyL = joyL;
-    spi_send(CMD_JOYSTICK, 0, static_cast<uint8_t>(joyL & 0x00FF));
-    spi_send(CMD_JOYSTICK, 1, static_cast<uint8_t>(joyL & 0xFF00) >> 8);
+    spi_send(CMD_JOYSTICK, 0, lowByte(joyL));
+    spi_send(CMD_JOYSTICK, 1, highByte(joyL));
   }
   if (joyR != prevJoyR) {
     d_printf("SEGA R: %u", joyR); d_println();
     prevJoyR = joyR;
-    spi_send(CMD_JOYSTICK, 2, static_cast<uint8_t>(joyR & 0x00FF));
-    spi_send(CMD_JOYSTICK, 3, static_cast<uint8_t>(joyR & 0xFF00) >> 8);
+    spi_send(CMD_JOYSTICK, 2, lowByte(joyR));
+    spi_send(CMD_JOYSTICK, 3, highByte(joyR));
   }
 
   osd_handle(false);
@@ -976,10 +978,14 @@ void flashboot (uint8_t data) {
   d_printf("Flashboot core id: %02x", data); d_println();
   d_flush(); delay(100);
   // todo: add flashboot_id to the core structure, search for desired id and boot it
-  // now it's implemented as hach: reload the same core (required for zx next hard reset)
-  String f = String(core.filename); f.trim(); 
-  char buf[32]; f.toCharArray(buf, sizeof(buf));
-  do_configure(buf);
+  // now it's implemented as hack: reload the same core (required for zx next hard reset)
+  d_printf("Core id %s", core.id); d_println();
+  d_printf("Core filename %s", core.filename); d_println();
+  //String f = String(core.filename); f.trim(); 
+  //d_printf("Loading core %s", f); d_println();
+  //char buf[33]; f.toCharArray(buf, sizeof(buf));
+  is_flashboot = true;
+  do_configure(core.filename);
 }
 
 void serial_set_speed(uint8_t dll, uint8_t dlm) {
@@ -1035,7 +1041,7 @@ void serial_data(uint8_t addr, uint8_t data) {
  */
 void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data) {
 
-  if (cmd == CMD_FLASHBOOT) {
+  if (cmd == CMD_FLASHBOOT && !is_flashboot) {
     flashboot(data);
   } else if (cmd == CMD_UART) {
     serial_data(addr, data);
