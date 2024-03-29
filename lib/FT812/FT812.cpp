@@ -28,7 +28,6 @@
 #include <SPI.h>
 #include <FT812.h>
 #include <Arduino.h>
-#include <PioSpi.h>
 
 /****************************************************************************/
 
@@ -112,9 +111,8 @@ const ft_mode_t ft_modes[] =
 
 /****************************************************************************/
 
-void FT812::begin(PioSpi* port, m_cb act)
+void FT812::begin(m_cb act)
 {
-    spi_port = *port;
     action = act;
     pinMode(pin_cs, OUTPUT); digitalWrite(pin_cs, HIGH);
     pinMode(pin_reset, OUTPUT); digitalWrite(pin_reset, HIGH);
@@ -149,20 +147,26 @@ bool FT812::init(uint8_t m) {
     sendCommand(FT81x_CMD_RST_PULSE);
     delay(300);
 
+    // select clock
     sendCommand(FT81x_CMD_CLKEXT);
     delay(300);
 
+    // clock multiplier
     sendCommand(FT81x_CMD_CLKSEL + ((mode.f_mul | 0xC0) << 8)); // f_mul
+
+    // activate
     sendCommand(FT81x_CMD_ACTIVE);
-    delay(300);
+    delay(100);
 
     if (read8(FT81x_REG_ID) != 0x7C) {
       return false;
     }
 
-    while (read8(FT81x_REG_ID) != 0x7C) {
-        __asm__ volatile("nop");
-    }
+    //while (read8(FT81x_REG_ID) != 0x7C) {
+    //    __asm__ volatile("nop");
+    //}
+
+    // wait for FT CPU reset complete
     while (read8(FT81x_REG_CPURESET) != 0x00) {
         __asm__ volatile("nop");
     }
@@ -592,63 +596,63 @@ uint8_t FT812::initBitmapHandleForFont(uint8_t font) {
 void FT812::writeGRAM(const uint32_t offset, const uint32_t size, const uint8_t *data, const bool useProgmem) {
     uint32_t cmd = (FT81x_RAM_G + offset) | WRITE;
 
-    spi_port.beginTransaction(FT81x_SPI_SETTINGS);
+    SPI.beginTransaction(FT81x_SPI_SETTINGS);
     digitalWrite(pin_cs, LOW);
 
-    spi_port.transfer((cmd >> 16) & 0xFF);
-    spi_port.transfer((cmd >> 8) & 0xFF);
-    spi_port.transfer(cmd & 0xFF);
+    SPI.transfer((cmd >> 16) & 0xFF);
+    SPI.transfer((cmd >> 8) & 0xFF);
+    SPI.transfer(cmd & 0xFF);
 
     if (useProgmem) {
         for (uint32_t i = 0; i < size; i++) {
-            spi_port.transfer(DATA(data, i));
+            SPI.transfer(DATA(data, i));
         }
     } else {
         for (uint32_t i = 0; i < size; i++) {
-            spi_port.transfer(data[i]);
+            SPI.transfer(data[i]);
         }
     }
 
     digitalWrite(pin_cs, HIGH);
-    spi_port.endTransaction();
+    SPI.endTransaction();
 }
 
 void FT812::startCmd(const uint32_t cmd) {
     uint32_t addr = (FT81x_RAM_CMD + cmdWriteAddress) | WRITE;
 
-    spi_port.beginTransaction(FT81x_SPI_SETTINGS);
+    SPI.beginTransaction(FT81x_SPI_SETTINGS);
     digitalWrite(pin_cs, LOW);
 
-    spi_port.transfer(addr >> 16);
-    spi_port.transfer(addr >> 8);
-    spi_port.transfer(addr);
-    spi_port.transfer(cmd);
-    spi_port.transfer(cmd >> 8);
-    spi_port.transfer(cmd >> 16);
-    spi_port.transfer(cmd >> 24);
+    SPI.transfer(addr >> 16);
+    SPI.transfer(addr >> 8);
+    SPI.transfer(addr);
+    SPI.transfer(cmd);
+    SPI.transfer(cmd >> 8);
+    SPI.transfer(cmd >> 16);
+    SPI.transfer(cmd >> 24);
 
     increaseCmdWriteAddress(4);
 }
 
 void FT812::intermediateCmd(const uint32_t cmd) {
 
-    spi_port.transfer(cmd);
-    spi_port.transfer(cmd >> 8);
-    spi_port.transfer(cmd >> 16);
-    spi_port.transfer(cmd >> 24);
+    SPI.transfer(cmd);
+    SPI.transfer(cmd >> 8);
+    SPI.transfer(cmd >> 16);
+    SPI.transfer(cmd >> 24);
 
     increaseCmdWriteAddress(4);
 }
 
 void FT812::endCmd(const uint32_t cmd) {
 
-    spi_port.transfer(cmd);
-    spi_port.transfer(cmd >> 8);
-    spi_port.transfer(cmd >> 16);
-    spi_port.transfer(cmd >> 24);
+    SPI.transfer(cmd);
+    SPI.transfer(cmd >> 8);
+    SPI.transfer(cmd >> 16);
+    SPI.transfer(cmd >> 24);
 
     digitalWrite(pin_cs, HIGH);
-    spi_port.endTransaction();
+    SPI.endTransaction();
 
     increaseCmdWriteAddress(4);
 
@@ -657,97 +661,98 @@ void FT812::endCmd(const uint32_t cmd) {
 
 void FT812::sendCommand(const uint32_t cmd) {
 
-    spi_port.beginTransaction(FT81x_SPI_SETTINGS);
+    SPI.beginTransaction(FT81x_SPI_LOW_SETTINGS);
     digitalWrite(pin_cs, LOW);
-    spi_port.transfer(cmd >> 16);
-    spi_port.transfer(cmd >> 8);
-    spi_port.transfer(cmd);
+    SPI.transfer(cmd >> 16);
+    SPI.transfer(cmd >> 8);
+    uint8_t res = SPI.transfer(cmd);
     digitalWrite(pin_cs, HIGH);
-    spi_port.endTransaction();
+    SPI.endTransaction();
+    //Serial.printf("Command %d result %d", cmd, res); Serial.println();
 }
 
 uint8_t FT812::read8(const uint32_t address) {
-    uint32_t cmd = address;
-    spi_port.beginTransaction(FT81x_SPI_SETTINGS);
+    uint32_t cmd = address | READ;
+    SPI.beginTransaction(FT81x_SPI_SETTINGS);
     digitalWrite(pin_cs, LOW);
-    spi_port.transfer(cmd >> 16);
-    spi_port.transfer(cmd >> 8);
-    spi_port.transfer(cmd);
-    spi_port.transfer(0x00);  // dummy byte
+    SPI.transfer(cmd >> 16);
+    SPI.transfer(cmd >> 8);
+    SPI.transfer(cmd);
+    SPI.transfer(0x00);  // dummy byte
     uint8_t result = SPI.transfer(0x00);
     digitalWrite(pin_cs, HIGH);
-    spi_port.endTransaction();
+    SPI.endTransaction();
     return result;
 }
 
 uint16_t FT812::read16(const uint32_t address) {
     uint32_t cmd = address | READ;
-    spi_port.beginTransaction(FT81x_SPI_SETTINGS);
+    SPI.beginTransaction(FT81x_SPI_SETTINGS);
     digitalWrite(pin_cs, LOW);
-    spi_port.transfer(cmd >> 16);
-    spi_port.transfer(cmd >> 8);
-    spi_port.transfer(cmd);
-    spi_port.transfer(0x00);  // dummy byte
-    uint16_t result = spi_port.transfer(0x00);
-    result |= (spi_port.transfer(0x00) << 8);
+    SPI.transfer(cmd >> 16);
+    SPI.transfer(cmd >> 8);
+    SPI.transfer(cmd);
+    SPI.transfer(0x00);  // dummy byte
+    uint16_t result = SPI.transfer(0x00);
+    result |= (SPI.transfer(0x00) << 8);
     digitalWrite(pin_cs, HIGH);
-    spi_port.endTransaction();
+    SPI.endTransaction();
     return result;
 }
 
 uint32_t FT812::read32(const uint32_t address) {
     uint32_t cmd = address | READ;
-    spi_port.beginTransaction(FT81x_SPI_SETTINGS);
+    SPI.beginTransaction(FT81x_SPI_SETTINGS);
     digitalWrite(pin_cs, LOW);
-    spi_port.transfer(cmd >> 16);
-    spi_port.transfer(cmd >> 8);
-    spi_port.transfer(cmd);
-    spi_port.transfer(0x00);  // dummy byte
-    uint32_t result = spi_port.transfer(0x00);
-    result |= (spi_port.transfer(0x00) << 8);
-    result |= ((uint32_t)spi_port.transfer(0x00) << 16);
-    result |= ((uint32_t)spi_port.transfer(0x00) << 24);
+    SPI.transfer(cmd >> 16);
+    SPI.transfer(cmd >> 8);
+    SPI.transfer(cmd);
+    SPI.transfer(0x00);  // dummy byte
+    uint32_t result = SPI.transfer(0x00);
+    result |= (SPI.transfer(0x00) << 8);
+    result |= ((uint32_t)SPI.transfer(0x00) << 16);
+    result |= ((uint32_t)SPI.transfer(0x00) << 24);
     digitalWrite(pin_cs, HIGH);
-    spi_port.endTransaction();
+    SPI.endTransaction();
     return result;
 }
 
 void FT812::write8(const uint32_t address, const uint8_t data) {
     uint32_t cmd = address | WRITE;
-    spi_port.beginTransaction(FT81x_SPI_SETTINGS);
+    SPI.beginTransaction(FT81x_SPI_SETTINGS);
     digitalWrite(pin_cs, LOW);
-    spi_port.transfer(cmd >> 16);
-    spi_port.transfer(cmd >> 8);
-    spi_port.transfer(cmd);
-    spi_port.transfer(data);
+    SPI.transfer(cmd >> 16);
+    SPI.transfer(cmd >> 8);
+    SPI.transfer(cmd);
+    SPI.transfer(data);
     digitalWrite(pin_cs, HIGH);
-    spi_port.endTransaction();
+    SPI.endTransaction();
 }
 
 void FT812::write16(const uint32_t address, const uint16_t data) {
     uint32_t cmd = address | WRITE;
-    spi_port.beginTransaction(FT81x_SPI_SETTINGS);
+    SPI.beginTransaction(FT81x_SPI_SETTINGS);
     digitalWrite(pin_cs, LOW);
-    spi_port.transfer(cmd >> 16);
-    spi_port.transfer(cmd >> 8);
-    spi_port.transfer(cmd);
-    spi_port.transfer(data);
-    spi_port.transfer(data >> 8);
+    SPI.transfer(cmd >> 16);
+    SPI.transfer(cmd >> 8);
+    SPI.transfer(cmd);
+    SPI.transfer(data);
+    SPI.transfer(data >> 8);
     digitalWrite(pin_cs, HIGH);
-    spi_port.endTransaction();
+    SPI.endTransaction();
 }
 
 void FT812::write32(const uint32_t address, const uint32_t data) {
     uint32_t cmd = address | WRITE;
-    spi_port.beginTransaction(FT81x_SPI_SETTINGS);
+    SPI.beginTransaction(FT81x_SPI_SETTINGS);
     digitalWrite(pin_cs, LOW);
-    spi_port.transfer(cmd >> 16);
-    spi_port.transfer(cmd >> 8);
-    spi_port.transfer(cmd);
-    spi_port.transfer(data);
-    spi_port.transfer(data >> 8);
-    spi_port.transfer(data >> 16);
-    spi_port.transfer(data >> 24);
+    SPI.transfer(cmd >> 16);
+    SPI.transfer(cmd >> 8);
+    SPI.transfer(cmd);
+    SPI.transfer(data);
+    SPI.transfer(data >> 8);
+    SPI.transfer(data >> 16);
+    SPI.transfer(data >> 24);
     digitalWrite(pin_cs, HIGH);
-    spi_port.endTransaction();
+    SPI.endTransaction();
 }

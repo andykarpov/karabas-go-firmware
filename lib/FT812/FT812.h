@@ -29,7 +29,7 @@
 #define __FT812_H__
 
 #include <Arduino.h>
-#include <PioSpi.h>
+#include <SPI.h>
 
 // Library headers
 // Project headers
@@ -45,10 +45,15 @@
 #define FT81x_ROTATE_PORTRAIT_MIRRORED           6  ///< Use with setRotation() to mirror and rotate screen to portrait
 #define FT81x_ROTATE_PORTRAIT_INVERTED_MIRRORED  7  ///< Use with setRotation() to invert, mirror and rotate screen to portrait
 
-#define FT81x_SPI_CLOCK_SPEED 24000000  ///< FT SPI clock speed
+#define FT81x_SPI_CLOCK_SPEED 8000000  ///< FT SPI clock speed
+#define FT81x_SPI_LOW_CLOCK_SPEED 1000000  ///< FT SPI low clock speed
 
 #ifndef FT81x_SPI_SETTINGS
 #define FT81x_SPI_SETTINGS SPISettings(FT81x_SPI_CLOCK_SPEED, MSBFIRST, SPI_MODE0)  ///< Default SPI settings, can be overwritten
+#endif
+
+#ifndef FT81x_SPI_LOW_SETTINGS
+#define FT81x_SPI_LOW_SETTINGS SPISettings(FT81x_SPI_LOW_CLOCK_SPEED, MSBFIRST, SPI_MODE0)  ///< Default SPI settings, can be overwritten
 #endif
 
 #define FT81x_CMD_ACTIVE    0x000000  ///< Switch from Standby/Sleep/PWRDOWN modes to active mode.
@@ -247,10 +252,9 @@ class FT812
 private:
   ft_mode_t mode;
   uint8_t ctrl_reg;
-  PioSpi spi_port;
   m_cb action;
-  int8_t pin_cs;                    ///< CS pin for FT81x
-  int8_t pin_reset;                 ///< RESET pin for FT81x
+  uint8_t pin_cs;                    ///< CS pin for FT81x
+  uint8_t pin_reset;                 ///< RESET pin for FT81x
 
 protected:
 
@@ -324,14 +328,13 @@ public:
   /**
    * Constructor
    */
-  FT812(int8_t cs, int8_t reset) : pin_cs(cs), pin_reset(reset) {}
+  FT812(uint8_t cs, uint8_t reset) : pin_cs(cs), pin_reset(reset) {}
 
   /*!
       @brief  Begin operation
-      @param  port PioSpi port
       @param  act spi callback
    */
-  void begin(PioSpi* port, m_cb act);
+  void begin(m_cb act);
 
   /*!
       @brief  Set FT dedicated SPI access on / off

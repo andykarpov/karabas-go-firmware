@@ -19,9 +19,11 @@
 #include <algorithm>
 #include <tuple>
 
-PioSpi spi(PIN_SD_SPI_RX, PIN_SD_SPI_SCK, PIN_SD_SPI_TX); // dedicated SD1 SPI
-#define SD_CONFIG SdSpiConfig(SD_CS_PIN, SHARED_SPI, SD_SCK_MHZ(60), &spi) // SD1 SPI Settings
-PioSpi ftspi(PIN_MCU_SPI2_RX, PIN_MCU_SPI2_SCK, PIN_MCU_SPI2_TX); // dedicated FT812 SPI / SD2 SPI
+PioSpi spiSD(PIN_SD_SPI_RX, PIN_SD_SPI_SCK, PIN_SD_SPI_TX); // dedicated SD1 SPI
+#define SD_CONFIG SdSpiConfig(SD_CS_PIN, DEDICATED_SPI, SD_SCK_MHZ(60), &spiSD) // SD1 SPI Settings
+
+#define SD2_CONFIG SdSpiConfig(PIN_MCU_SD2_CS, SHARED_SPI, SD_SCK_MHZ(8), &SPI) // SD2 SPI Settings
+
 SPISettings settingsA(SD_SCK_MHZ(24), MSBFIRST, SPI_MODE0); // MCU SPI settings
 
 PCA9536 extender;
@@ -29,14 +31,17 @@ ElapsedTimer my_timer;
 ElapsedTimer hide_timer;
 ElapsedTimer popup_timer;
 RTC zxrtc;
-SdFs sd;
-FsFile file;  
-FsFile root;
+SdFs sd, sd2;
+FsFile file, file2;
+FsFile root, root2;
 fs::Dir froot;
 fs::File ffile;
 SegaController sega;
 OSD zxosd;
-FT812 ft(PIN_MCU_SPI2_CS, PIN_FT_RESET);
+
+File troot;
+
+FT812 ft(PIN_MCU_FT_CS, PIN_FT_RESET);
 
 static queue_t spi_event_queue;
 
@@ -56,6 +61,14 @@ const uint8_t ft_core_page_size = MAX_CORES_PER_PAGE/2;
 uint8_t core_pages = 1;
 uint8_t core_page = 1;
 
+file_list_item_t files[MAX_FILES];
+file_item_t loader_file;
+uint8_t files_len = 0;
+uint8_t file_sel = 0;
+const uint8_t file_page_size = MAX_CORES_PER_PAGE;
+uint8_t file_pages = 1;
+uint8_t file_page = 1;
+
 uint8_t osd_state = state_main;
 uint8_t osd_prev_state = state_main;
 uint8_t osd_rtc_state = state_rtc_dow;
@@ -64,6 +77,7 @@ uint8_t curr_osd_item = 0;
 
 bool has_extender = false;
 bool has_sd = false;
+bool has_sd2 = false;
 bool has_fs = false;
 bool has_ft = false;
 bool is_flashboot = false;
@@ -82,8 +96,8 @@ void setup()
   SPI.setSCK(PIN_MCU_SPI_SCK);
   SPI.setRX(PIN_MCU_SPI_RX);
   SPI.setTX(PIN_MCU_SPI_TX);
-  SPI.setCS(PIN_MCU_SPI_CS);  
-  SPI.begin(true);
+  //SPI.setCS(PIN_MCU_SPI_CS);
+  SPI.begin(false);
 
   // FPGA bitstream loader
   pinMode(PIN_CONF_INIT_B, INPUT_PULLUP);
@@ -92,11 +106,10 @@ void setup()
   pinMode(PIN_CONF_CLK, OUTPUT);
   pinMode(PIN_CONF_IO1, OUTPUT);
 
-  // init in the FT812 constructor:
-  // FT Hard Reset
-  //pinMode(PIN_FT_RESET, OUTPUT); digitalWrite(PIN_FT_RESET, LOW); delay(1); digitalWrite(PIN_FT_RESET, HIGH);
-  // FT CS Pin (exclusive mode over dedicated PioSpi)
-  //pinMode(PIN_FT_SPI_CS, OUTPUT); digitalWrite(PIN_FT_SPI_CS, HIGH);
+  // FT, SD2, MCU CS lines 
+  pinMode(PIN_MCU_SPI_CS, OUTPUT); digitalWrite(PIN_MCU_SPI_CS, HIGH);
+  pinMode(PIN_MCU_SD2_CS, OUTPUT); digitalWrite(PIN_MCU_SD2_CS, HIGH);
+  pinMode(PIN_MCU_FT_CS, OUTPUT); digitalWrite(PIN_MCU_FT_CS, HIGH);
 
   // I2C
   Wire.setSDA(PIN_I2C_SDA);
@@ -104,7 +117,7 @@ void setup()
   Wire.setClock(100000);
   Wire.begin();
 
-  //while ( !Serial ) delay(10);   // wait for native usb
+  while ( !Serial ) delay(10);   // wait for native usb
 
   d_begin(115200);
   d_println("Karabas Go RP2040 firmware");
@@ -127,7 +140,7 @@ void setup()
   zxrtc.begin(spi_send, on_time);
   sega.begin(PIN_JOY_SCK, PIN_JOY_LOAD, PIN_JOY_DATA, PIN_JOY_P7);
   zxosd.begin(spi_send);
-  ft.begin(&ftspi, spi_send);
+  ft.begin(spi_send);
 
   // LittleFS
   d_print("Mounting Flash... ");
@@ -165,7 +178,24 @@ void setup()
   }
   osd_state = state_core_browser;
   read_core_list();
-  //osd_init_core_browser_overlay();
+
+    // test !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  /*d_println("Something else");
+  d_print("Mounting SD2 card... ");
+  Serial.flush();
+  if (!sd2.begin(SD2_CONFIG)) {
+    has_sd2 = false;
+    d_println("Failed");
+  } else {
+    has_sd2 = true;
+    d_println("Done");
+  }
+  if (has_sd2) {
+    read_file_list();
+  }
+  for (uint8_t i=0; i<files_len; i++) {
+    d_printf("File %d %s %s", i, files[i].name, files[i].dir ? 'D' : 'F'); d_println();
+  }*/
 }
 
 void do_configure(const char* filename) {
@@ -292,6 +322,44 @@ void core_browser(uint8_t vpos) {
   zxosd.printf("Page %02d of %02d", core_page, core_pages);
 }
 
+void file_loader(uint8_t vpos) {
+  //d_print("Files: "); d_println(files_len);
+  file_pages = ceil((float)files_len / file_page_size);
+  //d_print("Pages: "); d_println(file_pages);
+  file_page = ceil((float)(file_sel+1)/file_page_size);
+  //d_print("File page: "); d_println(file_page);
+  uint8_t file_from = (file_page-1)*file_page_size;
+  uint8_t file_to = file_page*file_page_size > files_len ? files_len : file_page*file_page_size;
+  uint8_t file_fill = file_page*file_page_size;
+  uint8_t pos = vpos;
+  //d_print("From: "); d_print(file_from); d_print(" to: "); d_println(file_to);
+  //d_print("Selected: "); d_println(file_sel);
+  for(uint8_t i=file_from; i < file_to; i++) {
+    //d_print(cores[i].name); d_println(cores[i].order);
+    zxosd.setPos(0, pos);
+    if (file_sel == i) {
+      zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLUE);
+    } else {
+      zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+    }
+    char name[32]; memcpy(name, files[i].name, 31); name[32] = '\0';
+    zxosd.printf("%-3d ", i+1); 
+    zxosd.print(name);
+    pos++;
+  }
+  //d_print("Fill: "); d_println(file_fill);
+  if (file_fill > file_to) {
+    for (uint8_t i=file_to; i<file_fill; i++) {
+      zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+      for (uint8_t j=0; j<32; j++) {
+        zxosd.print(" ");
+      }
+    }
+  }
+  zxosd.setPos(8, vpos + file_page_size + 1); zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+  zxosd.printf("Page %02d of %02d", file_page, file_pages);
+}
+
 void menu(uint8_t vpos) {
   for (uint8_t i=0; i<core.osd_len; i++) {
     String name = String(core.osd[i].name);
@@ -323,7 +391,7 @@ void menu(uint8_t vpos) {
 bool on_global_hotkeys() {
   
   // menu+esc to toggle osd only for osd supported cores
-  if (core.type != 0 && core.type != 255 && ((usb_keyboard_report.modifier & KEY_MOD_LMETA) || (usb_keyboard_report.modifier & KEY_MOD_RMETA)) && usb_keyboard_report.keycode[0] == KEY_ESC) {
+  if (core.type != CORE_TYPE_BOOT && core.type != CORE_TYPE_HIDDEN && ((usb_keyboard_report.modifier & KEY_MOD_LMETA) || (usb_keyboard_report.modifier & KEY_MOD_RMETA)) && usb_keyboard_report.keycode[0] == KEY_ESC) {
     if (!is_osd) {
       is_osd = true;
       zxosd.showMenu();
@@ -452,7 +520,12 @@ void on_keyboard() {
           char buf[32]; f.toCharArray(buf, sizeof(buf));
           has_ft = false;
           do_configure(buf);
-          osd_state = (core.type == 0) ? state_core_browser : state_main;
+          switch (core.type) {
+            case CORE_TYPE_BOOT: osd_state = state_core_browser; break;
+            case CORE_TYPE_OSD: osd_state = state_main; break;
+            case CORE_TYPE_FILELOADER: osd_state = state_file_loader; break;
+            default: osd_state = state_main;
+          }
         }
 
         // redraw core browser on keypress
@@ -536,6 +609,56 @@ void on_keyboard() {
         if (core.osd_need_save) {
           core_osd_save(curr_osd_item);
         }
+      break;
+
+      case state_file_loader:
+      if (files_len > 0) {
+        // down
+        if (usb_keyboard_report.keycode[0] == KEY_DOWN) {
+          if (file_sel < files_len-1) {
+            file_sel++;
+          } else {
+            file_sel = 0;
+          }
+        }
+
+        // up
+        if (usb_keyboard_report.keycode[0] == KEY_UP) {
+          if (file_sel > 0) {
+            file_sel--;
+          } else {
+            file_sel = files_len-1;
+          }
+        }
+
+        // right
+        if (usb_keyboard_report.keycode[0] == KEY_RIGHT) {
+          if (file_sel + file_page_size <= files_len-1) {
+            file_sel += file_page_size;
+          } else {
+            file_sel = files_len-1;
+          }
+        }
+
+        // left
+        if (usb_keyboard_report.keycode[0] == KEY_LEFT) {
+          if (file_sel - file_page_size >= 0) {
+            file_sel -= file_page_size;
+          } else {
+            file_sel = 0;
+          }
+        }
+        
+        // enter
+        if (usb_keyboard_report.keycode[0] == KEY_ENTER) {
+          // todo: load file into fpga
+        }
+
+        // redraw file loader on keypress
+        if (osd_state == state_file_loader) {
+          file_loader(APP_COREBROWSER_MENU_OFFSET);
+        }
+      }
       break;
 
     }
@@ -1104,6 +1227,13 @@ core_list_item_t get_core_list_item(bool is_flash) {
   return core;
 }
 
+file_list_item_t get_file_list_item() {
+  file_list_item_t f;
+  file2.getName(f.name, sizeof(f.name));
+  f.dir = file2.isDir();
+  return f;
+}
+
 void read_core_list() {
 
   // files from flash
@@ -1126,7 +1256,7 @@ void read_core_list() {
 
   // files from sd card
   if (has_sd) {
-    if (!root.open("/")) {
+    if (!root.open(&sd, "/")) {
       halt("open root");
     }
     root.rewind();
@@ -1142,6 +1272,34 @@ void read_core_list() {
   }
   // sort by core order number
   std::sort(cores, cores + cores_len);
+  // TODO
+}
+
+void read_file_list() {
+
+  // files from sd card
+  if (has_sd2) {
+    if (!root2.open(&sd2, "/")) {
+      halt("open root");
+    }
+    root2.rewind();
+    String exts = String(core.file_extensions);
+    exts.toLowerCase(); exts.trim();
+    while (file2.openNext(&root2, O_RDONLY)) {
+      char filename[32]; file2.getName(filename, sizeof(filename));
+      uint8_t len = strlen(filename);
+      //if (strstr(strlwr(filename + (len - 4)), ".kg1")) {
+      if (files_len < MAX_FILES) {
+        if (exts.length() == 0 || exts.indexOf(strlwr(filename + (len - 4))) != -1) {
+          files[files_len] = get_file_list_item();
+          files_len++;
+        }
+      }
+      file2.close();
+    }
+  }
+  // sort by file name
+  //std::sort(cores, cores + cores_len);
   // TODO
 }
 
@@ -1170,13 +1328,20 @@ void read_core(const char* filename) {
   uint8_t visible; file_seek(FILE_POS_CORE_VISIBLE, is_flash); visible = file_read(is_flash); core.visible = (visible > 0);
   file_seek(FILE_POS_CORE_ORDER, is_flash); core.order = file_read(is_flash);
   file_seek(FILE_POS_CORE_TYPE, is_flash); core.type = file_read(is_flash);
-  is_osd = (core.type == CORE_TYPE_BOOT) ? true : false;
-  //is_osd = true; // debug  
+  // show OSD on boot (only for boot and fileloader cores)
+  is_osd = false;
+  switch (core.type) {
+    case CORE_TYPE_BOOT: is_osd = true; break;
+    case CORE_TYPE_OSD: is_osd = false; break;
+    case CORE_TYPE_FILELOADER: is_osd = true; break;
+    default: is_osd = false;
+  }  
   d_print("Core type: ");
   switch (core.type) {
-    case 0: d_println("Boot"); break;
-    case 1: d_println("Normal"); break;
-    case 255: d_println("Hidden"); break;
+    case CORE_TYPE_BOOT: d_println("Boot"); break;
+    case CORE_TYPE_OSD: d_println("Normal"); break;
+    case CORE_TYPE_FILELOADER: d_println("Fileloader"); break;
+    case CORE_TYPE_HIDDEN: d_println("Hidden"); break;
     default: d_println("Reserved");
   }
   core.bitstream_length = file_read32(FILE_POS_BITSTREAM_LEN, is_flash);
@@ -1184,6 +1349,8 @@ void read_core(const char* filename) {
   file_seek(FILE_POS_CORE_BUILD, is_flash); file_read_bytes(core.build, 8, is_flash); core.build[8] = '\0';
   file_seek(FILE_POS_CORE_EEPROM_BANK, is_flash); core.eeprom_bank = file_read(is_flash);
   file_seek(FILE_POS_RTC_TYPE, is_flash); core.rtc_type = file_read(is_flash);
+  file_seek(FILE_POS_FILELOADER_FILE, is_flash); file_read_bytes(core.last_file, 128, is_flash); core.last_file[128] = '\0';
+  file_seek(FILE_POS_FILELOADER_EXTENSIONS, is_flash); file_read_bytes(core.file_extensions, 39, is_flash); core.file_extensions[39] = '\0';
   uint32_t roms_len = file_read32(FILE_POS_ROM_LEN, is_flash);
   uint32_t offset = FILE_POS_BITSTREAM_START + core.bitstream_length + roms_len;
   //d_print("OSD section: "); d_println(offset);
@@ -1191,7 +1358,7 @@ void read_core(const char* filename) {
   //d_print("OSD len: "); d_println(core.osd_len);
   for (uint8_t i=0; i<core.osd_len; i++) {
     core.osd[i].type = file_read(is_flash);
-    core.osd[i].bits = file_read(is_flash);
+    file_read(is_flash);
     file_read_bytes(core.osd[i].name, 16, is_flash); core.osd[i].name[16] = '\0';
     core.osd[i].def = file_read(is_flash);
     core.osd[i].val = core.osd[i].def;
@@ -1546,6 +1713,23 @@ void ft_osd_init_core_browser_overlay() {
   ft_core_browser(0);  
 }
 
+void osd_init_file_loader_overlay() {
+  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+  zxosd.clear();
+
+  osd_print_header();
+
+  zxosd.setPos(0,5);
+
+  file_loader(APP_COREBROWSER_MENU_OFFSET);  
+
+  // footer
+  osd_print_line(21);
+  osd_print_line(23);
+  zxosd.setPos(1,24); zxosd.print("Please use arrows to navigate");
+  zxosd.setPos(1,25); zxosd.print("Press Enter to load selection");
+}
+
 void osd_handle(bool force) {
   if (is_osd || force) {
     if ((osd_prev_state != osd_state) || force) {
@@ -1560,6 +1744,9 @@ void osd_handle(bool force) {
         break;
         case state_main:
           osd_init_overlay();
+        break;
+        case state_file_loader:
+          osd_init_file_loader_overlay();
         break;
         case state_rtc:
           osd_init_rtc_overlay();
