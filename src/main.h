@@ -101,8 +101,9 @@
 #define FILE_POS_BITSTREAM_LEN 80
 #define FILE_POS_ROM_LEN 84
 #define FILE_POS_RTC_TYPE 88
-#define FILE_POS_FILELOADER_FILE 89
-#define FILE_POS_FILELOADER_EXTENSIONS 217
+#define FILE_POS_FILELOADER_DIR 89
+#define FILE_POS_FILELOADER_FILE 121
+#define FILE_POS_FILELOADER_EXTENSIONS 153
 #define FILE_POS_EEPROM_DATA 256
 #define FILE_POS_SWITCHES_DATA 512
 #define FILE_POS_BITSTREAM_START 1024
@@ -189,12 +190,12 @@ typedef struct {
 	core_eeprom_t eeprom[MAX_EEPROM_ITEMS];
 	bool osd_need_save;
 	bool eeprom_need_save;
-	char last_file[128+1];
-	char file_extensions[39+1];
+	char dir[32+1];
+	char last_file[32+1];
+	char file_extensions[32+1];
 } core_item_t;
 
 typedef struct {
-	bool dir;
 	char name[32+1];
 } file_list_item_t;
 
@@ -250,6 +251,8 @@ void core_eeprom_send_all();
 
 void read_roms(const char* filename);
 void send_rom_byte(uint32_t addr, uint8_t data);
+
+void send_file_byte(uint32_t addr, uint8_t data);
 
 void file_seek(uint32_t pos, bool is_flash);
 uint8_t file_read(bool is_flash);

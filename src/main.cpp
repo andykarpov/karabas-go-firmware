@@ -31,15 +31,13 @@ ElapsedTimer my_timer;
 ElapsedTimer hide_timer;
 ElapsedTimer popup_timer;
 RTC zxrtc;
-SdFs sd, sd2;
-FsFile file, file2;
-FsFile root, root2;
+SdFs sd1, sd2;
+FsFile file1, file2;
+FsFile root1, root2;
 fs::Dir froot;
 fs::File ffile;
 SegaController sega;
 OSD zxosd;
-
-File troot;
 
 FT812 ft(PIN_MCU_FT_CS, PIN_FT_RESET);
 
@@ -157,7 +155,7 @@ void setup()
 
   // SD
   d_print("Mounting SD card... ");
-  if (!sd.begin(SD_CONFIG)) {
+  if (!sd1.begin(SD_CONFIG)) {
     has_sd = false;
     //sd.initErrorHalt(&Serial);
     d_println("Failed");
@@ -169,7 +167,7 @@ void setup()
   //sd.ls(&Serial, LS_SIZE);
 
   // load boot
-  if (has_sd && sd.exists(FILENAME_BOOT)) {  
+  if (has_sd && sd1.exists(FILENAME_BOOT)) {  
     do_configure(FILENAME_BOOT);
   } else if (has_fs && LittleFS.exists(FILENAME_FBOOT)) {
     do_configure(FILENAME_FBOOT);
@@ -178,24 +176,6 @@ void setup()
   }
   osd_state = state_core_browser;
   read_core_list();
-
-    // test !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  /*d_println("Something else");
-  d_print("Mounting SD2 card... ");
-  Serial.flush();
-  if (!sd2.begin(SD2_CONFIG)) {
-    has_sd2 = false;
-    d_println("Failed");
-  } else {
-    has_sd2 = true;
-    d_println("Done");
-  }
-  if (has_sd2) {
-    read_file_list();
-  }
-  for (uint8_t i=0; i<files_len; i++) {
-    d_printf("File %d %s %s", i, files[i].name, files[i].dir ? 'D' : 'F'); d_println();
-  }*/
 }
 
 void do_configure(const char* filename) {
@@ -342,9 +322,17 @@ void file_loader(uint8_t vpos) {
     } else {
       zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
     }
-    char name[32]; memcpy(name, files[i].name, 31); name[32] = '\0';
+    // display 28 chars
+    char name[29]; memcpy(name, files[i].name, 28); name[28] = '\0';
     zxosd.printf("%-3d ", i+1); 
     zxosd.print(name);
+    // fill name with spaces
+    uint8_t l = strlen(name);
+    if (l < 28) {
+      for (uint8_t ll=l; ll<28; ll++) {
+        zxosd.print(" ");
+      }
+    }
     pos++;
   }
   //d_print("Fill: "); d_println(file_fill);
@@ -462,6 +450,39 @@ bool on_global_hotkeys() {
   }
 
   return false;
+}
+
+void send_file(const char* filename) {
+  sd2.chvol();
+  String dir = String(core.dir);
+  dir.trim();
+  if (dir.length() == 0) dir = "/";
+  if (dir.charAt(0) != '/') dir = "/" + dir;
+  String f = String(filename);
+  f.trim();
+  String fullpath = dir + "/" + f;
+  fullpath.trim();
+  char new_filename[64+1];
+  fullpath.toCharArray(new_filename, 64, 0);
+  d_printf("Sending file %s", new_filename); d_println();
+  if (!file2.open(new_filename, FILE_READ)) {
+    d_println("Unable to open file to read");
+    d_flush();
+    return;
+  }
+
+  spi_send(CMD_FILELOADER, 0, 1);
+  uint64_t file_size = file2.size();
+  d_printf("Sending file %s (%d bytes)", new_filename, (uint32_t)((file_size))); d_println();
+  for (uint64_t i=0; i<file_size/256; i++) {
+    char buf[256];
+    int c = file2.readBytes(buf, sizeof(buf));
+    for (int j=0; j<256; j++) {
+      send_file_byte(i*256 + j, buf[j]);
+    }
+  }
+  d_println("File has been sent successfully");
+  spi_send(CMD_FILELOADER, 0, 0);
 }
 
 // kbd event handler
@@ -651,7 +672,14 @@ void on_keyboard() {
         
         // enter
         if (usb_keyboard_report.keycode[0] == KEY_ENTER) {
-          // todo: load file into fpga
+          // hide osd
+          if (!is_osd_hiding) {
+            is_osd_hiding = true;
+            hide_timer.reset();
+            zxosd.hideMenu();
+          }
+          strcpy(loader_file.name, files[file_sel].name);
+          send_file(loader_file.name);
         }
 
         // redraw file loader on keypress
@@ -679,19 +707,20 @@ void core_osd_save(uint8_t pos)
     ffile.write(core.osd[pos].val);
     ffile.close();
   } else {
-    if (!file.open(core.filename, FILE_WRITE)) {
+    sd1.chvol();
+    if (!file1.open(core.filename, FILE_WRITE)) {
       d_println("Unable to open bitstream file to write");
       return;
     }  
-    if (!file.isWritable()) {
+    if (!file1.isWritable()) {
       d_println("File is not writable");
       return;
     }
     core.osd_need_save = false;
     core.osd[pos].prev_val = core.osd[pos].val;
-    file.seek(FILE_POS_SWITCHES_DATA + pos);
-    file.write(core.osd[pos].val);
-    file.close();
+    file1.seek(FILE_POS_SWITCHES_DATA + pos);
+    file1.write(core.osd[pos].val);
+    file1.close();
   }
 }
 
@@ -887,7 +916,7 @@ void file_seek(uint32_t pos, bool is_flash) {
   if (is_flash) {
     ffile.seek(pos);
   } else {
-    file.seek(pos);
+    file1.seek(pos);
   }
 }
 
@@ -895,7 +924,7 @@ uint8_t file_read(bool is_flash) {
   if (is_flash) {
     return ffile.read();
   } else {
-    return file.read();
+    return file1.read();
   }
 }
 
@@ -903,7 +932,7 @@ size_t file_read_bytes(char *buf, size_t len, bool is_flash) {
   if (is_flash) {
     return ffile.readBytes(buf, len);
   } else {
-    return file.readBytes(buf, len);
+    return file1.readBytes(buf, len);
   }
 }
 
@@ -911,7 +940,7 @@ int file_read_buf(char *buf, size_t len, bool is_flash) {
   if (is_flash) {
     return ffile.readBytes(buf, len);
   } else {
-    return file.read(buf, len);
+    return file1.read(buf, len);
   }
 }
 
@@ -926,7 +955,7 @@ uint16_t file_read16(uint32_t pos, bool is_flash) {
     res = buf[1] + buf[0]*256;
   } else {
     uint8_t buf[2] = {0};
-    file.readBytes(buf, sizeof(buf));
+    file1.readBytes(buf, sizeof(buf));
     res = buf[1] + buf[0]*256;
   }
   
@@ -944,7 +973,7 @@ uint32_t file_read24(uint32_t pos, bool is_flash) {
     res = buf[2] + buf[1]*256 + buf[0]*256*256;
   } else {
     uint8_t buf[3] = {0};
-    file.readBytes(buf, sizeof(buf));
+    file1.readBytes(buf, sizeof(buf));
     res = buf[2] + buf[1]*256 + buf[0]*256*256;
   }
 
@@ -961,7 +990,7 @@ uint32_t file_read32(uint32_t pos, bool is_flash) {
     res = buf[3] + buf[2]*256 + buf[1]*256*256 + buf[0]*256*256*256;
   } else {
     uint8_t buf[4] = {0};
-    file.readBytes(buf, sizeof(buf));
+    file1.readBytes(buf, sizeof(buf));
     res = buf[3] + buf[2]*256 + buf[1]*256*256 + buf[0]*256*256*256;
   }
 
@@ -974,7 +1003,7 @@ void file_get_name(char *buf, size_t len, bool is_flash) {
     s = "/" + s;
     s.toCharArray(buf, len);
   } else {
-    file.getName(buf, sizeof(buf));
+    file1.getName(buf, sizeof(buf));
   }
 }
 
@@ -997,7 +1026,8 @@ uint32_t fpga_configure(const char* filename) {
   if (is_flash) {
     ffile = LittleFS.open(filename, "r");
    } else {
-    if (!file.open(filename, FILE_READ)) {
+    sd1.chvol();
+    if (!file1.open(filename, FILE_READ)) {
       halt("Unable to open bitstream file to read");
     }
    }
@@ -1052,7 +1082,7 @@ uint32_t fpga_configure(const char* filename) {
   if (is_flash) {
     ffile.close();
   } else {
-    file.close();
+    file1.close();
   }
 
   d_print(i, DEC); d_println(" bytes done");
@@ -1216,7 +1246,7 @@ core_list_item_t get_core_list_item(bool is_flash) {
     s.toCharArray(core.filename, sizeof(core.filename));
     core.flash = true;
   } else {
-    file.getName(core.filename, sizeof(core.filename));
+    file1.getName(core.filename, sizeof(core.filename));
     core.flash = false;
   }
   file_seek(FILE_POS_CORE_NAME, is_flash); file_read_bytes(core.name, 32, is_flash); core.name[32] = '\0';
@@ -1229,8 +1259,8 @@ core_list_item_t get_core_list_item(bool is_flash) {
 
 file_list_item_t get_file_list_item() {
   file_list_item_t f;
+  sd2.chvol();
   file2.getName(f.name, sizeof(f.name));
-  f.dir = file2.isDir();
   return f;
 }
 
@@ -1256,18 +1286,19 @@ void read_core_list() {
 
   // files from sd card
   if (has_sd) {
-    if (!root.open(&sd, "/")) {
+    sd1.chvol();
+    if (!root1.open(&sd1, "/")) {
       halt("open root");
     }
-    root.rewind();
-    while (file.openNext(&root, O_RDONLY)) {
-      char filename[32]; file.getName(filename, sizeof(filename));
+    root1.rewind();
+    while (file1.openNext(&root1, O_RDONLY)) {
+      char filename[32]; file1.getName(filename, sizeof(filename));
       uint8_t len = strlen(filename);
       if (strstr(strlwr(filename + (len - 4)), ".kg1")) {
         cores[cores_len] = get_core_list_item(false);
         cores_len++;
       }
-      file.close();
+      file1.close();
     }
   }
   // sort by core order number
@@ -1279,17 +1310,27 @@ void read_file_list() {
 
   // files from sd card
   if (has_sd2) {
-    if (!root2.open(&sd2, "/")) {
+    sd2.chvol();
+    String dir = String(core.dir);
+    dir.trim();
+    if (dir.length() == 0) dir = "/";
+    if (dir.charAt(0) != '/') dir = "/" + dir;
+    char d[33];
+    dir.toCharArray(d, 32);
+    if (!root2.open(&sd2, d)) {
       halt("open root");
     }
     root2.rewind();
+    d_println("Read file list");
     String exts = String(core.file_extensions);
     exts.toLowerCase(); exts.trim();
+    char e[33];
+    exts.toCharArray(e, 32);
+    d_printf("Extensions: %s", e); d_println();
     while (file2.openNext(&root2, O_RDONLY)) {
-      char filename[32]; file2.getName(filename, sizeof(filename));
+      char filename[255]; file2.getName(filename, sizeof(filename));
       uint8_t len = strlen(filename);
-      //if (strstr(strlwr(filename + (len - 4)), ".kg1")) {
-      if (files_len < MAX_FILES) {
+      if (files_len < MAX_FILES && !file2.isDirectory() && len <= 32) {
         if (exts.length() == 0 || exts.indexOf(strlwr(filename + (len - 4))) != -1) {
           files[files_len] = get_file_list_item();
           files_len++;
@@ -1299,7 +1340,7 @@ void read_file_list() {
     }
   }
   // sort by file name
-  //std::sort(cores, cores + cores_len);
+  std::sort(files, files + files_len);
   // TODO
 }
 
@@ -1310,7 +1351,8 @@ void read_core(const char* filename) {
   if (is_flash) {
     ffile = LittleFS.open(filename, "r");
   } else {
-    if (!file.open(filename, FILE_READ)) {
+    sd1.chvol();
+    if (!file1.open(filename, FILE_READ)) {
       halt("Unable to open bitstream file to read");
     }
   }
@@ -1321,7 +1363,7 @@ void read_core(const char* filename) {
     s = "/" + s;
     s.toCharArray(core.filename, sizeof(core.filename));
   } else {
-    file.getName(core.filename, sizeof(core.filename));
+    file1.getName(core.filename, sizeof(core.filename));
   }
   core.filename[32] = '\0';
   file_seek(FILE_POS_CORE_NAME, is_flash); file_read_bytes(core.name, 32, is_flash); core.name[32] = '\0';
@@ -1349,8 +1391,9 @@ void read_core(const char* filename) {
   file_seek(FILE_POS_CORE_BUILD, is_flash); file_read_bytes(core.build, 8, is_flash); core.build[8] = '\0';
   file_seek(FILE_POS_CORE_EEPROM_BANK, is_flash); core.eeprom_bank = file_read(is_flash);
   file_seek(FILE_POS_RTC_TYPE, is_flash); core.rtc_type = file_read(is_flash);
-  file_seek(FILE_POS_FILELOADER_FILE, is_flash); file_read_bytes(core.last_file, 128, is_flash); core.last_file[128] = '\0';
-  file_seek(FILE_POS_FILELOADER_EXTENSIONS, is_flash); file_read_bytes(core.file_extensions, 39, is_flash); core.file_extensions[39] = '\0';
+  file_seek(FILE_POS_FILELOADER_DIR, is_flash); file_read_bytes(core.dir, 32, is_flash); core.dir[32] = '\0';
+  file_seek(FILE_POS_FILELOADER_FILE, is_flash); file_read_bytes(core.last_file, 32, is_flash); core.last_file[32] = '\0';
+  file_seek(FILE_POS_FILELOADER_EXTENSIONS, is_flash); file_read_bytes(core.file_extensions, 32, is_flash); core.file_extensions[32] = '\0';
   uint32_t roms_len = file_read32(FILE_POS_ROM_LEN, is_flash);
   uint32_t offset = FILE_POS_BITSTREAM_START + core.bitstream_length + roms_len;
   //d_print("OSD section: "); d_println(offset);
@@ -1445,7 +1488,7 @@ void read_core(const char* filename) {
   if (is_flash) {
     ffile.close();
   } else {
-    file.close();
+    file1.close();
   }
 
   zxosd.hidePopup();
@@ -1465,7 +1508,8 @@ void read_roms(const char* filename) {
   if (is_flash) {
     ffile = LittleFS.open(filename, "r");
   } else {
-    if (!file.open(filename, FILE_READ)) {
+    sd1.chvol();
+    if (!file1.open(filename, FILE_READ)) {
       halt("Unable to open bitstream file to read");
     }
   }
@@ -1510,7 +1554,7 @@ void read_roms(const char* filename) {
   if (is_flash) {
     ffile.close();
   } else {
-    file.close();
+    file1.close();
   }
 }
 
@@ -1528,6 +1572,22 @@ void send_rom_byte(uint32_t addr, uint8_t data) {
   // send lower 256 bytes
   uint8_t romaddr = (uint8_t)((addr & 0x000000FF));
   spi_send(CMD_ROMDATA, romaddr, data);
+}
+
+void send_file_byte(uint32_t addr, uint8_t data) {
+  // send file bank address every 256 bytes
+  if (addr % 256 == 0) {
+    uint8_t filebank3 = (uint8_t)((addr & 0xFF000000) >> 24);
+    uint8_t filebank2 = (uint8_t)((addr & 0x00FF0000) >> 16);
+    uint8_t filebank1 = (uint8_t)((addr & 0x0000FF00) >> 8);
+    //d_printf("ROM bank %d %d %d", rombank1, rombank2, rombank3); d_println();
+    spi_send(CMD_FILEBANK, 0, filebank1);
+    spi_send(CMD_FILEBANK, 1, filebank2);
+    spi_send(CMD_FILEBANK, 2, filebank3);
+  }
+  // send lower 256 bytes
+  uint8_t fileaddr = (uint8_t)((addr & 0x000000FF));
+  spi_send(CMD_FILEDATA, fileaddr, data);
 }
 
 void osd_print_logo(uint8_t x, uint8_t y)
@@ -1721,6 +1781,19 @@ void osd_init_file_loader_overlay() {
 
   zxosd.setPos(0,5);
 
+  // collect files from sd2
+  if (!sd2.begin(SD2_CONFIG)) {
+    has_sd2 = false;
+    d_println("Failed");
+  } else {
+    has_sd2 = true;
+    d_println("Done");
+  }
+  if (has_sd2) {
+    sd2.chvol();
+    read_file_list();
+  }
+
   file_loader(APP_COREBROWSER_MENU_OFFSET);  
 
   // footer
@@ -1767,3 +1840,9 @@ bool operator<(const core_list_item_t a, const core_list_item_t b) {
   return a.order < b.order;
 }
 
+bool operator<(const file_list_item_t a, const file_list_item_t b) {
+  // Lexicographically compare the tuples (hour, minute)
+  String s1 = String(a.name); String s2 = String(b.name);
+  s1.toLowerCase(); s2.toLowerCase();
+  return s1 < s2;
+}
