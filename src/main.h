@@ -240,6 +240,7 @@ void menu(uint8_t vpos);
 bool is_flashfs(const char* filename);
 
 void core_osd_save(uint8_t pos);
+void core_file_loader_save();
 void core_osd_send(uint8_t pos);
 void core_osd_trigger(uint8_t pos);
 void core_osd_send_all();

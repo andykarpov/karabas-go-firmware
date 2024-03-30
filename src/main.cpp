@@ -679,6 +679,7 @@ void on_keyboard() {
             zxosd.hideMenu();
           }
           strcpy(loader_file.name, files[file_sel].name);
+          core_file_loader_save();
           send_file(loader_file.name);
         }
 
@@ -722,6 +723,23 @@ void core_osd_save(uint8_t pos)
     file1.write(core.osd[pos].val);
     file1.close();
   }
+}
+
+void core_file_loader_save()
+{
+    sd1.chvol();
+    if (!file1.open(core.filename, FILE_WRITE)) {
+      d_println("Unable to open bitstream file to write");
+      return;
+    }
+    if (!file1.isWritable()) {
+      d_println("File is not writable");
+      return;
+    }
+    memcpy(core.last_file, loader_file.name, 32);
+    file1.seek(FILE_POS_FILELOADER_FILE);
+    file1.write(core.last_file, 32);
+    file1.close();
 }
 
 void core_osd_send(uint8_t pos)
@@ -1341,7 +1359,27 @@ void read_file_list() {
   }
   // sort by file name
   std::sort(files, files + files_len);
-  // TODO
+  
+  // select and load prev file on boot
+  if (files_len >0 && strlen(core.last_file) > 0) {
+    String lf = String(core.last_file); lf.trim();
+    for (uint8_t i=0; i<files_len; i++) {
+      String f = String(files[i].name); f.trim();
+      if (f == lf) {
+          file_sel = i;
+          strcpy(loader_file.name, files[file_sel].name);
+          // hide osd
+          if (!is_osd_hiding) {
+            is_osd_hiding = true;
+            hide_timer.reset();
+            zxosd.hideMenu();
+          }
+          core_file_loader_save();
+          send_file(loader_file.name);
+      }
+    }
+  }
+
 }
 
 void read_core(const char* filename) {
