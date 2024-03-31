@@ -22,7 +22,7 @@
 PioSpi spiSD(PIN_SD_SPI_RX, PIN_SD_SPI_SCK, PIN_SD_SPI_TX); // dedicated SD1 SPI
 #define SD_CONFIG SdSpiConfig(SD_CS_PIN, DEDICATED_SPI, SD_SCK_MHZ(60), &spiSD) // SD1 SPI Settings
 
-#define SD2_CONFIG SdSpiConfig(PIN_MCU_SD2_CS, SHARED_SPI, SD_SCK_MHZ(8), &SPI) // SD2 SPI Settings
+#define SD2_CONFIG SdSpiConfig(PIN_MCU_SD2_CS, SHARED_SPI, SD_SCK_MHZ(4), &SPI) // SD2 SPI Settings
 
 SPISettings settingsA(SD_SCK_MHZ(24), MSBFIRST, SPI_MODE0); // MCU SPI settings
 
@@ -85,6 +85,11 @@ uint8_t evo_rs232_dll = 0;
 uint8_t evo_rs232_dlm = 0;
 uint32_t serial_speed = 115200;
 
+uint16_t debug_address = 0;
+uint16_t prev_debug_address = 0;
+uint16_t debug_data = 0;
+uint16_t prev_debug_data = 0;
+
 // the setup function runs once when you press reset or power the board
 void setup()
 {
@@ -115,7 +120,7 @@ void setup()
   Wire.setClock(100000);
   Wire.begin();
 
-  while ( !Serial ) delay(10);   // wait for native usb
+  //while ( !Serial ) delay(10);   // wait for native usb
 
   d_begin(115200);
   d_println("Karabas Go RP2040 firmware");
@@ -453,6 +458,20 @@ bool on_global_hotkeys() {
 }
 
 void send_file(const char* filename) {
+  
+  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+  zxosd.frame(8,8,24,13, 1);
+  zxosd.fill(9,9,23,12, 32);
+  zxosd.setColor(OSD::COLOR_GREEN_I, OSD::COLOR_BLACK);
+  zxosd.setPos(9, 9);
+  zxosd.print("Preparing...");
+  zxosd.setColor(OSD::COLOR_MAGENTA_I, OSD::COLOR_BLACK);
+  zxosd.setPos(9,10);
+  zxosd.print("Please wait.");
+
+  // re-init SD card
+  sd2.end();
+  sd2.begin(SD2_CONFIG);
   sd2.chvol();
   String dir = String(core.dir);
   dir.trim();
@@ -465,24 +484,84 @@ void send_file(const char* filename) {
   char new_filename[64+1];
   fullpath.toCharArray(new_filename, 64, 0);
   d_printf("Sending file %s", new_filename); d_println();
-  if (!file2.open(new_filename, FILE_READ)) {
+
+  if (!file2.open(&sd2, new_filename, FILE_READ)) {
     d_println("Unable to open file to read");
     d_flush();
+    osd_init_file_loader_overlay(false);
     return;
   }
 
+  uint8_t buf[256];
+  int c;
+
+  if (!has_sd) {
+    d_println("No SD1 found");
+    d_flush();
+    osd_init_file_loader_overlay(false);
+    return;
+  } else {
+    d_println("Found SD1, creating tmp file");
+  }
+
+  const char* tmp = "loader.tmp";
+
+  if (root1.exists(tmp)) {
+    root1.remove(tmp);
+  }
+  file1.open(&root1, tmp, FILE_WRITE);
+  while(c = file2.read(buf, sizeof(buf))) {
+    file1.write(buf, c);
+  }
+  file1.close();
+  file2.close();
+  sd2.end();
+  SPI.begin(false);
+  d_println("Done creating tmp file");
+  d_flush();
+
+  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+  zxosd.frame(8,8,24,13, 1);
+  zxosd.fill(9,9,23,12, 32);
+  zxosd.setColor(OSD::COLOR_YELLOW_I, OSD::COLOR_BLACK);
+  zxosd.setPos(9, 9);
+  zxosd.print("Loading file...");
+  zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_BLACK);
+  zxosd.setPos(9,10);
+  zxosd.print("Please wait.");
+  zxosd.setColor(OSD::COLOR_RED_I, OSD::COLOR_BLACK);
+
+  // trigger reset
   spi_send(CMD_FILELOADER, 0, 1);
-  uint64_t file_size = file2.size();
+  spi_send(CMD_FILELOADER, 0, 0);
+
+  file1.open(&root1, tmp, FILE_READ);
+  uint64_t file_size = file1.size();
+
   d_printf("Sending file %s (%d bytes)", new_filename, (uint32_t)((file_size))); d_println();
-  for (uint64_t i=0; i<file_size/256; i++) {
-    char buf[256];
-    int c = file2.readBytes(buf, sizeof(buf));
-    for (int j=0; j<256; j++) {
-      send_file_byte(i*256 + j, buf[j]);
+  d_flush();
+  
+uint32_t cnt = 0;
+
+  while(c = file1.read(buf, sizeof(buf))) {
+    for (int j=0; j<c; j++) {
+      send_file_byte(cnt, buf[j]);
+      cnt++;
+      if (cnt % 1024 == 0) {
+        zxosd.setPos(9,11);
+        zxosd.print(cnt); zxosd.print(" bytes ");
+      }
     }
   }
-  d_println("File has been sent successfully");
-  spi_send(CMD_FILELOADER, 0, 0);
+  zxosd.setColor(OSD::COLOR_GREEN_I, OSD::COLOR_BLACK);
+  zxosd.setPos(9,11);
+  zxosd.print(cnt); zxosd.print(" bytes ");
+
+  file1.close();
+  d_printf("Sent %u bytes", cnt); d_println();
+
+  // reload menu
+  osd_init_file_loader_overlay(false);
 }
 
 // kbd event handler
@@ -672,15 +751,15 @@ void on_keyboard() {
         
         // enter
         if (usb_keyboard_report.keycode[0] == KEY_ENTER) {
+          strcpy(loader_file.name, files[file_sel].name);
+          core_file_loader_save();
+          send_file(loader_file.name);          
           // hide osd
           if (!is_osd_hiding) {
             is_osd_hiding = true;
             hide_timer.reset();
             zxosd.hideMenu();
           }
-          strcpy(loader_file.name, files[file_sel].name);
-          core_file_loader_save();
-          send_file(loader_file.name);
         }
 
         // redraw file loader on keypress
@@ -1218,8 +1297,16 @@ void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data) {
     serial_data(addr, data);
   } else if (cmd == CMD_RTC) {
     zxrtc.setData(addr, data);
+  } else if (cmd == CMD_DEBUG_DATA) {
+    debug_data = addr*256 + data;
+  } else if (cmd == CMD_DEBUG_ADDRESS) {
+    debug_address = addr*256 + data;
   } else if (cmd == CMD_NOP) {
     //d_println("Nop");
+  }
+  if (prev_debug_data != debug_data) {
+    prev_debug_data = debug_data;
+    d_printf("Debug: %04x", debug_data); d_println();
   }
 }
 
@@ -1368,14 +1455,14 @@ void read_file_list() {
       if (f == lf) {
           file_sel = i;
           strcpy(loader_file.name, files[file_sel].name);
+          //core_file_loader_save();
+          //send_file(loader_file.name);
           // hide osd
-          if (!is_osd_hiding) {
+          /*if (!is_osd_hiding) {
             is_osd_hiding = true;
             hide_timer.reset();
             zxosd.hideMenu();
-          }
-          core_file_loader_save();
-          send_file(loader_file.name);
+          }*/
       }
     }
   }
@@ -1618,7 +1705,7 @@ void send_file_byte(uint32_t addr, uint8_t data) {
     uint8_t filebank3 = (uint8_t)((addr & 0xFF000000) >> 24);
     uint8_t filebank2 = (uint8_t)((addr & 0x00FF0000) >> 16);
     uint8_t filebank1 = (uint8_t)((addr & 0x0000FF00) >> 8);
-    //d_printf("ROM bank %d %d %d", rombank1, rombank2, rombank3); d_println();
+    //d_printf("File bank %d %d %d", filebank1, filebank2, filebank3); d_println();
     spi_send(CMD_FILEBANK, 0, filebank1);
     spi_send(CMD_FILEBANK, 1, filebank2);
     spi_send(CMD_FILEBANK, 2, filebank3);
@@ -1811,7 +1898,7 @@ void ft_osd_init_core_browser_overlay() {
   ft_core_browser(0);  
 }
 
-void osd_init_file_loader_overlay() {
+void osd_init_file_loader_overlay(bool initSD = true) {
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
   zxosd.clear();
 
@@ -1820,16 +1907,18 @@ void osd_init_file_loader_overlay() {
   zxosd.setPos(0,5);
 
   // collect files from sd2
-  if (!sd2.begin(SD2_CONFIG)) {
-    has_sd2 = false;
-    d_println("Failed");
-  } else {
-    has_sd2 = true;
-    d_println("Done");
-  }
-  if (has_sd2) {
-    sd2.chvol();
-    read_file_list();
+  if (initSD) {
+    if (!sd2.begin(SD2_CONFIG)) {
+      has_sd2 = false;
+      d_println("Failed");
+    } else {
+      has_sd2 = true;
+      d_println("Done");
+    }
+    if (has_sd2) {
+      sd2.chvol();
+      read_file_list();
+    }
   }
 
   file_loader(APP_COREBROWSER_MENU_OFFSET);  

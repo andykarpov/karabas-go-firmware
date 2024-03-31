@@ -64,6 +64,9 @@
 
 #define CMD_OSD 0x20
 
+#define CMD_DEBUG_ADDRESS 0x30
+#define CMD_DEBUG_DATA 0x31
+
 #define CMD_RTC 0xFA
 #define CMD_FLASHBOOT 0xFB
 #define CMD_UART 0xFC
@@ -279,6 +282,7 @@ void osd_init_rtc_overlay();
 void osd_init_about_overlay();
 void osd_init_info_overlay();
 void osd_init_core_browser_overlay();
+void osd_init_file_loader_overlay(bool initSD);
 
 void popupFooter();
 
