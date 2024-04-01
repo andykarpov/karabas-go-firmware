@@ -903,12 +903,14 @@ void loop()
 
   if (joyL != prevJoyL) {
     d_printf("SEGA L: %u", joyL); d_println();
+    on_keyboard();
     prevJoyL = joyL;
     spi_send(CMD_JOYSTICK, 0, lowByte(joyL));
     spi_send(CMD_JOYSTICK, 1, highByte(joyL));
   }
   if (joyR != prevJoyR) {
     d_printf("SEGA R: %u", joyR); d_println();
+    on_keyboard();
     prevJoyR = joyR;
     spi_send(CMD_JOYSTICK, 2, lowByte(joyR));
     spi_send(CMD_JOYSTICK, 3, highByte(joyR));
@@ -932,7 +934,6 @@ void loop()
         spi_send(packet.cmd, packet.addr, packet.data);
       }
     } else if (packet.cmd == CMD_JOYSTICK) {
-      on_keyboard();
       if (!is_osd) {
         spi_send(packet.cmd, packet.addr, packet.data);
       }
