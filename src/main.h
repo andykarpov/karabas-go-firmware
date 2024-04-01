@@ -120,7 +120,7 @@
 #endif
 
 #ifndef FT_OSD 
-#define FT_OSD 1
+#define FT_OSD 0
 #endif
 
 #if DEBUG
