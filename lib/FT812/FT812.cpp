@@ -88,25 +88,8 @@
 
 // Commands
 
-const uint8_t CMD_FT812 = 0x09;
-const uint8_t CMD_FT812_DATA = 0x0A;
-
-const uint8_t ADDR_EXCLUSIVE = 0x00;
-
-const uint8_t ADDR_CMD_BYTE1 = 0x01;
-const uint8_t ADDR_CMD_BYTE2 = 0x02;
-const uint8_t ADDR_CMD_BYTE3 = 0x03;
-
-const uint8_t ADDR_TRANSACTION_LEN = 0x04;
-const uint8_t ADDR_ADDRESS_BYTE1 = 0x05;
-const uint8_t ADDR_ADDRESS_BYTE2 = 0x06;
-const uint8_t ADDR_ADDRESS_BYTE3 = 0x07;
-const uint8_t ADDR_ADDRESS_BYTE4 = 0x08;
-
-const uint8_t ADDR_ACK_CMD = 0x09;
-const uint8_t ADDR_ACK_DATA = 0x0A;
-
-const uint8_t ADDR_DATA_BYTE = 0x00; // ... + ADDR_TRANSACTION_LEN-1 for CMD_FT812_DATA
+const uint8_t CMD_SPI_CONTROL = 0x09;
+const uint8_t ADDR_CONTROL_REGISTER = 0x00;
 
 const ft_mode_t ft_modes[] =
 {
@@ -128,155 +111,30 @@ const ft_mode_t ft_modes[] =
 
 /****************************************************************************/
 
-FT812::FT812(void)
-{
-}
-
-/****************************************************************************/
-
 void FT812::begin(m_cb act)
 {
-  action = act;
+    action = act;
+    pinMode(pin_cs, OUTPUT); digitalWrite(pin_cs, HIGH);
+    pinMode(pin_reset, OUTPUT); digitalWrite(pin_reset, HIGH);
 }
 
 void FT812::spi(bool on)
 {
   ctrl_reg = bitWrite(ctrl_reg, 0, on);
-  action(CMD_FT812, ADDR_EXCLUSIVE, ctrl_reg);
+  action(CMD_SPI_CONTROL, ADDR_CONTROL_REGISTER, ctrl_reg);
 }
 
 void FT812::vga(bool on)
 {
   ctrl_reg = bitWrite(ctrl_reg, 1, on);
-  action(CMD_FT812, ADDR_EXCLUSIVE, ctrl_reg);
-}
-
-void FT812::slow(bool on)
-{
-  ctrl_reg = bitWrite(ctrl_reg, 2, on);
-  action(CMD_FT812, ADDR_EXCLUSIVE, ctrl_reg);
+  action(CMD_SPI_CONTROL, ADDR_CONTROL_REGISTER, ctrl_reg);
 }
 
 void FT812::reset()
 {
-  spi(true);
-  slow(true);
-  commandNoWait(0x68, 0, 0);
-  spi(false);
-}
-
-void FT812::command(uint8_t cmd1, uint8_t cmd2, uint8_t cmd3)
-{
-  //Serial.printf("FT cmd %02x%02x%02x", cmd1, cmd2, cmd3); Serial.println();
-  transaction_active = true;
-  transaction_start = to_ms_since_boot(get_absolute_time());
-  transaction_len = 0;
-  data_transaction = false;
-  is_write = true;
-  action(CMD_FT812, ADDR_CMD_BYTE1, cmd1);
-  action(CMD_FT812, ADDR_CMD_BYTE2, cmd2);
-  action(CMD_FT812, ADDR_CMD_BYTE3, cmd3);
-  wait();
-}
-
-void FT812::commandNoWait(uint8_t cmd1, uint8_t cmd2, uint8_t cmd3)
-{
-  transaction_active = false;
-  transaction_len = 0;
-  data_transaction = false;
-  is_write = true;
-  action(CMD_FT812, ADDR_CMD_BYTE1, cmd1);
-  action(CMD_FT812, ADDR_CMD_BYTE2, cmd2);
-  action(CMD_FT812, ADDR_CMD_BYTE3, cmd3);
-  delay(200);
-}
-
-void FT812::write(uint32_t addr, uint8_t *data, uint8_t len)
-{
-  //Serial.printf("FT write %06x len %02x : ", addr, len); 
-
-  transaction_active = true;
-  transaction_start = to_ms_since_boot(get_absolute_time());
-  data_transaction = true;
-  transaction_len = len;
-  is_write = true;
-  uint8_t addr3 = (uint8_t)((addr & 0x00FF0000) >> 16); 
-  addr3 = bitSet(addr3, 7);  // write is "10"
-  addr3 = bitClear(addr3, 6);
-  uint8_t addr2 = (uint8_t)((addr & 0x0000FF00) >> 8);
-  uint8_t addr1 = (uint8_t)((addr & 0x000000FF));  
-  action(CMD_FT812, ADDR_TRANSACTION_LEN, len);
-  action(CMD_FT812, ADDR_ADDRESS_BYTE1, addr3);
-  action(CMD_FT812, ADDR_ADDRESS_BYTE2, addr2);
-  action(CMD_FT812, ADDR_ADDRESS_BYTE3, addr1);
-  // send data
-  for (uint8_t i = 0; i<len; i++) {
-    action(CMD_FT812_DATA, i, data[i]);
-    //Serial.printf("%02x ", data[i]);
-  }
-  //Serial.println();
-  wait();
-}
-
-void FT812::read(uint32_t addr, uint8_t len) 
-{
-  //Serial.printf("FT read %06x len %02x : ", addr, len); 
-
-  transaction_active = true;
-  transaction_start = to_ms_since_boot(get_absolute_time());
-  data_transaction = true;
-  transaction_len = len;
-  is_write = false;
-  uint8_t addr3 = (uint8_t)((addr & 0x00FF0000) >> 16); 
-  addr3 = bitClear(addr3, 7); // read is "00"
-  addr3 = bitClear(addr3, 6);
-  uint8_t addr2 = (uint8_t)((addr & 0x0000FF00) >> 8);
-  uint8_t addr1 = (uint8_t)((addr & 0x000000FF)); 
-  action(CMD_FT812, ADDR_TRANSACTION_LEN, len);
-  action(CMD_FT812, ADDR_ADDRESS_BYTE1, addr3);
-  action(CMD_FT812, ADDR_ADDRESS_BYTE2, addr2);
-  action(CMD_FT812, ADDR_ADDRESS_BYTE3, addr1);
-  action(CMD_FT812, ADDR_ADDRESS_BYTE4, 0); // dummy byte
-   for (uint8_t i = 0; i<len; i++) {
-    action(CMD_FT812_DATA, i, 0); // to read a byte we have to send a dummy byte
-  }
-  wait();
-  //for (uint8_t i = 0; i<len; i++) {
-  //  Serial.printf("%02x ", getData(i));
-  //}
-  //Serial.println();
-}
-
-void FT812::setData(uint8_t pos, uint8_t val)
-{
-  uint8_t count_system = (data_transaction) ? ((is_write) ? 3 : 4) : 3;
-  uint8_t count_bytes = (data_transaction) ? count_system + transaction_len : count_system;
-
-  // skip system regs
-  if (pos >= count_system) {
-    if (!is_write) { // read buffer
-      buf[pos-count_system] = val;
-    }
-  }
-
-  // deactivate transaction progress on last byte received
-  if (pos >= count_bytes-1) {
-    transaction_active = false;
-  }
-}
-
-uint8_t FT812::getData(uint8_t pos)
-{
-  return buf[pos];
-}
-
-void FT812::wait()
-{
-  // todo: add timeout
-  while (transaction_active && (to_ms_since_boot(get_absolute_time()) - transaction_start < 100))
-  {
-    action(0xFF, 0, 0); // NOP
-  }
+  digitalWrite(pin_reset, LOW); 
+  delay(10);
+  digitalWrite(pin_reset, HIGH);
 }
 
 /**************************************************************************************************/
@@ -285,24 +143,30 @@ bool FT812::init(uint8_t m) {
 
     mode = ft_modes[m];
 
-    slow(true);
-
     // reset
     sendCommand(FT81x_CMD_RST_PULSE);
     delay(300);
 
+    // select clock
     sendCommand(FT81x_CMD_CLKEXT);
-    sendCommand(FT81x_CMD_CLKSEL + ((mode.f_mul | 0xC0) << 8)); // f_mul
-    sendCommand(FT81x_CMD_ACTIVE);
     delay(300);
+
+    // clock multiplier
+    sendCommand(FT81x_CMD_CLKSEL + ((mode.f_mul | 0xC0) << 8)); // f_mul
+
+    // activate
+    sendCommand(FT81x_CMD_ACTIVE);
+    delay(100);
 
     if (read8(FT81x_REG_ID) != 0x7C) {
       return false;
     }
 
-    while (read8(FT81x_REG_ID) != 0x7C) {
-        __asm__ volatile("nop");
-    }
+    //while (read8(FT81x_REG_ID) != 0x7C) {
+    //    __asm__ volatile("nop");
+    //}
+
+    // wait for FT CPU reset complete
     while (read8(FT81x_REG_CPURESET) != 0x00) {
         __asm__ volatile("nop");
     }
@@ -330,11 +194,12 @@ bool FT812::init(uint8_t m) {
 
     write8(FT81x_REG_PCLK, mode.f_div); // f_div 1
 
+    // funny screen mirroring
+    //write8(FT81x_REG_ROTATE, FT81x_ROTATE_LANDSCAPE_INVERTED);
+
     // int setup
     //write8(FT81x_REG_INT_MASK, 1);
     //write8(FT81x_REG_INT_EN, 1);
-
-    slow(false);
 
     return true;
 }
@@ -732,57 +597,65 @@ uint8_t FT812::initBitmapHandleForFont(uint8_t font) {
 }
 
 void FT812::writeGRAM(const uint32_t offset, const uint32_t size, const uint8_t *data, const bool useProgmem) {
-    uint32_t chunk_size = 128;
-    uint32_t chunks = ceil((float)size / chunk_size);
-    uint8_t dbuf[128];
+    uint32_t cmd = (FT81x_RAM_G + offset) | WRITE;
 
-    uint32_t cmd = FT81x_RAM_G + offset;
+    SPI.beginTransaction(FT81x_SPI_SETTINGS);
+    digitalWrite(pin_cs, LOW);
 
-    for (uint32_t j=0; j<chunks; j++) {
-      uint32_t tail = size - j*chunk_size;
-      uint32_t to = (j == chunks-1) ? tail : chunk_size;
-      for (uint32_t i = 0; i < to; i++) {
-          dbuf[i] = (useProgmem) ? DATA(data, i + j*chunk_size) : data[i + j*chunk_size];
-      }
-      write(cmd, dbuf, to);
-      cmd += chunk_size; // next cmd + 32
+    SPI.transfer((cmd >> 16) & 0xFF);
+    SPI.transfer((cmd >> 8) & 0xFF);
+    SPI.transfer(cmd & 0xFF);
+
+    if (useProgmem) {
+        for (uint32_t i = 0; i < size; i++) {
+            SPI.transfer(DATA(data, i));
+        }
+    } else {
+        for (uint32_t i = 0; i < size; i++) {
+            SPI.transfer(data[i]);
+        }
     }
+
+    digitalWrite(pin_cs, HIGH);
+    SPI.endTransaction();
 }
 
 void FT812::startCmd(const uint32_t cmd) {
-    uint32_t addr = (FT81x_RAM_CMD + cmdWriteAddress);
+    uint32_t addr = (FT81x_RAM_CMD + cmdWriteAddress) | WRITE;
 
-    transaction_len = 0;
-    data_transaction = true;
-    // remember cmd_addr
-    cmd_addr = addr;
-    // add argument to transaction buf
-    buf[transaction_len++] = cmd;
-    buf[transaction_len++] = cmd >> 8;
-    buf[transaction_len++] = cmd >> 16;
-    buf[transaction_len++] = cmd >> 24;
+    SPI.beginTransaction(FT81x_SPI_SETTINGS);
+    digitalWrite(pin_cs, LOW);
+
+    SPI.transfer(addr >> 16);
+    SPI.transfer(addr >> 8);
+    SPI.transfer(addr);
+    SPI.transfer(cmd);
+    SPI.transfer(cmd >> 8);
+    SPI.transfer(cmd >> 16);
+    SPI.transfer(cmd >> 24);
 
     increaseCmdWriteAddress(4);
 }
 
 void FT812::intermediateCmd(const uint32_t cmd) {
 
-    buf[transaction_len++] = cmd;
-    buf[transaction_len++] = cmd >> 8;
-    buf[transaction_len++] = cmd >> 16;
-    buf[transaction_len++] = cmd >> 24;
+    SPI.transfer(cmd);
+    SPI.transfer(cmd >> 8);
+    SPI.transfer(cmd >> 16);
+    SPI.transfer(cmd >> 24);
 
     increaseCmdWriteAddress(4);
 }
 
 void FT812::endCmd(const uint32_t cmd) {
 
-    buf[transaction_len++] = cmd;
-    buf[transaction_len++] = cmd >> 8;
-    buf[transaction_len++] = cmd >> 16;
-    buf[transaction_len++] = cmd >> 24;
+    SPI.transfer(cmd);
+    SPI.transfer(cmd >> 8);
+    SPI.transfer(cmd >> 16);
+    SPI.transfer(cmd >> 24);
 
-    write(cmd_addr, buf, transaction_len);
+    digitalWrite(pin_cs, HIGH);
+    SPI.endTransaction();
 
     increaseCmdWriteAddress(4);
 
@@ -790,51 +663,99 @@ void FT812::endCmd(const uint32_t cmd) {
 }
 
 void FT812::sendCommand(const uint32_t cmd) {
-  command(cmd >> 16, cmd >> 8, cmd);
+
+    SPI.beginTransaction(FT81x_SPI_LOW_SETTINGS);
+    digitalWrite(pin_cs, LOW);
+    SPI.transfer(cmd >> 16);
+    SPI.transfer(cmd >> 8);
+    uint8_t res = SPI.transfer(cmd);
+    digitalWrite(pin_cs, HIGH);
+    SPI.endTransaction();
+    //Serial.printf("Command %d result %d", cmd, res); Serial.println();
 }
 
 uint8_t FT812::read8(const uint32_t address) {
-    uint32_t cmd = address;
-    read(address, 1);
-    uint8_t result = getData(0);
+    uint32_t cmd = address | READ;
+    SPI.beginTransaction(FT81x_SPI_SETTINGS);
+    digitalWrite(pin_cs, LOW);
+    SPI.transfer(cmd >> 16);
+    SPI.transfer(cmd >> 8);
+    SPI.transfer(cmd);
+    SPI.transfer(0x00);  // dummy byte
+    uint8_t result = SPI.transfer(0x00);
+    digitalWrite(pin_cs, HIGH);
+    SPI.endTransaction();
     return result;
 }
 
 uint16_t FT812::read16(const uint32_t address) {
-    read(address, 2);
-    uint16_t result = (uint16_t) getData(0);
-    result |= ((uint16_t) getData(1) << 8);
+    uint32_t cmd = address | READ;
+    SPI.beginTransaction(FT81x_SPI_SETTINGS);
+    digitalWrite(pin_cs, LOW);
+    SPI.transfer(cmd >> 16);
+    SPI.transfer(cmd >> 8);
+    SPI.transfer(cmd);
+    SPI.transfer(0x00);  // dummy byte
+    uint16_t result = SPI.transfer(0x00);
+    result |= (SPI.transfer(0x00) << 8);
+    digitalWrite(pin_cs, HIGH);
+    SPI.endTransaction();
     return result;
 }
 
 uint32_t FT812::read32(const uint32_t address) {
-    read(address, 4);
-    uint32_t result = (uint32_t) getData(0);
-    result |= ((uint32_t) getData(1) << 8);
-    result |= ((uint32_t) getData(2) << 16);
-    result |= ((uint32_t) getData(3) << 24);
+    uint32_t cmd = address | READ;
+    SPI.beginTransaction(FT81x_SPI_SETTINGS);
+    digitalWrite(pin_cs, LOW);
+    SPI.transfer(cmd >> 16);
+    SPI.transfer(cmd >> 8);
+    SPI.transfer(cmd);
+    SPI.transfer(0x00);  // dummy byte
+    uint32_t result = SPI.transfer(0x00);
+    result |= (SPI.transfer(0x00) << 8);
+    result |= ((uint32_t)SPI.transfer(0x00) << 16);
+    result |= ((uint32_t)SPI.transfer(0x00) << 24);
+    digitalWrite(pin_cs, HIGH);
+    SPI.endTransaction();
     return result;
 }
 
 void FT812::write8(const uint32_t address, const uint8_t data) {
     uint32_t cmd = address | WRITE;
-    uint8_t dbuf[1];
-    dbuf[0] = data;
-    write(address, dbuf, 1);
+    SPI.beginTransaction(FT81x_SPI_SETTINGS);
+    digitalWrite(pin_cs, LOW);
+    SPI.transfer(cmd >> 16);
+    SPI.transfer(cmd >> 8);
+    SPI.transfer(cmd);
+    SPI.transfer(data);
+    digitalWrite(pin_cs, HIGH);
+    SPI.endTransaction();
 }
 
 void FT812::write16(const uint32_t address, const uint16_t data) {
-    uint8_t dbuf[2];
-    dbuf[0] = (uint8_t) (data & 0x00FF);
-    dbuf[1] = (uint8_t) (data >> 8);
-    write(address, dbuf, 2);
+    uint32_t cmd = address | WRITE;
+    SPI.beginTransaction(FT81x_SPI_SETTINGS);
+    digitalWrite(pin_cs, LOW);
+    SPI.transfer(cmd >> 16);
+    SPI.transfer(cmd >> 8);
+    SPI.transfer(cmd);
+    SPI.transfer(data);
+    SPI.transfer(data >> 8);
+    digitalWrite(pin_cs, HIGH);
+    SPI.endTransaction();
 }
 
 void FT812::write32(const uint32_t address, const uint32_t data) {
-    uint8_t dbuf[4];
-    dbuf[0] = (uint8_t) (data & 0x000000FF);
-    dbuf[1] = (uint8_t) ((data & 0x0000FF00) >> 8);
-    dbuf[2] = (uint8_t) ((data & 0x00FF0000) >> 16);
-    dbuf[3] = (uint8_t) ((data & 0xFF000000) >> 24);
-    write(address, dbuf, 4);
+    uint32_t cmd = address | WRITE;
+    SPI.beginTransaction(FT81x_SPI_SETTINGS);
+    digitalWrite(pin_cs, LOW);
+    SPI.transfer(cmd >> 16);
+    SPI.transfer(cmd >> 8);
+    SPI.transfer(cmd);
+    SPI.transfer(data);
+    SPI.transfer(data >> 8);
+    SPI.transfer(data >> 16);
+    SPI.transfer(data >> 24);
+    digitalWrite(pin_cs, HIGH);
+    SPI.endTransaction();
 }

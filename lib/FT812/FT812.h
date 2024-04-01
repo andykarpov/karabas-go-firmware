@@ -29,6 +29,7 @@
 #define __FT812_H__
 
 #include <Arduino.h>
+#include <SPI.h>
 
 // Library headers
 // Project headers
@@ -43,6 +44,17 @@
 #define FT81x_ROTATE_LANDSCAPE_INVERTED_MIRRORED 5  ///< Use with setRotation() to invert, mirror and rotate screen to landscape
 #define FT81x_ROTATE_PORTRAIT_MIRRORED           6  ///< Use with setRotation() to mirror and rotate screen to portrait
 #define FT81x_ROTATE_PORTRAIT_INVERTED_MIRRORED  7  ///< Use with setRotation() to invert, mirror and rotate screen to portrait
+
+#define FT81x_SPI_CLOCK_SPEED 8000000  ///< FT SPI clock speed
+#define FT81x_SPI_LOW_CLOCK_SPEED 1000000  ///< FT SPI low clock speed
+
+#ifndef FT81x_SPI_SETTINGS
+#define FT81x_SPI_SETTINGS SPISettings(FT81x_SPI_CLOCK_SPEED, MSBFIRST, SPI_MODE0)  ///< Default SPI settings, can be overwritten
+#endif
+
+#ifndef FT81x_SPI_LOW_SETTINGS
+#define FT81x_SPI_LOW_SETTINGS SPISettings(FT81x_SPI_LOW_CLOCK_SPEED, MSBFIRST, SPI_MODE0)  ///< Default SPI settings, can be overwritten
+#endif
 
 #define FT81x_CMD_ACTIVE    0x000000  ///< Switch from Standby/Sleep/PWRDOWN modes to active mode.
 #define FT81x_CMD_STANDBY   0x410000  ///< Put FT81x core to standby mode. Clock gate STANDBY off, PLL and Oscillator remain on (default). ACTIVE command to wake up.
@@ -240,14 +252,9 @@ class FT812
 private:
   ft_mode_t mode;
   uint8_t ctrl_reg;
-  uint32_t cmd_addr;
-  uint8_t transaction_len;
-  bool transaction_active;
-  uint32_t transaction_start;
-  bool data_transaction;
-  bool is_write;
   m_cb action;
-  uint8_t buf[256];
+  uint8_t pin_cs;                    ///< CS pin for FT81x
+  uint8_t pin_reset;                 ///< RESET pin for FT81x
 
 protected:
 
@@ -321,7 +328,7 @@ public:
   /**
    * Constructor
    */
-  FT812();
+  FT812(uint8_t cs, uint8_t reset) : pin_cs(cs), pin_reset(reset) {}
 
   /*!
       @brief  Begin operation
@@ -330,77 +337,21 @@ public:
   void begin(m_cb act);
 
   /*!
-      @brief  Set FT SPI on / off
+      @brief  Set FT dedicated SPI access on / off
       @param  on boolean state of the MCU SPI bus
   */
   void spi(bool on);
 
   /*!
-      @brief  Switch VGA to FT
+      @brief  Switch VGA port to FT
       @param  on boolean state of the MCU VGA buffers
   */
   void vga(bool on);
 
   /*!
-      @brief  Switch SPI to slow mode
-      @param  on boolean state of SLOW SPI mode
-  */
-  void slow(bool on);
-
-  /*!
       @brief  Performs a FT812 reset with no wait cycles
   */
   void reset();
-
-  /*!
-      @brief  Send FT812 command
-      @param  cmd1 high byte
-      @param  cmd2 mid byte (parameters)
-      @param  cmd3 low byte (usually 0)
-  */
-  void command(uint8_t cmd1, uint8_t cmd2, uint8_t cmd3);
-
-  /*!
-      @brief  Send FT812 command with no wait cycle
-      @param  cmd1 high byte
-      @param  cmd2 mid byte (parameters)
-      @param  cmd3 low byte (usually 0)
-  */
-  void commandNoWait(uint8_t cmd1, uint8_t cmd2, uint8_t cmd3);
-
-  /*!
-      @brief  Performs a write data transaction
-      @param  addr 32-bit address
-      @param  data data to send
-      @param  len length of data to send
-  */
-  void write(uint32_t addr, uint8_t *data, uint8_t len);
-
-  /*!
-      @brief  Performs a read data transaction
-      @param  addr 32-bit address
-      @param  len length of data to send
-  */
-  void read(uint32_t addr, uint8_t len);
- 
-  /*!
-      @brief  Set data val at pos
-      @param  pos byte position
-      @param  val byte value
-  */
-  void setData(uint8_t pos, uint8_t val);
-
-  /*!
-      @brief  Get data at pos
-      @param  pos byte position
-      @return byte balue
-  */
-  uint8_t getData(uint8_t pos);
-
-  /*!
-      @brief  Wait the SPI transaction to complete
-  */
-  void wait();
 
   /*************************************/
 

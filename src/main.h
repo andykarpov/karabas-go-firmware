@@ -33,11 +33,12 @@
 #define PIN_CONF_CLK 17 
 #define PIN_CONF_DONE 19 
 
-#define PIN_FT_RESET 0
-#define PIN_MCU_SPI_CS1 2
-#define PIN_MCU_SPI_CS2 7
-#define PIN_MCU_SPI_CS3 14
-#define PIN_MCU_SPI_CS4 15
+#define PIN_FT_RESET 0     // TP9 - /FT_PD
+#define PIN_MCU_SD2_CS 7  // TP11 - FPGA TP2 (M9)
+#define PIN_MCU_FT_CS 15  // TP13 - FPGA TP3 (M10)
+
+#define PIN_MCU_SPI_IO0 14 // TP12 - FPGA TP4 (M11)
+#define PIN_MCU_SPI_IO1 2  // TP10 - FPGA TP1 (N9)
 
 #define PIN_EXT_BTN1 0
 #define PIN_EXT_BTN2 1
@@ -52,14 +53,19 @@
 #define CMD_ROMBANK 0x06
 #define CMD_ROMDATA 0x07
 #define CMD_ROMLOADER 0x08
-#define CMD_FT812 	  0x09
-#define CMD_FT812_DATA 0x0A
+#define CMD_SPI_CONTROL 0x09
 #define CMD_PS2_SCANCODE 0x0B
+#define CMD_FILEBANK 0x0C
+#define CMD_FILEDATA 0x0D
+#define CMD_FILELOADER 0x0E
 
 #define CMD_USB_GAMEPAD 0x11
 #define CMD_USB_JOYSTICK 0x12
 
 #define CMD_OSD 0x20
+
+#define CMD_DEBUG_ADDRESS 0x30
+#define CMD_DEBUG_DATA 0x31
 
 #define CMD_RTC 0xFA
 #define CMD_FLASHBOOT 0xFB
@@ -68,16 +74,19 @@
 #define CMD_INIT_DONE 0xFE
 #define CMD_NOP 0xFF
 
-#define CORE_TYPE_BOOT 0x0
-#define CORE_TYPE_OSD 0x1
-#define CORE_TYPE_OTHER 0x2
+#define CORE_TYPE_BOOT 0x00
+#define CORE_TYPE_OSD 0x01
+#define CORE_TYPE_FILELOADER 0x02
+#define CORE_TYPE_HIDDEN 0xff
 
-#define CORE_OSD_TYPE_SWITCH 0x0
-#define CORE_OSD_TYPE_NSWITCH 0x1
-#define CORE_OSD_TYPE_TRIGGER 0x2
-#define CORE_OSD_TYPE_HIDDEN 0x3
+#define CORE_OSD_TYPE_SWITCH 0x00
+#define CORE_OSD_TYPE_NSWITCH 0x01
+#define CORE_OSD_TYPE_TRIGGER 0x02
+#define CORE_OSD_TYPE_HIDDEN 0x03
+#define CORE_OSD_TYPE_TEXT 0x04
 
 #define MAX_CORES 255
+#define MAX_FILES 255
 #define MAX_CORES_PER_PAGE 16
 #define MAX_OSD_ITEMS 32
 #define MAX_OSD_ITEM_OPTIONS 8
@@ -95,6 +104,9 @@
 #define FILE_POS_BITSTREAM_LEN 80
 #define FILE_POS_ROM_LEN 84
 #define FILE_POS_RTC_TYPE 88
+#define FILE_POS_FILELOADER_DIR 89
+#define FILE_POS_FILELOADER_FILE 121
+#define FILE_POS_FILELOADER_EXTENSIONS 153
 #define FILE_POS_EEPROM_DATA 256
 #define FILE_POS_SWITCHES_DATA 512
 #define FILE_POS_BITSTREAM_START 1024
@@ -149,9 +161,8 @@ typedef struct {
 
 typedef struct {
 	uint8_t type;
-	uint8_t bits;
 	uint8_t def;
-	char name[16+1];
+	char name[32+1];
 	char hotkey[16+1];
 	uint8_t keys[2];
 	core_osd_option_t options[MAX_OSD_ITEM_OPTIONS];
@@ -182,12 +193,25 @@ typedef struct {
 	core_eeprom_t eeprom[MAX_EEPROM_ITEMS];
 	bool osd_need_save;
 	bool eeprom_need_save;
+	char dir[32+1];
+	char last_file[32+1];
+	char file_extensions[32+1];
 } core_item_t;
+
+typedef struct {
+	char name[32+1];
+} file_list_item_t;
+
+typedef struct {
+	char name[32+1];
+	uint32_t size;
+} file_item_t;
 
 enum osd_state_e {
     state_main = 0,
     state_rtc,
 	state_core_browser,
+	state_file_loader,
     state_about,
     state_info,
 };
@@ -206,6 +230,7 @@ void spi_queue(uint8_t cmd, uint8_t addr, uint8_t data);
 void spi_send(uint8_t cmd, uint8_t addr, uint8_t data);
 core_list_item_t get_core_list_item(bool is_flash);
 void read_core_list();
+void read_file_list();
 void read_core(const char* filename);
 uint32_t fpga_configure(const char* filename);
 void do_configure(const char* filename);
@@ -218,6 +243,7 @@ void menu(uint8_t vpos);
 bool is_flashfs(const char* filename);
 
 void core_osd_save(uint8_t pos);
+void core_file_loader_save();
 void core_osd_send(uint8_t pos);
 void core_osd_trigger(uint8_t pos);
 void core_osd_send_all();
@@ -229,6 +255,8 @@ void core_eeprom_send_all();
 
 void read_roms(const char* filename);
 void send_rom_byte(uint32_t addr, uint8_t data);
+
+void send_file_byte(uint32_t addr, uint8_t data);
 
 void file_seek(uint32_t pos, bool is_flash);
 uint8_t file_read(bool is_flash);
@@ -254,6 +282,7 @@ void osd_init_rtc_overlay();
 void osd_init_about_overlay();
 void osd_init_info_overlay();
 void osd_init_core_browser_overlay();
+void osd_init_file_loader_overlay(bool initSD);
 
 void popupFooter();
 

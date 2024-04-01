@@ -43,7 +43,7 @@ uint8_t const hid2ps2[] = {
 hid_keyboard_report_t prev_rpt = {0};
 
 void kb_send(uint8_t byte) {
-    d_printf("PS/2 Scancode: %02x", byte); d_println();
+    //d_printf("PS/2 Scancode: %02x", byte); d_println();
     spi_queue(CMD_PS2_SCANCODE, 0x00, byte);
 }
 
