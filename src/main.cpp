@@ -22,8 +22,6 @@
 PioSpi spiSD(PIN_SD_SPI_RX, PIN_SD_SPI_SCK, PIN_SD_SPI_TX); // dedicated SD1 SPI
 #define SD_CONFIG SdSpiConfig(SD_CS_PIN, DEDICATED_SPI, SD_SCK_MHZ(60), &spiSD) // SD1 SPI Settings
 
-#define SD2_CONFIG SdSpiConfig(PIN_MCU_SD2_CS, SHARED_SPI, SD_SCK_MHZ(4), &SPI) // SD2 SPI Settings
-
 SPISettings settingsA(SD_SCK_MHZ(24), MSBFIRST, SPI_MODE0); // MCU SPI settings
 
 PCA9536 extender;
@@ -31,9 +29,9 @@ ElapsedTimer my_timer;
 ElapsedTimer hide_timer;
 ElapsedTimer popup_timer;
 RTC zxrtc;
-SdFs sd1, sd2;
-FsFile file1, file2;
-FsFile root1, root2;
+SdFat sd1;
+FsFile file1;
+FsFile root1;
 fs::Dir froot;
 fs::File ffile;
 SegaController sega;
@@ -75,7 +73,6 @@ uint8_t curr_osd_item = 0;
 
 bool has_extender = false;
 bool has_sd = false;
-bool has_sd2 = false;
 bool has_fs = false;
 bool has_ft = false;
 bool is_flashboot = false;
@@ -469,10 +466,6 @@ void send_file(const char* filename) {
   zxosd.setPos(9,10);
   zxosd.print("Please wait.");
 
-  // re-init SD card
-  sd2.end();
-  sd2.begin(SD2_CONFIG);
-  sd2.chvol();
   String dir = String(core.dir);
   dir.trim();
   if (dir.length() == 0) dir = "/";
@@ -485,7 +478,7 @@ void send_file(const char* filename) {
   fullpath.toCharArray(new_filename, 64, 0);
   d_printf("Sending file %s", new_filename); d_println();
 
-  if (!file2.open(&sd2, new_filename, FILE_READ)) {
+  if (!file1.open(&sd1, new_filename, FILE_READ)) {
     d_println("Unable to open file to read");
     d_flush();
     osd_init_file_loader_overlay(false);
@@ -494,31 +487,6 @@ void send_file(const char* filename) {
 
   uint8_t buf[256];
   int c;
-
-  if (!has_sd) {
-    d_println("No SD1 found");
-    d_flush();
-    osd_init_file_loader_overlay(false);
-    return;
-  } else {
-    d_println("Found SD1, creating tmp file");
-  }
-
-  const char* tmp = "loader.tmp";
-
-  if (root1.exists(tmp)) {
-    root1.remove(tmp);
-  }
-  file1.open(&root1, tmp, FILE_WRITE);
-  while(c = file2.read(buf, sizeof(buf))) {
-    file1.write(buf, c);
-  }
-  file1.close();
-  file2.close();
-  sd2.end();
-  SPI.begin(false);
-  d_println("Done creating tmp file");
-  d_flush();
 
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
   zxosd.frame(8,8,24,13, 1);
@@ -535,28 +503,30 @@ void send_file(const char* filename) {
   spi_send(CMD_FILELOADER, 0, 1);
   spi_send(CMD_FILELOADER, 0, 0);
 
-  file1.open(&root1, tmp, FILE_READ);
+  //file1.open(&root1, tmp, FILE_READ);
   uint64_t file_size = file1.size();
 
   d_printf("Sending file %s (%d bytes)", new_filename, (uint32_t)((file_size))); d_println();
   d_flush();
   
 uint32_t cnt = 0;
+float perc = 0;
 
   while(c = file1.read(buf, sizeof(buf))) {
     for (int j=0; j<c; j++) {
       send_file_byte(cnt, buf[j]);
       cnt++;
-      if (cnt % 1024 == 0) {
+      if (cnt % 10000 == 0) {
+        perc = (file_size > 0) ? (((float) cnt) * 100.0) / ((float) file_size) : 0.0;
         zxosd.setPos(9,11);
-        zxosd.print(cnt); zxosd.print(" bytes ");
+        zxosd.printf("%-3d ", (perc >=0 && perc <= 100) ? (uint8_t) perc : 100); zxosd.print("% ");
       }
     }
   }
   zxosd.setColor(OSD::COLOR_GREEN_I, OSD::COLOR_BLACK);
   zxosd.setPos(9,11);
-  zxosd.print(cnt); zxosd.print(" bytes ");
-
+  zxosd.print("100 % ");
+  
   file1.close();
   d_printf("Sent %u bytes", cnt); d_println();
 
@@ -1364,8 +1334,7 @@ core_list_item_t get_core_list_item(bool is_flash) {
 
 file_list_item_t get_file_list_item() {
   file_list_item_t f;
-  sd2.chvol();
-  file2.getName(f.name, sizeof(f.name));
+  file1.getName(f.name, sizeof(f.name));
   return f;
 }
 
@@ -1414,34 +1383,33 @@ void read_core_list() {
 void read_file_list() {
 
   // files from sd card
-  if (has_sd2) {
-    sd2.chvol();
+  if (has_sd) {
     String dir = String(core.dir);
     dir.trim();
     if (dir.length() == 0) dir = "/";
     if (dir.charAt(0) != '/') dir = "/" + dir;
     char d[33];
     dir.toCharArray(d, 32);
-    if (!root2.open(&sd2, d)) {
+    if (!root1.open(&sd1, d)) {
       halt("open root");
     }
-    root2.rewind();
+    root1.rewind();
     d_println("Read file list");
     String exts = String(core.file_extensions);
     exts.toLowerCase(); exts.trim();
     char e[33];
     exts.toCharArray(e, 32);
     d_printf("Extensions: %s", e); d_println();
-    while (file2.openNext(&root2, O_RDONLY)) {
-      char filename[255]; file2.getName(filename, sizeof(filename));
+    while (file1.openNext(&root1, O_RDONLY)) {
+      char filename[255]; file1.getName(filename, sizeof(filename));
       uint8_t len = strlen(filename);
-      if (files_len < MAX_FILES && !file2.isDirectory() && len <= 32) {
+      if (files_len < MAX_FILES && !file1.isDirectory() && len <= 32) {
         if (exts.length() == 0 || exts.indexOf(strlwr(filename + (len - 4))) != -1) {
           files[files_len] = get_file_list_item();
           files_len++;
         }
       }
-      file2.close();
+      file1.close();
     }
   }
   // sort by file name
@@ -1906,19 +1874,9 @@ void osd_init_file_loader_overlay(bool initSD = true) {
 
   zxosd.setPos(0,5);
 
-  // collect files from sd2
+  // collect files from sd
   if (initSD) {
-    if (!sd2.begin(SD2_CONFIG)) {
-      has_sd2 = false;
-      d_println("Failed");
-    } else {
-      has_sd2 = true;
-      d_println("Done");
-    }
-    if (has_sd2) {
-      sd2.chvol();
       read_file_list();
-    }
   }
 
   file_loader(APP_COREBROWSER_MENU_OFFSET);  
