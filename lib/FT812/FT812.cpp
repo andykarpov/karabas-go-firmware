@@ -194,6 +194,9 @@ bool FT812::init(uint8_t m) {
 
     write8(FT81x_REG_PCLK, mode.f_div); // f_div 1
 
+    // funny screen mirroring
+    //write8(FT81x_REG_ROTATE, FT81x_ROTATE_LANDSCAPE_INVERTED);
+
     // int setup
     //write8(FT81x_REG_INT_MASK, 1);
     //write8(FT81x_REG_INT_EN, 1);

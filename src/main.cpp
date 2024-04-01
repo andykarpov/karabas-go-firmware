@@ -43,6 +43,8 @@ static queue_t spi_event_queue;
 
 hid_keyboard_report_t usb_keyboard_report;
 hid_mouse_report_t usb_mouse_report;
+uint16_t joyL = 0;
+uint16_t joyR = 0;
 
 bool is_osd = false;
 bool is_osd_hiding = false; 
@@ -380,8 +382,13 @@ void menu(uint8_t vpos) {
 
 bool on_global_hotkeys() {
   
-  // menu+esc to toggle osd only for osd supported cores
-  if (core.type != CORE_TYPE_BOOT && core.type != CORE_TYPE_HIDDEN && ((usb_keyboard_report.modifier & KEY_MOD_LMETA) || (usb_keyboard_report.modifier & KEY_MOD_RMETA)) && usb_keyboard_report.keycode[0] == KEY_ESC) {
+  // menu+esc (joy start+c) to toggle osd only for osd supported cores
+  if (core.type != CORE_TYPE_BOOT && core.type != CORE_TYPE_HIDDEN && 
+      ((((usb_keyboard_report.modifier & KEY_MOD_LMETA) || (usb_keyboard_report.modifier & KEY_MOD_RMETA)) && usb_keyboard_report.keycode[0] == KEY_ESC) ||
+       ((joyL & SC_BTN_START) && (joyL & SC_BTN_C)) ||
+       ((joyR & SC_BTN_START) && (joyR & SC_BTN_C))
+      )
+    ) {
     if (!is_osd) {
       is_osd = true;
       zxosd.showMenu();
@@ -393,11 +400,14 @@ bool on_global_hotkeys() {
     return true;
   }
 
-  // ctrl+alt+backspace to global reset rp2040
+  // ctrl+alt+backspace (joy start+x) to global reset rp2040
   if (
-      ((usb_keyboard_report.modifier & KEY_MOD_LCTRL) || (usb_keyboard_report.modifier & KEY_MOD_RCTRL)) && 
+      (((usb_keyboard_report.modifier & KEY_MOD_LCTRL) || (usb_keyboard_report.modifier & KEY_MOD_RCTRL)) && 
       ((usb_keyboard_report.modifier & KEY_MOD_LALT) || (usb_keyboard_report.modifier & KEY_MOD_RALT)) && 
-        usb_keyboard_report.keycode[0] == KEY_BACKSPACE) {
+        usb_keyboard_report.keycode[0] == KEY_BACKSPACE) || 
+        (((joyL & SC_BTN_START) && (joyL & SC_BTN_X))) ||
+        (((joyR & SC_BTN_START) && (joyR & SC_BTN_X)))
+        ) {
      rp2040.reboot();
      return true;
   }
@@ -476,10 +486,9 @@ void send_file(const char* filename) {
   fullpath.trim();
   char new_filename[64+1];
   fullpath.toCharArray(new_filename, 64, 0);
-  d_printf("Sending file %s", new_filename); d_println();
 
   if (!file1.open(&sd1, new_filename, FILE_READ)) {
-    d_println("Unable to open file to read");
+    d_printf("Unable to open file %s", new_filename); d_println();
     d_flush();
     osd_init_file_loader_overlay(false);
     return;
@@ -534,7 +543,7 @@ float perc = 0;
   osd_init_file_loader_overlay(false);
 }
 
-// kbd event handler
+// kbd/joy event handler
 void on_keyboard() {
 
   bool need_redraw = on_global_hotkeys();
@@ -545,7 +554,7 @@ void on_keyboard() {
       case state_core_browser:
       if (cores_len > 0) {
         // down
-        if (usb_keyboard_report.keycode[0] == KEY_DOWN) {
+        if (usb_keyboard_report.keycode[0] == KEY_DOWN || (joyL & SC_BTN_DOWN) || (joyR & SC_BTN_DOWN)) {
           if (core_sel < cores_len-1) {
             core_sel++;
           } else {
@@ -554,7 +563,7 @@ void on_keyboard() {
         }
 
         // up
-        if (usb_keyboard_report.keycode[0] == KEY_UP) {
+        if (usb_keyboard_report.keycode[0] == KEY_UP  || (joyL & SC_BTN_UP) || (joyR & SC_BTN_UP)) {
           if (core_sel > 0) {
             core_sel--;
           } else {
@@ -563,7 +572,7 @@ void on_keyboard() {
         }
 
         // right
-        if (usb_keyboard_report.keycode[0] == KEY_RIGHT) {
+        if (usb_keyboard_report.keycode[0] == KEY_RIGHT || (joyL & SC_BTN_RIGHT) || (joyR & SC_BTN_RIGHT)) {
           if (core_sel + core_page_size <= cores_len-1) {
             core_sel += core_page_size;
           } else {
@@ -572,7 +581,7 @@ void on_keyboard() {
         }
 
         // left
-        if (usb_keyboard_report.keycode[0] == KEY_LEFT) {
+        if (usb_keyboard_report.keycode[0] == KEY_LEFT || (joyL & SC_BTN_LEFT) || (joyR & SC_BTN_LEFT)) {
           if (core_sel - core_page_size >= 0) {
             core_sel -= core_page_size;
           } else {
@@ -581,7 +590,7 @@ void on_keyboard() {
         }
         
         // enter
-        if (usb_keyboard_report.keycode[0] == KEY_ENTER) {
+        if (usb_keyboard_report.keycode[0] == KEY_ENTER || (joyL & SC_BTN_A) || (joyR & SC_BTN_A) || (joyL & SC_BTN_B) || (joyR & SC_BTN_B)) {
           if (FT_OSD == 1 && has_ft == true) {
             ft_core_browser(2); // play wav
             delay(500);
@@ -621,7 +630,7 @@ void on_keyboard() {
       case state_main:
 
         // down
-        if (usb_keyboard_report.keycode[0] == KEY_DOWN) {
+        if (usb_keyboard_report.keycode[0] == KEY_DOWN || (joyL & SC_BTN_DOWN) || (joyR & SC_BTN_DOWN)) {
           if (curr_osd_item < core.osd_len-1 && core.osd[curr_osd_item+1].options_len > 0) {
             curr_osd_item++;
           } else {
@@ -631,7 +640,7 @@ void on_keyboard() {
         }
 
         // up
-        if (usb_keyboard_report.keycode[0] == KEY_UP) {
+        if (usb_keyboard_report.keycode[0] == KEY_UP || (joyL & SC_BTN_UP) || (joyR & SC_BTN_UP)) {
           if (curr_osd_item > 0) {
             curr_osd_item--;
           } else {
@@ -646,7 +655,7 @@ void on_keyboard() {
         }
 
         // right, enter
-        if (usb_keyboard_report.keycode[0] == KEY_RIGHT || usb_keyboard_report.keycode[0] == KEY_ENTER) {
+        if (usb_keyboard_report.keycode[0] == KEY_RIGHT || usb_keyboard_report.keycode[0] == KEY_ENTER  || (joyL & SC_BTN_A) || (joyR & SC_BTN_A) || (joyL & SC_BTN_B) || (joyR & SC_BTN_B) || (joyL & SC_BTN_RIGHT) || (joyR & SC_BTN_RIGHT) ) {
           core.osd[curr_osd_item].val++; 
           if (core.osd[curr_osd_item].val > core.osd[curr_osd_item].options_len-1) {
             core.osd[curr_osd_item].val = 0;
@@ -659,7 +668,7 @@ void on_keyboard() {
         }
 
         // left
-        if (usb_keyboard_report.keycode[0] == KEY_LEFT) {
+        if (usb_keyboard_report.keycode[0] == KEY_LEFT || (joyL & SC_BTN_LEFT) || (joyR & SC_BTN_LEFT)) {
           if (core.osd[curr_osd_item].val > 0) {
             core.osd[curr_osd_item].val--;
           } else {
@@ -684,7 +693,7 @@ void on_keyboard() {
       case state_file_loader:
       if (files_len > 0) {
         // down
-        if (usb_keyboard_report.keycode[0] == KEY_DOWN) {
+        if (usb_keyboard_report.keycode[0] == KEY_DOWN || (joyL & SC_BTN_DOWN) || (joyR & SC_BTN_DOWN)) {
           if (file_sel < files_len-1) {
             file_sel++;
           } else {
@@ -693,7 +702,7 @@ void on_keyboard() {
         }
 
         // up
-        if (usb_keyboard_report.keycode[0] == KEY_UP) {
+        if (usb_keyboard_report.keycode[0] == KEY_UP || (joyL & SC_BTN_UP) || (joyR & SC_BTN_UP)) {
           if (file_sel > 0) {
             file_sel--;
           } else {
@@ -702,7 +711,7 @@ void on_keyboard() {
         }
 
         // right
-        if (usb_keyboard_report.keycode[0] == KEY_RIGHT) {
+        if (usb_keyboard_report.keycode[0] == KEY_RIGHT || (joyL & SC_BTN_RIGHT) || (joyR & SC_BTN_RIGHT)) {
           if (file_sel + file_page_size <= files_len-1) {
             file_sel += file_page_size;
           } else {
@@ -711,7 +720,7 @@ void on_keyboard() {
         }
 
         // left
-        if (usb_keyboard_report.keycode[0] == KEY_LEFT) {
+        if (usb_keyboard_report.keycode[0] == KEY_LEFT || (joyL & SC_BTN_LEFT) || (joyR & SC_BTN_LEFT)) {
           if (file_sel - file_page_size >= 0) {
             file_sel -= file_page_size;
           } else {
@@ -720,7 +729,7 @@ void on_keyboard() {
         }
         
         // enter
-        if (usb_keyboard_report.keycode[0] == KEY_ENTER) {
+        if (usb_keyboard_report.keycode[0] == KEY_ENTER || (joyL & SC_BTN_A) || (joyR & SC_BTN_A) || (joyL & SC_BTN_B) || (joyR & SC_BTN_B)) {
           strcpy(loader_file.name, files[file_sel].name);
           core_file_loader_save();
           send_file(loader_file.name);          
@@ -887,8 +896,8 @@ void loop()
   }*/
 
   // joy reading
-  uint16_t joyL = sega.getState(true);
-  uint16_t joyR = sega.getState(false);
+  joyL = sega.getState(true);
+  joyR = sega.getState(false);
   static uint16_t prevJoyL = 0;
   static uint16_t prevJoyR = 0;
 
@@ -922,7 +931,12 @@ void loop()
       if (!is_osd) {
         spi_send(packet.cmd, packet.addr, packet.data);
       }
-    }    
+    } else if (packet.cmd == CMD_JOYSTICK) {
+      on_keyboard();
+      if (!is_osd) {
+        spi_send(packet.cmd, packet.addr, packet.data);
+      }
+    }
     else {
       spi_send(packet.cmd, packet.addr, packet.data);
     }
