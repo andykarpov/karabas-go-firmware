@@ -202,11 +202,6 @@ typedef struct {
 	char name[32+1];
 } file_list_item_t;
 
-typedef struct {
-	char name[32+1];
-	uint32_t size;
-} file_item_t;
-
 enum osd_state_e {
     state_main = 0,
     state_rtc,
@@ -230,7 +225,7 @@ void spi_queue(uint8_t cmd, uint8_t addr, uint8_t data);
 void spi_send(uint8_t cmd, uint8_t addr, uint8_t data);
 core_list_item_t get_core_list_item(bool is_flash);
 void read_core_list();
-void read_file_list();
+void read_file_list(bool forceIndex);
 void read_core(const char* filename);
 void send_font();
 uint32_t fpga_configure(const char* filename);
@@ -283,7 +278,7 @@ void osd_init_rtc_overlay();
 void osd_init_about_overlay();
 void osd_init_info_overlay();
 void osd_init_core_browser_overlay();
-void osd_init_file_loader_overlay(bool initSD);
+void osd_init_file_loader_overlay(bool initSD, bool recreateIndex);
 
 void popupFooter();
 

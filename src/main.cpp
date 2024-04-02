@@ -31,7 +31,7 @@ ElapsedTimer hide_timer;
 ElapsedTimer popup_timer;
 RTC zxrtc;
 SdFat sd1;
-FsFile file1;
+FsFile file1, fileIndex1;
 FsFile root1;
 fs::Dir froot;
 fs::File ffile;
@@ -61,7 +61,6 @@ uint8_t core_pages = 1;
 uint8_t core_page = 1;
 
 file_list_item_t files[MAX_FILES];
-file_item_t loader_file;
 uint8_t files_len = 0;
 uint8_t file_sel = 0;
 const uint8_t file_page_size = MAX_CORES_PER_PAGE;
@@ -495,13 +494,13 @@ void send_file(const char* filename) {
   f.trim();
   String fullpath = dir + "/" + f;
   fullpath.trim();
-  char new_filename[64+1];
-  fullpath.toCharArray(new_filename, 64, 0);
+  char new_filename[255+1];
+  fullpath.toCharArray(new_filename, 255, 0);
 
   if (!file1.open(&sd1, new_filename, FILE_READ)) {
     d_printf("Unable to open file %s", new_filename); d_println();
     d_flush();
-    osd_init_file_loader_overlay(false);
+    osd_init_file_loader_overlay(false, false);
     return;
   }
 
@@ -551,7 +550,7 @@ float perc = 0;
   d_printf("Sent %u bytes", cnt); d_println();
 
   // reload menu
-  osd_init_file_loader_overlay(false);
+  osd_init_file_loader_overlay(false, false);
 }
 
 // kbd/joy event handler
@@ -739,12 +738,17 @@ void on_keyboard() {
             file_sel = 0;
           }
         }
+
+        // R = recreate file index
+        if (usb_keyboard_report.keycode[0] == KEY_R) {
+            file_sel = 0;
+            osd_init_file_loader_overlay(true, true);
+        }
         
         // enter
         if (usb_keyboard_report.keycode[0] == KEY_ENTER || (joyL & SC_BTN_A) || (joyR & SC_BTN_A) || (joyL & SC_BTN_B) || (joyR & SC_BTN_B)) {
-          strcpy(loader_file.name, files[file_sel].name);
           core_file_loader_save();
-          send_file(loader_file.name);          
+          send_file(files[file_sel].name);
           // hide osd
           if (!is_osd_hiding) {
             is_osd_hiding = true;
@@ -806,7 +810,7 @@ void core_file_loader_save()
       d_println("File is not writable");
       return;
     }
-    memcpy(core.last_file, loader_file.name, 32);
+    memcpy(core.last_file, files[file_sel].name, 32);
     file1.seek(FILE_POS_FILELOADER_FILE);
     file1.write(core.last_file, 32);
     file1.close();
@@ -1359,12 +1363,6 @@ core_list_item_t get_core_list_item(bool is_flash) {
   return core;
 }
 
-file_list_item_t get_file_list_item() {
-  file_list_item_t f;
-  file1.getName(f.name, sizeof(f.name));
-  return f;
-}
-
 void read_core_list() {
 
   // files from flash
@@ -1407,7 +1405,19 @@ void read_core_list() {
   // TODO
 }
 
-void read_file_list() {
+void read_file_list(bool forceIndex = false) {
+
+  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+  zxosd.frame(8,8,24,13, 1);
+  zxosd.fill(9,9,23,12, 32);
+  zxosd.setColor(OSD::COLOR_GREEN_I, OSD::COLOR_BLACK);
+  zxosd.setPos(9, 9);
+  zxosd.print("Scanning files");
+  zxosd.setColor(OSD::COLOR_MAGENTA_I, OSD::COLOR_BLACK);
+  zxosd.setPos(9,10);
+  zxosd.print("Please wait...");
+
+  // todo: create text index
 
   // files from sd card
   if (has_sd) {
@@ -1415,33 +1425,83 @@ void read_file_list() {
     dir.trim();
     if (dir.length() == 0) dir = "/";
     if (dir.charAt(0) != '/') dir = "/" + dir;
-    char d[33];
-    dir.toCharArray(d, 32);
+    char d[256];
+    dir.toCharArray(d, 255);
     if (!root1.open(&sd1, d)) {
-      halt("open root");
+
+        zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+        zxosd.frame(8,8,24,13, 1);
+        zxosd.fill(9,9,23,12, 32);
+        zxosd.setColor(OSD::COLOR_RED_I, OSD::COLOR_BLACK);
+        zxosd.setPos(9, 9);
+        zxosd.print("Error occured");
+        zxosd.setPos(9,10);
+        zxosd.printf("Bad dir %s", d);
+        return;
     }
     root1.rewind();
-    d_println("Read file list");
-    String exts = String(core.file_extensions);
-    exts.toLowerCase(); exts.trim();
-    char e[33];
-    exts.toCharArray(e, 32);
-    d_printf("Extensions: %s", e); d_println();
-    while (file1.openNext(&root1, O_RDONLY)) {
-      char filename[255]; file1.getName(filename, sizeof(filename));
-      uint8_t len = strlen(filename);
-      if (files_len < MAX_FILES && !file1.isDirectory() && len <= 32) {
-        if (exts.length() == 0 || exts.indexOf(strlwr(filename + (len - 4))) != -1) {
-          files[files_len] = get_file_list_item();
+
+    // recreate index
+    if (forceIndex || !sd1.exists(dir + "/index.db")) {
+      // drop index
+      if (sd1.exists(dir + "/index.db")) {
+        sd1.remove(dir + "/index.db");
+      }
+      if (fileIndex1 = sd1.open(dir + "/index.db", FILE_WRITE)) {
+        d_println("Read file list");
+        String exts = String(core.file_extensions);
+        exts.toLowerCase(); exts.trim();
+        char e[33];
+        exts.toCharArray(e, 32);
+        while (file1.openNext(&root1, O_RDONLY)) {
+          char filename[255]; file1.getName(filename, sizeof(filename));
+          uint8_t len = strlen(filename);
+          if (files_len < MAX_FILES && !file1.isDirectory() && len <= 32) {
+            if (exts.length() == 0 || exts.indexOf(strlwr(filename + (len - 4))) != -1) {
+              fileIndex1.write(filename);
+              fileIndex1.write("\n");
+            }
+          }
+          file1.close();
+        }
+        fileIndex1.close();
+      }
+    }
+
+    // reading file list from index
+    if (fileIndex1 = sd1.open(dir + "/index.db", FILE_READ)) {
+      files_len = 0;
+      while(fileIndex1.available()) {
+        String s = fileIndex1.readStringUntil('\n'); 
+        if (s.length() > 0 && s.length() <= 32) {
+          s.trim();
+          file_list_item_t f;
+          s.toCharArray(f.name, sizeof(f.name));
+          files[files_len] = f;
           files_len++;
         }
       }
-      file1.close();
+      fileIndex1.close();
     }
+    
+  } else {
+    zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+    zxosd.frame(8,8,24,13, 1);
+    zxosd.fill(9,9,23,12, 32);
+    zxosd.setColor(OSD::COLOR_RED_I, OSD::COLOR_BLACK);
+    zxosd.setPos(9, 9);
+    zxosd.print("Error occured");
+    zxosd.setPos(9,10);
+    zxosd.print("Check SD card");
+    return;
   }
   // sort by file name
   std::sort(files, files + files_len);
   
+  // cleanup error messages
+  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+  zxosd.fill(8,8,24,13, 32);  
+
   // select and load prev file on boot
   if (files_len >0 && strlen(core.last_file) > 0) {
     String lf = String(core.last_file); lf.trim();
@@ -1449,15 +1509,13 @@ void read_file_list() {
       String f = String(files[i].name); f.trim();
       if (f == lf) {
           file_sel = i;
-          strcpy(loader_file.name, files[file_sel].name);
-          //core_file_loader_save();
-          //send_file(loader_file.name);
+          send_file(files[file_sel].name);
           // hide osd
-          /*if (!is_osd_hiding) {
+          if (!is_osd_hiding) {
             is_osd_hiding = true;
             hide_timer.reset();
             zxosd.hideMenu();
-          }*/
+          }
       }
     }
   }
@@ -1893,7 +1951,7 @@ void ft_osd_init_core_browser_overlay() {
   ft_core_browser(0);  
 }
 
-void osd_init_file_loader_overlay(bool initSD = true) {
+void osd_init_file_loader_overlay(bool initSD = true, bool recreateIndex = false) {
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
   zxosd.clear();
 
@@ -1903,7 +1961,7 @@ void osd_init_file_loader_overlay(bool initSD = true) {
 
   // collect files from sd
   if (initSD) {
-      read_file_list();
+      read_file_list(recreateIndex);
   }
 
   file_loader(APP_COREBROWSER_MENU_OFFSET);  
