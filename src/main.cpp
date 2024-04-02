@@ -211,14 +211,14 @@ void ft_core_browser(uint8_t play_sounds) {
   ft.beginDisplayList();
 
   uint32_t color_black = FT81x_COLOR_RGB(1, 1, 1);
-  uint32_t color_gradient = FT81x_COLOR_RGB(0, 0, 200);
-  uint32_t color_button = FT81x_COLOR_RGB(64, 64, 92);
-  uint32_t color_button_active = FT81x_COLOR_RGB(0, 0, 200);
+  uint32_t color_gradient = FT81x_COLOR_RGB(200, 0, 0);
+  uint32_t color_button = FT81x_COLOR_RGB(32, 32, 38);
+  uint32_t color_button_active = FT81x_COLOR_RGB(200, 0, 0);
   uint32_t color_text = FT81x_COLOR_RGB(255,255,255);
   uint32_t color_copyright = FT81x_COLOR_RGB(120, 120, 120);
 
   ft.clear(color_black);
-  ft.drawGradient(ft.width()/2, 0, color_gradient, ft.width()/2, ft.height()-1, color_black);
+  ft.drawGradient(ft.width()/2, 0, color_gradient, ft.width()/2, ft.height()-ft.height()/4-1, color_black);
 
   core_pages = ceil((float)cores_len / ft_core_page_size);
   core_page = ceil((float)(core_sel+1)/ft_core_page_size);
@@ -245,7 +245,11 @@ void ft_core_browser(uint8_t play_sounds) {
 
   char time[9];
   sprintf(time, "%02d:%02d:%02d\0", zxrtc.getHour(), zxrtc.getMinute(), zxrtc.getSecond());
-  ft.drawText(ft.width()-88, 40, 30, color_text, FT81x_OPT_CENTER, time);
+  ft.drawText(ft.width()-88, 30, 30, color_text, FT81x_OPT_CENTER, time);
+  char date[9];
+  sprintf(date, "%02d/%02d/%02d\0", zxrtc.getDay(), zxrtc.getMonth(), zxrtc.getYear() % 100);
+  ft.drawText(ft.width()-88, 60, 30, color_text, FT81x_OPT_CENTER, date);
+
 
   if (play_sounds == 1) {
       // play synth sound
@@ -256,8 +260,8 @@ void ft_core_browser(uint8_t play_sounds) {
   }
 
   ft.drawBitmap(0, 8, 8, 56, 16, 4, 0); 
-  //ft.overlayBitmap(LOGO_BITMAP_SIZE, 640-200, 480-143, 200, 143, 1, 0);
-  ft.overlayBitmap(LOGO_BITMAP_SIZE, 640-160-8, 480-200-8, 160, 200, 1, 0);
+  ft.overlayBitmap(LOGO_BITMAP_SIZE, 640-200, 480-143, 200, 143, 1, 0);
+  //ft.overlayBitmap(LOGO_BITMAP_SIZE, 640-160-8, 480-200-8, 160, 200, 1, 0);
 
   /*uint16_t h = (uint16_t) (zxrtc.getHour() % 12);
   uint16_t m = (uint16_t) (zxrtc.getMinute() % 60);
@@ -1946,7 +1950,7 @@ void ft_osd_init_core_browser_overlay() {
   ft.setSound(FT81x_SOUND_SWITCH, 40);
   // load png/jpegs with extraction bitmaps to GRAM
   ft.loadImage(0, LOGO_SIZE, logoData, false); // karabas logo, starts from 0 in GRAM
-  ft.loadImage(LOGO_BITMAP_SIZE, BURATO3_SIZE, burato3Data, false); // karabas bg, starts from 1792 in GRAM
+  ft.loadImage(LOGO_BITMAP_SIZE, BURATO2_SIZE, burato2Data, false); // karabas bg, starts from 1792 in GRAM
   // load pcm audio
   ft.writeGRAM(LOGO_BITMAP_SIZE + BURATO3_BITMAP_SIZE, KEY_SIZE, keyData); // pcm sound, starts from 65792 in GRAM
 
