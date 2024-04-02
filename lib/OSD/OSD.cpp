@@ -32,6 +32,10 @@ const uint8_t ADDR_CHAR = 0x12;
 const uint8_t ADDR_ATTR = 0x13;
 const uint8_t ADDR_NOOP = 0x14;
 
+const uint8_t ADDR_FONT_RST = 0x20;
+const uint8_t ADDR_FONT_DATA = 0x21;
+const uint8_t ADDR_FONT_DATA_WR = 0x22;
+
 const uint8_t SIZE_X = 32;
 const uint8_t SIZE_Y = 26;
 
@@ -161,6 +165,16 @@ void OSD::showPopup() {
 
 void OSD::hidePopup() {
   action(CMD_OSD, ADDR_POPUP, 0);
+}
+
+void OSD::fontReset() {
+  action(CMD_OSD, ADDR_FONT_RST, 1);
+  action(CMD_OSD, ADDR_FONT_RST, 0);
+}
+
+void OSD::fontSend(uint8_t data) {
+  action (CMD_OSD, ADDR_FONT_DATA, data);
+  action (CMD_OSD, ADDR_FONT_DATA_WR, 1);
 }
 
 

@@ -232,6 +232,7 @@ core_list_item_t get_core_list_item(bool is_flash);
 void read_core_list();
 void read_file_list();
 void read_core(const char* filename);
+void send_font();
 uint32_t fpga_configure(const char* filename);
 void do_configure(const char* filename);
 void halt(const char* msg);

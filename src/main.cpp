@@ -16,6 +16,7 @@
 #include "main.h"
 #include "usb_hid_keys.h"
 #include "bitmaps.h"
+#include "osd_font.h"
 #include <algorithm>
 #include <tuple>
 
@@ -187,6 +188,7 @@ void do_configure(const char* filename) {
   ft.spi(false);
   fpga_configure(filename);
   spi_send(CMD_INIT_START, 0, 0);
+  send_font();
   read_core(filename);
   if (!is_osd) {
     zxosd.clear();
@@ -464,6 +466,15 @@ bool on_global_hotkeys() {
   return false;
 }
 
+void send_font() {
+  // trigger reset
+  zxosd.fontReset();
+  // send font data
+  for (int i=0; i<OSD_FONT_SIZE; i++) {
+    zxosd.fontSend(osd_font[i]);
+  }
+}
+
 void send_file(const char* filename) {
   
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
@@ -595,6 +606,7 @@ void on_keyboard() {
             ft_core_browser(2); // play wav
             delay(500);
           }
+          d_printf("Selected core %s to boot from menu", cores[core_sel].filename); d_println();
           String f = String(cores[core_sel].filename); f.trim(); 
           char buf[32]; f.toCharArray(buf, sizeof(buf));
           has_ft = false;

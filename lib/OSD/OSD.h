@@ -104,6 +104,9 @@ public:
   void showPopup();
   void hidePopup();
 
+  void fontReset();
+  void fontSend(uint8_t data);
+
 };
 
 #endif // __OSD_H__
