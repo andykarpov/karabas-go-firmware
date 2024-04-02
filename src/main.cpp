@@ -1453,13 +1453,15 @@ void read_file_list(bool forceIndex = false) {
         exts.toLowerCase(); exts.trim();
         char e[33];
         exts.toCharArray(e, 32);
+        int cnt = 0;
         while (file1.openNext(&root1, O_RDONLY)) {
           char filename[255]; file1.getName(filename, sizeof(filename));
           uint8_t len = strlen(filename);
-          if (files_len < MAX_FILES && !file1.isDirectory() && len <= 32) {
+          if (cnt < MAX_FILES && !file1.isDirectory() && len <= 32) {
             if (exts.length() == 0 || exts.indexOf(strlwr(filename + (len - 4))) != -1) {
               fileIndex1.write(filename);
               fileIndex1.write("\n");
+              cnt++;
             }
           }
           file1.close();
