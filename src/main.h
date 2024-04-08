@@ -116,11 +116,11 @@
 #define APP_COREBROWSER_MENU_OFFSET 5
 
 #ifndef DEBUG
-#define DEBUG 0
+#define DEBUG 1
 #endif
 
 #ifndef FT_OSD 
-#define FT_OSD 0
+#define FT_OSD 1
 #endif
 
 #if DEBUG

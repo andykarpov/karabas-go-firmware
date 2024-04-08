@@ -185,9 +185,9 @@ void RTC::setData(uint8_t addr, uint8_t data) {
     // skip multiple writes for clock registers
     if (rtc_last_write_reg == addr && rtc_last_write_data == data && addr <= 0xD) return;
 
-    //if (addr != 0x0C && addr != 0x0D && addr < 0x0A) {
-    //  d_printf("Set rtc reg %02x = %02x", addr, data); d_println();
-    //}
+    if (addr != 0x0C && addr != 0x0D && addr < 0x0A) {
+      //Serial.printf("RTC %02x => %02x", addr, data); Serial.println();
+    }
 
       rtc_last_write_reg = addr;
       rtc_last_write_data = data;
@@ -209,10 +209,11 @@ void RTC::setData(uint8_t addr, uint8_t data) {
                   rtc_is_24h = true; //bitRead(data, 1);  
                   bitSet(data, 1); // always 24-h format
                   bitClear(data, 7);
-                  prev = getEepromReg(addr);
+                  // tsconf maxi-clock uses regB too much
+                  /*prev = getEepromReg(addr);
                   if (prev != data) {
                     setEepromReg(addr, data); 
-                  }
+                  }*/
                   break;
         case 0xC: // C and D are read-only registers
         case 0xD: break;

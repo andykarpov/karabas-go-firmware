@@ -23,7 +23,7 @@
 PioSpi spiSD(PIN_SD_SPI_RX, PIN_SD_SPI_SCK, PIN_SD_SPI_TX); // dedicated SD1 SPI
 #define SD_CONFIG SdSpiConfig(SD_CS_PIN, DEDICATED_SPI, SD_SCK_MHZ(60), &spiSD) // SD1 SPI Settings
 
-SPISettings settingsA(SD_SCK_MHZ(24), MSBFIRST, SPI_MODE0); // MCU SPI settings
+SPISettings settingsA(SD_SCK_MHZ(8), MSBFIRST, SPI_MODE0); // MCU SPI settings
 
 PCA9536 extender;
 ElapsedTimer my_timer;
@@ -1299,7 +1299,7 @@ void serial_data(uint8_t addr, uint8_t data) {
  */
 void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data) {
 
-  if (cmd == CMD_FLASHBOOT && !is_flashboot) {
+  if (cmd == CMD_FLASHBOOT && !is_flashboot && strcmp(core.id, "zxnext")==0) {
     flashboot(data);
   } else if (cmd == CMD_UART) {
     serial_data(addr, data);
@@ -1633,7 +1633,7 @@ void read_core(const char* filename) {
   core_osd_send_all();
 
   // re-send rtc registers
-  zxrtc.sendAll();
+  //zxrtc.sendAll();
 
   has_ft = false;
 
