@@ -78,6 +78,7 @@ bool has_sd = false;
 bool has_fs = false;
 bool has_ft = false;
 bool is_flashboot = false;
+bool is_configuring = false;
 
 uint8_t uart_idx = 0;
 uint8_t evo_rs232_dll = 0;
@@ -183,6 +184,7 @@ void setup()
 }
 
 void do_configure(const char* filename) {
+  is_configuring = true;
   ft.vga(false);
   ft.spi(false);
   fpga_configure(filename);
@@ -204,6 +206,7 @@ void do_configure(const char* filename) {
   }
   spi_send(CMD_INIT_DONE, 0, 0);
   is_flashboot = false;
+  is_configuring = false;
 }
 
 void ft_core_browser(uint8_t play_sounds) {
@@ -1223,7 +1226,7 @@ void spi_send(uint8_t cmd, uint8_t addr, uint8_t data) {
   uint8_t rx_data = SPI.transfer(data);
   digitalWrite(PIN_MCU_SPI_CS, HIGH);
   SPI.endTransaction();
-  if (rx_cmd > 0) {
+  if ((rx_cmd > 0) && !is_configuring) {
     process_in_cmd(rx_cmd, rx_addr, rx_data);
   }
 }
