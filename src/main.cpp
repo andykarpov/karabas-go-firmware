@@ -1,3 +1,27 @@
+/*-------------------------------------------------------------------------------------------------------------------
+-- 
+-- 
+-- #       #######                                                 #                                               
+-- #                                                               #                                               
+-- #                                                               #                                               
+-- ############### ############### ############### ############### ############### ############### ############### 
+-- #             #               # #                             # #             #               # #               
+-- #             # ############### #               ############### #             # ############### ############### 
+-- #             # #             # #               #             # #             # #             #               # 
+-- #             # ############### #               ############### ############### ############### ############### 
+--                                                                                                                 
+--         ####### ####### ####### #######                                         ############### ############### 
+--                                                                                 #               #             # 
+--                                                                                 #   ########### #             # 
+--                                                                                 #             # #             # 
+-- https://github.com/andykarpov/karabas-go                                        ############### ############### 
+--
+-- RP2040 firmware for Karabas-Go
+--
+-- @author Andy Karpov <andy.karpov@gmail.com>
+-- EU, 2024
+------------------------------------------------------------------------------------------------------------------*/
+
 #include <Arduino.h>
 #include "config.h"
 #include "types.h"
@@ -257,7 +281,7 @@ void loop()
 
   queue_spi_t packet;
 	while (queue_try_remove(&spi_event_queue, &packet)) {
-    // capture keyboard events to osd when active
+    // skip keyboard transmission when osd is active
     if (packet.cmd == CMD_USB_KBD) {
       if (has_extender) extender.digitalWrite(3, !(usb_keyboard_report.modifier != 0 || usb_keyboard_report.keycode[0] != 0));
       if (packet.addr == 1 && packet.data != 0) {
@@ -266,10 +290,12 @@ void loop()
       if (!is_osd) {
         spi_send(packet.cmd, packet.addr, packet.data);
       }
+    // skip ps/2 scancode transmission when osd is active
     } else if (packet.cmd == CMD_PS2_SCANCODE) {
       if (!is_osd) {
         spi_send(packet.cmd, packet.addr, packet.data);
       }
+    // skip joystick transmission when osd is active
     } else if (packet.cmd == CMD_JOYSTICK) {
       if (!is_osd) {
         spi_send(packet.cmd, packet.addr, packet.data);
