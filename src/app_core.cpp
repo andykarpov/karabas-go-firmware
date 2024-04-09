@@ -27,7 +27,7 @@ void app_core_overlay()
 
   // footer
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  osd_print_line(24);
+  zxosd.line(24);
   zxosd.setPos(0,25); zxosd.print("Press Menu+Esc to toggle OSD");
 }
 
@@ -122,7 +122,7 @@ void app_core_on_keyboard() {
           if (core.osd[curr_osd_item].val > core.osd[curr_osd_item].options_len-1) {
             core.osd[curr_osd_item].val = 0;
           }
-          core_osd_send(curr_osd_item);
+          core_send(curr_osd_item);
           if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_SWITCH) {
             core.osd_need_save = true;
           }
@@ -136,7 +136,7 @@ void app_core_on_keyboard() {
           } else {
             core.osd[curr_osd_item].val = core.osd[curr_osd_item].options_len-1;
           }
-          core_osd_send(curr_osd_item);
+          core_send(curr_osd_item);
           if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_SWITCH) {
             core.osd_need_save = true;
           }

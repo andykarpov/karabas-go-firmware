@@ -74,6 +74,7 @@ void OSD::setPos(uint8_t x, uint8_t y)
 
 void OSD::clear(void)
 {
+  setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
   fill(0);
 }
 
@@ -175,6 +176,57 @@ void OSD::fontReset() {
 void OSD::fontSend(uint8_t data) {
   action (CMD_OSD, ADDR_FONT_DATA, data);
   action (CMD_OSD, ADDR_FONT_DATA_WR, 1);
+}
+
+void OSD::line(uint8_t y) {
+  setPos(0,y);
+  for (uint8_t i=0; i<32; i++) {
+    write(0xd1); 
+  }
+}
+
+void OSD::logo(uint8_t x, uint8_t y) {
+  setPos(x,y);
+  setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+
+  // karabas go logo
+  write(0xb0); write(0xb1); // k
+  write(0xb2); write(0xb3); // a
+  write(0xb4); write(0xb5); // r
+  write(0xb2); write(0xb3); // a
+  write(0xb6); write(0xb7); // b
+  write(0xb2); write(0xb3); // a
+  write(0xb8); write(0xb9); // s
+
+  setPos(x,y+1);
+  write(0xc0); write(0xc1); // k
+  write(0xc2); write(0xc3); // a
+  write(0xc4); write(0xc5); // r
+  write(0xc2); write(0xc3); // a
+  write(0xc6); write(0xc7); // b
+  write(0xc2); write(0xc3); // a
+  write(0xc8); write(0xc9); // s
+
+  setPos(x+10, y+2);
+  write(0xba); write(0xbb); // g
+  write(0xbc); write(0xbd); // o
+
+  setPos(x+10, y+3);
+  write(0xca); write(0xcb); // g
+  write(0xcc); write(0xcd); // o
+
+  setPos(x+1, y+2);
+  setColor(OSD::COLOR_RED_I, OSD::COLOR_BLACK);
+  write(0x16); // -
+  setColor(OSD::COLOR_YELLOW_I, OSD::COLOR_BLACK);
+  write(0x16); // -
+  setColor(OSD::COLOR_GREEN_I, OSD::COLOR_BLACK);
+  write(0x16); // -
+  setColor(OSD::COLOR_BLUE_I, OSD::COLOR_BLACK);
+  write(0x16); // -
+
+  setColor(OSD::COLOR_GREY, OSD::COLOR_BLACK);
+  setPos(x,y+3);
 }
 
 

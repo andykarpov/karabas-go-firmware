@@ -197,8 +197,8 @@ void app_file_loader_overlay(bool initSD = true, bool recreateIndex = false) {
   app_file_loader_menu(APP_COREBROWSER_MENU_OFFSET);  
 
   // footer
-  osd_print_line(21);
-  osd_print_line(23);
+  zxosd.line(21);
+  zxosd.line(23);
   zxosd.setPos(1,24); zxosd.print("Please use arrows to navigate");
   zxosd.setPos(1,25); zxosd.print("Press Enter to load selection");
 }

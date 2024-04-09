@@ -56,19 +56,14 @@ uint32_t file_read32(uint32_t pos, bool is_flash);
 void file_get_name(char *buf, size_t len, bool is_flash);
 bool is_flashfs(const char* filename);
 
-void osd_print_logo(uint8_t x, uint8_t y);
-void osd_print_line(uint8_t y);
-void osd_print_space();
 void osd_print_header();
-void osd_clear();
 void osd_print_footer();
+void osd_handle(bool force);
 
-void core_osd_send(uint8_t pos);
-void on_time();
-void send_font();
-void send_rom_byte(uint32_t addr, uint8_t data);
 void read_core(const char* filename);
 void read_roms(const char* filename);
-void osd_handle(bool force);
-void core_osd_trigger(uint8_t pos);
+void core_trigger(uint8_t pos);
+void core_send(uint8_t pos);
+
+void on_time();
 void on_keyboard();

@@ -308,11 +308,16 @@ void do_configure(const char* filename) {
   ft.spi(false);
   fpga_configure(filename);
   spi_send(CMD_INIT_START, 0, 0);
-  send_font();
+  // trigger font loader reset
+  zxosd.fontReset();
+  // send font data
+  for (int i=0; i<OSD_FONT_SIZE; i++) {
+    zxosd.fontSend(osd_font[i]);
+  }
   read_core(filename);
   if (!is_osd) {
     zxosd.clear();
-    osd_print_logo(0,0);
+    zxosd.logo(0,0);
     zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
     zxosd.setPos(0,5);
     zxosd.print("ROM ");
@@ -380,10 +385,10 @@ bool on_global_hotkeys() {
             if (core.osd[i].val > core.osd[i].options_len-1) {
               core.osd[i].val = 0;
             }
-            core_osd_send(i);
+            core_send(i);
             if (!is_osd) {
               zxosd.clear();
-              osd_print_logo(0, 0);
+              zxosd.logo(0, 0);
               zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
               zxosd.setPos(0, 5);
               zxosd.print(core.osd[i].name);
@@ -398,7 +403,7 @@ bool on_global_hotkeys() {
             }
           }
         } else if (core.osd[i].type == CORE_OSD_TYPE_TRIGGER) {
-            core_osd_trigger(i);
+            core_trigger(i);
         }
         return true;
       }
@@ -410,15 +415,6 @@ bool on_global_hotkeys() {
   }
 
   return false;
-}
-
-void send_font() {
-  // trigger reset
-  zxosd.fontReset();
-  // send font data
-  for (int i=0; i<OSD_FONT_SIZE; i++) {
-    zxosd.fontSend(osd_font[i]);
-  }
 }
 
 void on_keyboard() {
@@ -435,21 +431,21 @@ void on_keyboard() {
   }
 }
 
-void core_osd_send(uint8_t pos)
+void core_send(uint8_t pos)
 {
   spi_send(CMD_SWITCHES, pos, core.osd[pos].val);
   d_printf("Switch: %s %d", core.osd[pos].name, core.osd[pos].val);
   d_println();
 }
 
-void core_osd_send_all() 
+void core_send_all() 
 {
   for (uint8_t i=0; i<core.osd_len; i++) {
     spi_send(CMD_SWITCHES, i, core.osd[i].val);
   }
 }
 
-void core_osd_trigger(uint8_t pos)
+void core_trigger(uint8_t pos)
 {
   d_printf("Trigger: %s", core.osd[pos].name);
   d_println();
@@ -901,7 +897,7 @@ void read_core(const char* filename) {
     }
     core.osd[i].prev_val = core.osd[i].val;
   }
-  core_osd_send_all();
+  core_send_all();
 
   // re-send rtc registers
   //zxrtc.sendAll();
@@ -988,7 +984,24 @@ void read_roms(const char* filename) {
       char buf[256];
       int c = file_read_bytes(buf, sizeof(buf), is_flash);
       for (int j=0; j<256; j++) {
-        send_rom_byte(rom_addr + i*256 + j, buf[j]);
+
+        uint32_t addr = rom_addr + i*256 + j;
+        uint8_t data = buf[j];
+
+        // send rombank address every 256 bytes
+          if (addr % 256 == 0) {
+            uint8_t rombank3 = (uint8_t)((addr & 0xFF000000) >> 24);
+            uint8_t rombank2 = (uint8_t)((addr & 0x00FF0000) >> 16);
+            uint8_t rombank1 = (uint8_t)((addr & 0x0000FF00) >> 8);
+            //d_printf("ROM bank %d %d %d", rombank1, rombank2, rombank3); d_println();
+            spi_send(CMD_ROMBANK, 0, rombank1);
+            spi_send(CMD_ROMBANK, 1, rombank2);
+            spi_send(CMD_ROMBANK, 2, rombank3);
+          }
+          // send lower 256 bytes
+          uint8_t romaddr = (uint8_t)((addr & 0x000000FF));
+          spi_send(CMD_ROMDATA, romaddr, data);
+
       }
       if (rom_len > 0) {
         zxosd.setPos(4,5+rom_idx);
@@ -1016,86 +1029,9 @@ void read_roms(const char* filename) {
   }
 }
 
-void send_rom_byte(uint32_t addr, uint8_t data) {
-  // send rombank address every 256 bytes
-  if (addr % 256 == 0) {
-    uint8_t rombank3 = (uint8_t)((addr & 0xFF000000) >> 24);
-    uint8_t rombank2 = (uint8_t)((addr & 0x00FF0000) >> 16);
-    uint8_t rombank1 = (uint8_t)((addr & 0x0000FF00) >> 8);
-    //d_printf("ROM bank %d %d %d", rombank1, rombank2, rombank3); d_println();
-    spi_send(CMD_ROMBANK, 0, rombank1);
-    spi_send(CMD_ROMBANK, 1, rombank2);
-    spi_send(CMD_ROMBANK, 2, rombank3);
-  }
-  // send lower 256 bytes
-  uint8_t romaddr = (uint8_t)((addr & 0x000000FF));
-  spi_send(CMD_ROMDATA, romaddr, data);
-}
-
-void osd_print_logo(uint8_t x, uint8_t y)
-{
-  zxosd.setPos(x,y);
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-
-  // karabas go logo
-  zxosd.write(0xb0); zxosd.write(0xb1); // k
-  zxosd.write(0xb2); zxosd.write(0xb3); // a
-  zxosd.write(0xb4); zxosd.write(0xb5); // r
-  zxosd.write(0xb2); zxosd.write(0xb3); // a
-  zxosd.write(0xb6); zxosd.write(0xb7); // b
-  zxosd.write(0xb2); zxosd.write(0xb3); // a
-  zxosd.write(0xb8); zxosd.write(0xb9); // s
-
-  zxosd.setPos(x,y+1);
-  zxosd.write(0xc0); zxosd.write(0xc1); // k
-  zxosd.write(0xc2); zxosd.write(0xc3); // a
-  zxosd.write(0xc4); zxosd.write(0xc5); // r
-  zxosd.write(0xc2); zxosd.write(0xc3); // a
-  zxosd.write(0xc6); zxosd.write(0xc7); // b
-  zxosd.write(0xc2); zxosd.write(0xc3); // a
-  zxosd.write(0xc8); zxosd.write(0xc9); // s
-
-  zxosd.setPos(x+10, y+2);
-  zxosd.write(0xba); zxosd.write(0xbb); // g
-  zxosd.write(0xbc); zxosd.write(0xbd); // o
-
-  zxosd.setPos(x+10, y+3);
-  zxosd.write(0xca); zxosd.write(0xcb); // g
-  zxosd.write(0xcc); zxosd.write(0xcd); // o
-
-  zxosd.setPos(x+1, y+2);
-  zxosd.setColor(OSD::COLOR_RED_I, OSD::COLOR_BLACK);
-  zxosd.write(0x16); // -
-  zxosd.setColor(OSD::COLOR_YELLOW_I, OSD::COLOR_BLACK);
-  zxosd.write(0x16); // -
-  zxosd.setColor(OSD::COLOR_GREEN_I, OSD::COLOR_BLACK);
-  zxosd.write(0x16); // -
-  zxosd.setColor(OSD::COLOR_BLUE_I, OSD::COLOR_BLACK);
-  zxosd.write(0x16); // -
-
-  zxosd.setColor(OSD::COLOR_GREY, OSD::COLOR_BLACK);
-  zxosd.setPos(x,y+3);
-}
-
-void osd_print_line(uint8_t y)
-{
-  zxosd.setPos(0,y);
-  for (uint8_t i=0; i<32; i++) {
-    zxosd.write(0x5f);
-    //zxosd.write(0xd1); // 0xd1 - new
-  }
-}
-
-void osd_print_space() {
-  uint8_t i = 0;
-  for (i=0; i<8; i++) {
-    zxosd.print(" ");
-  }
-}
-
 void osd_print_header()
 {
-  osd_print_logo(0,0);
+  zxosd.logo(0,0);
 
   zxosd.setColor(OSD::COLOR_GREY, OSD::COLOR_BLACK);
   zxosd.setPos(19,2);
@@ -1106,21 +1042,15 @@ void osd_print_header()
   zxosd.print("CORE "); zxosd.print(core.id);
 
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  osd_print_line(4);
+  zxosd.line(4);
 
   //updateTime();
-}
-
-void osd_clear()
-{
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.clear();
 }
 
 void osd_print_footer() {
 
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  osd_print_line(22);
+  zxosd.line(22);
 
   // footer
   zxosd.setPos(0,23); 
