@@ -1,4 +1,6 @@
 #include <Arduino.h>
+#include "config.h"
+#include "types.h"
 #include <SPI.h>
 #include <Wire.h>
 #include "PioSpi.h"
@@ -17,8 +19,9 @@
 #include "usb_hid_keys.h"
 #include "bitmaps.h"
 #include "osd_font.h"
-#include <algorithm>
-#include <tuple>
+#include "app_core_browser.h"
+#include "app_file_loader.h"
+#include "app_core.h"
 
 PioSpi spiSD(PIN_SD_SPI_RX, PIN_SD_SPI_SCK, PIN_SD_SPI_TX); // dedicated SD1 SPI
 #define SD_CONFIG SdSpiConfig(SD_CS_PIN, DEDICATED_SPI, SD_SCK_MHZ(60), &spiSD) // SD1 SPI Settings
@@ -44,34 +47,15 @@ static queue_t spi_event_queue;
 
 hid_keyboard_report_t usb_keyboard_report;
 hid_mouse_report_t usb_mouse_report;
-uint16_t joyL = 0;
-uint16_t joyR = 0;
 
 bool is_osd = false;
 bool is_osd_hiding = false; 
 bool is_popup_hiding = false;
+bool need_redraw = false;
 
-core_list_item_t cores[MAX_CORES];
 core_item_t core;
-uint8_t cores_len = 0;
-uint8_t core_sel = 0;
-const uint8_t core_page_size = MAX_CORES_PER_PAGE;
-const uint8_t ft_core_page_size = MAX_CORES_PER_PAGE/2;
-uint8_t core_pages = 1;
-uint8_t core_page = 1;
-
-file_list_item_t files[MAX_FILES];
-uint8_t files_len = 0;
-uint8_t file_sel = 0;
-const uint8_t file_page_size = MAX_CORES_PER_PAGE;
-uint8_t file_pages = 1;
-uint8_t file_page = 1;
-
-uint8_t osd_state = state_main;
+uint8_t osd_state;
 uint8_t osd_prev_state = state_main;
-uint8_t osd_rtc_state = state_rtc_dow;
-uint8_t osd_prev_rtc_state = state_rtc_dow;
-uint8_t curr_osd_item = 0;
 
 bool has_extender = false;
 bool has_sd = false;
@@ -79,6 +63,9 @@ bool has_fs = false;
 bool has_ft = false;
 bool is_flashboot = false;
 bool is_configuring = false;
+
+uint16_t joyL;
+uint16_t joyR;
 
 uint8_t uart_idx = 0;
 uint8_t evo_rs232_dll = 0;
@@ -90,7 +77,6 @@ uint16_t prev_debug_address = 0;
 uint16_t debug_data = 0;
 uint16_t prev_debug_data = 0;
 
-// the setup function runs once when you press reset or power the board
 void setup()
 {
   queue_init(&spi_event_queue, sizeof(queue_spi_t), 64);
@@ -120,7 +106,9 @@ void setup()
   Wire.setClock(100000);
   Wire.begin();
 
-  //while ( !Serial ) delay(10);   // wait for native usb
+#if WAIT_SERIAL
+  while ( !Serial ) yield();   // wait for native usb
+#endif
 
   d_begin(115200);
   d_println("Karabas Go RP2040 firmware");
@@ -162,16 +150,16 @@ void setup()
   d_print("Mounting SD card... ");
   if (!sd1.begin(SD_CONFIG)) {
     has_sd = false;
-    //sd.initErrorHalt(&Serial);
     d_println("Failed");
   } else {
     has_sd = true;
     d_println("Done");
   }
 
-  //sd.ls(&Serial, LS_SIZE);
+  joyL = joyR = 0;
+  osd_state = state_main;
 
-  // load boot
+  // load boot.kg1 from SD or flashfs
   if (has_sd && sd1.exists(FILENAME_BOOT)) {  
     do_configure(FILENAME_BOOT);
   } else if (has_fs && LittleFS.exists(FILENAME_FBOOT)) {
@@ -180,689 +168,15 @@ void setup()
     halt("Boot file not found. System stopped");
   }
   osd_state = state_core_browser;
-  read_core_list();
+  app_core_browser_read_list();
 }
 
-void do_configure(const char* filename) {
-  is_configuring = true;
-  ft.vga(false);
-  ft.spi(false);
-  fpga_configure(filename);
-  spi_send(CMD_INIT_START, 0, 0);
-  send_font();
-  read_core(filename);
-  if (!is_osd) {
-    zxosd.clear();
-    osd_print_logo(0,0);
-    zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-    zxosd.setPos(0,5);
-    zxosd.print("ROM ");
-    zxosd.showPopup();
-  }
-  read_roms(filename);
-  if (!is_osd) {
-    zxosd.hidePopup();
-    osd_handle(true); // reinit osd
-  }
-  spi_send(CMD_INIT_DONE, 0, 0);
-  is_flashboot = false;
-  is_configuring = false;
-}
-
-void ft_core_browser(uint8_t play_sounds) {
-
-  ft.beginDisplayList();
-
-  uint32_t color_black = FT81x_COLOR_RGB(1, 1, 1);
-  uint32_t color_gradient = FT81x_COLOR_RGB(200, 0, 0);
-  uint32_t color_button = FT81x_COLOR_RGB(32, 32, 38);
-  uint32_t color_button_active = FT81x_COLOR_RGB(200, 0, 0);
-  uint32_t color_text = FT81x_COLOR_RGB(255,255,255);
-  uint32_t color_copyright = FT81x_COLOR_RGB(120, 120, 120);
-
-  ft.clear(color_black);
-  ft.drawGradient(ft.width()/2, 0, color_gradient, ft.width()/2, ft.height()-ft.height()/4-1, color_black);
-
-  core_pages = ceil((float)cores_len / ft_core_page_size);
-  core_page = ceil((float)(core_sel+1)/ft_core_page_size);
-  uint8_t core_from = (core_page-1)*ft_core_page_size;
-  uint8_t core_to = core_page*ft_core_page_size > cores_len ? cores_len : core_page*ft_core_page_size;
-  uint8_t core_fill = core_page*ft_core_page_size;
-  uint8_t pos = 0;
-  uint8_t offset = 64 + 16 + 8;
-  for(uint8_t i=core_from; i < core_to; i++) {
-    char name[18];
-    String n = String(cores[i].name); n.trim(); n.toCharArray(name, 18);
-    const uint32_t color = i == core_sel ? color_button_active : color_button;
-    ft.drawButton(160+8, offset + pos*40, 320-16, 32, 28, color_text, color, FT81x_OPT_3D, name);
-    if (cores[i].flash) {
-      ft.drawText(160+320-16-24, offset + pos*40 + 16, 28, color_text, FT81x_OPT_CENTERY, "F\0");
-    }
-    pos++;
-  }
-
-  ft.drawText(112, 440, 27, color_copyright, FT81x_OPT_CENTER, "www.karabas.uk\0");
-  ft.drawText(112, 460, 27, color_copyright, FT81x_OPT_CENTER, "(c) 2024 andykarpov\0");
-  char b[40]; sprintf(b, "Page %d of %d\0", core_page, core_pages);
-  ft.drawText(320, 440, 27, color_copyright, FT81x_OPT_CENTER, b);
-
-  char time[9];
-  sprintf(time, "%02d:%02d:%02d\0", zxrtc.getHour(), zxrtc.getMinute(), zxrtc.getSecond());
-  ft.drawText(ft.width()-88, 30, 30, color_text, FT81x_OPT_CENTER, time);
-  char date[9];
-  sprintf(date, "%02d/%02d/%02d\0", zxrtc.getDay(), zxrtc.getMonth(), zxrtc.getYear() % 100);
-  ft.drawText(ft.width()-88, 60, 30, color_text, FT81x_OPT_CENTER, date);
-
-
-  if (play_sounds == 1) {
-      // play synth sound
-      ft.playSound();
-  } else if (play_sounds == 2) {
-    // play wav
-    ft.playAudio(LOGO_BITMAP_SIZE + BURATO3_BITMAP_SIZE, KEY_SIZE, 22050, FT81x_AUDIO_FORMAT_ULAW, false);
-  }
-
-  ft.drawBitmap(0, 8, 8, 56, 16, 4, 0); 
-  ft.overlayBitmap(LOGO_BITMAP_SIZE, 640-200, 480-143, 200, 143, 1, 0);
-  //ft.overlayBitmap(LOGO_BITMAP_SIZE, 640-160-8, 480-200-8, 160, 200, 1, 0);
-
-  /*uint16_t h = (uint16_t) (zxrtc.getHour() % 12);
-  uint16_t m = (uint16_t) (zxrtc.getMinute() % 60);
-  uint16_t s = (uint16_t) (zxrtc.getSecond() % 60);
-  ft.drawClock(640 - 80-8, 80+8, 80, FT81x_COLOR_RGB(255,255,255), FT81x_COLOR_RGB(1,1,1), FT81x_OPT_NOBACK | FT81x_OPT_FLAT, h, m, s);*/
-
-  ft.swapScreen();
-}
-
-void core_browser(uint8_t vpos) {
-  //d_print("Cores: "); d_println(cores_len);
-  core_pages = ceil((float)cores_len / core_page_size);
-  //d_print("Pages: "); d_println(core_pages);
-  core_page = ceil((float)(core_sel+1)/core_page_size);
-  //d_print("Core page: "); d_println(core_page);
-  uint8_t core_from = (core_page-1)*core_page_size;
-  uint8_t core_to = core_page*core_page_size > cores_len ? cores_len : core_page*core_page_size;
-  uint8_t core_fill = core_page*core_page_size;
-  uint8_t pos = vpos;
-  //d_print("From: "); d_print(core_from); d_print(" to: "); d_println(core_to);
-  //d_print("Selected: "); d_println(core_sel);
-  for(uint8_t i=core_from; i < core_to; i++) {
-    //d_print(cores[i].name); d_println(cores[i].order);
-    zxosd.setPos(0, pos);
-    if (core_sel == i) {
-      zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLUE);
-    } else {
-      zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-    }
-    char name[18]; memcpy(name, cores[i].name, 17); name[17] = '\0';
-    zxosd.printf("%-3d ", i+1); 
-    zxosd.print(name);
-    zxosd.print(cores[i].build);
-    zxosd.print(cores[i].flash ? "  F" : " SD");
-    pos++;
-  }
-  //d_print("Fill: "); d_println(core_fill);
-  if (core_fill > core_to) {
-    for (uint8_t i=core_to; i<core_fill; i++) {
-      zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-      for (uint8_t j=0; j<32; j++) {
-        zxosd.print(" ");
-      }
-    }
-  }
-  zxosd.setPos(8, vpos + core_page_size + 1); zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.printf("Page %02d of %02d", core_page, core_pages);
-}
-
-void file_loader(uint8_t vpos) {
-  //d_print("Files: "); d_println(files_len);
-  file_pages = ceil((float)files_len / file_page_size);
-  //d_print("Pages: "); d_println(file_pages);
-  file_page = ceil((float)(file_sel+1)/file_page_size);
-  //d_print("File page: "); d_println(file_page);
-  uint8_t file_from = (file_page-1)*file_page_size;
-  uint8_t file_to = file_page*file_page_size > files_len ? files_len : file_page*file_page_size;
-  uint8_t file_fill = file_page*file_page_size;
-  uint8_t pos = vpos;
-  //d_print("From: "); d_print(file_from); d_print(" to: "); d_println(file_to);
-  //d_print("Selected: "); d_println(file_sel);
-  for(uint8_t i=file_from; i < file_to; i++) {
-    //d_print(cores[i].name); d_println(cores[i].order);
-    zxosd.setPos(0, pos);
-    if (file_sel == i) {
-      zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLUE);
-    } else {
-      zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-    }
-    // display 28 chars
-    char name[29]; memcpy(name, files[i].name, 28); name[28] = '\0';
-    zxosd.printf("%-3d ", i+1); 
-    zxosd.print(name);
-    // fill name with spaces
-    uint8_t l = strlen(name);
-    if (l < 28) {
-      for (uint8_t ll=l; ll<28; ll++) {
-        zxosd.print(" ");
-      }
-    }
-    pos++;
-  }
-  //d_print("Fill: "); d_println(file_fill);
-  if (file_fill > file_to) {
-    for (uint8_t i=file_to; i<file_fill; i++) {
-      zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-      for (uint8_t j=0; j<32; j++) {
-        zxosd.print(" ");
-      }
-    }
-  }
-  zxosd.setPos(8, vpos + file_page_size + 1); zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.printf("Page %02d of %02d", file_page, file_pages);
-}
-
-void menu(uint8_t vpos) {
-  for (uint8_t i=0; i<core.osd_len; i++) {
-    String name = String(core.osd[i].name);
-    zxosd.setPos(0, i+vpos);
-    zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-    zxosd.print(name.substring(0,10));
-
-    String option = String(core.osd[i].options[core.osd[i].val].name);
-    zxosd.setPos(11, i+vpos);
-    if (curr_osd_item == i) {
-      zxosd.setColor(OSD::COLOR_BLACK, OSD::COLOR_YELLOW_I);
-    } else {
-      zxosd.setColor(OSD::COLOR_YELLOW_I, OSD::COLOR_BLACK);
-    }
-    zxosd.print(option.substring(0, 10));
-
-    String hotkey = String(core.osd[i].hotkey);
-    zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_BLACK);
-    if (core.osd[i].options_len > 0) {
-      zxosd.setPos(22, i+vpos);
-      zxosd.print(hotkey.substring(0,10));
-    } else {
-      zxosd.setPos(11, i+vpos);
-      zxosd.print(hotkey);
-    }
-  }
-}
-
-bool on_global_hotkeys() {
-  
-  // menu+esc (joy start+c) to toggle osd only for osd supported cores
-  if (core.type != CORE_TYPE_BOOT && core.type != CORE_TYPE_HIDDEN && 
-      ((((usb_keyboard_report.modifier & KEY_MOD_LMETA) || (usb_keyboard_report.modifier & KEY_MOD_RMETA)) && usb_keyboard_report.keycode[0] == KEY_ESC) ||
-       ((joyL & SC_BTN_START) && (joyL & SC_BTN_C)) ||
-       ((joyR & SC_BTN_START) && (joyR & SC_BTN_C))
-      )
-    ) {
-    if (!is_osd) {
-      is_osd = true;
-      zxosd.showMenu();
-    } else if (!is_osd_hiding) {
-      is_osd_hiding = true;
-      hide_timer.reset();
-      zxosd.hideMenu();
-    }
-    return true;
-  }
-
-  // ctrl+alt+backspace (joy start+x) to global reset rp2040
-  if (
-      (((usb_keyboard_report.modifier & KEY_MOD_LCTRL) || (usb_keyboard_report.modifier & KEY_MOD_RCTRL)) && 
-      ((usb_keyboard_report.modifier & KEY_MOD_LALT) || (usb_keyboard_report.modifier & KEY_MOD_RALT)) && 
-        usb_keyboard_report.keycode[0] == KEY_BACKSPACE) || 
-        (((joyL & SC_BTN_START) && (joyL & SC_BTN_X))) ||
-        (((joyR & SC_BTN_START) && (joyR & SC_BTN_X)))
-        ) {
-     rp2040.reboot();
-     return true;
-  }
-
-  // ctrl+alt+del to core reset
-  /*if (
-      ((usb_keyboard_report.modifier & KEY_MOD_LCTRL) || (usb_keyboard_report.modifier & KEY_MOD_RCTRL)) && 
-      ((usb_keyboard_report.modifier & KEY_MOD_LALT) || (usb_keyboard_report.modifier & KEY_MOD_RALT)) && 
-        usb_keyboard_report.keycode[0] == KEY_DELETE) {
-     // todo: send reset somehow
-     return true;
-  }*/
-
-  // osd hotkey
-  for (uint8_t i=0; i<core.osd_len; i++) {
-    if (core.osd[i].keys[0] != 0 && (usb_keyboard_report.modifier & core.osd[i].keys[0]) || (core.osd[i].keys[0] == 0)) {
-      if (core.osd[i].keys[1] != 0 && (usb_keyboard_report.keycode[0] == core.osd[i].keys[1])) {
-        if (core.osd[i].type == CORE_OSD_TYPE_SWITCH || core.osd[i].type == CORE_OSD_TYPE_NSWITCH) {
-          if (core.osd[i].options_len > 0) {
-            curr_osd_item = i;
-            core.osd[i].val++; 
-            if (core.osd[i].val > core.osd[i].options_len-1) {
-              core.osd[i].val = 0;
-            }
-            core_osd_send(i);
-            if (!is_osd) {
-              zxosd.clear();
-              osd_print_logo(0, 0);
-              zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-              zxosd.setPos(0, 5);
-              zxosd.print(core.osd[i].name);
-              zxosd.setPos(0,6);
-              zxosd.print(core.osd[i].options[core.osd[i].val].name);
-              is_popup_hiding = true;
-              popup_timer.reset();
-              zxosd.showPopup();
-            }
-            if (core.osd[i].type == CORE_OSD_TYPE_SWITCH) {
-              core.osd_need_save = true;
-            }
-          }
-        } else if (core.osd[i].type == CORE_OSD_TYPE_TRIGGER) {
-            core_osd_trigger(i);
-        }
-        return true;
-      }
-    }
-  }
-
-  if (core.osd_need_save) {
-    core_osd_save(curr_osd_item);
-  }
-
-  return false;
-}
-
-void send_font() {
-  // trigger reset
-  zxosd.fontReset();
-  // send font data
-  for (int i=0; i<OSD_FONT_SIZE; i++) {
-    zxosd.fontSend(osd_font[i]);
-  }
-}
-
-void send_file(const char* filename) {
-  
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.frame(8,8,24,13, 1);
-  zxosd.fill(9,9,23,12, 32);
-  zxosd.setColor(OSD::COLOR_GREEN_I, OSD::COLOR_BLACK);
-  zxosd.setPos(9, 9);
-  zxosd.print("Preparing...");
-  zxosd.setColor(OSD::COLOR_MAGENTA_I, OSD::COLOR_BLACK);
-  zxosd.setPos(9,10);
-  zxosd.print("Please wait.");
-
-  String dir = String(core.dir);
-  dir.trim();
-  if (dir.length() == 0) dir = "/";
-  if (dir.charAt(0) != '/') dir = "/" + dir;
-  String f = String(filename);
-  f.trim();
-  String fullpath = dir + "/" + f;
-  fullpath.trim();
-  char new_filename[255+1];
-  fullpath.toCharArray(new_filename, 255, 0);
-
-  if (!file1.open(&sd1, new_filename, FILE_READ)) {
-    d_printf("Unable to open file %s", new_filename); d_println();
-    d_flush();
-    osd_init_file_loader_overlay(false, false);
-    return;
-  }
-
-  uint8_t buf[256];
-  int c;
-
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.frame(8,8,24,13, 1);
-  zxosd.fill(9,9,23,12, 32);
-  zxosd.setColor(OSD::COLOR_YELLOW_I, OSD::COLOR_BLACK);
-  zxosd.setPos(9, 9);
-  zxosd.print("Loading file...");
-  zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_BLACK);
-  zxosd.setPos(9,10);
-  zxosd.print("Please wait.");
-  zxosd.setColor(OSD::COLOR_RED_I, OSD::COLOR_BLACK);
-
-  // trigger reset
-  spi_send(CMD_FILELOADER, 0, 1);
-  spi_send(CMD_FILELOADER, 0, 0);
-
-  //file1.open(&root1, tmp, FILE_READ);
-  uint64_t file_size = file1.size();
-
-  d_printf("Sending file %s (%d bytes)", new_filename, (uint32_t)((file_size))); d_println();
-  d_flush();
-  
-uint32_t cnt = 0;
-float perc = 0;
-
-  while(c = file1.read(buf, sizeof(buf))) {
-    for (int j=0; j<c; j++) {
-      send_file_byte(cnt, buf[j]);
-      cnt++;
-      if (cnt % 10000 == 0) {
-        perc = (file_size > 0) ? (((float) cnt) * 100.0) / ((float) file_size) : 0.0;
-        zxosd.setPos(9,11);
-        zxosd.printf("%-3d ", (perc >=0 && perc <= 100) ? (uint8_t) perc : 100); zxosd.print("% ");
-      }
-    }
-  }
-  zxosd.setColor(OSD::COLOR_GREEN_I, OSD::COLOR_BLACK);
-  zxosd.setPos(9,11);
-  zxosd.print("100 % ");
-  
-  file1.close();
-  d_printf("Sent %u bytes", cnt); d_println();
-
-  // reload menu
-  osd_init_file_loader_overlay(false, false);
-}
-
-// kbd/joy event handler
-void on_keyboard() {
-
-  bool need_redraw = on_global_hotkeys();
-
-  // in-osd keyboard handle
-  if (is_osd) {
-    switch (osd_state) {
-      case state_core_browser:
-      if (cores_len > 0) {
-        // down
-        if (usb_keyboard_report.keycode[0] == KEY_DOWN || (joyL & SC_BTN_DOWN) || (joyR & SC_BTN_DOWN)) {
-          if (core_sel < cores_len-1) {
-            core_sel++;
-          } else {
-            core_sel = 0;
-          }
-        }
-
-        // up
-        if (usb_keyboard_report.keycode[0] == KEY_UP  || (joyL & SC_BTN_UP) || (joyR & SC_BTN_UP)) {
-          if (core_sel > 0) {
-            core_sel--;
-          } else {
-            core_sel = cores_len-1;
-          }
-        }
-
-        // right
-        if (usb_keyboard_report.keycode[0] == KEY_RIGHT || (joyL & SC_BTN_RIGHT) || (joyR & SC_BTN_RIGHT)) {
-          if (core_sel + core_page_size <= cores_len-1) {
-            core_sel += core_page_size;
-          } else {
-            core_sel = cores_len-1;
-          }
-        }
-
-        // left
-        if (usb_keyboard_report.keycode[0] == KEY_LEFT || (joyL & SC_BTN_LEFT) || (joyR & SC_BTN_LEFT)) {
-          if (core_sel - core_page_size >= 0) {
-            core_sel -= core_page_size;
-          } else {
-            core_sel = 0;
-          }
-        }
-        
-        // enter
-        if (usb_keyboard_report.keycode[0] == KEY_ENTER || (joyL & SC_BTN_A) || (joyR & SC_BTN_A) || (joyL & SC_BTN_B) || (joyR & SC_BTN_B)) {
-          if (FT_OSD == 1 && has_ft == true) {
-            ft_core_browser(2); // play wav
-            delay(500);
-          }
-          d_printf("Selected core %s to boot from menu", cores[core_sel].filename); d_println();
-          String f = String(cores[core_sel].filename); f.trim(); 
-          char buf[32]; f.toCharArray(buf, sizeof(buf));
-          has_ft = false;
-          do_configure(buf);
-          switch (core.type) {
-            case CORE_TYPE_BOOT: osd_state = state_core_browser; break;
-            case CORE_TYPE_OSD: osd_state = state_main; break;
-            case CORE_TYPE_FILELOADER: osd_state = state_file_loader; break;
-            default: osd_state = state_main;
-          }
-        }
-
-        // redraw core browser on keypress
-        if (osd_state == state_core_browser) {
-          if (FT_OSD == 1 && has_ft == true) {
-            ft_core_browser(1);
-          } else {
-            core_browser(APP_COREBROWSER_MENU_OFFSET);
-          }
-        }
-      }
-
-      // return back to classic osd
-      if (usb_keyboard_report.keycode[0] == KEY_SPACE && has_ft == true && FT_OSD == 1) {
-        has_ft = false;
-        ft.vga(false);
-        ft.spi(false);
-        osd_init_core_browser_overlay();
-      }
-
-      break;
-
-      case state_main:
-
-        // down
-        if (usb_keyboard_report.keycode[0] == KEY_DOWN || (joyL & SC_BTN_DOWN) || (joyR & SC_BTN_DOWN)) {
-          if (curr_osd_item < core.osd_len-1 && core.osd[curr_osd_item+1].options_len > 0) {
-            curr_osd_item++;
-          } else {
-            curr_osd_item = 0;
-          }
-          need_redraw = true;
-        }
-
-        // up
-        if (usb_keyboard_report.keycode[0] == KEY_UP || (joyL & SC_BTN_UP) || (joyR & SC_BTN_UP)) {
-          if (curr_osd_item > 0) {
-            curr_osd_item--;
-          } else {
-            // get last item with options
-            uint8_t last_osd_item = 0;
-            for (uint8_t i = 0; i < core.osd_len; i++) {
-              if (core.osd[i].options_len > 0) last_osd_item = i;
-            }
-            curr_osd_item = last_osd_item;
-          }
-          need_redraw = true;
-        }
-
-        // right, enter
-        if (usb_keyboard_report.keycode[0] == KEY_RIGHT || usb_keyboard_report.keycode[0] == KEY_ENTER  || (joyL & SC_BTN_A) || (joyR & SC_BTN_A) || (joyL & SC_BTN_B) || (joyR & SC_BTN_B) || (joyL & SC_BTN_RIGHT) || (joyR & SC_BTN_RIGHT) ) {
-          core.osd[curr_osd_item].val++; 
-          if (core.osd[curr_osd_item].val > core.osd[curr_osd_item].options_len-1) {
-            core.osd[curr_osd_item].val = 0;
-          }
-          core_osd_send(curr_osd_item);
-          if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_SWITCH) {
-            core.osd_need_save = true;
-          }
-          need_redraw = true;
-        }
-
-        // left
-        if (usb_keyboard_report.keycode[0] == KEY_LEFT || (joyL & SC_BTN_LEFT) || (joyR & SC_BTN_LEFT)) {
-          if (core.osd[curr_osd_item].val > 0) {
-            core.osd[curr_osd_item].val--;
-          } else {
-            core.osd[curr_osd_item].val = core.osd[curr_osd_item].options_len-1;
-          }
-          core_osd_send(curr_osd_item);
-          if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_SWITCH) {
-            core.osd_need_save = true;
-          }
-          need_redraw = true;
-        }
-
-        if (need_redraw) {
-          menu(APP_COREBROWSER_MENU_OFFSET);
-        }
-
-        if (core.osd_need_save) {
-          core_osd_save(curr_osd_item);
-        }
-      break;
-
-      case state_file_loader:
-      if (files_len > 0) {
-        // down
-        if (usb_keyboard_report.keycode[0] == KEY_DOWN || (joyL & SC_BTN_DOWN) || (joyR & SC_BTN_DOWN)) {
-          if (file_sel < files_len-1) {
-            file_sel++;
-          } else {
-            file_sel = 0;
-          }
-        }
-
-        // up
-        if (usb_keyboard_report.keycode[0] == KEY_UP || (joyL & SC_BTN_UP) || (joyR & SC_BTN_UP)) {
-          if (file_sel > 0) {
-            file_sel--;
-          } else {
-            file_sel = files_len-1;
-          }
-        }
-
-        // right
-        if (usb_keyboard_report.keycode[0] == KEY_RIGHT || (joyL & SC_BTN_RIGHT) || (joyR & SC_BTN_RIGHT)) {
-          if (file_sel + file_page_size <= files_len-1) {
-            file_sel += file_page_size;
-          } else {
-            file_sel = files_len-1;
-          }
-        }
-
-        // left
-        if (usb_keyboard_report.keycode[0] == KEY_LEFT || (joyL & SC_BTN_LEFT) || (joyR & SC_BTN_LEFT)) {
-          if (file_sel - file_page_size >= 0) {
-            file_sel -= file_page_size;
-          } else {
-            file_sel = 0;
-          }
-        }
-
-        // R = recreate file index
-        if (usb_keyboard_report.keycode[0] == KEY_R) {
-            file_sel = 0;
-            osd_init_file_loader_overlay(true, true);
-        }
-        
-        // enter
-        if (usb_keyboard_report.keycode[0] == KEY_ENTER || (joyL & SC_BTN_A) || (joyR & SC_BTN_A) || (joyL & SC_BTN_B) || (joyR & SC_BTN_B)) {
-          core_file_loader_save();
-          send_file(files[file_sel].name);
-          // hide osd
-          if (!is_osd_hiding) {
-            is_osd_hiding = true;
-            hide_timer.reset();
-            zxosd.hideMenu();
-          }
-        }
-
-        // redraw file loader on keypress
-        if (osd_state == state_file_loader) {
-          file_loader(APP_COREBROWSER_MENU_OFFSET);
-        }
-      }
-      break;
-
-    }
-  }
-}
-
-void core_osd_save(uint8_t pos)
-{
-  bool is_flash = is_flashfs(core.filename);
-  //d_print("Core osd "); d_print(core.osd[pos].name); d_print("="); d_println(core.osd[pos].val);
-  //d_print(core.filename); d_print(" type "); d_println(is_flash ? " flash" : " sd");
-
-  if (is_flash) {
-    ffile = LittleFS.open(core.filename, "r+"); // read+write
-    core.osd_need_save = false;
-    core.osd[pos].prev_val = core.osd[pos].val;
-    ffile.seek(FILE_POS_SWITCHES_DATA + pos);
-    ffile.write(core.osd[pos].val);
-    ffile.close();
-  } else {
-    sd1.chvol();
-    if (!file1.open(core.filename, FILE_WRITE)) {
-      d_println("Unable to open bitstream file to write");
-      return;
-    }  
-    if (!file1.isWritable()) {
-      d_println("File is not writable");
-      return;
-    }
-    core.osd_need_save = false;
-    core.osd[pos].prev_val = core.osd[pos].val;
-    file1.seek(FILE_POS_SWITCHES_DATA + pos);
-    file1.write(core.osd[pos].val);
-    file1.close();
-  }
-}
-
-void core_file_loader_save()
-{
-    sd1.chvol();
-    if (!file1.open(core.filename, FILE_WRITE)) {
-      d_println("Unable to open bitstream file to write");
-      return;
-    }
-    if (!file1.isWritable()) {
-      d_println("File is not writable");
-      return;
-    }
-    memcpy(core.last_file, files[file_sel].name, 32);
-    file1.seek(FILE_POS_FILELOADER_FILE);
-    file1.write(core.last_file, 32);
-    file1.close();
-}
-
-void core_osd_send(uint8_t pos)
-{
-  spi_send(CMD_SWITCHES, pos, core.osd[pos].val);
-  d_printf("Switch: %s %d", core.osd[pos].name, core.osd[pos].val);
-  d_println();
-}
-
-void core_osd_send_all() 
-{
-  for (uint8_t i=0; i<core.osd_len; i++) {
-    spi_send(CMD_SWITCHES, i, core.osd[i].val);
-  }
-}
-
-void core_osd_trigger(uint8_t pos)
-{
-  d_printf("Trigger: %s", core.osd[pos].name);
-  d_println();
-
-  // reset FT812 on soft reset
-  // todo: replace hardcode with something else
-  if (memcmp(core.osd[pos].name, "Rese", 4) == 0) {
-    d_println("Reset FT812");
-    ft.reset();
-    delay(100);
-  }
-
-  d_println("Reset Host");
-  spi_send(CMD_SWITCHES, pos, 1);
-  delay(100);
-  spi_send(CMD_SWITCHES, pos, 0);
-}
-
-uint8_t core_eeprom_get(uint8_t pos) {
-  return core.eeprom[pos].val;
-}
-
-void core_eeprom_set(uint8_t pos, uint8_t val) {
-  core.eeprom[pos].val = val;
-  core.eeprom_need_save = true;
+void setup1() {
+  pio_usb_configuration_t pio_cfg = PIO_USB_DEFAULT_CONFIG;
+  pio_cfg.pin_dp = HOST_PIN_DP;
+  pio_cfg.pinout = PIO_USB_PINOUT_DMDP;
+  tuh_configure(1, TUH_CFGID_RPI_PIO_USB_CONFIGURATION, &pio_cfg);
+  tuh_init(1);
 }
 
 void loop()
@@ -983,26 +297,186 @@ void loop()
 
 }
 
-// core1's setup
-void setup1() {
-  pio_usb_configuration_t pio_cfg = PIO_USB_DEFAULT_CONFIG;
-  pio_cfg.pin_dp = HOST_PIN_DP;
-  pio_cfg.pinout = PIO_USB_PINOUT_DMDP;
-  tuh_configure(1, TUH_CFGID_RPI_PIO_USB_CONFIGURATION, &pio_cfg);
-  tuh_init(1);
-}
-
-// core1's loop
 void loop1()
 {
    tuh_task();
 }
 
-/**
- * @brief Halt the program execution with message
- * 
- * @param msg 
- */
+void do_configure(const char* filename) {
+  is_configuring = true;
+  ft.vga(false);
+  ft.spi(false);
+  fpga_configure(filename);
+  spi_send(CMD_INIT_START, 0, 0);
+  send_font();
+  read_core(filename);
+  if (!is_osd) {
+    zxosd.clear();
+    osd_print_logo(0,0);
+    zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+    zxosd.setPos(0,5);
+    zxosd.print("ROM ");
+    zxosd.showPopup();
+  }
+  read_roms(filename);
+  if (!is_osd) {
+    zxosd.hidePopup();
+    osd_handle(true); // reinit osd
+  }
+  spi_send(CMD_INIT_DONE, 0, 0);
+  is_flashboot = false;
+  is_configuring = false;
+}
+
+bool on_global_hotkeys() {
+  
+  // menu+esc (joy start+c) to toggle osd only for osd supported cores
+  if (core.type != CORE_TYPE_BOOT && core.type != CORE_TYPE_HIDDEN && 
+      ((((usb_keyboard_report.modifier & KEY_MOD_LMETA) || (usb_keyboard_report.modifier & KEY_MOD_RMETA)) && usb_keyboard_report.keycode[0] == KEY_ESC) ||
+       ((joyL & SC_BTN_START) && (joyL & SC_BTN_C)) ||
+       ((joyR & SC_BTN_START) && (joyR & SC_BTN_C))
+      )
+    ) {
+    if (!is_osd) {
+      is_osd = true;
+      zxosd.showMenu();
+    } else if (!is_osd_hiding) {
+      is_osd_hiding = true;
+      hide_timer.reset();
+      zxosd.hideMenu();
+    }
+    return true;
+  }
+
+  // ctrl+alt+backspace (joy start+x) to global reset rp2040
+  if (
+      (((usb_keyboard_report.modifier & KEY_MOD_LCTRL) || (usb_keyboard_report.modifier & KEY_MOD_RCTRL)) && 
+      ((usb_keyboard_report.modifier & KEY_MOD_LALT) || (usb_keyboard_report.modifier & KEY_MOD_RALT)) && 
+        usb_keyboard_report.keycode[0] == KEY_BACKSPACE) || 
+        (((joyL & SC_BTN_START) && (joyL & SC_BTN_X))) ||
+        (((joyR & SC_BTN_START) && (joyR & SC_BTN_X)))
+        ) {
+     rp2040.reboot();
+     return true;
+  }
+
+  // ctrl+alt+del to core reset
+  /*if (
+      ((usb_keyboard_report.modifier & KEY_MOD_LCTRL) || (usb_keyboard_report.modifier & KEY_MOD_RCTRL)) && 
+      ((usb_keyboard_report.modifier & KEY_MOD_LALT) || (usb_keyboard_report.modifier & KEY_MOD_RALT)) && 
+        usb_keyboard_report.keycode[0] == KEY_DELETE) {
+     // todo: send reset somehow
+     return true;
+  }*/
+
+  // osd hotkey
+  for (uint8_t i=0; i<core.osd_len; i++) {
+    if (core.osd[i].keys[0] != 0 && (usb_keyboard_report.modifier & core.osd[i].keys[0]) || (core.osd[i].keys[0] == 0)) {
+      if (core.osd[i].keys[1] != 0 && (usb_keyboard_report.keycode[0] == core.osd[i].keys[1])) {
+        if (core.osd[i].type == CORE_OSD_TYPE_SWITCH || core.osd[i].type == CORE_OSD_TYPE_NSWITCH) {
+          if (core.osd[i].options_len > 0) {
+            curr_osd_item = i;
+            core.osd[i].val++; 
+            if (core.osd[i].val > core.osd[i].options_len-1) {
+              core.osd[i].val = 0;
+            }
+            core_osd_send(i);
+            if (!is_osd) {
+              zxosd.clear();
+              osd_print_logo(0, 0);
+              zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+              zxosd.setPos(0, 5);
+              zxosd.print(core.osd[i].name);
+              zxosd.setPos(0,6);
+              zxosd.print(core.osd[i].options[core.osd[i].val].name);
+              is_popup_hiding = true;
+              popup_timer.reset();
+              zxosd.showPopup();
+            }
+            if (core.osd[i].type == CORE_OSD_TYPE_SWITCH) {
+              core.osd_need_save = true;
+            }
+          }
+        } else if (core.osd[i].type == CORE_OSD_TYPE_TRIGGER) {
+            core_osd_trigger(i);
+        }
+        return true;
+      }
+    }
+  }
+
+  if (core.osd_need_save) {
+    app_core_save(curr_osd_item);
+  }
+
+  return false;
+}
+
+void send_font() {
+  // trigger reset
+  zxosd.fontReset();
+  // send font data
+  for (int i=0; i<OSD_FONT_SIZE; i++) {
+    zxosd.fontSend(osd_font[i]);
+  }
+}
+
+void on_keyboard() {
+
+  need_redraw = on_global_hotkeys();
+
+  // in-osd keyboard handle
+  if (is_osd) {
+    switch (osd_state) {
+      case state_core_browser: app_core_browser_on_keyboard(); break;
+      case state_main: app_core_on_keyboard(); break;
+      case state_file_loader: app_file_loader_on_keyboard(); break;
+    }
+  }
+}
+
+void core_osd_send(uint8_t pos)
+{
+  spi_send(CMD_SWITCHES, pos, core.osd[pos].val);
+  d_printf("Switch: %s %d", core.osd[pos].name, core.osd[pos].val);
+  d_println();
+}
+
+void core_osd_send_all() 
+{
+  for (uint8_t i=0; i<core.osd_len; i++) {
+    spi_send(CMD_SWITCHES, i, core.osd[i].val);
+  }
+}
+
+void core_osd_trigger(uint8_t pos)
+{
+  d_printf("Trigger: %s", core.osd[pos].name);
+  d_println();
+
+  // reset FT812 on soft reset
+  // todo: replace hardcode with something else
+  if (memcmp(core.osd[pos].name, "Rese", 4) == 0) {
+    d_println("Reset FT812");
+    ft.reset();
+    delay(100);
+  }
+
+  d_println("Reset Host");
+  spi_send(CMD_SWITCHES, pos, 1);
+  delay(100);
+  spi_send(CMD_SWITCHES, pos, 0);
+}
+
+uint8_t core_eeprom_get(uint8_t pos) {
+  return core.eeprom[pos].val;
+}
+
+void core_eeprom_set(uint8_t pos, uint8_t val) {
+  core.eeprom[pos].val = val;
+  core.eeprom_need_save = true;
+}
+
 void halt(const char* msg) {
   d_println(msg);
   d_flush();
@@ -1117,11 +591,6 @@ bool is_flashfs(const char* filename) {
   return (s.charAt(0) == '/');
 }
 
-/**
- * @brief FPGA bitstream uploader
- * 
- * @param filename 
- */
 uint32_t fpga_configure(const char* filename) {
 
   d_print("Configuring FPGA by "); d_println(filename);
@@ -1211,13 +680,6 @@ void spi_queue(uint8_t cmd, uint8_t addr, uint8_t data) {
   queue_try_add(&spi_event_queue, &packet);
 }
 
-/**
- * @brief send a custom message to MCU via hw SPI
- * 
- * @param cmd command
- * @param addr address
- * @param data data
- */
 void spi_send(uint8_t cmd, uint8_t addr, uint8_t data) {
   SPI.beginTransaction(settingsA);
   digitalWrite(PIN_MCU_SPI_CS, LOW);
@@ -1290,13 +752,6 @@ void serial_data(uint8_t addr, uint8_t data) {
     }
 }
 
-/**
- * @brief Process incoming command from FPGA
- * 
- * @param cmd command
- * @param addr address
- * @param data data
- */
 void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data) {
 
   if (cmd == CMD_FLASHBOOT && !is_flashboot && strcmp(core.id, "zxnext")==0) {
@@ -1318,10 +773,6 @@ void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data) {
   }
 }
 
-/**
- * @brief RTC callback
- * 
- */
 void on_time() {
   zxosd.setPos(24, 0);
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
@@ -1347,188 +798,8 @@ void on_time() {
 
   if (core.type == CORE_TYPE_BOOT && has_ft == true && is_osd == true) {
     // redraw core browser
-    ft_core_browser(0);
+    app_core_browser_ft_menu(0);
   }
-}
-
-core_list_item_t get_core_list_item(bool is_flash) {
-  core_list_item_t core;
-  if (is_flash) {
-    String s = String(ffile.fullName());
-    s = "/" + s;
-    s.toCharArray(core.filename, sizeof(core.filename));
-    core.flash = true;
-  } else {
-    file1.getName(core.filename, sizeof(core.filename));
-    core.flash = false;
-  }
-  file_seek(FILE_POS_CORE_NAME, is_flash); file_read_bytes(core.name, 32, is_flash); core.name[32] = '\0';
-  uint8_t visible; file_seek(FILE_POS_CORE_VISIBLE, is_flash); visible = file_read(is_flash); core.visible = (visible > 0);
-  file_seek(FILE_POS_CORE_ORDER, is_flash); core.order = file_read(is_flash);
-  file_seek(FILE_POS_CORE_TYPE, is_flash); core.type = file_read(is_flash);
-  file_seek(FILE_POS_CORE_BUILD, is_flash); file_read_bytes(core.build, 8, is_flash); core.build[8] = '\0';
-  return core;
-}
-
-void read_core_list() {
-
-  // files from flash
-  if (has_fs) {
-    fs::Dir dir = LittleFS.openDir("/");
-    dir.rewind();
-    while (dir.next()) {
-      if (dir.isFile()) {
-        ffile = dir.openFile("r");
-        char filename[32]; file_get_name(filename, sizeof(filename), true);
-        uint8_t len = strlen(filename);
-        if (strstr(strlwr(filename + (len - 4)), ".kg1")) {
-          cores[cores_len] = get_core_list_item(true);
-          cores_len++;
-        }
-        ffile.close();
-      }
-    }
-  }
-
-  // files from sd card
-  if (has_sd) {
-    sd1.chvol();
-    if (!root1.open(&sd1, "/")) {
-      halt("open root");
-    }
-    root1.rewind();
-    while (file1.openNext(&root1, O_RDONLY)) {
-      char filename[32]; file1.getName(filename, sizeof(filename));
-      uint8_t len = strlen(filename);
-      if (strstr(strlwr(filename + (len - 4)), ".kg1")) {
-        cores[cores_len] = get_core_list_item(false);
-        cores_len++;
-      }
-      file1.close();
-    }
-  }
-  // sort by core order number
-  std::sort(cores, cores + cores_len);
-  // TODO
-}
-
-void read_file_list(bool forceIndex = false) {
-
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.frame(8,8,24,13, 1);
-  zxosd.fill(9,9,23,12, 32);
-  zxosd.setColor(OSD::COLOR_GREEN_I, OSD::COLOR_BLACK);
-  zxosd.setPos(9, 9);
-  zxosd.print("Scanning files");
-  zxosd.setColor(OSD::COLOR_MAGENTA_I, OSD::COLOR_BLACK);
-  zxosd.setPos(9,10);
-  zxosd.print("Please wait...");
-
-  // todo: create text index
-
-  // files from sd card
-  if (has_sd) {
-    String dir = String(core.dir);
-    dir.trim();
-    if (dir.length() == 0) dir = "/";
-    if (dir.charAt(0) != '/') dir = "/" + dir;
-    char d[256];
-    dir.toCharArray(d, 255);
-    if (!root1.open(&sd1, d)) {
-
-        zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-        zxosd.frame(8,8,24,13, 1);
-        zxosd.fill(9,9,23,12, 32);
-        zxosd.setColor(OSD::COLOR_RED_I, OSD::COLOR_BLACK);
-        zxosd.setPos(9, 9);
-        zxosd.print("Error occured");
-        zxosd.setPos(9,10);
-        zxosd.printf("Bad dir %s", d);
-        return;
-    }
-    root1.rewind();
-
-    // recreate index
-    if (forceIndex || !sd1.exists(dir + "/index.db")) {
-      // drop index
-      if (sd1.exists(dir + "/index.db")) {
-        sd1.remove(dir + "/index.db");
-      }
-      if (fileIndex1 = sd1.open(dir + "/index.db", FILE_WRITE)) {
-        d_println("Read file list");
-        String exts = String(core.file_extensions);
-        exts.toLowerCase(); exts.trim();
-        char e[33];
-        exts.toCharArray(e, 32);
-        int cnt = 0;
-        while (file1.openNext(&root1, O_RDONLY)) {
-          char filename[255]; file1.getName(filename, sizeof(filename));
-          uint8_t len = strlen(filename);
-          if (cnt < MAX_FILES && !file1.isDirectory() && len <= 32) {
-            if (exts.length() == 0 || exts.indexOf(strlwr(filename + (len - 4))) != -1) {
-              fileIndex1.write(filename);
-              fileIndex1.write("\n");
-              cnt++;
-            }
-          }
-          file1.close();
-        }
-        fileIndex1.close();
-      }
-    }
-
-    // reading file list from index
-    if (fileIndex1 = sd1.open(dir + "/index.db", FILE_READ)) {
-      files_len = 0;
-      while(fileIndex1.available()) {
-        String s = fileIndex1.readStringUntil('\n'); 
-        if (s.length() > 0 && s.length() <= 32) {
-          s.trim();
-          file_list_item_t f;
-          s.toCharArray(f.name, sizeof(f.name));
-          files[files_len] = f;
-          files_len++;
-        }
-      }
-      fileIndex1.close();
-    }
-    
-  } else {
-    zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-    zxosd.frame(8,8,24,13, 1);
-    zxosd.fill(9,9,23,12, 32);
-    zxosd.setColor(OSD::COLOR_RED_I, OSD::COLOR_BLACK);
-    zxosd.setPos(9, 9);
-    zxosd.print("Error occured");
-    zxosd.setPos(9,10);
-    zxosd.print("Check SD card");
-    return;
-  }
-  // sort by file name
-  std::sort(files, files + files_len);
-  
-  // cleanup error messages
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.fill(8,8,24,13, 32);  
-
-  // select and load prev file on boot
-  if (files_len >0 && strlen(core.last_file) > 0) {
-    String lf = String(core.last_file); lf.trim();
-    for (uint8_t i=0; i<files_len; i++) {
-      String f = String(files[i].name); f.trim();
-      if (f == lf) {
-          file_sel = i;
-          send_file(files[file_sel].name);
-          // hide osd
-          if (!is_osd_hiding) {
-            is_osd_hiding = true;
-            hide_timer.reset();
-            zxosd.hideMenu();
-          }
-      }
-    }
-  }
-
 }
 
 void read_core(const char* filename) {
@@ -1761,22 +1032,6 @@ void send_rom_byte(uint32_t addr, uint8_t data) {
   spi_send(CMD_ROMDATA, romaddr, data);
 }
 
-void send_file_byte(uint32_t addr, uint8_t data) {
-  // send file bank address every 256 bytes
-  if (addr % 256 == 0) {
-    uint8_t filebank3 = (uint8_t)((addr & 0xFF000000) >> 24);
-    uint8_t filebank2 = (uint8_t)((addr & 0x00FF0000) >> 16);
-    uint8_t filebank1 = (uint8_t)((addr & 0x0000FF00) >> 8);
-    //d_printf("File bank %d %d %d", filebank1, filebank2, filebank3); d_println();
-    spi_send(CMD_FILEBANK, 0, filebank1);
-    spi_send(CMD_FILEBANK, 1, filebank2);
-    spi_send(CMD_FILEBANK, 2, filebank3);
-  }
-  // send lower 256 bytes
-  uint8_t fileaddr = (uint8_t)((addr & 0x000000FF));
-  spi_send(CMD_FILEDATA, fileaddr, data);
-}
-
 void osd_print_logo(uint8_t x, uint8_t y)
 {
   zxosd.setPos(x,y);
@@ -1856,70 +1111,10 @@ void osd_print_header()
   //updateTime();
 }
 
-void osd_init_overlay()
-{
-  osd_state = state_main;
-
-  // disable popup in overlay mode
-  zxosd.hidePopup();
-
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.clear();
-
-  osd_print_header();
-
-  menu(APP_COREBROWSER_MENU_OFFSET);
-
-  // footer
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  osd_print_line(24);
-  zxosd.setPos(0,25); zxosd.print("Press Menu+Esc to toggle OSD");
-}
-
 void osd_clear()
 {
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
   zxosd.clear();
-}
-
-void osd_init_popup(uint8_t event_type)
-{
-  // todo
-}
-
-// init rtc osd
-void osd_init_rtc_overlay()
-{
-  // todo
-}
-
-// init about osd
-void osd_init_about_overlay()
-{
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.clear();
-
-  osd_print_header();
-
-  zxosd.setPos(0,5);
-  zxosd.print("About");
-
-  osd_print_footer();
-
-}
-
-// init info osd
-void osd_init_info_overlay()
-{
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.clear();
-
-  osd_print_header();
-
-  zxosd.setPos(0,5);
-  zxosd.print("System Info");
-  
-  osd_print_footer();
 }
 
 void osd_print_footer() {
@@ -1932,56 +1127,6 @@ void osd_print_footer() {
   zxosd.print("Press ESC to return");
 }
 
-void osd_init_core_browser_overlay() {
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.clear();
-
-  osd_print_header();
-
-  zxosd.setPos(0,5);
-
-  core_browser(APP_COREBROWSER_MENU_OFFSET);  
-
-  // footer
-  osd_print_line(21);
-  osd_print_line(23);
-  zxosd.setPos(1,24); zxosd.print("Please use arrows to navigate");
-  zxosd.setPos(1,25); zxosd.print("Press Enter to load selection");
-}
-
-void ft_osd_init_core_browser_overlay() {
-  ft.setSound(FT81x_SOUND_SWITCH, 40);
-  // load png/jpegs with extraction bitmaps to GRAM
-  ft.loadImage(0, LOGO_SIZE, logoData, false); // karabas logo, starts from 0 in GRAM
-  ft.loadImage(LOGO_BITMAP_SIZE, BURATO2_SIZE, burato2Data, false); // karabas bg, starts from 1792 in GRAM
-  // load pcm audio
-  ft.writeGRAM(LOGO_BITMAP_SIZE + BURATO3_BITMAP_SIZE, KEY_SIZE, keyData); // pcm sound, starts from 65792 in GRAM
-
-  ft_core_browser(0);  
-}
-
-void osd_init_file_loader_overlay(bool initSD = true, bool recreateIndex = false) {
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.clear();
-
-  osd_print_header();
-
-  zxosd.setPos(0,5);
-
-  // collect files from sd
-  if (initSD) {
-      read_file_list(recreateIndex);
-  }
-
-  file_loader(APP_COREBROWSER_MENU_OFFSET);  
-
-  // footer
-  osd_print_line(21);
-  osd_print_line(23);
-  zxosd.setPos(1,24); zxosd.print("Please use arrows to navigate");
-  zxosd.setPos(1,25); zxosd.print("Press Enter to load selection");
-}
-
 void osd_handle(bool force) {
   if (is_osd || force) {
     if ((osd_prev_state != osd_state) || force) {
@@ -1989,39 +1134,18 @@ void osd_handle(bool force) {
       switch(osd_state) {
         case state_core_browser:
           if (FT_OSD == 1 && has_ft == true) {
-            ft_osd_init_core_browser_overlay();
+            app_core_browser_ft_overlay();
           } else {
-            osd_init_core_browser_overlay();
+            app_core_browser_overlay();
           }
         break;
         case state_main:
-          osd_init_overlay();
+          app_core_overlay();
         break;
         case state_file_loader:
-          osd_init_file_loader_overlay();
-        break;
-        case state_rtc:
-          osd_init_rtc_overlay();
-        break;
-        case state_about:
-          osd_init_about_overlay();
-        break;
-        case state_info:
-          osd_init_info_overlay();
+          app_file_loader_overlay(true, false);
         break;
       }
     }
   }
-}
-
-bool operator<(const core_list_item_t a, const core_list_item_t b) {
-  // Lexicographically compare the tuples (hour, minute)
-  return a.order < b.order;
-}
-
-bool operator<(const file_list_item_t a, const file_list_item_t b) {
-  // Lexicographically compare the tuples (hour, minute)
-  String s1 = String(a.name); String s2 = String(b.name);
-  s1.toLowerCase(); s2.toLowerCase();
-  return s1 < s2;
 }

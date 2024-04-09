@@ -1,3 +1,5 @@
+#pragma once
+
 #include <Arduino.h>
 
 #define LOGO_SIZE 192
