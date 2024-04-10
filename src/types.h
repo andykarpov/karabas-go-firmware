@@ -25,7 +25,7 @@ typedef struct {
 typedef struct {
 	uint8_t type;
 	uint8_t def;
-	char name[32+1];
+	char name[16+1];
 	char hotkey[16+1];
 	uint8_t keys[2];
 	core_osd_option_t options[MAX_OSD_ITEM_OPTIONS];
