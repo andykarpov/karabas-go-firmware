@@ -11,6 +11,7 @@
 #include "LittleFS.h"
 #include "hid_app.h"
 #include "ElapsedTimer.h"
+#include "file.h"
 
 extern FT812 ft;
 extern RTC zxrtc;
@@ -43,21 +44,9 @@ void spi_send(uint8_t cmd, uint8_t addr, uint8_t data);
 void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data);
 
 void do_configure(const char* filename);
-uint32_t fpga_configure(const char* filename);
+uint32_t fpga_send(const char* filename);
 void halt(const char* msg);
 
-void file_seek(uint32_t pos, bool is_flash);
-uint8_t file_read(bool is_flash);
-size_t file_read_bytes(char *buf, size_t len, bool is_flash);
-int file_read_buf(char *buf, size_t len, bool is_flash);
-uint16_t file_read16(uint32_t pos, bool is_flash);
-uint32_t file_read24(uint32_t pos, bool is_flash);
-uint32_t file_read32(uint32_t pos, bool is_flash);
-void file_get_name(char *buf, size_t len, bool is_flash);
-bool is_flashfs(const char* filename);
-
-void osd_print_header();
-void osd_print_footer();
 void osd_handle(bool force);
 
 void read_core(const char* filename);

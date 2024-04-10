@@ -9,7 +9,6 @@
 #include <SPI.h>
 #include <RTC.h>
 #include <Arduino.h>
-#include <utils.h>
 
 /****************************************************************************/
 
@@ -334,6 +333,37 @@ void RTC::setEepromReg(uint8_t reg, uint8_t val) {
     // noting here, 255 means no eeprom allowed
   }
 }
+
+uint8_t RTC::bin2bcd(uint8_t val) {
+  return val + 6 * (val / 10);
+}
+
+uint8_t RTC::bcd2bin(uint8_t val) {
+  return val - 6 * (val >> 4);
+}
+
+uint8_t RTC::time_to24h(uint8_t val) {
+  bool pm = bitRead(val, 7);
+  bitClear(val, 7);
+  val = (pm) ? val + 12 : val;
+  return (val < 23) ? val : 0;
+}
+
+uint8_t RTC::time_to12h(uint8_t val) {
+  bool pm = false;
+  if (val > 12) {
+    val = val - 12;
+    pm = true;
+  }
+  //bitWrite(val, 7, pm);
+  return val;
+}
+
+uint8_t RTC::get_year(int year) {
+  int res = year % 100;
+  return lowByte(res);
+}
+
 
 
 /****************************************************************************/

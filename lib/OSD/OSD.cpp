@@ -229,5 +229,31 @@ void OSD::logo(uint8_t x, uint8_t y) {
   setPos(x,y+3);
 }
 
+void OSD::header(char* build, char* id)
+{
+  logo(0,0);
+
+  setColor(OSD::COLOR_GREY, OSD::COLOR_BLACK);
+  setPos(19,2);
+  print("FPGA "); print(build);
+
+  setColor(OSD::COLOR_GREY, OSD::COLOR_BLACK);
+  setPos(19,3);
+  print("CORE "); print(id);
+
+  setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+  line(4);
+}
+
+void OSD::footer() {
+
+  setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+  line(22);
+
+  // footer
+  setPos(0,23); 
+  print("Press ESC to return");
+}
+
 
 // vim:cin:ai:sts=2 sw=2 ft=cpp

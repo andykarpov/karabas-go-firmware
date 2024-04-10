@@ -29,8 +29,6 @@ void app_file_loader_read_list(bool forceIndex = false) {
   zxosd.setPos(9,10);
   zxosd.print("Please wait...");
 
-  // todo: create text index
-
   // files from sd card
   if (has_sd) {
     String dir = String(core.dir);
@@ -136,19 +134,13 @@ void app_file_loader_read_list(bool forceIndex = false) {
 }
 
 void app_file_loader_menu(uint8_t vpos) {
-  //d_print("Files: "); d_println(files_len);
   file_pages = ceil((float)files_len / file_page_size);
-  //d_print("Pages: "); d_println(file_pages);
   file_page = ceil((float)(file_sel+1)/file_page_size);
-  //d_print("File page: "); d_println(file_page);
   uint8_t file_from = (file_page-1)*file_page_size;
   uint8_t file_to = file_page*file_page_size > files_len ? files_len : file_page*file_page_size;
   uint8_t file_fill = file_page*file_page_size;
   uint8_t pos = vpos;
-  //d_print("From: "); d_print(file_from); d_print(" to: "); d_println(file_to);
-  //d_print("Selected: "); d_println(file_sel);
   for(uint8_t i=file_from; i < file_to; i++) {
-    //d_print(cores[i].name); d_println(cores[i].order);
     zxosd.setPos(0, pos);
     if (file_sel == i) {
       zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLUE);
@@ -168,7 +160,6 @@ void app_file_loader_menu(uint8_t vpos) {
     }
     pos++;
   }
-  //d_print("Fill: "); d_println(file_fill);
   if (file_fill > file_to) {
     for (uint8_t i=file_to; i<file_fill; i++) {
       zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
@@ -185,7 +176,7 @@ void app_file_loader_overlay(bool initSD = true, bool recreateIndex = false) {
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
   zxosd.clear();
 
-  osd_print_header();
+  zxosd.header(core.build, core.id);
 
   zxosd.setPos(0,5);
 
@@ -268,7 +259,6 @@ void app_file_loader_send_file(const char* filename) {
   spi_send(CMD_FILELOADER, 0, 1);
   spi_send(CMD_FILELOADER, 0, 0);
 
-  //file1.open(&root1, tmp, FILE_READ);
   uint64_t file_size = file1.size();
 
   d_printf("Sending file %s (%d bytes)", new_filename, (uint32_t)((file_size))); d_println();

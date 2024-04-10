@@ -24,7 +24,7 @@ uint8_t core_page = 1;
 void app_core_browser_overlay() {
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
   zxosd.clear();
-  osd_print_header();
+  zxosd.header(core.build, core.id);
   zxosd.setPos(0,5);
   app_core_browser_menu(APP_COREBROWSER_MENU_OFFSET);  
   // footer
@@ -277,7 +277,6 @@ void app_core_browser_on_keyboard() {
 }
 
 bool operator<(const core_list_item_t a, const core_list_item_t b) {
-  // Lexicographically compare the tuples (hour, minute)
   return a.order < b.order;
 }
 

@@ -21,7 +21,7 @@ void app_core_overlay()
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
   zxosd.clear();
 
-  osd_print_header();
+  zxosd.header(core.build, core.id);
 
   app_core_menu(APP_COREBROWSER_MENU_OFFSET);
 
@@ -62,8 +62,6 @@ void app_core_menu(uint8_t vpos) {
 void app_core_save(uint8_t pos)
 {
   bool is_flash = is_flashfs(core.filename);
-  //d_print("Core osd "); d_print(core.osd[pos].name); d_print("="); d_println(core.osd[pos].val);
-  //d_print(core.filename); d_print(" type "); d_println(is_flash ? " flash" : " sd");
 
   if (is_flash) {
     ffile = LittleFS.open(core.filename, "r+"); // read+write

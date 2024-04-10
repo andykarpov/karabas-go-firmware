@@ -46,6 +46,7 @@
 #include "app_core_browser.h"
 #include "app_file_loader.h"
 #include "app_core.h"
+#include "file.h"
 
 PioSpi spiSD(PIN_SD_SPI_RX, PIN_SD_SPI_SCK, PIN_SD_SPI_TX); // dedicated SD1 SPI
 #define SD_CONFIG SdSpiConfig(SD_CS_PIN, DEDICATED_SPI, SD_SCK_MHZ(60), &spiSD) // SD1 SPI Settings
@@ -332,7 +333,7 @@ void do_configure(const char* filename) {
   is_configuring = true;
   ft.vga(false);
   ft.spi(false);
-  fpga_configure(filename);
+  fpga_send(filename);
   spi_send(CMD_INIT_START, 0, 0);
   // trigger font loader reset
   zxosd.fontReset();
@@ -513,107 +514,7 @@ void halt(const char* msg) {
   }
 }
 
-void file_seek(uint32_t pos, bool is_flash) {
-  if (is_flash) {
-    ffile.seek(pos);
-  } else {
-    file1.seek(pos);
-  }
-}
-
-uint8_t file_read(bool is_flash) {
-  if (is_flash) {
-    return ffile.read();
-  } else {
-    return file1.read();
-  }
-}
-
-size_t file_read_bytes(char *buf, size_t len, bool is_flash) {
-  if (is_flash) {
-    return ffile.readBytes(buf, len);
-  } else {
-    return file1.readBytes(buf, len);
-  }
-}
-
-int file_read_buf(char *buf, size_t len, bool is_flash) {
-  if (is_flash) {
-    return ffile.readBytes(buf, len);
-  } else {
-    return file1.read(buf, len);
-  }
-}
-
-uint16_t file_read16(uint32_t pos, bool is_flash) {
-  file_seek(pos, is_flash);
-  
-  uint16_t res = 0;
-
-  if (is_flash) {
-    char buf[2] = {0};
-    ffile.readBytes(buf, sizeof(buf));
-    res = buf[1] + buf[0]*256;
-  } else {
-    uint8_t buf[2] = {0};
-    file1.readBytes(buf, sizeof(buf));
-    res = buf[1] + buf[0]*256;
-  }
-  
-  return res;
-}
-
-uint32_t file_read24(uint32_t pos, bool is_flash) {
-  file_seek(pos, is_flash);
-
-  uint32_t res = 0;
-
-  if (is_flash) {
-    char buf[3] = {0};
-    ffile.readBytes(buf, sizeof(buf));
-    res = buf[2] + buf[1]*256 + buf[0]*256*256;
-  } else {
-    uint8_t buf[3] = {0};
-    file1.readBytes(buf, sizeof(buf));
-    res = buf[2] + buf[1]*256 + buf[0]*256*256;
-  }
-
-  return res;
-}
-
-uint32_t file_read32(uint32_t pos, bool is_flash) {
-  file_seek(pos, is_flash);
-
-  uint32_t res = 0;
-  if (is_flash) {
-    char buf[4] = {0};
-    ffile.readBytes(buf, sizeof(buf));
-    res = buf[3] + buf[2]*256 + buf[1]*256*256 + buf[0]*256*256*256;
-  } else {
-    uint8_t buf[4] = {0};
-    file1.readBytes(buf, sizeof(buf));
-    res = buf[3] + buf[2]*256 + buf[1]*256*256 + buf[0]*256*256*256;
-  }
-
-  return res;
-}
-
-void file_get_name(char *buf, size_t len, bool is_flash) {
-  if (is_flash) {
-    String s = String(ffile.fullName());
-    s = "/" + s;
-    s.toCharArray(buf, len);
-  } else {
-    file1.getName(buf, sizeof(buf));
-  }
-}
-
-bool is_flashfs(const char* filename) {
-  String s = String(filename);
-  return (s.charAt(0) == '/');
-}
-
-uint32_t fpga_configure(const char* filename) {
+uint32_t fpga_send(const char* filename) {
 
   d_print("Configuring FPGA by "); d_println(filename);
 
@@ -1053,34 +954,6 @@ void read_roms(const char* filename) {
   } else {
     file1.close();
   }
-}
-
-void osd_print_header()
-{
-  zxosd.logo(0,0);
-
-  zxosd.setColor(OSD::COLOR_GREY, OSD::COLOR_BLACK);
-  zxosd.setPos(19,2);
-  zxosd.print("FPGA "); zxosd.print(core.build);
-
-  zxosd.setColor(OSD::COLOR_GREY, OSD::COLOR_BLACK);
-  zxosd.setPos(19,3);
-  zxosd.print("CORE "); zxosd.print(core.id);
-
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.line(4);
-
-  //updateTime();
-}
-
-void osd_print_footer() {
-
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.line(22);
-
-  // footer
-  zxosd.setPos(0,23); 
-  zxosd.print("Press ESC to return");
 }
 
 void osd_handle(bool force) {
