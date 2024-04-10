@@ -63,10 +63,14 @@ FsFile file1, fileIndex1;
 FsFile root1;
 fs::Dir froot;
 fs::File ffile;
-SegaController sega;
 OSD zxosd;
 
+#if HW_ID == HW_ID_GO
+SegaController sega;
 FT812 ft(PIN_MCU_FT_CS, PIN_FT_RESET);
+#elif HW_ID == HW_ID_MINI 
+FT812 ft(PIN_MCU_FT_CS);
+#endif
 
 static queue_t spi_event_queue;
 
@@ -138,6 +142,7 @@ void setup()
   d_begin(115200);
   d_println("Karabas Go RP2040 firmware");
 
+#if HW_ID == HW_ID_GO
   if (extender.begin() == false) {
     has_extender = false;
     d_println("PCA9536 unavailable. Please check soldering.");
@@ -153,8 +158,17 @@ void setup()
     extender.pinMode(PIN_EXT_LED2, OUTPUT);
   }
 
-  zxrtc.begin(spi_send, on_time);
   sega.begin(PIN_JOY_SCK, PIN_JOY_LOAD, PIN_JOY_DATA, PIN_JOY_P7);
+
+#elif HW_ID == HW_ID_MINI
+  has_extender = false;
+  pinMode(PIN_BTN1, INPUT_PULLUP);
+  pinMode(PIN_BTN2, INPUT_PULLUP);
+  pinMode(PIN_LED1, OUTPUT); digitalWrite(PIN_LED1, HIGH);
+  pinMode(PIN_LED2, OUTPUT); digitalWrite(PIN_LED2, HIGH);
+#endif
+
+  zxrtc.begin(spi_send, on_time);
   zxosd.begin(spi_send);
   ft.begin(spi_send);
 
@@ -199,7 +213,11 @@ void setup()
 void setup1() {
   pio_usb_configuration_t pio_cfg = PIO_USB_DEFAULT_CONFIG;
   pio_cfg.pin_dp = HOST_PIN_DP;
+#if HW_ID == HW_ID_GO
   pio_cfg.pinout = PIO_USB_PINOUT_DMDP;
+#elif HW_ID == HW_ID_MINI
+  pio_cfg.pinout = PIO_USB_PINOUT_DPDM;
+#endif
   tuh_configure(1, TUH_CFGID_RPI_PIO_USB_CONFIGURATION, &pio_cfg);
   tuh_init(1);
 }
@@ -222,15 +240,27 @@ void loop()
     osd_handle(true); // reinit osd
   }
 
-  if (has_extender && my_timer.elapsed() >= 100) {
-    extender.digitalWrite(2, LOW);
-    my_timer.reset();
+  if (my_timer.elapsed() >= 100) {
+#if HW_ID == HW_ID_GO
+    if (has_extender) {
+      extender.digitalWrite(2, LOW);
+      my_timer.reset();
+    }
+#elif HW_ID == HW_ID_MINI
+  digitalWrite(PIN_LED1, LOW);
+  my_timer.reset();
+#endif
   }
 
   static bool prev_btn1 = HIGH;
   static bool prev_btn2 = HIGH;
+#if HW_ID == HW_ID_GO
   bool btn1 = has_extender ? extender.digitalRead(0) : HIGH;
   bool btn2 = has_extender ? extender.digitalRead(1) : HIGH;
+#elif HW_ID == HW_ID_MINI
+  bool btn1 = digitalRead(PIN_BTN1);
+  bool btn2 = digitalRead(PIN_BTN2);
+#endif
 
   if (prev_btn1 != btn1) {
     d_print("Button 1: "); d_println((btn1 == LOW) ? "on" : "off");
@@ -258,8 +288,10 @@ void loop()
   }*/
 
   // joy reading
+#if HW_ID == HW_ID_GO
   joyL = sega.getState(true);
   joyR = sega.getState(false);
+#endif
   static uint16_t prevJoyL = 0;
   static uint16_t prevJoyR = 0;
 
@@ -506,10 +538,15 @@ void halt(const char* msg) {
   bool blink = false;
   while(true) {
       blink = !blink;
+#if HW_ID == HW_ID_GO
       if (has_extender) {
         extender.digitalWrite(PIN_EXT_LED1, blink);
         extender.digitalWrite(PIN_EXT_LED2, blink);
       }
+#elif HW_ID == HW_ID_MINI
+      digitalWrite(PIN_LED1, blink);
+      digitalWrite(PIN_LED2, blink);
+#endif
       delay(100);
   }
 }
@@ -570,10 +607,15 @@ uint32_t fpga_send(const char* filename) {
 
     if (i % 8192 == 0) {
       blink = !blink;
+#if HW_ID == HW_ID_GO
       if (has_extender) {
         extender.digitalWrite(PIN_EXT_LED1, blink);
         extender.digitalWrite(PIN_EXT_LED2, blink);
       }
+#elif HW_ID == HW_ID_MINI
+      digitalWrite(PIN_LED1, blink);
+      digitalWrite(PIN_LED2, blink);
+#endif
     }
   }
   if (is_flash) {

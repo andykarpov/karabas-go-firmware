@@ -255,6 +255,7 @@ private:
   m_cb action;
   uint8_t pin_cs;                    ///< CS pin for FT81x
   uint8_t pin_reset;                 ///< RESET pin for FT81x
+  bool has_reset;
 
 protected:
 
@@ -328,7 +329,9 @@ public:
   /**
    * Constructor
    */
-  FT812(uint8_t cs, uint8_t reset) : pin_cs(cs), pin_reset(reset) {}
+  FT812(uint8_t cs, uint8_t reset) : pin_cs(cs), pin_reset(reset), has_reset(true) {}
+
+  FT812(uint8_t cs) : pin_cs(cs), has_reset(false) {}
 
   /*!
       @brief  Begin operation

@@ -1,5 +1,15 @@
 #pragma once
 
+#define HW_ID_GO 1
+#define HW_ID_MINI 2
+
+#ifndef HW_ID
+#define HW_ID 1
+#endif
+
+
+#if HW_ID==HW_ID_GO
+
 #define HOST_PIN_DP   25
 
 #define PIN_MCU_SPI_SCK 22 // sck
@@ -38,6 +48,44 @@
 #define PIN_EXT_BTN2 1
 #define PIN_EXT_LED1 2
 #define PIN_EXT_LED2 3
+
+#elif HW_ID==HW_ID_MINI
+
+#define HOST_PIN_DP   24
+
+#define PIN_MCU_SPI_SCK 22 // sck
+#define PIN_MCU_SPI_CS 21  // ss
+#define PIN_MCU_SPI_RX 20 // miso
+#define PIN_MCU_SPI_TX 23 // mosi
+
+#define PIN_SD_SPI_SCK 2 
+#define PIN_SD_SPI_CS 1 
+#define PIN_SD_SPI_RX 0 
+#define PIN_SD_SPI_TX 3 
+#define SD_CS_PIN PIN_SD_SPI_CS
+
+#define PIN_I2C_SDA 12 
+#define PIN_I2C_SCL 13 
+
+#define PIN_CONF_INIT_B 11 
+#define PIN_CONF_PRG_B 19 
+#define PIN_CONF_IO1 10 
+#define PIN_CONF_CLK 9 
+#define PIN_CONF_DONE 8 
+
+#define PIN_MCU_SD2_CS 16  
+#define PIN_MCU_FT_CS 17 
+
+#define PIN_MCU_SPI_IO0 14 
+#define PIN_MCU_SPI_IO1 15
+#define PIN_MCU_SPI_IO4 18
+
+#define PIN_BTN1 4
+#define PIN_BTN2 6
+#define PIN_LED1 5
+#define PIN_LED2 7
+
+#endif // HW_ID
 
 #define CMD_USB_KBD 0x01
 #define CMD_USB_MOUSE 0x02

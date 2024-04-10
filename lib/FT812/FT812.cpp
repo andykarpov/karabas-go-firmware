@@ -115,7 +115,9 @@ void FT812::begin(m_cb act)
 {
     action = act;
     pinMode(pin_cs, OUTPUT); digitalWrite(pin_cs, HIGH);
-    pinMode(pin_reset, OUTPUT); digitalWrite(pin_reset, HIGH);
+    if (has_reset) {
+        pinMode(pin_reset, OUTPUT); digitalWrite(pin_reset, HIGH);
+    }
 }
 
 void FT812::spi(bool on)
@@ -132,9 +134,11 @@ void FT812::vga(bool on)
 
 void FT812::reset()
 {
-  digitalWrite(pin_reset, LOW); 
-  delay(10);
-  digitalWrite(pin_reset, HIGH);
+    if (has_reset) {
+        digitalWrite(pin_reset, LOW); 
+        delay(10);
+        digitalWrite(pin_reset, HIGH);
+    }
 }
 
 /**************************************************************************************************/
