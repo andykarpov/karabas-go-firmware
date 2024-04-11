@@ -182,7 +182,7 @@ void app_core_browser_read_list() {
   if (has_sd) {
     sd1.chvol();
     if (!root1.open(&sd1, "/")) {
-      halt("open root");
+      return;
     }
     root1.rewind();
     while (file1.openNext(&root1, O_RDONLY)) {
