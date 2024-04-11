@@ -198,7 +198,7 @@ void setup()
   joyL = joyR = 0;
   osd_state = state_main;
 
-  // load boot.kg1 from SD or flashfs
+  // load boot from SD or flashfs
   if (has_sd && sd1.exists(FILENAME_BOOT)) {  
     do_configure(FILENAME_BOOT);
   } else if (has_fs && LittleFS.exists(FILENAME_FBOOT)) {
@@ -376,7 +376,7 @@ void do_configure(const char* filename) {
   read_core(filename);
   if (!is_osd) {
     zxosd.clear();
-    zxosd.logo(0,0);
+    zxosd.logo(0,0, HW_ID);
     zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
     zxosd.setPos(0,5);
     zxosd.print("ROM ");
@@ -424,15 +424,6 @@ bool on_global_hotkeys() {
      return true;
   }
 
-  // ctrl+alt+del to core reset
-  /*if (
-      ((usb_keyboard_report.modifier & KEY_MOD_LCTRL) || (usb_keyboard_report.modifier & KEY_MOD_RCTRL)) && 
-      ((usb_keyboard_report.modifier & KEY_MOD_LALT) || (usb_keyboard_report.modifier & KEY_MOD_RALT)) && 
-        usb_keyboard_report.keycode[0] == KEY_DELETE) {
-     // todo: send reset somehow
-     return true;
-  }*/
-
   // osd hotkey
   for (uint8_t i=0; i<core.osd_len; i++) {
     if (core.osd[i].keys[0] != 0 && (usb_keyboard_report.modifier & core.osd[i].keys[0]) || (core.osd[i].keys[0] == 0)) {
@@ -447,7 +438,7 @@ bool on_global_hotkeys() {
             core_send(i);
             if (!is_osd) {
               zxosd.clear();
-              zxosd.logo(0, 0);
+              zxosd.logo(0, 0, HW_ID);
               zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
               zxosd.setPos(0, 5);
               zxosd.print(core.osd[i].name);

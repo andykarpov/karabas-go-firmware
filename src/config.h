@@ -152,8 +152,16 @@
 #define FILE_POS_EEPROM_DATA 256
 #define FILE_POS_SWITCHES_DATA 512
 #define FILE_POS_BITSTREAM_START 1024
+
+#if HW_ID==HW_ID_GO
 #define FILENAME_BOOT "boot.kg1"
 #define FILENAME_FBOOT "/boot.kg1"
+#define CORE_EXT ".kg1"
+#elif HW_ID==HW_ID_MINI
+#define FILENAME_BOOT "boot.kg2"
+#define FILENAME_FBOOT "/boot.kg2"
+#define CORE_EXT ".kg2"
+#endif
 
 #define APP_COREBROWSER_MENU_OFFSET 5
 

@@ -176,7 +176,7 @@ void app_file_loader_overlay(bool initSD = true, bool recreateIndex = false) {
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
   zxosd.clear();
 
-  zxosd.header(core.build, core.id);
+  zxosd.header(core.build, core.id, HW_ID);
 
   zxosd.setPos(0,5);
 

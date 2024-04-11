@@ -86,7 +86,7 @@ void app_core_overlay()
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
   zxosd.clear();
 
-  zxosd.header(core.build, core.id);
+  zxosd.header(core.build, core.id, HW_ID);
 
   curr_osd_item = find_first_item();
   app_core_menu(APP_COREBROWSER_MENU_OFFSET);

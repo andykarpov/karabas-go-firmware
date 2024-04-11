@@ -185,7 +185,7 @@ void OSD::line(uint8_t y) {
   }
 }
 
-void OSD::logo(uint8_t x, uint8_t y) {
+void OSD::logo(uint8_t x, uint8_t y, uint8_t hw) {
   setPos(x,y);
   setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
 
@@ -225,13 +225,19 @@ void OSD::logo(uint8_t x, uint8_t y) {
   setColor(OSD::COLOR_BLUE_I, OSD::COLOR_BLACK);
   write(0x16); // -
 
+  if (hw == 2) {
+    setPos(x+6, y+3);
+    setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+    print("mini");
+  }
+
   setColor(OSD::COLOR_GREY, OSD::COLOR_BLACK);
   setPos(x,y+3);
 }
 
-void OSD::header(char* build, char* id)
+void OSD::header(char* build, char* id, uint8_t hw)
 {
-  logo(0,0);
+  logo(0,0, hw);
 
   setColor(OSD::COLOR_GREY, OSD::COLOR_BLACK);
   setPos(19,2);

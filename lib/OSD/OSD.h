@@ -99,8 +99,8 @@ public:
   void fill(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, uint8_t chr);
   void frame(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, uint8_t thickness);
   void line(uint8_t y);
-  void logo(uint8_t x, uint8_t y);
-  void header(char* build, char* id);
+  void logo(uint8_t x, uint8_t y, uint8_t hw);
+  void header(char* build, char* id, uint8_t hw);
   void footer();
 
   void showMenu();

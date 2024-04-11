@@ -24,7 +24,7 @@ uint8_t core_page = 1;
 void app_core_browser_overlay() {
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
   zxosd.clear();
-  zxosd.header(core.build, core.id);
+  zxosd.header(core.build, core.id, HW_ID);
   zxosd.setPos(0,5);
   app_core_browser_menu(APP_COREBROWSER_MENU_OFFSET);  
   // footer
@@ -169,7 +169,7 @@ void app_core_browser_read_list() {
         ffile = dir.openFile("r");
         char filename[32]; file_get_name(filename, sizeof(filename), true);
         uint8_t len = strlen(filename);
-        if (strstr(strlwr(filename + (len - 4)), ".kg1")) {
+        if (strstr(strlwr(filename + (len - 4)), CORE_EXT)) {
           cores[cores_len] = app_core_browser_get_item(true);
           cores_len++;
         }
@@ -188,7 +188,7 @@ void app_core_browser_read_list() {
     while (file1.openNext(&root1, O_RDONLY)) {
       char filename[32]; file1.getName(filename, sizeof(filename));
       uint8_t len = strlen(filename);
-      if (strstr(strlwr(filename + (len - 4)), ".kg1")) {
+      if (strstr(strlwr(filename + (len - 4)), CORE_EXT)) {
         cores[cores_len] = app_core_browser_get_item(false);
         cores_len++;
       }
