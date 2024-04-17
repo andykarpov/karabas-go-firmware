@@ -49,9 +49,9 @@
 #include "file.h"
 
 PioSpi spiSD(PIN_SD_SPI_RX, PIN_SD_SPI_SCK, PIN_SD_SPI_TX); // dedicated SD1 SPI
-#define SD_CONFIG SdSpiConfig(SD_CS_PIN, DEDICATED_SPI, SD_SCK_MHZ(60), &spiSD) // SD1 SPI Settings
+#define SD_CONFIG SdSpiConfig(SD_CS_PIN, DEDICATED_SPI, SD_SCK_MHZ(30), &spiSD) // SD1 SPI Settings
 
-SPISettings settingsA(SD_SCK_MHZ(8), MSBFIRST, SPI_MODE0); // MCU SPI settings
+SPISettings settingsA(SD_SCK_MHZ(4), MSBFIRST, SPI_MODE0); // MCU SPI settings
 
 PCA9536 extender;
 ElapsedTimer my_timer;
@@ -243,7 +243,7 @@ void loop()
   if (my_timer.elapsed() >= 100) {
 #if HW_ID == HW_ID_GO
     if (has_extender) {
-      extender.digitalWrite(2, LOW);
+      extender.digitalWrite(PIN_EXT_LED1, LOW);
       my_timer.reset();
     }
 #elif HW_ID == HW_ID_MINI
@@ -255,8 +255,8 @@ void loop()
   static bool prev_btn1 = HIGH;
   static bool prev_btn2 = HIGH;
 #if HW_ID == HW_ID_GO
-  bool btn1 = has_extender ? extender.digitalRead(0) : HIGH;
-  bool btn2 = has_extender ? extender.digitalRead(1) : HIGH;
+  bool btn1 = has_extender ? extender.digitalRead(PIN_EXT_BTN1) : HIGH;
+  bool btn2 = has_extender ? extender.digitalRead(PIN_EXT_BTN2) : HIGH;
 #elif HW_ID == HW_ID_MINI
   bool btn1 = digitalRead(PIN_BTN1);
   bool btn2 = digitalRead(PIN_BTN2);
@@ -316,7 +316,11 @@ void loop()
 	while (queue_try_remove(&spi_event_queue, &packet)) {
     // skip keyboard transmission when osd is active
     if (packet.cmd == CMD_USB_KBD) {
-      if (has_extender) extender.digitalWrite(3, !(usb_keyboard_report.modifier != 0 || usb_keyboard_report.keycode[0] != 0));
+#if HW_ID==HW_ID_GO
+      if (has_extender) extender.digitalWrite(PIN_EXT_LED2, !(usb_keyboard_report.modifier != 0 || usb_keyboard_report.keycode[0] != 0));
+#elif HW_ID==HW_ID_MINI
+      digitalWrite(PIN_LED2, !(usb_keyboard_report.modifier != 0 || usb_keyboard_report.keycode[0] != 0));
+#endif
       if (packet.addr == 1 && packet.data != 0) {
           on_keyboard();
       }

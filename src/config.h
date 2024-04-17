@@ -4,7 +4,7 @@
 #define HW_ID_MINI 2
 
 #ifndef HW_ID
-#define HW_ID 1
+#define HW_ID 2
 #endif
 
 
@@ -82,8 +82,8 @@
 
 #define PIN_BTN1 4
 #define PIN_BTN2 6
-#define PIN_LED1 5
-#define PIN_LED2 7
+#define PIN_LED1 7
+#define PIN_LED2 5
 
 #endif // HW_ID
 
