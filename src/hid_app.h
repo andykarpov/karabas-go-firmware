@@ -9,6 +9,24 @@
 
 extern hid_keyboard_report_t usb_keyboard_report;
 extern hid_mouse_report_t usb_mouse_report;
+extern uint16_t joyUSB[4];
+extern uint8_t joyUSB_len;
+
+typedef struct
+{
+  uint16_t btn; // button id (sega)
+  uint8_t pos; // byte position in the hid report
+  bool isBit; // is value is bit num or absolute value
+  bool isAvail; // is button configured
+  uint8_t val; // value (absolute or bit position)
+} hid_joy_button_config_t;
+
+typedef struct
+{
+  uint16_t vid;
+  uint16_t pid;
+  hid_joy_button_config_t buttons[12];
+} hid_joy_config_t;
 
 // Each HID instance can has multiple reports
 static struct
@@ -17,6 +35,9 @@ static struct
   tuh_hid_report_info_t report_info[MAX_REPORT];
   uint16_t vid;
   uint16_t pid;
+  bool mounted;
+  bool has_driver;
+  hid_joy_config_t joy_config;
 } hid_info[CFG_TUH_HID];
 
 // joystick report struct
@@ -62,5 +83,7 @@ static void process_mouse_report_ext(uint8_t dev_addr, uint8_t instance, hid_mou
 static void process_joystick_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len);
 static void process_gamepad_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len);
 static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len);
+static void process_driver_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len);
+static uint8_t get_joy_num(uint8_t dev_addr, uint8_t instance);
 
 #endif

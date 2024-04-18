@@ -47,6 +47,8 @@
 #include "app_file_loader.h"
 #include "app_core.h"
 #include "file.h"
+#include <IniFile.h>
+#include "hid_driver.h"
 
 PioSpi spiSD(PIN_SD_SPI_RX, PIN_SD_SPI_SCK, PIN_SD_SPI_TX); // dedicated SD1 SPI
 #define SD_CONFIG SdSpiConfig(SD_CS_PIN, DEDICATED_SPI, SD_SCK_MHZ(30), &spiSD) // SD1 SPI Settings
@@ -86,6 +88,9 @@ core_item_t core;
 uint8_t osd_state;
 uint8_t osd_prev_state = state_main;
 
+hid_joy_config_t joy_drivers[255];
+uint8_t joy_drivers_len;
+
 bool has_extender = false;
 bool has_sd = false;
 bool has_fs = false;
@@ -95,6 +100,8 @@ bool is_configuring = false;
 
 uint16_t joyL;
 uint16_t joyR;
+uint16_t joyUSB[4];
+uint8_t joyUSB_len;
 
 uint8_t uart_idx = 0;
 uint8_t evo_rs232_dll = 0;
@@ -109,6 +116,10 @@ uint16_t prev_debug_data = 0;
 void setup()
 {
   queue_init(&spi_event_queue, sizeof(queue_spi_t), 64);
+
+  joyL = joyR = 0;
+  for (uint8_t i=0; i<4; i++) { joyUSB[i] = 0; }
+  joyUSB_len = 0;
 
   // SPI0 to FPGA
   SPI.setSCK(PIN_MCU_SPI_SCK);
@@ -195,7 +206,11 @@ void setup()
     d_println("Done");
   }
 
-  joyL = joyR = 0;
+  // load usb joy drivers
+  d_println("Loading usb hid joystock drivers");
+  hid_drivers_load();
+  //hid_drivers_dump();
+
   osd_state = state_main;
 
   // load boot from SD or flashfs
@@ -291,9 +306,20 @@ void loop()
 #if HW_ID == HW_ID_GO
   joyL = sega.getState(true);
   joyR = sega.getState(false);
+#elif HW_ID == HW_ID_MINI
+  joyL = 0;
+  joyR = 0;
 #endif
   static uint16_t prevJoyL = 0;
   static uint16_t prevJoyR = 0;
+
+  // merge 
+  if (joyUSB_len > 0) {
+    joyL = joyL | joyUSB[0];
+  }
+  if (joyUSB_len > 1) {
+    joyR = joyR | joyUSB[1];
+  }
 
   if (joyL != prevJoyL) {
     d_printf("SEGA L: %u", joyL); d_println();

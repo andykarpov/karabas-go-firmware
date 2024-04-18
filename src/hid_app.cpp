@@ -5,6 +5,32 @@
 #include "main.h"
 #include "host/usbh.h"
 #include "ps2kbd.h"
+#include "SegaController.h"
+
+bool hid_has_driver(uint16_t vid, uint16_t pid)
+{
+  if (joy_drivers_len > 0) {
+    for (uint8_t i = 0; i < joy_drivers_len; i++) {
+      if (joy_drivers[i].vid == vid && joy_drivers[i].pid == pid) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+hid_joy_config_t hid_load_driver(uint16_t vid, uint16_t pid)
+{
+  hid_joy_config_t cfg;
+  if (joy_drivers_len > 0) {
+    for (uint8_t i = 0; i < joy_drivers_len; i++) {
+      if (joy_drivers[i].vid == vid && joy_drivers[i].pid == pid) {
+        return joy_drivers[i];
+      }
+    }
+  }
+  return cfg; 
+}
 
 // Invoked when device is mounted (configured)
 void tuh_hid_mount_cb (uint8_t dev_addr, uint8_t instance, uint8_t const* desc_report, uint16_t desc_len)
@@ -20,6 +46,8 @@ void tuh_hid_mount_cb (uint8_t dev_addr, uint8_t instance, uint8_t const* desc_r
   tuh_vid_pid_get(dev_addr, &vid, &pid);
   hid_info[instance].vid = vid;
   hid_info[instance].pid = pid;
+  hid_info[instance].mounted = true;
+  hid_info[instance].has_driver = false;
 
   d_printf("HID VID/PID = %04x/%04x\r\n", vid, pid);
 
@@ -27,6 +55,10 @@ void tuh_hid_mount_cb (uint8_t dev_addr, uint8_t instance, uint8_t const* desc_r
   {
     hid_info[instance].report_count = tuh_hid_parse_report_descriptor(hid_info[instance].report_info, MAX_REPORT, desc_report, desc_len);
     d_printf("HID has %u reports \r\n", hid_info[instance].report_count);
+    hid_info[instance].has_driver = hid_has_driver(vid, pid);
+    if (hid_info[instance].has_driver) {
+      hid_info[instance].joy_config = hid_load_driver(vid, pid);
+    }
   }
   // Receive report
   tuh_hid_receive_report(dev_addr, instance);
@@ -40,6 +72,14 @@ void tuh_hid_set_protocol_complete_cb(uint8_t dev_addr, uint8_t instance, uint8_
 /// Invoked when device is unmounted (bus reset/unplugged)
 void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
 {
+  hid_info[instance].mounted = false;
+  
+  // reset joy data
+  get_joy_num(dev_addr, instance);
+  for (uint8_t i=0; i<4; i++) {
+    joyUSB[i] = 0;
+  }
+  
   d_printf("HID device unmounted, address = %d, instance = %d\r\n", dev_addr, instance);
 }
 
@@ -275,6 +315,40 @@ static void process_joystick_report(uint8_t dev_addr, uint8_t instance, uint8_t 
 
 }
 
+static uint8_t get_joy_num(uint8_t dev_addr, uint8_t instance)
+{
+  uint8_t res = 0;
+  uint8_t cnt = 0;
+  for (uint8_t i=0; i<CFG_TUH_HID; i++) {
+    if (hid_info[i].mounted && hid_info[i].has_driver) {
+      if (i == instance) {
+        res = cnt;
+      }
+      cnt++;
+    }
+  }
+  joyUSB_len = cnt;
+  return res;
+}
+
+static void process_driver_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
+{
+  //d_println("Driver report processing");
+  uint16_t res = SC_CTL_ON;
+  for(uint8_t i=0; i<12; i++) {
+    hid_joy_button_config_t cfg = hid_info[instance].joy_config.buttons[i];
+    if (cfg.isAvail) {
+      if (cfg.isBit) {
+        res += ((bitRead(report[cfg.pos], cfg.val)) ? cfg.btn : 0);
+        //d_printf("USB Joy button %d = %d", cfg.btn, bitRead(report[cfg.pos], cfg.val)); d_println();
+      } else {
+        res += ((cfg.val == report[cfg.pos]) ? cfg.btn : 0);
+        //d_printf("USB Joy button %d = %d", cfg.btn, (cfg.val == report[cfg.pos])); d_println();
+      }
+    }
+  }
+  joyUSB[get_joy_num(dev_addr, instance)] = res;
+}
 
 //--------------------------------------------------------------------+
 // Generic Report
@@ -343,13 +417,42 @@ static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t c
       break;
       case HID_USAGE_DESKTOP_JOYSTICK:
         //d_printf("HID usage desktop joystick, len=%d", len); d_println();
-        process_joystick_report( dev_addr, instance, report, len );
+        if (hid_info[instance].has_driver) {
+          process_driver_report(dev_addr, instance, report, len);
+        } else {
+          // try find a driver
+          hid_info[instance].has_driver = hid_has_driver(hid_info[instance].vid, hid_info[instance].pid);
+          if (hid_info[instance].has_driver) {
+            hid_info[instance].joy_config = hid_load_driver(hid_info[instance].vid, hid_info[instance].pid);
+          } else {
+            process_joystick_report( dev_addr, instance, report, len );
+          }
+        }
       break;
       case HID_USAGE_DESKTOP_GAMEPAD:
         //d_printf("HID usage desktop gamepad, len=%d", len); d_println();
-        process_gamepad_report( dev_addr, instance, report, len);
+        if (hid_info[instance].has_driver) {
+          process_driver_report(dev_addr, instance, report, len);
+        } else {
+          // try find a driver
+          hid_info[instance].has_driver = hid_has_driver(hid_info[instance].vid, hid_info[instance].pid);
+          if (hid_info[instance].has_driver) {
+            hid_info[instance].joy_config = hid_load_driver(hid_info[instance].vid, hid_info[instance].pid);
+          } else {
+            process_gamepad_report( dev_addr, instance, report, len);
+          }
+        }
       break;
-      default: break;
+      default: 
+        if (hid_info[instance].has_driver) {
+          process_driver_report(dev_addr, instance, report, len);
+        } else {
+          // try find a driver
+          hid_info[instance].has_driver = hid_has_driver(hid_info[instance].vid, hid_info[instance].pid);
+          if (hid_info[instance].has_driver) {
+            hid_info[instance].joy_config = hid_load_driver(hid_info[instance].vid, hid_info[instance].pid);
+          }
+        }
     }
   }
 }

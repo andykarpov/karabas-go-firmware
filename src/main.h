@@ -32,12 +32,17 @@ extern hid_mouse_report_t usb_mouse_report;
 
 extern uint16_t joyL;
 extern uint16_t joyR;
+extern uint16_t joyUSB[4];
+extern uint8_t joyUSB_len;
 
 extern uint8_t osd_state;
 extern core_item_t core;
 
 extern bool is_osd_hiding;
 extern ElapsedTimer hide_timer; 
+
+extern hid_joy_config_t joy_drivers[255];
+extern uint8_t joy_drivers_len;
 
 void spi_queue(uint8_t cmd, uint8_t addr, uint8_t data);
 void spi_send(uint8_t cmd, uint8_t addr, uint8_t data);
