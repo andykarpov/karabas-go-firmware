@@ -85,6 +85,8 @@ bool is_popup_hiding = false;
 bool need_redraw = false;
 
 core_item_t core;
+core_file_slot_t file_slots[4];
+
 uint8_t osd_state;
 uint8_t osd_prev_state = state_main;
 
@@ -120,6 +122,8 @@ void setup()
   joyL = joyR = 0;
   for (uint8_t i=0; i<4; i++) { joyUSB[i] = 0; }
   joyUSB_len = 0;
+
+  for (uint8_t i=0; i<4; i++) { file_slots[i] = {0}; }
 
   // SPI0 to FPGA
   SPI.setSCK(PIN_MCU_SPI_SCK);
@@ -513,15 +517,24 @@ void on_keyboard() {
 
 void core_send(uint8_t pos)
 {
-  spi_send(CMD_SWITCHES, pos, core.osd[pos].val);
-  d_printf("Switch: %s %d", core.osd[pos].name, core.osd[pos].val);
+  if (core.osd[pos].type == CORE_OSD_TYPE_FILEMOUNTER) {
+      spi_send(CMD_SWITCHES, pos, (file_slots[core.osd[pos].slot_id].is_mounted) ? 1 : 0);
+      d_printf("File mounter: %s %d", core.osd[pos].name, file_slots[core.osd[pos].slot_id].is_mounted);
+    } else {
+      spi_send(CMD_SWITCHES, pos, core.osd[pos].val);
+      d_printf("Switch: %s %d", core.osd[pos].name, core.osd[pos].val);
+    }
   d_println();
 }
 
 void core_send_all() 
 {
   for (uint8_t i=0; i<core.osd_len; i++) {
-    spi_send(CMD_SWITCHES, i, core.osd[i].val);
+    if (core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER) {
+      spi_send(CMD_SWITCHES, i, (file_slots[core.osd[i].slot_id].is_mounted) ? 1 : 0);
+    } else {
+      spi_send(CMD_SWITCHES, i, core.osd[i].val);
+    }
   }
 }
 
@@ -843,6 +856,9 @@ void read_core(const char* filename) {
   //d_print("OSD section: "); d_println(offset);
   file_seek(offset, is_flash); core.osd_len = file_read(is_flash);
   //d_print("OSD len: "); d_println(core.osd_len);
+  
+  for (uint8_t i=0; i<4; i++) { file_slots[i].is_mounted = false; }
+
   for (uint8_t i=0; i<core.osd_len; i++) {
     core.osd[i].type = file_read(is_flash);
     file_read(is_flash);
@@ -850,12 +866,35 @@ void read_core(const char* filename) {
     core.osd[i].def = file_read(is_flash);
     core.osd[i].val = core.osd[i].def;
     core.osd[i].prev_val = core.osd[i].def;
-    core.osd[i].options_len = file_read(is_flash);
-    if (core.osd[i].options_len > 8) {
-      core.osd[i].options_len = 8; // something goes wrong
+
+    // filemounter osd type:
+    // loading initial dir, filename, extensions and trying to mount file, if any
+    if (core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER) {
+      core.osd[i].options_len = 0;
+      core.osd[i].slot_id = file_read(is_flash);
+      file_slots[core.osd[i].slot_id].is_mounted = false;
+      file_read_bytes(file_slots[core.osd[i].slot_id].ext, 256, is_flash); file_slots[core.osd[i].slot_id].ext[255] = '\0';
+      file_read_bytes(file_slots[core.osd[i].slot_id].dir, 256, is_flash); file_slots[core.osd[i].slot_id].dir[255] = '\0';
+      String dir = String(file_slots[core.osd[i].slot_id].dir);
+      if (dir == "") { dir = "/"; }
+      if (dir.charAt(0) != '/') { dir = '/' + dir; }
+      dir.toCharArray(file_slots[core.osd[i].slot_id].dir, sizeof(file_slots[core.osd[i].slot_id].dir));
+      file_read_bytes(file_slots[core.osd[i].slot_id].filename, 256, is_flash); file_slots[core.osd[i].slot_id].filename[255] = '\0';
+      String sfilename = String( file_slots[core.osd[i].slot_id].filename);
+      String sfullname = dir + "/" + sfilename;
+      if (sfilename.length() > 0 && sd1.exists(sfullname)) {
+        file_slots[core.osd[i].slot_id].is_mounted = true; //file_slots[core.osd[i].slot_id].file = sd1.open(sfullname, O_READ);
+      }
     } 
-    for (uint8_t j=0; j<core.osd[i].options_len; j++) {
-      file_read_bytes(core.osd[i].options[j].name, 16, is_flash); core.osd[i].options[j].name[16] = '\0';
+      // otherwise - reading options structure
+      else {
+      core.osd[i].options_len = file_read(is_flash);
+      if (core.osd[i].options_len > 8) {
+        core.osd[i].options_len = 8; // something goes wrong
+      } 
+      for (uint8_t j=0; j<core.osd[i].options_len; j++) {
+        file_read_bytes(core.osd[i].options[j].name, 16, is_flash); core.osd[i].options[j].name[16] = '\0';
+      }
     }
     file_read_bytes(core.osd[i].hotkey, 16, is_flash); core.osd[i].hotkey[16] = '\0';
     core.osd[i].keys[0] = file_read(is_flash);
@@ -933,6 +972,22 @@ void read_core(const char* filename) {
     ffile.close();
   } else {
     file1.close();
+  }
+
+  // mount slots
+  for(uint8_t i=0; i<core.osd_len; i++) {
+    if (core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER) {
+      String dir = String(file_slots[core.osd[i].slot_id].dir);
+      if (dir == "") { dir = "/"; }
+      if (dir.charAt(0) != '/') { dir = '/' + dir; }
+      dir.toCharArray(file_slots[core.osd[i].slot_id].dir, sizeof(file_slots[core.osd[i].slot_id].dir));
+      String sfilename = String( file_slots[core.osd[i].slot_id].filename);
+      String sfullname = dir + "/" + sfilename;
+      if (sfilename.length() > 0 && sd1.exists(sfullname)) {
+        file_slots[core.osd[i].slot_id].is_mounted = file_slots[core.osd[i].slot_id].file = sd1.open(sfullname, O_READ);
+      }
+      core_send(i);
+    }
   }
 
   zxosd.hidePopup();

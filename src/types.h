@@ -1,6 +1,7 @@
 #pragma once
 
 #include "config.h"
+#include "SdFat.h"
 
 typedef struct {
 	uint8_t cmd;
@@ -23,6 +24,21 @@ typedef struct {
 } core_osd_option_t;
 
 typedef struct {
+	bool is_mounted;
+	char ext[256];
+	char dir[256];
+	char filename[256];
+	FsFile file;
+} core_file_slot_t;
+
+typedef struct {
+	bool is_dir;
+	char name[32];
+	char dir[256];
+	char filename[256];
+} core_filebrowser_item_t;
+
+typedef struct {
 	uint8_t type;
 	uint8_t def;
 	char name[16+1];
@@ -32,6 +48,7 @@ typedef struct {
 	uint8_t options_len;
 	uint8_t val;
 	uint8_t prev_val;
+	uint8_t slot_id;
 } core_osd_t;
 
 typedef struct {

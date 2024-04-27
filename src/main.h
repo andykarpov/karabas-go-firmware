@@ -37,6 +37,7 @@ extern uint8_t joyUSB_len;
 
 extern uint8_t osd_state;
 extern core_item_t core;
+extern core_file_slot_t file_slots[4];
 
 extern bool is_osd_hiding;
 extern ElapsedTimer hide_timer; 
