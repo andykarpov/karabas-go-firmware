@@ -70,7 +70,7 @@ void app_core_browser_menu(uint8_t vpos) {
 void app_core_browser_ft_overlay() {
   ft.setSound(FT81x_SOUND_SWITCH, 40);
   ft.loadImage(0, LOGO_SIZE, logoData, false); // karabas logo, starts from 0 in GRAM
-  ft.loadImage(LOGO_BITMAP_SIZE, BURATO2_SIZE, burato2Data, false); // karabas bg, starts from 1792 in GRAM
+  ft.loadImage(LOGO_BITMAP_SIZE, BURATO3_SIZE, burato3Data, false); // karabas bg, starts from 1792 in GRAM
   ft.writeGRAM(LOGO_BITMAP_SIZE + BURATO3_BITMAP_SIZE, KEY_SIZE, keyData); // pcm sound, starts from 65792 in GRAM
   app_core_browser_ft_menu(0);  
 }
@@ -80,9 +80,9 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
   ft.beginDisplayList();
 
   uint32_t color_black = FT81x_COLOR_RGB(1, 1, 1);
-  uint32_t color_gradient = FT81x_COLOR_RGB(200, 0, 0);
+  uint32_t color_gradient = FT81x_COLOR_RGB(0, 0, 200);
   uint32_t color_button = FT81x_COLOR_RGB(32, 32, 38);
-  uint32_t color_button_active = FT81x_COLOR_RGB(200, 0, 0);
+  uint32_t color_button_active = FT81x_COLOR_RGB(0, 0, 200);
   uint32_t color_text = FT81x_COLOR_RGB(255,255,255);
   uint32_t color_copyright = FT81x_COLOR_RGB(120, 120, 120);
 
@@ -127,8 +127,8 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
   }
 
   ft.drawBitmap(0, 8, 8, 56, 16, 4, 0); 
-  ft.overlayBitmap(LOGO_BITMAP_SIZE, 640-200, 480-143, 200, 143, 1, 0);
-  //ft.overlayBitmap(LOGO_BITMAP_SIZE, 640-160-8, 480-200-8, 160, 200, 1, 0);
+  //ft.overlayBitmap(LOGO_BITMAP_SIZE, 640-200, 480-143, 200, 143, 1, 0);
+  ft.overlayBitmap(LOGO_BITMAP_SIZE, 640-160-8, 480-200-8, 160, 200, 1, 0);
 
   /*uint16_t h = (uint16_t) (zxrtc.getHour() % 12);
   uint16_t m = (uint16_t) (zxrtc.getMinute() % 60);
@@ -242,7 +242,7 @@ void app_core_browser_on_keyboard() {
         if (usb_keyboard_report.keycode[0] == KEY_ENTER || (joyL & SC_BTN_A) || (joyR & SC_BTN_A) || (joyL & SC_BTN_B) || (joyR & SC_BTN_B)) {
           if (FT_OSD == 1 && has_ft == true) {
             app_core_browser_ft_menu(2); // play wav
-            delay(500);
+            delay(1000);
           }
           d_printf("Selected core %s to boot from menu", cores[core_sel].filename); d_println();
           String f = String(cores[core_sel].filename); f.trim(); 

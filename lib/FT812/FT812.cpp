@@ -134,11 +134,21 @@ void FT812::vga(bool on)
 
 void FT812::reset()
 {
+    // enable mcu-ft spi
+    spi(true);
     if (has_reset) {
+        // hard reset
         digitalWrite(pin_reset, LOW); 
         delay(10);
         digitalWrite(pin_reset, HIGH);
+    } else {
+        // soft reset
+        sendCommand(FT81x_CMD_RST_PULSE);
     }
+    // disable mcu-ft spi
+    spi(false);
+    // disable ft vga switch
+    vga(false);
 }
 
 /**************************************************************************************************/

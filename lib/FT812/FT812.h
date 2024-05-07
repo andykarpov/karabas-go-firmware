@@ -45,7 +45,7 @@
 #define FT81x_ROTATE_PORTRAIT_MIRRORED           6  ///< Use with setRotation() to mirror and rotate screen to portrait
 #define FT81x_ROTATE_PORTRAIT_INVERTED_MIRRORED  7  ///< Use with setRotation() to invert, mirror and rotate screen to portrait
 
-#define FT81x_SPI_CLOCK_SPEED 8000000  ///< FT SPI clock speed
+#define FT81x_SPI_CLOCK_SPEED 4000000  ///< FT SPI clock speed
 #define FT81x_SPI_LOW_CLOCK_SPEED 1000000  ///< FT SPI low clock speed
 
 #ifndef FT81x_SPI_SETTINGS
