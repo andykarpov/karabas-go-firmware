@@ -62,3 +62,11 @@ void core_send(uint8_t pos);
 
 void on_time();
 void on_keyboard();
+
+bool btn_read(uint8_t num);
+void led_write(uint8_t num, bool on);
+
+int32_t msc_read_cb_sd (uint32_t lba, void* buffer, uint32_t bufsize);
+int32_t msc_write_cb_sd (uint32_t lba, uint8_t* buffer, uint32_t bufsize);
+void msc_flush_cb_sd (void);
+bool msc_start_stop_cb_sd(uint8_t power_condition, bool start, bool load_eject);

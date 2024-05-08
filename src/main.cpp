@@ -51,12 +51,13 @@
 #include "hid_driver.h"
 
 PioSpi spiSD(PIN_SD_SPI_RX, PIN_SD_SPI_SCK, PIN_SD_SPI_TX); // dedicated SD1 SPI
-#define SD_CONFIG SdSpiConfig(SD_CS_PIN, DEDICATED_SPI, SD_SCK_MHZ(30), &spiSD) // SD1 SPI Settings
+#define SD_CONFIG SdSpiConfig(SD_CS_PIN, SHARED_SPI, SD_SCK_MHZ(30), &spiSD) // SD1 SPI Settings
 
 SPISettings settingsA(SD_SCK_MHZ(4), MSBFIRST, SPI_MODE0); // MCU SPI settings
+Adafruit_USBD_MSC usb_msc;
 
 PCA9536 extender;
-ElapsedTimer my_timer;
+ElapsedTimer my_timer, my_timer2;
 ElapsedTimer hide_timer;
 ElapsedTimer popup_timer;
 RTC zxrtc;
@@ -99,6 +100,9 @@ bool has_fs = false;
 bool has_ft = false;
 bool is_flashboot = false;
 bool is_configuring = false;
+bool expose_msc = false;
+bool ejected = false;
+bool msc_blink = false;
 
 uint16_t joyL;
 uint16_t joyR;
@@ -118,6 +122,14 @@ uint16_t prev_debug_data = 0;
 void setup()
 {
   queue_init(&spi_event_queue, sizeof(queue_spi_t), 64);
+
+  usb_msc.setID(0, "Karabas", "SD Card", "1.0");
+  usb_msc.setReadWriteCallback(0, msc_read_cb_sd, msc_write_cb_sd, msc_flush_cb_sd);
+  usb_msc.setStartStopCallback(0, msc_start_stop_cb_sd);
+  usb_msc.setUnitReady(0, false);
+  usb_msc.begin();
+
+  //rp2040.wdt_begin(5000);
 
   joyL = joyR = 0;
   for (uint8_t i=0; i<4; i++) { joyUSB[i] = 0; }
@@ -171,6 +183,8 @@ void setup()
     extender.pinMode(PIN_EXT_BTN2, INPUT_PULLUP);
     extender.pinMode(PIN_EXT_LED1, OUTPUT);
     extender.pinMode(PIN_EXT_LED2, OUTPUT);
+    extender.digitalWrite(PIN_EXT_LED1, HIGH);
+    extender.digitalWrite(PIN_EXT_LED2, HIGH);
   }
 
   sega.begin(PIN_JOY_SCK, PIN_JOY_LOAD, PIN_JOY_DATA, PIN_JOY_P7);
@@ -215,18 +229,32 @@ void setup()
   hid_drivers_load();
   //hid_drivers_dump();
 
+  // if btn2 pressed on boot - espose msc
+  if (btn_read(1)) {
+    if (has_sd) {
+      expose_msc = true;
+      ejected = false;
+      uint32_t block_count = sd1.card()->sectorCount();
+      usb_msc.setCapacity(0, block_count, 512);
+      usb_msc.setUnitReady(0, true);
+      my_timer.reset();
+    }
+  }
+
   osd_state = state_main;
 
-  // load boot from SD or flashfs
-  if (has_sd && sd1.exists(FILENAME_BOOT)) {  
-    do_configure(FILENAME_BOOT);
-  } else if (has_fs && LittleFS.exists(FILENAME_FBOOT)) {
-    do_configure(FILENAME_FBOOT);
-  } else {
-    halt("Boot file not found. System stopped");
+  if (!expose_msc) {
+    // load boot from SD or flashfs
+    if (has_sd && sd1.exists(FILENAME_BOOT)) {  
+      do_configure(FILENAME_BOOT);
+    } else if (has_fs && LittleFS.exists(FILENAME_FBOOT)) {
+      do_configure(FILENAME_FBOOT);
+    } else {
+      halt("Boot file not found. System stopped");
+    }
+    osd_state = state_core_browser;
+    app_core_browser_read_list();
   }
-  osd_state = state_core_browser;
-  app_core_browser_read_list();
 }
 
 void setup1() {
@@ -243,6 +271,39 @@ void setup1() {
 
 void loop()
 {
+  //rp2040.wdt_reset();
+  // read hw buttons to manipulate msc / reboots
+  static bool prev_btn1 = false;
+  static bool prev_btn2 = false;
+  bool btn1 = btn_read(0);
+  bool btn2 = btn_read(1);
+
+  // if eject event registered - reboot rp2040
+  if (ejected) {
+    ejected = false;
+    rp2040.reboot();
+  }
+
+  // if msc mounted but btn1 pressed - also reboot rp2040
+  if (expose_msc) {
+
+    if (my_timer2.elapsed() >= 200) {
+          msc_blink = !msc_blink;
+        led_write(1, msc_blink);
+        my_timer2.reset();
+    }
+
+    if (btn1 && my_timer.elapsed() > 10000) {
+      // wait for btn1 to release
+      while(btn1) { btn1 = btn_read(0); delay(100); }
+      expose_msc = false;
+      rp2040.reboot();
+    }
+
+    // do not process other loop things until exit from msc mode
+    return;
+  }
+
   zxrtc.handle();
 
   // set is_osd off after 200ms of real switching off 
@@ -260,47 +321,32 @@ void loop()
   }
 
   if (my_timer.elapsed() >= 100) {
-#if HW_ID == HW_ID_GO
-    if (has_extender) {
-      extender.digitalWrite(PIN_EXT_LED1, LOW);
+      led_write(0, true);
       my_timer.reset();
-    }
-#elif HW_ID == HW_ID_MINI
-  digitalWrite(PIN_LED1, LOW);
-  my_timer.reset();
-#endif
   }
 
-  static bool prev_btn1 = HIGH;
-  static bool prev_btn2 = HIGH;
-#if HW_ID == HW_ID_GO
-  bool btn1 = has_extender ? extender.digitalRead(PIN_EXT_BTN1) : HIGH;
-  bool btn2 = has_extender ? extender.digitalRead(PIN_EXT_BTN2) : HIGH;
-#elif HW_ID == HW_ID_MINI
-  bool btn1 = digitalRead(PIN_BTN1);
-  bool btn2 = digitalRead(PIN_BTN2);
-#endif
-
   if (prev_btn1 != btn1) {
-    d_print("Button 1: "); d_println((btn1 == LOW) ? "on" : "off");
+    d_print("Button 1: "); d_println((btn1) ? "on" : "off");
     prev_btn1 = btn1;
-    spi_send(CMD_BTN, 0, !btn1);
+    spi_send(CMD_BTN, 0, btn1);
   }
 
   if (prev_btn2 != btn2) {
-    d_print("Button 2: "); d_println((btn2 == LOW) ? "on" : "off");
+    d_print("Button 2: "); d_println((btn2) ? "on" : "off");
     prev_btn2 = btn2;
-    spi_send(CMD_BTN, 1, !btn2);
+    spi_send(CMD_BTN, 1, btn2);
   }
 
   // debug features
   // TODO: remove from production / refactor
-  if (btn1 == LOW) {
+  if (btn1) {
+    // wait until released
+    while (btn1) { btn1 = btn_read(0); delay(100); }
     d_println("Reboot");
     d_flush();
     rp2040.reboot();
   }
-  /*if (btn2 == LOW) {
+  /*if (btn2) {
       d_println("Reboot to bootloader");
       d_flush();
       rp2040.rebootToBootloader();
@@ -572,15 +618,8 @@ void halt(const char* msg) {
   bool blink = false;
   while(true) {
       blink = !blink;
-#if HW_ID == HW_ID_GO
-      if (has_extender) {
-        extender.digitalWrite(PIN_EXT_LED1, blink);
-        extender.digitalWrite(PIN_EXT_LED2, blink);
-      }
-#elif HW_ID == HW_ID_MINI
-      digitalWrite(PIN_LED1, blink);
-      digitalWrite(PIN_LED2, blink);
-#endif
+      led_write(0, blink);
+      led_write(1, blink);
       delay(100);
   }
 }
@@ -641,15 +680,8 @@ uint32_t fpga_send(const char* filename) {
 
     if (i % 8192 == 0) {
       blink = !blink;
-#if HW_ID == HW_ID_GO
-      if (has_extender) {
-        extender.digitalWrite(PIN_EXT_LED1, blink);
-        extender.digitalWrite(PIN_EXT_LED2, blink);
-      }
-#elif HW_ID == HW_ID_MINI
-      digitalWrite(PIN_LED1, blink);
-      digitalWrite(PIN_LED2, blink);
-#endif
+      led_write(0, blink);
+      led_write(1, blink);
     }
   }
   if (is_flash) {
@@ -1094,5 +1126,90 @@ void osd_handle(bool force) {
         break;
       }
     }
-  }
+  }  
 }
+
+bool btn_read(uint8_t num) {
+#if HW_ID == HW_ID_GO
+  if (num == 0) {
+    return !(has_extender ? extender.digitalRead(PIN_EXT_BTN1) : HIGH);
+  } else {
+    return !(has_extender ? extender.digitalRead(PIN_EXT_BTN2) : HIGH);
+  }
+#elif HW_ID == HW_ID_MINI
+  if (num == 0) { 
+    return !digitalRead(PIN_BTN1);
+  } else {
+    return !digitalRead(PIN_BTN2);
+  }
+#endif
+}
+
+void led_write(uint8_t num, bool on) {
+#if HW_ID == HW_ID_GO
+  if (num == 0) {
+    extender.digitalWrite(PIN_EXT_LED1, !on);
+  } else {
+    extender.digitalWrite(PIN_EXT_LED2, !on);
+  }
+#elif HW_ID == HW_ID_MINI
+  if (num == 0) { 
+    digitalWrite(PIN_LED1, !on);
+  } else {
+    digitalWrite(PIN_LED2, !on);
+  }
+#endif
+}
+
+// Callback invoked when received READ10 command.
+// Copy disk's data to buffer (up to bufsize) and
+// return number of copied bytes (must be multiple of block size)
+int32_t msc_read_cb_sd (uint32_t lba, void* buffer, uint32_t bufsize)
+{
+  bool rc;
+  rc = sd1.card()->readSectors(lba, (uint8_t*) buffer, bufsize/512);
+  return rc ? bufsize : -1;
+}
+
+// Callback invoked when received WRITE10 command.
+// Process data in buffer to disk's storage and 
+// return number of written bytes (must be multiple of block size)
+int32_t msc_write_cb_sd (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
+{
+  bool rc;
+  rc = sd1.card()->writeSectors(lba, buffer, bufsize/512);
+  return rc ? bufsize : -1;
+}
+
+// Callback invoked when WRITE10 command is completed (status received and accepted by host).
+// used to flush any pending cache.
+void msc_flush_cb_sd (void)
+{
+  sd1.card()->syncDevice();
+  //sd1.cacheClear();
+}
+
+bool msc_start_stop_cb_sd(uint8_t power_condition, bool start, bool load_eject) {
+  //d_printf("Start stop msc %d %d %d", power_condition, start, load_eject);
+  //d_println(); d_flush();
+  (void) power_condition;
+
+  if ( load_eject )
+  {
+    if (start)
+    {
+      // load disk storage
+    }else
+    {
+      // unload disk storage
+      if (expose_msc) {
+        expose_msc = false;
+        ejected = true;
+      }
+    }
+  }
+
+  return true;
+}
+
+/////////
