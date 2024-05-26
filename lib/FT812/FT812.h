@@ -45,7 +45,7 @@
 #define FT81x_ROTATE_PORTRAIT_MIRRORED           6  ///< Use with setRotation() to mirror and rotate screen to portrait
 #define FT81x_ROTATE_PORTRAIT_INVERTED_MIRRORED  7  ///< Use with setRotation() to invert, mirror and rotate screen to portrait
 
-#define FT81x_SPI_CLOCK_SPEED 4000000  ///< FT SPI clock speed
+#define FT81x_SPI_CLOCK_SPEED 12000000  ///< FT SPI clock speed
 #define FT81x_SPI_LOW_CLOCK_SPEED 1000000  ///< FT SPI low clock speed
 
 #ifndef FT81x_SPI_SETTINGS
@@ -250,7 +250,6 @@ class FT812
   using m_cb = void (*)(uint8_t cmd, uint8_t addr, uint8_t data); // alias function pointer
 
 private:
-  ft_mode_t mode;
   uint8_t ctrl_reg;
   m_cb action;
   uint8_t pin_cs;                    ///< CS pin for FT81x
@@ -262,6 +261,8 @@ protected:
   uint16_t cmdWriteAddress = 0;  ///< Internal pointer to the command buffer of the FT81x chip
 
 public:
+
+    ft_mode_t mode;
 
     /*!
         @brief  Initialize the FT81x chip
@@ -350,6 +351,18 @@ public:
       @param  on boolean state of the MCU VGA buffers
   */
   void vga(bool on);
+
+  /*!
+      @brief  Switch SD2 direct access by MCU
+      @param  on boolean state of the SD2 exclusive access
+  */
+  void sd2(bool on);
+
+  /*!
+      @brief  Switch ESP8266 direct access by MCU
+      @param  on boolean state of the ESP8266 exclusive access
+  */
+  void esp8266(bool on);
 
   /*!
       @brief  Performs a FT812 reset with no wait cycles

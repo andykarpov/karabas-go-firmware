@@ -23,7 +23,7 @@ core_filebrowser_item_t filebrowser_files[16];
 uint8_t find_first_item() {
   if (core.osd_len > 0) {
     for (uint8_t i = 0; i < core.osd_len; i++) {
-      if (core.osd[i].options_len > 0 || core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER) {
+      if (core.osd[i].options_len > 0 || core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[i].type == CORE_OSD_TYPE_FILELOADER) {
         return i;
       }
     }
@@ -34,7 +34,7 @@ uint8_t find_first_item() {
 uint8_t find_last_item() {
   if (core.osd_len > 0) {
     for (uint8_t i = core.osd_len-1; i >= 0; i--) {
-      if (core.osd[i].options_len > 0 || core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER) {
+      if (core.osd[i].options_len > 0 || core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[i].type == CORE_OSD_TYPE_FILELOADER) {
         return i;
       }
     }
@@ -54,7 +54,7 @@ uint8_t find_prev_item() {
   // if there is a room to decrease - find a previous item
   if (curr_osd_item > first) {
     for (uint8_t i = curr_osd_item-1; i >= first; i--) {
-      if (core.osd[i].options_len > 0 || core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER) {
+      if (core.osd[i].options_len > 0 || core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[i].type == CORE_OSD_TYPE_FILELOADER) {
         return i;
       }
     }
@@ -75,7 +75,7 @@ uint8_t find_next_item() {
   // if there is a room to increase - find a next item
   if (curr_osd_item < last) {
     for (uint8_t i = curr_osd_item+1; i <= last; i++) {
-      if (core.osd[i].options_len > 0 || core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER) {
+      if (core.osd[i].options_len > 0 || core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[i].type == CORE_OSD_TYPE_FILELOADER) {
         return i;
       }
     }
@@ -121,7 +121,7 @@ void app_core_menu(uint8_t vpos) {
       zxosd.print(name.substring(0,10));
 
       String option;
-      if (core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER) {
+      if (core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[i].type == CORE_OSD_TYPE_FILELOADER) {
         if (file_slots[core.osd[i].slot_id].is_mounted) {
           option = String(file_slots[core.osd[i].slot_id].filename);
         } else {
@@ -140,7 +140,7 @@ void app_core_menu(uint8_t vpos) {
 
       String hotkey = String(core.osd[i].hotkey);
       zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_BLACK);
-      if (core.osd[i].options_len > 0 || core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER) {
+      if (core.osd[i].options_len > 0 || core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[i].type == CORE_OSD_TYPE_FILELOADER) {
         zxosd.setPos(22, i+vpos);
         zxosd.print(hotkey.substring(0,10));
       } else {
@@ -160,6 +160,8 @@ void app_core_save(uint8_t pos)
     core.osd_need_save = false;
     if (core.osd[pos].type == CORE_OSD_TYPE_FILEMOUNTER) {
       // todo: save file mounter data (dir, filename)
+    } else if (core.osd[pos].type == CORE_OSD_TYPE_FILELOADER) {
+      // todo also
     } else {
       core.osd[pos].prev_val = core.osd[pos].val;
       ffile.seek(FILE_POS_SWITCHES_DATA + pos);
@@ -179,6 +181,8 @@ void app_core_save(uint8_t pos)
     core.osd_need_save = false;
     if (core.osd[pos].type == CORE_OSD_TYPE_FILEMOUNTER) {
       // todo: save file mounter data(dir, filename)
+    } else if (core.osd[pos].type == CORE_OSD_TYPE_FILELOADER) {
+      // todo also
     } else {
       core.osd[pos].prev_val = core.osd[pos].val;
       file1.seek(FILE_POS_SWITCHES_DATA + pos);
@@ -267,7 +271,7 @@ void app_core_on_keyboard() {
 
         // right, enter
         if (usb_keyboard_report.keycode[0] == KEY_RIGHT || usb_keyboard_report.keycode[0] == KEY_ENTER  || (joyL & SC_BTN_A) || (joyR & SC_BTN_A) || (joyL & SC_BTN_B) || (joyR & SC_BTN_B) || (joyL & SC_BTN_RIGHT) || (joyR & SC_BTN_RIGHT) ) {
-          if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER) {
+          if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILELOADER) {
             is_filebrowser = true;
           } else {
             core.osd[curr_osd_item].val++; 
@@ -284,7 +288,7 @@ void app_core_on_keyboard() {
 
         // left
         if (usb_keyboard_report.keycode[0] == KEY_LEFT || (joyL & SC_BTN_LEFT) || (joyR & SC_BTN_LEFT)) {
-          if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER) {
+          if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILELOADER) {
             is_filebrowser = true;
           } else {
             if (core.osd[curr_osd_item].val > 0) {

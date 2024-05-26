@@ -121,12 +121,13 @@
 #define CORE_TYPE_FILELOADER 0x02
 #define CORE_TYPE_HIDDEN 0xff
 
-#define CORE_OSD_TYPE_SWITCH 0x00
-#define CORE_OSD_TYPE_NSWITCH 0x01
-#define CORE_OSD_TYPE_TRIGGER 0x02
-#define CORE_OSD_TYPE_HIDDEN 0x03
-#define CORE_OSD_TYPE_TEXT 0x04
-#define CORE_OSD_TYPE_FILEMOUNTER 0x05
+#define CORE_OSD_TYPE_SWITCH 0x00        // drop-down like control to select a value from predifined options 
+#define CORE_OSD_TYPE_NSWITCH 0x01       // non-volatile dropdown. the selected value is not stored on change
+#define CORE_OSD_TYPE_TRIGGER 0x02       // sends a pulse while pressed. the value also is not stored anywhere
+#define CORE_OSD_TYPE_HIDDEN 0x03        // hidden value 
+#define CORE_OSD_TYPE_TEXT 0x04          // just a text line (32 characters wide)
+#define CORE_OSD_TYPE_FILEMOUNTER 0x05   // mounts a selected file image as virtual drive (img_*)
+#define CORE_OSD_TYPE_FILELOADER 0x06    // immediately transfer a selected file to the fpga side (ioctl_*)
 
 #define MAX_CORES 255
 #define MAX_FILES 255

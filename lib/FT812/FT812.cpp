@@ -132,6 +132,18 @@ void FT812::vga(bool on)
   action(CMD_SPI_CONTROL, ADDR_CONTROL_REGISTER, ctrl_reg);
 }
 
+void FT812::sd2(bool on)
+{
+  ctrl_reg = bitWrite(ctrl_reg, 2, on);
+  action(CMD_SPI_CONTROL, ADDR_CONTROL_REGISTER, ctrl_reg);
+}
+
+void FT812::esp8266(bool on)
+{
+  ctrl_reg = bitWrite(ctrl_reg, 3, on);
+  action(CMD_SPI_CONTROL, ADDR_CONTROL_REGISTER, ctrl_reg);
+}
+
 void FT812::reset()
 {
     // enable mcu-ft spi
@@ -157,6 +169,8 @@ bool FT812::init(uint8_t m) {
 
     mode = ft_modes[m];
 
+    delay(100);
+
     // reset
     sendCommand(FT81x_CMD_RST_PULSE);
     delay(300);
@@ -167,6 +181,7 @@ bool FT812::init(uint8_t m) {
 
     // clock multiplier
     sendCommand(FT81x_CMD_CLKSEL + ((mode.f_mul | 0xC0) << 8)); // f_mul
+    delay(300);
 
     // activate
     sendCommand(FT81x_CMD_ACTIVE);

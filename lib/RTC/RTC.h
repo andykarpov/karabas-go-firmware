@@ -60,6 +60,7 @@ private:
   bool rtc_is_24h = true;
 
   unsigned long tr = 0; // rtc poll time
+  unsigned long to = 0; // redraw osd time
 
 protected:
 

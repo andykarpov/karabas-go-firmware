@@ -566,10 +566,12 @@ void core_send(uint8_t pos)
   if (core.osd[pos].type == CORE_OSD_TYPE_FILEMOUNTER) {
       spi_send(CMD_SWITCHES, pos, (file_slots[core.osd[pos].slot_id].is_mounted) ? 1 : 0);
       d_printf("File mounter: %s %d", core.osd[pos].name, file_slots[core.osd[pos].slot_id].is_mounted);
-    } else {
-      spi_send(CMD_SWITCHES, pos, core.osd[pos].val);
-      d_printf("Switch: %s %d", core.osd[pos].name, core.osd[pos].val);
-    }
+  } else if (core.osd[pos].type == CORE_OSD_TYPE_FILELOADER) {
+    // do nothing
+  } else {
+    spi_send(CMD_SWITCHES, pos, core.osd[pos].val);
+    d_printf("Switch: %s %d", core.osd[pos].name, core.osd[pos].val);
+  }
   d_println();
 }
 
@@ -578,6 +580,8 @@ void core_send_all()
   for (uint8_t i=0; i<core.osd_len; i++) {
     if (core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER) {
       spi_send(CMD_SWITCHES, i, (file_slots[core.osd[i].slot_id].is_mounted) ? 1 : 0);
+    } else if (core.osd[i].type == CORE_OSD_TYPE_FILELOADER) {
+      // do nothing
     } else {
       spi_send(CMD_SWITCHES, i, core.osd[i].val);
     }
@@ -901,7 +905,7 @@ void read_core(const char* filename) {
 
     // filemounter osd type:
     // loading initial dir, filename, extensions and trying to mount file, if any
-    if (core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER) {
+    if (core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[i].type == CORE_OSD_TYPE_FILELOADER) {
       core.osd[i].options_len = 0;
       core.osd[i].slot_id = file_read(is_flash);
       file_slots[core.osd[i].slot_id].is_mounted = false;
@@ -976,7 +980,7 @@ void read_core(const char* filename) {
         d_println("Space pressed: skip FT81x detection, fallback to classic OSD");
       } else {
         ft.spi(true);
-        has_ft = ft.init(1); // 640x480x75
+        has_ft = ft.init(0); // 640x480x57
         if (has_ft) {
           d_println("Found FT81x IC, switching to FT OSD");
           ft.vga(true);

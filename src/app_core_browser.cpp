@@ -20,6 +20,7 @@ const uint8_t core_page_size = MAX_CORES_PER_PAGE;
 const uint8_t ft_core_page_size = MAX_CORES_PER_PAGE/2;
 uint8_t core_pages = 1;
 uint8_t core_page = 1;
+uint16_t rot = 0;
 
 void app_core_browser_overlay() {
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
@@ -100,17 +101,17 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
     char name[18];
     String n = String(cores[i].name); n.trim(); n.toCharArray(name, 18);
     const uint32_t color = i == core_sel ? color_button_active : color_button;
-    ft.drawButton(160+8, offset + pos*40, 320-16, 32, 28, color_text, color, FT81x_OPT_3D, name);
+    ft.drawButton(ft.width()/4 + 8, offset + pos*40, ft.width()/2-16, 32, 28, color_text, color, FT81x_OPT_3D, name);
     if (cores[i].flash) {
-      ft.drawText(160+320-16-24, offset + pos*40 + 16, 28, color_text, FT81x_OPT_CENTERY, "F\0");
+      ft.drawText(ft.width()/4+ft.width()/2-16-24, offset + pos*40 + 16, 28, color_text, FT81x_OPT_CENTERY, "F\0");
     }
     pos++;
   }
 
-  ft.drawText(112, 440, 27, color_copyright, FT81x_OPT_CENTER, "www.karabas.uk\0");
-  ft.drawText(112, 460, 27, color_copyright, FT81x_OPT_CENTER, "(c) 2024 andykarpov\0");
+  ft.drawText(112, ft.height()-40, 27, color_copyright, FT81x_OPT_CENTER, "www.karabas.uk\0");
+  ft.drawText(112, ft.height()-20, 27, color_copyright, FT81x_OPT_CENTER, "(c) 2024 andykarpov\0");
   char b[40]; sprintf(b, "Page %d of %d\0", core_page, core_pages);
-  ft.drawText(320, 440, 27, color_copyright, FT81x_OPT_CENTER, b);
+  ft.drawText(ft.width()/2, ft.height()-40, 27, color_copyright, FT81x_OPT_CENTER, b);
 
   char time[9];
   sprintf(time, "%02d:%02d:%02d\0", zxrtc.getHour(), zxrtc.getMinute(), zxrtc.getSecond());
@@ -128,7 +129,9 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
 
   ft.drawBitmap(0, 8, 8, 56, 16, 4, 0); 
   //ft.overlayBitmap(LOGO_BITMAP_SIZE, 640-200, 480-143, 200, 143, 1, 0);
-  ft.overlayBitmap(LOGO_BITMAP_SIZE, 640-160-8, 480-200-8, 160, 200, 1, 0);
+  ft.overlayBitmap(LOGO_BITMAP_SIZE, ft.width()-160-8, ft.height()-200-8, 160, 200, 1, ((rot > 7) ? (15 - rot) : rot));
+  rot++;
+  if (rot >= 15) rot = 0; 
 
   /*uint16_t h = (uint16_t) (zxrtc.getHour() % 12);
   uint16_t m = (uint16_t) (zxrtc.getMinute() % 60);
