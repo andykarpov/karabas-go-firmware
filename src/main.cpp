@@ -980,7 +980,7 @@ void read_core(const char* filename) {
         d_println("Space pressed: skip FT81x detection, fallback to classic OSD");
       } else {
         ft.spi(true);
-        has_ft = ft.init(0); // 640x480x57
+        has_ft = ft.init(2); // 640x480@76Hz
         if (has_ft) {
           d_println("Found FT81x IC, switching to FT OSD");
           ft.vga(true);

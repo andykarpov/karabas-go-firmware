@@ -245,7 +245,7 @@ void app_core_browser_on_keyboard() {
         if (usb_keyboard_report.keycode[0] == KEY_ENTER || (joyL & SC_BTN_A) || (joyR & SC_BTN_A) || (joyL & SC_BTN_B) || (joyR & SC_BTN_B)) {
           if (FT_OSD == 1 && has_ft == true) {
             app_core_browser_ft_menu(2); // play wav
-            delay(1000);
+            delay(1200);
           }
           d_printf("Selected core %s to boot from menu", cores[core_sel].filename); d_println();
           String f = String(cores[core_sel].filename); f.trim(); 

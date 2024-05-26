@@ -153,9 +153,11 @@ void FT812::reset()
         digitalWrite(pin_reset, LOW); 
         delay(10);
         digitalWrite(pin_reset, HIGH);
+        delay(300);
     } else {
         // soft reset
         sendCommand(FT81x_CMD_RST_PULSE);
+        delay(300);
     }
     // disable mcu-ft spi
     spi(false);
@@ -169,36 +171,21 @@ bool FT812::init(uint8_t m) {
 
     mode = ft_modes[m];
 
-    delay(100);
-
-    // reset
-    sendCommand(FT81x_CMD_RST_PULSE);
-    delay(300);
-
-    // select clock
-    sendCommand(FT81x_CMD_CLKEXT);
-    delay(300);
-
-    // clock multiplier
-    sendCommand(FT81x_CMD_CLKSEL + ((mode.f_mul | 0xC0) << 8)); // f_mul
-    delay(300);
-
-    // activate
+    sendCommand(FT81x_CMD_PWRDOWN);
     sendCommand(FT81x_CMD_ACTIVE);
-    delay(100);
+    sendCommand(FT81x_CMD_SLEEP);
+    sendCommand(FT81x_CMD_CLKEXT);
+    sendCommand(FT81x_CMD_CLKSEL + ((mode.f_mul | 0xC0) << 8)); // f_mul
+    sendCommand(FT81x_CMD_ACTIVE);
 
     if (read8(FT81x_REG_ID) != 0x7C) {
       return false;
     }
 
-    //while (read8(FT81x_REG_ID) != 0x7C) {
-    //    __asm__ volatile("nop");
-    //}
-
     // wait for FT CPU reset complete
-    while (read8(FT81x_REG_CPURESET) != 0x00) {
+    /*while (read8(FT81x_REG_CPURESET) != 0x00) {
         __asm__ volatile("nop");
-    }
+    }*/
 
     // configure rgb interface
     write16(FT81x_REG_HSYNC0, mode.h_fporch); // h_fporch
@@ -215,20 +202,9 @@ bool FT812::init(uint8_t m) {
 
     write8(FT81x_REG_PCLK_POL, 0);
     write8(FT81x_REG_CSPREAD, 0);
-
-    // write first display list
-    beginDisplayList();
-    clear(0);
-    swapScreen();
-
     write8(FT81x_REG_PCLK, mode.f_div); // f_div 1
-
-    // funny screen mirroring
-    //write8(FT81x_REG_ROTATE, FT81x_ROTATE_LANDSCAPE_INVERTED);
-
-    // int setup
-    //write8(FT81x_REG_INT_MASK, 1);
-    //write8(FT81x_REG_INT_EN, 1);
+    write8(FT81x_REG_INT_MASK, 1);
+    write8(FT81x_REG_INT_EN, 1);
 
     return true;
 }
@@ -700,6 +676,7 @@ void FT812::sendCommand(const uint32_t cmd) {
     uint8_t res = SPI.transfer(cmd);
     digitalWrite(pin_cs, HIGH);
     SPI.endTransaction();
+    delay(200);
     //Serial.printf("Command %d result %d", cmd, res); Serial.println();
 }
 
