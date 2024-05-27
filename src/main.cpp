@@ -225,9 +225,9 @@ void setup()
   }
 
   // load usb joy drivers
-  d_println("Loading usb hid joystock drivers");
+  d_println("Loading usb hid joystick drivers");
   hid_drivers_load();
-  //hid_drivers_dump();
+  hid_drivers_dump();
 
   // if btn2 pressed on boot - espose msc
   if (btn_read(1)) {

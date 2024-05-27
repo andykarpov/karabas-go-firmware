@@ -129,9 +129,10 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
 
   ft.drawBitmap(0, 8, 8, 56, 16, 4, 0); 
   //ft.overlayBitmap(LOGO_BITMAP_SIZE, 640-200, 480-143, 200, 143, 1, 0);
-  ft.overlayBitmap(LOGO_BITMAP_SIZE, ft.width()-160-8, ft.height()-200-8, 160, 200, 1, ((rot > 7) ? (15 - rot) : rot));
-  rot++;
-  if (rot >= 15) rot = 0; 
+  ft.overlayBitmap(LOGO_BITMAP_SIZE, ft.width()-160-8, ft.height()-200-8, 160, 200, 1, 0);
+  //ft.overlayBitmap(LOGO_BITMAP_SIZE, ft.width()-160-8, ft.height()-200-8, 160, 200, 1, ((rot > 7) ? (15 - rot) : rot));
+  //rot++;
+  //if (rot >= 15) rot = 0; 
 
   /*uint16_t h = (uint16_t) (zxrtc.getHour() % 12);
   uint16_t m = (uint16_t) (zxrtc.getMinute() % 60);

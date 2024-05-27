@@ -85,7 +85,7 @@ void hid_drivers_dump()
       if (joy_drivers_len > 0) {
     d_printf("Loaded %d drivers", joy_drivers_len); d_println();
     for (uint8_t i=0; i<joy_drivers_len; i++) {
-      d_printf("Driver for %d:%d:", joy_drivers[i].vid, joy_drivers[i].pid); d_println();
+      d_printf("Driver for %04x:%04x:", joy_drivers[i].vid, joy_drivers[i].pid); d_println();
       for (uint8_t j=0; j<12; j++) {
         if (joy_drivers[i].buttons[j].isAvail) {
           if (joy_drivers[i].buttons[j].isBit) {
