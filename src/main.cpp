@@ -728,6 +728,52 @@ void spi_send(uint8_t cmd, uint8_t addr, uint8_t data) {
   }
 }
 
+void spi_send16(uint8_t cmd, uint16_t data) {
+  uint8_t byte2 = (uint8_t)((data & 0xFF00) >> 8);
+  uint8_t byte1 = (uint8_t)((data & 0x00FF));
+  spi_send(cmd, 0, byte1);
+  spi_send(cmd, 1, byte2);
+}
+
+void spi_send24(uint8_t cmd, uint32_t data) {
+  uint8_t byte3 = (uint8_t)((data & 0x00FF0000) >> 16);
+  uint8_t byte2 = (uint8_t)((data & 0x0000FF00) >> 8);
+  uint8_t byte1 = (uint8_t)((data & 0x000000FF));
+  spi_send(cmd, 0, byte1);
+  spi_send(cmd, 1, byte2);
+  spi_send(cmd, 2, byte3);
+}
+
+void spi_send32(uint8_t cmd, uint32_t data) {
+  uint8_t byte4 = (uint8_t)((data & 0xFF000000) >> 24);
+  uint8_t byte3 = (uint8_t)((data & 0x00FF0000) >> 16);
+  uint8_t byte2 = (uint8_t)((data & 0x0000FF00) >> 8);
+  uint8_t byte1 = (uint8_t)((data & 0x000000FF));
+  spi_send(cmd, 0, byte1);
+  spi_send(cmd, 1, byte2);
+  spi_send(cmd, 2, byte3);
+  spi_send(cmd, 2, byte4);
+}
+
+void spi_send64(uint8_t cmd, uint64_t data) {
+  uint8_t byte8 = (uint8_t)((data & 0xFF00000000000000) >> 56);
+  uint8_t byte7 = (uint8_t)((data & 0x00FF000000000000) >> 48);
+  uint8_t byte6 = (uint8_t)((data & 0x0000FF0000000000) >> 40);
+  uint8_t byte5 = (uint8_t)((data & 0x000000FF00000000) >> 32);
+  uint8_t byte4 = (uint8_t)((data & 0x00000000FF000000) >> 24);
+  uint8_t byte3 = (uint8_t)((data & 0x0000000000FF0000) >> 16);
+  uint8_t byte2 = (uint8_t)((data & 0x000000000000FF00) >> 8);
+  uint8_t byte1 = (uint8_t)((data & 0x00000000000000FF));
+  spi_send(cmd, 0, byte1);
+  spi_send(cmd, 1, byte2);
+  spi_send(cmd, 2, byte3);
+  spi_send(cmd, 2, byte4);
+  spi_send(cmd, 2, byte5);
+  spi_send(cmd, 2, byte6);
+  spi_send(cmd, 2, byte7);
+  spi_send(cmd, 2, byte8);
+}
+
 void flashboot (uint8_t data) {
   uint8_t flashboot_coreid = data;
   d_printf("Flashboot core id: %02x", data); d_println();

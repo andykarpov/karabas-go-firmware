@@ -47,6 +47,10 @@ extern uint8_t joy_drivers_len;
 
 void spi_queue(uint8_t cmd, uint8_t addr, uint8_t data);
 void spi_send(uint8_t cmd, uint8_t addr, uint8_t data);
+void spi_send16(uint8_t cmd, uint16_t data);
+void spi_send24(uint8_t cmd, uint32_t data);
+void spi_send32(uint8_t cmd, uint32_t data);
+void spi_send64(uint8_t cmd, uint64_t data);
 void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data);
 
 void do_configure(const char* filename);

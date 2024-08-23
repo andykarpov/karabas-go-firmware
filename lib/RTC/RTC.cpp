@@ -58,15 +58,15 @@ void RTC::handle()
     sendTime();
 
     // cb rtc
-    //event();
+    event();
 
     tr = n;
   }
 
-  if (n - to >= 100) {
+  /*if (n - to >= 100) {
     event();
     to = n;
-  }
+  }*/
 }
 
 void RTC::save() {

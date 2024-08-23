@@ -161,7 +161,7 @@ void app_core_save(uint8_t pos)
     if (core.osd[pos].type == CORE_OSD_TYPE_FILEMOUNTER) {
       // todo: save file mounter data (dir, filename)
     } else if (core.osd[pos].type == CORE_OSD_TYPE_FILELOADER) {
-      // todo also
+      // todo save file loader data (dir)
     } else {
       core.osd[pos].prev_val = core.osd[pos].val;
       ffile.seek(FILE_POS_SWITCHES_DATA + pos);
@@ -180,9 +180,9 @@ void app_core_save(uint8_t pos)
     }
     core.osd_need_save = false;
     if (core.osd[pos].type == CORE_OSD_TYPE_FILEMOUNTER) {
-      // todo: save file mounter data(dir, filename)
+      // todo: save file mounter data (dir, filename)
     } else if (core.osd[pos].type == CORE_OSD_TYPE_FILELOADER) {
-      // todo also
+      // todo save file loader data (dir)
     } else {
       core.osd[pos].prev_val = core.osd[pos].val;
       file1.seek(FILE_POS_SWITCHES_DATA + pos);
@@ -244,6 +244,43 @@ void app_core_on_keyboard() {
           strcpy(file_slots[core.osd[curr_osd_item].slot_id].filename, filebrowser_files[filebrowser_sel].filename);
           file_slots[core.osd[curr_osd_item].slot_id].is_mounted = true;
           // todo: update core with selection
+          core.osd_need_save = true;
+
+          if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILELOADER) {
+            // send ioctl slot id, file data for file loader type
+            spi_send(CMD_IOCTL_SLOT, 0, core.osd[curr_osd_item].slot_id);
+
+            uint64_t fsize = 0;
+            spi_send64(CMD_IOCTL_SIZE, fsize);
+            String fname = String(file_slots[core.osd[curr_osd_item].slot_id].dir) + "/" + String(file_slots[core.osd[curr_osd_item].slot_id].filename);
+            FsFile file = sd1.open(fname);
+            fsize = file.size();
+            spi_send64(CMD_IOCTL_SIZE, fsize);
+
+            String ext = fname.substring(fname.lastIndexOf('.')+1);
+            for(uint8_t i = 0; i<ext.length(); i++) {
+              spi_send(CMD_IOCTL_EXT, i, ext.charAt(i));
+            }
+
+            for(uint64_t i = 0; i < fsize; i++) {
+              if (i % 256 == 0) {
+                spi_send24(CMD_IOCTL_BANK, i >> 8);
+              }
+              uint8_t data = file.read();
+              spi_send(CMD_IOCTL_DATA, (uint8_t)((i & 0x00000000000000FF)), data);
+            }
+            file.close();
+          } else if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER) {
+            // send img slot id, size for file mounter type
+            spi_send(CMD_IMG_SLOT, 0, core.osd[curr_osd_item].slot_id);
+            uint64_t fsize = 0;
+            spi_send64(CMD_IMG_SIZE, fsize);
+            String fname = String(file_slots[core.osd[curr_osd_item].slot_id].dir) + "/" + String(file_slots[core.osd[curr_osd_item].slot_id].filename);
+            FsFile file = sd1.open(fname);
+            fsize = file.size();
+            spi_send64(CMD_IMG_SIZE, fsize);
+            file.close();
+          }
         }
       }
       need_redraw = true;

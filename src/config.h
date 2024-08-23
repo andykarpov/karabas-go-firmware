@@ -109,6 +109,32 @@
 #define CMD_DEBUG_ADDRESS 0x30
 #define CMD_DEBUG_DATA 0x31
 
+#define CMD_IMG_SLOT 0x40
+#define CMD_IMG_SIZE 0x41
+#define CMD_IMG_LBA 0x42
+#define CMD_IMG_SEC 0x43
+#define CMD_IMG_BUF_BANK 0x44
+#define CMD_IMG_BUF_DATA 0x45
+
+// todo: other IMG commands here
+
+// fileloader files will be transferred in the following order:
+// 1. send SLOT num  - 1 byte
+// 2. send file SIZE - 8 bytes
+// 3. send file EXT  - 3 bytes lowercase
+// 4. while not EOF: 
+// 4.1. send bank when pos % 256 = 0
+// 4.2. send data bytes (0-255)
+// on the FPGA side the transfer begins on sending a SLOT number
+// and ends on the last byte was received
+// the core itself should decide what to do with the incoming data, e.g. parse header, write data directly to the memory location, etc
+
+#define CMD_IOCTL_SLOT 0x50 // (0, uint8_t): set current slot number (0-3)
+#define CMD_IOCTL_SIZE 0x51 // (0-7, uint8_t): fileloader file size
+#define CMD_IOCTL_BANK 0x52 // (0-7, uint8_t): fileloader bank
+#define CMD_IOCTL_DATA 0x53 // (0-255, uint8_t): fileloader byte
+#define CMD_IOCTL_EXT 0x54 // (0-3, uint8_t): fileloader file ext
+
 #define CMD_RTC 0xFA
 #define CMD_FLASHBOOT 0xFB
 #define CMD_UART 0xFC
