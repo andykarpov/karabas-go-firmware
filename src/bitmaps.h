@@ -1439,7 +1439,7 @@ static const uint8_t bgData[]  = {
 
 #endif
 
-#define KEY_ID 4
+#define KEY_ID 1
 
 #if KEY_ID==1
 
