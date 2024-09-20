@@ -18,3 +18,5 @@ core_list_item_t app_core_browser_get_item(bool is_flash);
 void app_core_browser_read_list();
 
 void app_core_browser_on_keyboard();
+
+void app_core_browser_on_time();

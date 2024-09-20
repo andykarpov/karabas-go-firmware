@@ -21,6 +21,9 @@ const uint8_t ft_core_page_size = MAX_CORES_PER_PAGE/2;
 uint8_t core_pages = 1;
 uint8_t core_page = 1;
 uint16_t rot = 0;
+ElapsedTimer autoload_timer;
+bool autoload_enabled;
+uint32_t autoload_countdown;
 
 void app_core_browser_overlay() {
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
@@ -113,6 +116,15 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
   char b[40]; sprintf(b, "Page %d of %d\0", core_page, core_pages);
   ft.drawText(ft.width()/2, ft.height()-40, 27, color_copyright, FT81x_OPT_CENTER, b);
 
+  if (autoload_enabled) {
+    uint32_t diff = (autoload_timer.elapsed() < autoload_countdown * 1000) ? ceil((autoload_countdown * 1000 - autoload_timer.elapsed())/1000) : 0;
+    sprintf(b, "Autoloading core in %d s\0", diff);
+    ft.drawText(ft.width()/2, ft.height()-20, 27, color_copyright, FT81x_OPT_CENTER, b);
+  } else {
+    sprintf(b, "Autoload disabled\0");
+    ft.drawText(ft.width()/2, ft.height()-20, 27, color_copyright, FT81x_OPT_CENTER, b);
+  }
+
   if (hw_setup.ft_time) {
     char time[9];
     sprintf(time, "%02d:%02d:%02d\0", zxrtc.getHour(), zxrtc.getMinute(), zxrtc.getSecond());
@@ -152,6 +164,7 @@ core_list_item_t app_core_browser_get_item(bool is_flash) {
     file1.getName(core.filename, sizeof(core.filename));
     core.flash = false;
   }
+  file_seek(FILE_POS_CORE_ID, is_flash); file_read_bytes(core.id, 32, is_flash); core.name[32] = '\0';
   file_seek(FILE_POS_CORE_NAME, is_flash); file_read_bytes(core.name, 32, is_flash); core.name[32] = '\0';
   uint8_t visible; file_seek(FILE_POS_CORE_VISIBLE, is_flash); visible = file_read(is_flash); core.visible = (visible > 0);
   file_seek(FILE_POS_CORE_ORDER, is_flash); core.order = file_read(is_flash);
@@ -198,13 +211,29 @@ void app_core_browser_read_list() {
   }
   // sort by core order number
   std::sort(cores, cores + cores_len);
-  // TODO
+  
+  autoload_enabled = false;
+  // pre-select autoload core
+  for (uint8_t i=0; i<cores_len; i++) {
+    String s1 = String(hw_setup.autoload_core);
+    String s2 = String(cores[i].id);
+    s1.trim();
+    s2.trim();
+    if (hw_setup.autoload_enabled && s2.equals(s1)) {
+      autoload_enabled = true;
+      autoload_countdown = hw_setup.autoload_timeout;
+      core_sel = i;
+      autoload_timer.reset();
+    }
+  }
+
 }
 
 void app_core_browser_on_keyboard() {
-          if (cores_len > 0) {
+      if (cores_len > 0) {
         // down
         if (usb_keyboard_report.keycode[0] == KEY_DOWN || (joyL & SC_BTN_DOWN) || (joyR & SC_BTN_DOWN)) {
+          autoload_enabled = false;
           if (core_sel < cores_len-1) {
             core_sel++;
           } else {
@@ -214,6 +243,7 @@ void app_core_browser_on_keyboard() {
 
         // up
         if (usb_keyboard_report.keycode[0] == KEY_UP  || (joyL & SC_BTN_UP) || (joyR & SC_BTN_UP)) {
+          autoload_enabled = false;
           if (core_sel > 0) {
             core_sel--;
           } else {
@@ -223,6 +253,7 @@ void app_core_browser_on_keyboard() {
 
         // right
         if (usb_keyboard_report.keycode[0] == KEY_RIGHT || (joyL & SC_BTN_RIGHT) || (joyR & SC_BTN_RIGHT)) {
+          autoload_enabled = false;
           if (core_sel + core_page_size <= cores_len-1) {
             core_sel += core_page_size;
           } else {
@@ -232,6 +263,7 @@ void app_core_browser_on_keyboard() {
 
         // left
         if (usb_keyboard_report.keycode[0] == KEY_LEFT || (joyL & SC_BTN_LEFT) || (joyR & SC_BTN_LEFT)) {
+          autoload_enabled = false;
           if (core_sel - core_page_size >= 0) {
             core_sel -= core_page_size;
           } else {
@@ -241,6 +273,7 @@ void app_core_browser_on_keyboard() {
         
         // enter
         if (usb_keyboard_report.keycode[0] == KEY_ENTER || (joyL & SC_BTN_A) || (joyR & SC_BTN_A) || (joyL & SC_BTN_B) || (joyR & SC_BTN_B)) {
+          autoload_enabled = false;
           if (hw_setup.ft_enabled && has_ft == true) {
             app_core_browser_ft_menu(2); // play wav
           }
@@ -274,6 +307,24 @@ void app_core_browser_on_keyboard() {
         ft.spi(false);
         app_core_browser_overlay();
       }
+}
+
+void app_core_browser_on_time() {
+  if (autoload_enabled) {
+    if (autoload_timer.elapsed() > autoload_countdown * 1000) {
+      autoload_enabled = false;
+      String f = String(cores[core_sel].filename); f.trim(); 
+      char buf[32]; f.toCharArray(buf, sizeof(buf));
+      has_ft = false;
+      do_configure(buf);
+      switch (core.type) {
+        case CORE_TYPE_BOOT: osd_state = state_core_browser; break;
+        case CORE_TYPE_OSD: osd_state = state_main; break;
+        case CORE_TYPE_FILELOADER: osd_state = state_file_loader; break;
+        default: osd_state = state_main;
+      }
+    }
+  }
 }
 
 bool operator<(const core_list_item_t a, const core_list_item_t b) {

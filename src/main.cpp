@@ -884,6 +884,9 @@ void on_time() {
   if (mo < 10) zxosd.print(0); zxosd.print(mo); zxosd.print("/");
   if (y < 10) zxosd.print(0); zxosd.print(y);
 
+  // on time callback
+  app_core_browser_on_time();
+
   if (core.type == CORE_TYPE_BOOT && has_ft == true && is_osd == true) {
     // redraw core browser
     app_core_browser_ft_menu(0);

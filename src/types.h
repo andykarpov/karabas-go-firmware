@@ -11,6 +11,7 @@ typedef struct {
 
 typedef struct {
 	bool flash;
+	char id[32+1];
 	char name[32+1];
 	char filename[32+1];
 	char build[8+1];
