@@ -111,6 +111,10 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
     if (cores[i].flash) {
       ft.drawText(ft.width()/4+ft.width()/2-16-24, offset + pos*40 + 16, 28, color_text, FT81x_OPT_CENTERY, "F\0");
     }
+    if (autoload_enabled && i==core_sel) {
+      uint32_t diff = (autoload_timer.elapsed() < autoload_countdown * 1000) ? ceil((autoload_countdown * 1000 - autoload_timer.elapsed())/1000) : 0;
+      ft.drawGauge(ft.width()/4+16+12, offset + pos*40 + 16, 12, color_text, color_button, 0, 1, 1, diff, autoload_countdown);
+    }
     pos++;
   }
 
