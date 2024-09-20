@@ -121,7 +121,7 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
   char b[40]; 
 
   //ft.drawText(112, ft.height()-40, 27, color_copyright, FT81x_OPT_CENTER, "www.karabas.uk\0");
-  sprintf(b, "FW build: %s\0", BUILD_VER);
+  sprintf(b, "FW build: %s\0", STRINGIZE_VALUE_OF(BUILD_VER));
   ft.drawText(112, ft.height()-40, 27, color_copyright, FT81x_OPT_CENTER, b);
   ft.drawText(112, ft.height()-20, 27, color_copyright, FT81x_OPT_CENTER, "(c) 2024 andykarpov\0");
   sprintf(b, "Page %d of %d\0", core_page, core_pages);

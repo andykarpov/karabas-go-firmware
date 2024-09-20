@@ -8,8 +8,11 @@
 #endif
 
 #ifndef BUILD_VER
-#define BUILD_VER "DEVBUILD"
+#define BUILD_VER DEVBUILD
 #endif
+
+#define STRINGIZE(x) #x
+#define STRINGIZE_VALUE_OF(x) STRINGIZE(x)
 
 #if HW_ID==HW_ID_GO
 
