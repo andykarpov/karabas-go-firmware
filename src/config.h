@@ -7,6 +7,9 @@
 #define HW_ID 1
 #endif
 
+#ifndef BUILD_VER
+#define BUILD_VER "DEVBUILD"
+#endif
 
 #if HW_ID==HW_ID_GO
 
