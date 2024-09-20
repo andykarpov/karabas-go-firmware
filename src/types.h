@@ -87,7 +87,7 @@ typedef struct {
 	bool debug_enabled;
 	bool ft_enabled;
 	uint8_t ft_video_mode;
-	bool ft_sound;
+	uint8_t ft_sound;
 	bool ft_click;
 	bool ft_time;
 	bool ft_date;

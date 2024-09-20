@@ -1234,7 +1234,7 @@ void load_setup() {
   
   hw_setup.ft_enabled = true;
   hw_setup.ft_video_mode = 0;
-  hw_setup.ft_sound = true;
+  hw_setup.ft_sound = 1;
   hw_setup.ft_click = true;
   hw_setup.ft_time = true;
   hw_setup.ft_date = true;
@@ -1257,7 +1257,7 @@ void load_setup() {
     
     ini.getValue("ft812", "enabled", buffer, bufferLen, hw_setup.ft_enabled);
     hw_setup.ft_video_mode = (ini.getValue("ft812", "video_mode", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : 0;
-    ini.getValue("ft812", "sound", buffer, bufferLen, hw_setup.ft_sound);
+    hw_setup.ft_sound = (ini.getValue("ft812", "sound", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : 0;
     ini.getValue("ft812", "click", buffer, bufferLen, hw_setup.ft_click);
     ini.getValue("ft812", "time", buffer, bufferLen, hw_setup.ft_time);
     ini.getValue("ft812", "date", buffer, bufferLen, hw_setup.ft_date);
@@ -1273,7 +1273,7 @@ void load_setup() {
     d_print("Debug enabled: "); d_println(hw_setup.debug_enabled ? "yes" : "no"); 
     d_print("FT812 enabled: "); d_println(hw_setup.ft_enabled ? "yes" : "no"); 
     d_print("FT812 video mode: "); d_println(hw_setup.ft_video_mode);
-    d_print("FT812 sound enabled: "); d_println(hw_setup.ft_sound ? "yes" : "no"); 
+    d_print("FT812 sound: "); d_println(hw_setup.ft_sound); 
     d_print("FT812 keypress click enabled: "); d_println(hw_setup.ft_click ? "yes" : "no"); 
     d_print("FT812 show time: "); d_println(hw_setup.ft_time ? "yes" : "no"); 
     d_print("FT812 show date: "); d_println(hw_setup.ft_date ? "yes" : "no"); 
