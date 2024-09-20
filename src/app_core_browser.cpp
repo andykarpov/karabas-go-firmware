@@ -87,11 +87,11 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
   ft.beginDisplayList();
 
   uint32_t color_black = FT81x_COLOR_RGB(1, 1, 1);
-  uint32_t color_gradient = FT81x_COLOR_RGB(0, 0, 200);
-  uint32_t color_button = FT81x_COLOR_RGB(32, 32, 38);
-  uint32_t color_button_active = FT81x_COLOR_RGB(0, 0, 200);
-  uint32_t color_text = FT81x_COLOR_RGB(255,255,255);
-  uint32_t color_copyright = FT81x_COLOR_RGB(120, 120, 120);
+  uint32_t color_gradient = hw_setup.color_gradient;
+  uint32_t color_button = hw_setup.color_button;
+  uint32_t color_button_active = hw_setup.color_active;
+  uint32_t color_text = hw_setup.color_text;
+  uint32_t color_copyright = hw_setup.color_copyright;
 
   ft.clear(color_black);
   ft.drawGradient(ft.width()/2, 0, color_gradient, ft.width()/2, ft.height()-ft.height()/4-1, color_black);
