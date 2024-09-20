@@ -153,11 +153,9 @@ void FT812::reset()
         digitalWrite(pin_reset, LOW); 
         delay(10);
         digitalWrite(pin_reset, HIGH);
-        delay(300);
     } else {
         // soft reset
         sendCommand(FT81x_CMD_RST_PULSE);
-        delay(300);
     }
     // disable mcu-ft spi
     spi(false);
@@ -171,40 +169,36 @@ bool FT812::init(uint8_t m) {
 
     mode = ft_modes[m];
 
-    sendCommand(FT81x_CMD_PWRDOWN);
-    sendCommand(FT81x_CMD_ACTIVE);
-    sendCommand(FT81x_CMD_SLEEP);
     sendCommand(FT81x_CMD_CLKEXT);
     sendCommand(FT81x_CMD_CLKSEL + ((mode.f_mul | 0xC0) << 8)); // f_mul
-    sendCommand(FT81x_CMD_ACTIVE);
+    sendCommand(FT81x_CMD_RST_PULSE);
+    sendCommand(FT81x_CMD_ACTIVE);  
 
-    if (read8(FT81x_REG_ID) != 0x7C) {
-      return false;
-    }
+    while (read8(FT81x_REG_ID) != 0x7C);
+    while (read16(FT81x_REG_CPURESET) != 0x00);
 
-    // wait for FT CPU reset complete
-    /*while (read8(FT81x_REG_CPURESET) != 0x00) {
-        __asm__ volatile("nop");
-    }*/
-
-    // configure rgb interface
+    // configure vga mode
+    write16(FT81x_REG_HCYCLE, mode.h_fporch + mode.h_sync + mode.h_bporch + mode.h_visible); // h_visible + h_fporch + h_sync + h_bporch
+    write16(FT81x_REG_HOFFSET, mode.h_fporch + mode.h_sync + mode.h_bporch); // h_fporch + h_sync + h_bporch
     write16(FT81x_REG_HSYNC0, mode.h_fporch); // h_fporch
     write16(FT81x_REG_HSYNC1, mode.h_fporch + mode.h_sync); // h_fporch + h_sync
-    write16(FT81x_REG_HOFFSET, mode.h_fporch + mode.h_sync + mode.h_bporch); // h_fporch + h_sync + h_bporch
-    write16(FT81x_REG_HCYCLE, mode.h_fporch + mode.h_sync + mode.h_bporch + mode.h_visible); // h_visible + h_fporch + h_sync + h_bporch
-    write16(FT81x_REG_HSIZE, mode.h_visible); // h_visible
-
+    write16(FT81x_REG_VCYCLE, mode.v_fporch + mode.v_sync + mode.v_bporch + mode.v_visible); // v_visible + v_fporch + v_sync + v_bporch    
+    write16(FT81x_REG_VOFFSET, mode.v_fporch + mode.v_sync + mode.v_bporch - 1); // v_fporch + v_syhc + v_bporch - 1
     write16(FT81x_REG_VSYNC0, mode.v_fporch - 1); // v_fporch - 1
     write16(FT81x_REG_VSYNC1, mode.v_fporch + mode.v_sync - 1); // v_fporch + v_sync - 1
-    write16(FT81x_REG_VOFFSET, mode.v_fporch + mode.v_sync + mode.v_bporch - 1); // v_fporch + v_syhc + v_bporch - 1
-    write16(FT81x_REG_VCYCLE, mode.v_fporch + mode.v_sync + mode.v_bporch + mode.v_visible); // v_visible + v_fporch + v_sync + v_bporch    
-    write16(FT81x_REG_VSIZE, mode.v_visible);
-
+    write8(FT81x_REG_SWIZZLE, 0);
     write8(FT81x_REG_PCLK_POL, 0);
     write8(FT81x_REG_CSPREAD, 0);
-    write8(FT81x_REG_PCLK, mode.f_div); // f_div 1
-    write8(FT81x_REG_INT_MASK, 1);
-    write8(FT81x_REG_INT_EN, 1);
+    write16(FT81x_REG_HSIZE, mode.h_visible);
+    write16(FT81x_REG_VSIZE, mode.v_visible);
+
+
+    // write first DL
+    beginDisplayList();
+    clear(0);
+    swapScreen();    
+
+    write8(FT81x_REG_PCLK, mode.f_div); // f_div
 
     return true;
 }
@@ -676,7 +670,7 @@ void FT812::sendCommand(const uint32_t cmd) {
     uint8_t res = SPI.transfer(cmd);
     digitalWrite(pin_cs, HIGH);
     SPI.endTransaction();
-    delay(200);
+    //delay(200);
     //Serial.printf("Command %d result %d", cmd, res); Serial.println();
 }
 

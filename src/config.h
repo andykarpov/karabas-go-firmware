@@ -193,30 +193,13 @@
 
 #define APP_COREBROWSER_MENU_OFFSET 5
 
-#ifndef DEBUG
-#define DEBUG 1
-#endif
-
-#ifndef FT_OSD 
-#define FT_OSD 1
-#endif
-
 #ifndef WAIT_SERIAL
 #define WAIT_SERIAL 0
 #endif
 
-#if DEBUG
-#define d_begin(...) Serial.begin(__VA_ARGS__);
-#define d_print(...)    Serial.print(__VA_ARGS__)
-#define d_printf(...)    Serial.printf(__VA_ARGS__)
-#define d_write(...)    Serial.write(__VA_ARGS__)
-#define d_println(...)  Serial.println(__VA_ARGS__)
-#define d_flush(...)  Serial.flush(__VA_ARGS__)
-#else
-#define d_begin(...)
-#define d_print(...)
-#define d_printf(...)
-#define d_write(...)
-#define d_println(...)
-#define d_flush(...)
-#endif
+#define d_begin(...)   if (hw_setup.debug_enabled) Serial.begin(__VA_ARGS__);
+#define d_print(...)   if (hw_setup.debug_enabled) Serial.print(__VA_ARGS__);
+#define d_printf(...)  if (hw_setup.debug_enabled) Serial.printf(__VA_ARGS__);
+#define d_write(...)   if (hw_setup.debug_enabled) Serial.write(__VA_ARGS__);
+#define d_println(...) if (hw_setup.debug_enabled) Serial.println(__VA_ARGS__);
+#define d_flush(...)   if (hw_setup.debug_enabled)  Serial.flush(__VA_ARGS__);

@@ -82,6 +82,20 @@ typedef struct {
 	char name[32+1];
 } file_list_item_t;
 
+typedef struct {
+	bool debug_enabled;
+	bool ft_enabled;
+	uint8_t ft_video_mode;
+	bool ft_sound;
+	bool ft_click;
+	bool ft_time;
+	bool ft_date;
+	bool ft_char;
+	bool autoload_enabled;
+	uint8_t autoload_timeout;
+	char autoload_core[32+1];
+} setup_t;
+
 enum osd_state_e {
     state_main = 0,
     state_rtc,

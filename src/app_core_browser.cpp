@@ -113,24 +113,29 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
   char b[40]; sprintf(b, "Page %d of %d\0", core_page, core_pages);
   ft.drawText(ft.width()/2, ft.height()-40, 27, color_copyright, FT81x_OPT_CENTER, b);
 
-  char time[9];
-  sprintf(time, "%02d:%02d:%02d\0", zxrtc.getHour(), zxrtc.getMinute(), zxrtc.getSecond());
-  ft.drawText(ft.width()-88, 30, 30, color_text, FT81x_OPT_CENTER, time);
-  char date[9];
-  sprintf(date, "%02d/%02d/%02d\0", zxrtc.getDay(), zxrtc.getMonth(), zxrtc.getYear() % 100);
-  ft.drawText(ft.width()-88, 60, 30, color_text, FT81x_OPT_CENTER, date);
+  if (hw_setup.ft_time) {
+    char time[9];
+    sprintf(time, "%02d:%02d:%02d\0", zxrtc.getHour(), zxrtc.getMinute(), zxrtc.getSecond());
+    ft.drawText(ft.width()-88, 30, 30, color_text, FT81x_OPT_CENTER, time);
+  }
+  if (hw_setup.ft_date) {
+    char date[9];
+    sprintf(date, "%02d/%02d/%02d\0", zxrtc.getDay(), zxrtc.getMonth(), zxrtc.getYear() % 100);
+    ft.drawText(ft.width()-88, 60, 30, color_text, FT81x_OPT_CENTER, date);
+  }
 
-
-  if (play_sounds == 1) {
+  if (play_sounds == 1 && hw_setup.ft_click) {
       ft.playSound();
-  } else if (play_sounds == 2) {
+  } else if (play_sounds == 2 && hw_setup.ft_sound) {
     ft.playAudio(LOGO_BITMAP_SIZE + BG_BITMAP_SIZE, KEY_SIZE, KEY_SAMPLERATE, FT81x_AUDIO_FORMAT_ULAW, false);
     delay(KEY_DURATION);
     ft.stopSound();
   }
 
   ft.drawBitmap(0, 8, 8, LOGO_WIDTH, LOGO_HEIGHT, 4, 0);  // logo scaled 4x
-  ft.overlayBitmap(LOGO_BITMAP_SIZE, ft.width()-BG_WIDTH-8, ft.height()-BG_HEIGHT-8, BG_WIDTH, BG_HEIGHT, 1, 0); // bg image
+  if (hw_setup.ft_char) {
+    ft.overlayBitmap(LOGO_BITMAP_SIZE, ft.width()-BG_WIDTH-8, ft.height()-BG_HEIGHT-8, BG_WIDTH, BG_HEIGHT, 1, 0); // bg image
+  }
 
   ft.swapScreen();
 }
@@ -177,7 +182,6 @@ void app_core_browser_read_list() {
 
   // files from sd card
   if (has_sd) {
-    sd1.chvol();
     if (!root1.open(&sd1, "/")) {
       return;
     }
@@ -237,7 +241,7 @@ void app_core_browser_on_keyboard() {
         
         // enter
         if (usb_keyboard_report.keycode[0] == KEY_ENTER || (joyL & SC_BTN_A) || (joyR & SC_BTN_A) || (joyL & SC_BTN_B) || (joyR & SC_BTN_B)) {
-          if (FT_OSD == 1 && has_ft == true) {
+          if (hw_setup.ft_enabled && has_ft == true) {
             app_core_browser_ft_menu(2); // play wav
           }
           d_printf("Selected core %s to boot from menu", cores[core_sel].filename); d_println();
@@ -255,7 +259,7 @@ void app_core_browser_on_keyboard() {
 
         // redraw core browser on keypress
         if (osd_state == state_core_browser) {
-          if (FT_OSD == 1 && has_ft == true) {
+          if (hw_setup.ft_enabled && has_ft == true) {
             app_core_browser_ft_menu(1);
           } else {
             app_core_browser_menu(APP_COREBROWSER_MENU_OFFSET);
@@ -264,7 +268,7 @@ void app_core_browser_on_keyboard() {
       }
 
       // return back to classic osd
-      if (usb_keyboard_report.keycode[0] == KEY_SPACE && has_ft == true && FT_OSD == 1) {
+      if (usb_keyboard_report.keycode[0] == KEY_SPACE && has_ft == true && hw_setup.ft_enabled) {
         has_ft = false;
         ft.vga(false);
         ft.spi(false);

@@ -45,6 +45,8 @@ extern ElapsedTimer hide_timer;
 extern hid_joy_config_t joy_drivers[255];
 extern uint8_t joy_drivers_len;
 
+extern setup_t hw_setup;
+
 void spi_queue(uint8_t cmd, uint8_t addr, uint8_t data);
 void spi_send(uint8_t cmd, uint8_t addr, uint8_t data);
 void spi_send16(uint8_t cmd, uint16_t data);
@@ -69,6 +71,8 @@ void on_keyboard();
 
 bool btn_read(uint8_t num);
 void led_write(uint8_t num, bool on);
+
+void load_setup();
 
 int32_t msc_read_cb_sd (uint32_t lba, void* buffer, uint32_t bufsize);
 int32_t msc_write_cb_sd (uint32_t lba, uint8_t* buffer, uint32_t bufsize);

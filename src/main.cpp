@@ -119,9 +119,13 @@ uint16_t prev_debug_address = 0;
 uint16_t debug_data = 0;
 uint16_t prev_debug_data = 0;
 
+setup_t hw_setup;
+
 void setup()
 {
   queue_init(&spi_event_queue, sizeof(queue_spi_t), 64);
+
+  hw_setup.debug_enabled = false;
 
   usb_msc.setID(0, "Karabas", "SD Card", "1.0");
   usb_msc.setReadWriteCallback(0, msc_read_cb_sd, msc_write_cb_sd, msc_flush_cb_sd);
@@ -244,6 +248,9 @@ void setup()
   osd_state = state_main;
 
   if (!expose_msc) {
+    // load setup
+    load_setup();
+
     // load boot from SD or flashfs
     if (has_sd && sd1.exists(FILENAME_BOOT)) {  
       do_configure(FILENAME_BOOT);
@@ -1015,18 +1022,20 @@ void read_core(const char* filename) {
 
   has_ft = false;
 
-  // hw ft reset
-  ft.reset();
+  // hw ft reset for other cores types
+  if (core.type != CORE_TYPE_BOOT) {
+    ft.reset();
+  }
 
   // boot core tries to use FT812 as osd handler
   if (core.type == CORE_TYPE_BOOT && is_osd) {
-    if (FT_OSD == 1) {
+    if (hw_setup.ft_enabled) {
       // space skip ft osd
       if (usb_keyboard_report.keycode[0] == KEY_SPACE) {
         d_println("Space pressed: skip FT81x detection, fallback to classic OSD");
       } else {
         ft.spi(true);
-        has_ft = ft.init(2); // 640x480@76Hz
+        has_ft = ft.init(hw_setup.ft_video_mode);
         if (has_ft) {
           d_println("Found FT81x IC, switching to FT OSD");
           ft.vga(true);
@@ -1162,7 +1171,7 @@ void osd_handle(bool force) {
       osd_prev_state = osd_state;
       switch(osd_state) {
         case state_core_browser:
-          if (FT_OSD == 1 && has_ft == true) {
+          if (hw_setup.ft_enabled && has_ft == true) {
             app_core_browser_ft_overlay();
           } else {
             app_core_browser_overlay();
@@ -1209,6 +1218,70 @@ void led_write(uint8_t num, bool on) {
     digitalWrite(PIN_LED2, !on);
   }
 #endif
+}
+
+void load_setup() {
+
+  const size_t bufferLen = 80;
+  char buffer[bufferLen];
+  IniFile ini("karabas.ini");
+  
+  // defaults
+  hw_setup.debug_enabled = false;
+  
+  hw_setup.ft_enabled = true;
+  hw_setup.ft_video_mode = 0;
+  hw_setup.ft_sound = true;
+  hw_setup.ft_click = true;
+  hw_setup.ft_time = true;
+  hw_setup.ft_date = true;
+  hw_setup.ft_char = true;
+
+  hw_setup.autoload_enabled = false;
+  hw_setup.autoload_timeout = 15;
+
+  if (!has_sd) return;
+  sd1.chvol();
+
+  if (ini.open()) {
+    // validate file
+    if (!ini.validate(buffer, bufferLen)) {
+      ini.close();
+      return;
+    }
+
+    ini.getValue("setup", "debug", buffer, bufferLen, hw_setup.debug_enabled);
+    
+    ini.getValue("ft812", "enabled", buffer, bufferLen, hw_setup.ft_enabled);
+    hw_setup.ft_video_mode = (ini.getValue("ft812", "video_mode", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : 0;
+    ini.getValue("ft812", "sound", buffer, bufferLen, hw_setup.ft_sound);
+    ini.getValue("ft812", "click", buffer, bufferLen, hw_setup.ft_click);
+    ini.getValue("ft812", "time", buffer, bufferLen, hw_setup.ft_time);
+    ini.getValue("ft812", "date", buffer, bufferLen, hw_setup.ft_date);
+    ini.getValue("ft812", "char", buffer, bufferLen, hw_setup.ft_char);
+
+    ini.getValue("autoload", "enabled", buffer, bufferLen, hw_setup.autoload_enabled);
+    hw_setup.autoload_timeout = (ini.getValue("autoload", "timeout", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : 0;
+    if (ini.getValue("autoload", "core", buffer, bufferLen)) {
+          strcpy(hw_setup.autoload_core, buffer);
+    }
+
+    d_println("Setup:");
+    d_print("Debug enabled: "); d_println(hw_setup.debug_enabled ? "yes" : "no"); 
+    d_print("FT812 enabled: "); d_println(hw_setup.ft_enabled ? "yes" : "no"); 
+    d_print("FT812 video mode: "); d_println(hw_setup.ft_video_mode);
+    d_print("FT812 sound enabled: "); d_println(hw_setup.ft_sound ? "yes" : "no"); 
+    d_print("FT812 keypress click enabled: "); d_println(hw_setup.ft_click ? "yes" : "no"); 
+    d_print("FT812 show time: "); d_println(hw_setup.ft_time ? "yes" : "no"); 
+    d_print("FT812 show date: "); d_println(hw_setup.ft_date ? "yes" : "no"); 
+    d_print("FT812 show character: "); d_println(hw_setup.ft_char ? "yes" : "no"); 
+    d_print("Autoload enabled: "); d_println(hw_setup.autoload_enabled ? "yes" : "no"); 
+    d_print("Autoload timeout: "); d_println(hw_setup.autoload_timeout); 
+    d_print("Autoload core: "); d_println(hw_setup.autoload_core); 
+
+    ini.close();
+    return;
+  }
 }
 
 // Callback invoked when received READ10 command.
