@@ -261,7 +261,10 @@ void app_core_browser_read_list() {
     String s2 = String(cores[i].id);
     s1.trim();
     s2.trim();
-    if (hw_setup.autoload_enabled && s2.equals(s1)) {
+    //d_println(s1);
+    //d_println(s2);
+    //d_println(hw_setup.autoload_enabled);
+    if (!autoload_enabled && hw_setup.autoload_enabled && s2.equals(s1)) {
       autoload_enabled = true;
       autoload_countdown = hw_setup.autoload_timeout;
       core_sel = i;

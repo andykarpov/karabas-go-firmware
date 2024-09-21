@@ -4,7 +4,7 @@
 #define HW_ID_MINI 2
 
 #ifndef HW_ID
-#define HW_ID 1
+#define HW_ID 2
 #endif
 
 #ifndef BUILD_VER

@@ -51,7 +51,7 @@
 #include "hid_driver.h"
 
 PioSpi spiSD(PIN_SD_SPI_RX, PIN_SD_SPI_SCK, PIN_SD_SPI_TX); // dedicated SD1 SPI
-#define SD_CONFIG SdSpiConfig(SD_CS_PIN, SHARED_SPI, SD_SCK_MHZ(30), &spiSD) // SD1 SPI Settings
+#define SD_CONFIG SdSpiConfig(SD_CS_PIN, SHARED_SPI, SD_SCK_MHZ(25), &spiSD) // SD1 SPI Settings
 
 SPISettings settingsA(SD_SCK_MHZ(4), MSBFIRST, SPI_MODE0); // MCU SPI settings
 Adafruit_USBD_MSC usb_msc;
