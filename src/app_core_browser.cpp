@@ -206,7 +206,7 @@ core_list_item_t app_core_browser_get_item(bool is_flash) {
     file1.getName(core.filename, sizeof(core.filename));
     core.flash = false;
   }
-  file_seek(FILE_POS_CORE_ID, is_flash); file_read_bytes(core.id, 32, is_flash); core.name[32] = '\0';
+  file_seek(FILE_POS_CORE_ID, is_flash); file_read_bytes(core.id, 32, is_flash); core.id[32] = '\0';
   file_seek(FILE_POS_CORE_NAME, is_flash); file_read_bytes(core.name, 32, is_flash); core.name[32] = '\0';
   uint8_t visible; file_seek(FILE_POS_CORE_VISIBLE, is_flash); visible = file_read(is_flash); core.visible = (visible > 0);
   file_seek(FILE_POS_CORE_ORDER, is_flash); core.order = file_read(is_flash);
@@ -261,9 +261,9 @@ void app_core_browser_read_list() {
     String s2 = String(cores[i].id);
     s1.trim();
     s2.trim();
-    //d_println(s1);
-    //d_println(s2);
-    //d_println(hw_setup.autoload_enabled);
+//    d_println(s1);
+//    d_println(s2);
+//    d_println(hw_setup.autoload_enabled);
     if (!autoload_enabled && hw_setup.autoload_enabled && s2.equals(s1)) {
       autoload_enabled = true;
       autoload_countdown = hw_setup.autoload_timeout;
