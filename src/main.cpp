@@ -160,6 +160,13 @@ void setup()
   pinMode(PIN_MCU_SD2_CS, OUTPUT); digitalWrite(PIN_MCU_SD2_CS, HIGH);
   pinMode(PIN_MCU_FT_CS, OUTPUT); digitalWrite(PIN_MCU_FT_CS, HIGH);
 
+  // unused MCU-FPGA pins (yet)
+  pinMode(PIN_MCU_SPI_IO0, INPUT);
+  pinMode(PIN_MCU_SPI_IO1, INPUT);
+  #if HW_ID==HW_ID_MINI
+  pinMode(PIN_MCU_SPI_IO4, INPUT);
+  #endif
+
   // I2C
   Wire.setSDA(PIN_I2C_SDA);
   Wire.setSCL(PIN_I2C_SCL);
@@ -1243,10 +1250,12 @@ void load_setup() {
   hw_setup.autoload_enabled = false;
   hw_setup.autoload_timeout = 15;
 
+  hw_setup.color_bg = 0x00010101;
   hw_setup.color_gradient = 0x000000c8;
   hw_setup.color_button = 0x00202026;
   hw_setup.color_active = 0x000000c8;
   hw_setup.color_text = 0x00ffffff;
+  hw_setup.color_text_active = 0x00ffffff;
   hw_setup.color_copyright = 0x00787878;  
 
   if (!has_sd) return;
@@ -1263,15 +1272,19 @@ void load_setup() {
     
     ini.getValue("ft812", "enabled", buffer, bufferLen, hw_setup.ft_enabled);
     hw_setup.ft_video_mode = (ini.getValue("ft812", "video_mode", buffer, bufferLen)) ? strtoul(buffer, 0, 10) : 0;
+    if (hw_setup.ft_video_mode > 15) hw_setup.ft_video_mode = 0;
     hw_setup.ft_sound = (ini.getValue("ft812", "sound", buffer, bufferLen)) ? strtoul(buffer, 0, 10) : 0;
+    if (hw_setup.ft_sound > 4) hw_setup.ft_sound = 1;
     ini.getValue("ft812", "click", buffer, bufferLen, hw_setup.ft_click);
     ini.getValue("ft812", "time", buffer, bufferLen, hw_setup.ft_time);
     ini.getValue("ft812", "date", buffer, bufferLen, hw_setup.ft_date);
     ini.getValue("ft812", "char", buffer, bufferLen, hw_setup.ft_char);
+    hw_setup.color_bg = (ini.getValue("ft812", "color_bg", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_bg;
     hw_setup.color_gradient = (ini.getValue("ft812", "color_gradient", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_gradient;
     hw_setup.color_button = (ini.getValue("ft812", "color_button", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_button;
     hw_setup.color_active = (ini.getValue("ft812", "color_active", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_active;
     hw_setup.color_text = (ini.getValue("ft812", "color_text", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_text;
+    hw_setup.color_text_active = (ini.getValue("ft812", "color_text_active", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_text_active;
     hw_setup.color_copyright = (ini.getValue("ft812", "color_copyright", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_copyright;
 
     ini.getValue("autoload", "enabled", buffer, bufferLen, hw_setup.autoload_enabled);

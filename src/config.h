@@ -79,12 +79,12 @@
 #define PIN_CONF_CLK 9 
 #define PIN_CONF_DONE 8 
 
-#define PIN_MCU_SD2_CS 16  
-#define PIN_MCU_FT_CS 17 
+#define PIN_MCU_SD2_CS 16 // io2 
+#define PIN_MCU_FT_CS 17  // io3
 
-#define PIN_MCU_SPI_IO0 14 
-#define PIN_MCU_SPI_IO1 15
-#define PIN_MCU_SPI_IO4 18
+#define PIN_MCU_SPI_IO0 14 // io0
+#define PIN_MCU_SPI_IO1 15 // io1
+#define PIN_MCU_SPI_IO4 18 // io4 (will be gone for 50MHz clock)
 
 #define PIN_BTN1 4
 #define PIN_BTN2 6

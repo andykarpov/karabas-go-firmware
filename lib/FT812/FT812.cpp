@@ -94,8 +94,8 @@ const uint8_t ADDR_CONTROL_REGISTER = 0x00;
 const ft_mode_t ft_modes[] =
 {
   // f_mul, f_div, h_fporch, h_sync, h_bporch, h_visible, v_fporch, v_sync, v_bporch, v_visible
-  {6,  2, 16, 96,  48,  640,  18, 2, 24, 480},   //  0: 640x480@57Hz (48MHz)
-  {8,  2, 16, 64,  120, 640,  1,  3, 16, 480},   //  1: 640x480@75Hz (64MHz)
+  {6,  2, 16, 96,  48,  640,  11, 2, 31, 480},   //  0: 640x480@57Hz (48MHz)
+  {8,  2, 24, 40,  128, 640,  9,  3, 28, 480},   //  1: 640x480@74Hz (64MHz)
   {8,  2, 16, 96,  48,  640,  11, 2, 31, 480},   //  2: 640x480@76Hz (64MHz)
   {5,  1, 40, 128, 88,  800,  1,  4, 23, 600},   //  3: 800x600@60Hz (40MHz)
   {10, 2, 40, 128, 88,  800,  1,  4, 23, 600},   //  4: 800x600@60Hz (80MHz)
@@ -107,6 +107,8 @@ const ft_mode_t ft_modes[] =
   {7,  1, 24, 56,  124, 640,  1,  3, 38, 1024},  // 10: 1280/2x1024@60Hz (56MHz)
   {9, 1, 110, 40,  220, 1280, 5,  5, 20, 720},   // 11: 1280x720@58Hz (72MHz)
   {9,  1, 93, 40,  187, 1280, 5,  5, 20, 720},   // 12: 1280x720@60Hz (72MHz)
+  {5,  1, 40, 128, 88,  800,  1,  4, 23, 748},   // 13: 800x600@48.7Hz (40MHz)  - for ZX-Evo sync
+  {8,  1, 24, 136, 160, 1024, 3,  6, 29, 938},   // 14: 1024x768@48.7Hz (64MHz) - for ZX-Evo sync  
 };
 
 /****************************************************************************/
@@ -169,11 +171,13 @@ bool FT812::init(uint8_t m) {
 
     mode = ft_modes[m];
 
+    sendCommand(FT81x_CMD_PWRDOWN);
+    sendCommand(FT81x_CMD_ACTIVE);
+    sendCommand(FT81x_CMD_SLEEP);
     sendCommand(FT81x_CMD_CLKEXT);
     sendCommand(FT81x_CMD_CLKSEL + ((mode.f_mul | 0xC0) << 8)); // f_mul
+    sendCommand(FT81x_CMD_ACTIVE); 
     sendCommand(FT81x_CMD_RST_PULSE);
-    sendCommand(FT81x_CMD_ACTIVE);  
-
     while (read8(FT81x_REG_ID) != 0x7C);
     while (read16(FT81x_REG_CPURESET) != 0x00);
 
@@ -198,7 +202,15 @@ bool FT812::init(uint8_t m) {
     clear(0);
     swapScreen();    
 
+    // set PCLK
+    write8(FT81x_REG_ADAPTIVE_FRAMERATE, 0);
+    write32(FT81x_REG_GPIOX_DIR, (uint32_t) 1 << 15); // bit15 - DISP output
+    write32(FT81x_REG_GPIOX, (uint32_t)1 << 15 | ((uint32_t)1 << 12) | ((uint32_t)1 << 9)); // bit15 - DISP level, bit12 - PCLK (and others) drive strength, bit9 - INT_N push/pull
     write8(FT81x_REG_PCLK, mode.f_div); // f_div
+
+    // Configure INT
+    write8(FT81x_REG_INT_MASK, 1); // FT_INT_SWAP=1
+    write8(FT81x_REG_INT_EN, 1);
 
     return true;
 }

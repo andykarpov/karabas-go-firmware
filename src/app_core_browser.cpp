@@ -86,11 +86,12 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
 
   ft.beginDisplayList();
 
-  uint32_t color_black = FT81x_COLOR_RGB(1, 1, 1);
+  uint32_t color_black = hw_setup.color_bg;
   uint32_t color_gradient = hw_setup.color_gradient;
   uint32_t color_button = hw_setup.color_button;
   uint32_t color_button_active = hw_setup.color_active;
   uint32_t color_text = hw_setup.color_text;
+  uint32_t color_text_active = hw_setup.color_text_active;
   uint32_t color_copyright = hw_setup.color_copyright;
 
   ft.clear(color_black);
@@ -106,14 +107,15 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
   for(uint8_t i=core_from; i < core_to; i++) {
     char name[18];
     String n = String(cores[i].name); n.trim(); n.toCharArray(name, 18);
-    const uint32_t color = i == core_sel ? color_button_active : color_button;
-    ft.drawButton(ft.width()/4 + 8, offset + pos*40, ft.width()/2-16, 32, 28, color_text, color, FT81x_OPT_3D, name);
+    const uint32_t colorb = i == core_sel ? color_button_active : color_button;
+    const uint32_t colort = i == core_sel ? color_text_active : color_text;
+    ft.drawButton(ft.width()/4 + 8, offset + pos*40, ft.width()/2-16, 32, 28, colort, colorb, FT81x_OPT_FLAT, name);
     if (cores[i].flash) {
-      ft.drawText(ft.width()/4+ft.width()/2-16-24, offset + pos*40 + 16, 28, color_text, FT81x_OPT_CENTERY, "F\0");
+      ft.drawText(ft.width()/4+ft.width()/2-16-24, offset + pos*40 + 16, 28, colort, FT81x_OPT_CENTERY, "F\0");
     }
     if (autoload_enabled && i==core_sel) {
       uint32_t diff = (autoload_timer.elapsed() < autoload_countdown * 1000) ? ceil((autoload_countdown * 1000 - autoload_timer.elapsed())/1000) : 0;
-      ft.drawGauge(ft.width()/4+16+12, offset + pos*40 + 16, 12, color_text, color_button, 0, 1, 1, diff, autoload_countdown);
+      ft.drawGauge(ft.width()/4+16+12, offset + pos*40 + 16, 12, colort, colorb, 0, 1, 1, diff, autoload_countdown);
     }
     pos++;
   }
@@ -333,6 +335,18 @@ void app_core_browser_on_keyboard() {
             case CORE_TYPE_FILELOADER: osd_state = state_file_loader; break;
             default: osd_state = state_main;
           }
+        }
+
+        if (usb_keyboard_report.keycode[0] == KEY_V && hw_setup.debug_enabled && hw_setup.ft_enabled && has_ft) {
+          autoload_enabled = false;
+          uint8_t old_vmode = hw_setup.ft_video_mode;
+          hw_setup.ft_video_mode++;
+          if (hw_setup.ft_video_mode > 14) {
+            hw_setup.ft_video_mode = 0;
+          }
+          d_printf("Changing video mode from %d to %d", old_vmode, hw_setup.ft_video_mode); d_println();
+          ft.init(hw_setup.ft_video_mode);
+          app_core_browser_ft_overlay();
         }
 
         // redraw core browser on keypress

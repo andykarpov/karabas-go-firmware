@@ -95,10 +95,12 @@ typedef struct {
 	bool autoload_enabled;
 	uint8_t autoload_timeout;
 	char autoload_core[32+1];
+	uint32_t color_bg;
 	uint32_t color_gradient;
 	uint32_t color_button;
 	uint32_t color_active;
 	uint32_t color_text;
+	uint32_t color_text_active;
 	uint32_t color_copyright;
 } setup_t;
 

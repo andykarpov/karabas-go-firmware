@@ -132,6 +132,7 @@
 #define FT81x_REG_CMDB_WRITE       0x302578  ///< Command DL (bulk) write
 #define FT81x_REG_MEDIAFIFO_READ   0x309014  ///< Read pointer for media FIFO in general purpose graphics RAM
 #define FT81x_REG_MEDIAFIFO_WRITE  0x309018  ///< Write pointer for media FIFO in general purpose graphics RAM
+#define FT81x_REG_ADAPTIVE_FRAMERATE 0x30257C
 
 #define FT81x_RAM_G         0x000000  ///< General purpose graphics RAM
 #define FT81x_ROM_FONT      0x1E0000  ///< Font table and bitmap
