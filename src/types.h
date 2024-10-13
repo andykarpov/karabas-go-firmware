@@ -92,6 +92,7 @@ typedef struct {
 	bool ft_time;
 	bool ft_date;
 	bool ft_char;
+	bool ft_3d_buttons;
 	bool autoload_enabled;
 	uint8_t autoload_timeout;
 	char autoload_core[32+1];

@@ -30,6 +30,7 @@
 
 #include <Arduino.h>
 #include <SPI.h>
+#include <ElapsedTimer.h>
 
 // Library headers
 // Project headers
@@ -256,6 +257,7 @@ private:
   uint8_t pin_cs;                    ///< CS pin for FT81x
   uint8_t pin_reset;                 ///< RESET pin for FT81x
   bool has_reset;
+  ElapsedTimer init_timer;
 
 protected:
 

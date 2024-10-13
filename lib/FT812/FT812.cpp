@@ -28,6 +28,7 @@
 #include <SPI.h>
 #include <FT812.h>
 #include <Arduino.h>
+#include <ElapsedTimer.h>
 
 /****************************************************************************/
 
@@ -94,21 +95,21 @@ const uint8_t ADDR_CONTROL_REGISTER = 0x00;
 const ft_mode_t ft_modes[] =
 {
   // f_mul, f_div, h_fporch, h_sync, h_bporch, h_visible, v_fporch, v_sync, v_bporch, v_visible
-  {6,  2, 16, 96,  48,  640,  11, 2, 31, 480},   //  0: 640x480@57Hz (48MHz)
-  {8,  2, 24, 40,  128, 640,  9,  3, 28, 480},   //  1: 640x480@74Hz (64MHz)
-  {8,  2, 16, 96,  48,  640,  11, 2, 31, 480},   //  2: 640x480@76Hz (64MHz)
-  {5,  1, 40, 128, 88,  800,  1,  4, 23, 600},   //  3: 800x600@60Hz (40MHz)
-  {10, 2, 40, 128, 88,  800,  1,  4, 23, 600},   //  4: 800x600@60Hz (80MHz)
-  {6,  1, 56, 120, 64,  800,  37, 6, 23, 600},   //  5: 800x600@69Hz (48MHz)
-  {7,  1, 32, 64,  152, 800,  1,  3, 27, 600},   //  6: 800x600@85Hz (56MHz)
-  {8,  1, 24, 136, 160, 1024, 3,  6, 29, 768},   //  7: 1024x768@59Hz (64MHz)
-  {9,  1, 24, 136, 144, 1024, 3,  6, 29, 768},   //  8: 1024x768@67Hz (72MHz)
-  {10, 1, 16, 96,  176, 1024, 1,  3, 28, 768},   //  9: 1024x768@76Hz (80MHz)
-  {7,  1, 24, 56,  124, 640,  1,  3, 38, 1024},  // 10: 1280/2x1024@60Hz (56MHz)
-  {9, 1, 110, 40,  220, 1280, 5,  5, 20, 720},   // 11: 1280x720@58Hz (72MHz)
-  {9,  1, 93, 40,  187, 1280, 5,  5, 20, 720},   // 12: 1280x720@60Hz (72MHz)
-  {5,  1, 40, 128, 88,  800,  1,  4, 23, 748},   // 13: 800x600@48.7Hz (40MHz)  - for ZX-Evo sync
-  {8,  1, 24, 136, 160, 1024, 3,  6, 29, 938},   // 14: 1024x768@48.7Hz (64MHz) - for ZX-Evo sync  
+  {6,  2, 16, 96,  48,  640,  11, 2, 31, 480},   //  0: 640x480@57Hz (48MHz) pclk 24
+  {8,  2, 24, 40,  128, 640,  9,  3, 28, 480},   //  1: 640x480@74Hz (64MHz) pclk 32
+  {8,  2, 16, 96,  48,  640,  11, 2, 31, 480},   //  2: 640x480@76Hz (64MHz) pclk 32
+  {5,  1, 40, 128, 88,  800,  1,  4, 23, 600},   //  3: 800x600@60Hz (40MHz) pclk 40
+  {10, 2, 40, 128, 88,  800,  1,  4, 23, 600},   //  4: 800x600@60Hz (80MHz) pclk 40
+  {6,  1, 56, 120, 64,  800,  37, 6, 23, 600},   //  5: 800x600@69Hz (48MHz) pclk 48
+  {7,  1, 32, 64,  152, 800,  1,  3, 27, 600},   //  6: 800x600@85Hz (56MHz) pclk 56
+  {8,  1, 24, 136, 160, 1024, 3,  6, 29, 768},   //  7: 1024x768@59Hz (64MHz) pclk 64
+  {9,  1, 24, 136, 144, 1024, 3,  6, 29, 768},   //  8: 1024x768@67Hz (72MHz) pclk 72
+  {10, 1, 16, 96,  176, 1024, 1,  3, 28, 768},   //  9: 1024x768@76Hz (80MHz) pclk 80
+  {7,  1, 24, 56,  124, 640,  1,  3, 38, 1024},  // 10: 1280/2x1024@60Hz (56MHz) pclk 56
+  {9, 1, 110, 40,  220, 1280, 5,  5, 20, 720},   // 11: 1280x720@58Hz (72MHz) pclk 72
+  {9,  1, 93, 40,  187, 1280, 5,  5, 20, 720},   // 12: 1280x720@60Hz (72MHz) pclk 72
+  {5,  1, 40, 128, 88,  800,  1,  4, 23, 748},   // 13: 800x600@48.7Hz (40MHz)  - for ZX-Evo sync pclk 40
+  {8,  1, 24, 136, 160, 1024, 3,  6, 29, 938},   // 14: 1024x768@48.7Hz (64MHz) - for ZX-Evo sync pclk 64
 };
 
 /****************************************************************************/
@@ -151,13 +152,17 @@ void FT812::reset()
     // enable mcu-ft spi
     spi(true);
     if (has_reset) {
-        // hard reset
+        // hard reset by MCU side
         digitalWrite(pin_reset, LOW); 
         delay(10);
         digitalWrite(pin_reset, HIGH);
     } else {
-        // soft reset
-        sendCommand(FT81x_CMD_RST_PULSE);
+        // hard reset by FPGA side
+        ctrl_reg = bitWrite(ctrl_reg, 4, 1);
+        action(CMD_SPI_CONTROL, ADDR_CONTROL_REGISTER, ctrl_reg);
+        delay(10);
+        ctrl_reg = bitWrite(ctrl_reg, 4, 0);
+        action(CMD_SPI_CONTROL, ADDR_CONTROL_REGISTER, ctrl_reg);
     }
     // disable mcu-ft spi
     spi(false);
@@ -178,8 +183,15 @@ bool FT812::init(uint8_t m) {
     sendCommand(FT81x_CMD_CLKSEL + ((mode.f_mul | 0xC0) << 8)); // f_mul
     sendCommand(FT81x_CMD_ACTIVE); 
     sendCommand(FT81x_CMD_RST_PULSE);
-    while (read8(FT81x_REG_ID) != 0x7C);
-    while (read16(FT81x_REG_CPURESET) != 0x00);
+
+    init_timer.reset();
+
+    while (read8(FT81x_REG_ID) != 0x7C) {
+        if (init_timer.elapsed() > 5000) return false;
+    }
+    while (read16(FT81x_REG_CPURESET) != 0x00) {
+        if (init_timer.elapsed() > 5000) return false;
+    }
 
     // configure vga mode
     write16(FT81x_REG_HCYCLE, mode.h_fporch + mode.h_sync + mode.h_bporch + mode.h_visible); // h_visible + h_fporch + h_sync + h_bporch

@@ -109,7 +109,7 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
     String n = String(cores[i].name); n.trim(); n.toCharArray(name, 18);
     const uint32_t colorb = i == core_sel ? color_button_active : color_button;
     const uint32_t colort = i == core_sel ? color_text_active : color_text;
-    ft.drawButton(ft.width()/4 + 8, offset + pos*40, ft.width()/2-16, 32, 28, colort, colorb, FT81x_OPT_FLAT, name);
+    ft.drawButton(ft.width()/4 + 8, offset + pos*40, ft.width()/2-16, 32, 28, colort, colorb, (hw_setup.ft_3d_buttons) ? FT81x_OPT_3D : FT81x_OPT_FLAT , name);
     if (cores[i].flash) {
       ft.drawText(ft.width()/4+ft.width()/2-16-24, offset + pos*40 + 16, 28, colort, FT81x_OPT_CENTERY, "F\0");
     }
