@@ -85,6 +85,7 @@ typedef struct {
 
 typedef struct {
 	bool debug_enabled;
+	bool debug_hid;
 	bool ft_enabled;
 	uint8_t ft_video_mode;
 	uint8_t ft_sound;

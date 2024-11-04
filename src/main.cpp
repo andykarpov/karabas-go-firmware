@@ -1238,7 +1238,7 @@ void load_setup() {
   
   // defaults
   hw_setup.debug_enabled = false;
-  
+  hw_setup.debug_hid = false;
   hw_setup.ft_enabled = true;
   hw_setup.ft_video_mode = 0;
   hw_setup.ft_sound = 1;
@@ -1270,6 +1270,7 @@ void load_setup() {
     }
 
     ini.getValue("setup", "debug", buffer, bufferLen, hw_setup.debug_enabled);
+    ini.getValue("setup", "debug_hid", buffer, bufferLen, hw_setup.debug_hid);
     
     ini.getValue("ft812", "enabled", buffer, bufferLen, hw_setup.ft_enabled);
     hw_setup.ft_video_mode = (ini.getValue("ft812", "video_mode", buffer, bufferLen)) ? strtoul(buffer, 0, 10) : 0;
@@ -1297,6 +1298,7 @@ void load_setup() {
 
     d_println("Setup:");
     d_print("Debug enabled: "); d_println(hw_setup.debug_enabled ? "yes" : "no"); 
+    d_print("Debug HID enabled: "); d_println(hw_setup.debug_hid ? "yes" : "no"); 
     d_print("FT812 enabled: "); d_println(hw_setup.ft_enabled ? "yes" : "no"); 
     d_print("FT812 video mode: "); d_println(hw_setup.ft_video_mode);
     d_print("FT812 sound: "); d_println(hw_setup.ft_sound); 
