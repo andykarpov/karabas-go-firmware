@@ -269,7 +269,7 @@ void app_file_loader_send_file(const char* filename) {
   zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_BLACK);
   zxosd.setPos(9,10);
   zxosd.print("Please wait.   ");
-  zxosd.setColor(OSD::COLOR_RED_I, OSD::COLOR_BLACK);
+  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
 
   // trigger reset
   spi_send(CMD_FILELOADER, 0, 1);
@@ -289,15 +289,17 @@ float perc = 0;
       cnt++;
       if (cnt % 8192 == 0) {
         //perc = (file_size > 0) ? (((float) cnt) * 100.0) / ((float) file_size) : 0.0;
-        zxosd.setPos(9,11);
-        zxosd.printf("%d bytes ", cnt);
+        //zxosd.setPos(9,11);
+        //zxosd.printf("%d bytes ", cnt);
+        zxosd.progress(9, 11, 15, cnt, file_size);
         //zxosd.printf("%-3d ", (perc >=0 && perc <= 100) ? (uint8_t) perc : 100); zxosd.print("% ");
       }
     }
   }
   zxosd.setColor(OSD::COLOR_GREEN_I, OSD::COLOR_BLACK);
-  zxosd.setPos(9,11);
-  zxosd.print("100 % loaded :)");
+  //zxosd.setPos(9,11);
+  zxosd.progress(9, 11, 15, file_size, file_size);
+  //zxosd.print("100 % loaded :)");
   
   file2.close();
   d_printf("Sent %u bytes", cnt); d_println();
