@@ -239,6 +239,9 @@ void app_core_browser_read_list() {
 
   // files from sd card
   if (has_sd) {
+    if (root1.isOpen()) {
+      root1.close();
+    }
     if (!root1.open(&sd1, "/")) {
       return;
     }

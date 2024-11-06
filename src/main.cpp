@@ -51,9 +51,9 @@
 #include "hid_driver.h"
 
 PioSpi spiSD(PIN_SD_SPI_RX, PIN_SD_SPI_SCK, PIN_SD_SPI_TX); // dedicated SD1 SPI
-#define SD_CONFIG SdSpiConfig(SD_CS_PIN, SHARED_SPI, SD_SCK_MHZ(25), &spiSD) // SD1 SPI Settings
-
-SPISettings settingsA(SD_SCK_MHZ(4), MSBFIRST, SPI_MODE0); // MCU SPI settings
+#define SD_CONFIG  SdSpiConfig(SD_CS_PIN, SHARED_SPI, SD_SCK_MHZ(20), &spiSD) // SD1 SPI Settings
+#define SD2_CONFIG SdSpiConfig(PIN_MCU_SD2_CS, SHARED_SPI, SD_SCK_MHZ(16)) // SD2 SPI Settings
+SPISettings settingsA(SD_SCK_MHZ(16), MSBFIRST, SPI_MODE0); // MCU SPI settings
 Adafruit_USBD_MSC usb_msc;
 
 PCA9536 extender;
@@ -61,9 +61,9 @@ ElapsedTimer my_timer, my_timer2;
 ElapsedTimer hide_timer;
 ElapsedTimer popup_timer;
 RTC zxrtc;
-SdFat sd1;
-FsFile file1, fileIndex1;
-FsFile root1;
+SdFat32 sd1, sd2;
+File32 file1, fileIndex1, file2, fileIndex2;
+File32 root1, root2;
 fs::Dir froot;
 fs::File ffile;
 OSD zxosd;
@@ -96,6 +96,7 @@ uint8_t joy_drivers_len;
 
 bool has_extender = false;
 bool has_sd = false;
+bool has_sd2 = false;
 bool has_fs = false;
 bool has_ft = false;
 bool is_flashboot = false;
@@ -634,12 +635,13 @@ void halt(const char* msg) {
   d_println(msg);
   d_flush();
   bool blink = false;
-  while(true) {
+  for(int i=0; i<50; i++) {
       blink = !blink;
       led_write(0, blink);
-      led_write(1, blink);
+      led_write(1, !blink);
       delay(100);
   }
+  rp2040.reboot();
 }
 
 uint32_t fpga_send(const char* filename) {

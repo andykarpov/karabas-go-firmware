@@ -65,6 +65,9 @@ void hid_drivers_load()
 {
     if (has_sd) {
     sd1.chvol();
+    if (root1.isOpen()) {
+      root1.close();
+    }
     if (root1.open(&sd1, "/drivers")) {
       root1.rewind();
       while (file1.openNext(&root1, O_RDONLY)) {

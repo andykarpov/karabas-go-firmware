@@ -9,6 +9,9 @@
 #include <algorithm>
 #include <tuple>
 #include "app_file_loader.h"
+#include <SPI.h>
+
+#define SD2_CONFIG SdSpiConfig(PIN_MCU_SD2_CS, SHARED_SPI, SD_SCK_MHZ(16)) // SD2 SPI Settings
 
 file_list_item_t files[MAX_FILES];
 uint8_t files_len = 0;
@@ -20,8 +23,8 @@ uint8_t file_page = 1;
 void app_file_loader_read_list(bool forceIndex = false) {
 
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.frame(8,8,24,13, 1);
-  zxosd.fill(9,9,23,12, 32);
+  zxosd.frame(8,8,24,12, 1);
+  zxosd.fill(9,9,23,11, 32);
   zxosd.setColor(OSD::COLOR_GREEN_I, OSD::COLOR_BLACK);
   zxosd.setPos(9, 9);
   zxosd.print("Scanning files");
@@ -29,19 +32,32 @@ void app_file_loader_read_list(bool forceIndex = false) {
   zxosd.setPos(9,10);
   zxosd.print("Please wait...");
 
-  // files from sd card
-  if (has_sd) {
+  // files from sd2 card
+
+  ft.sd2(true);
+
+  if (!sd2.begin(SD2_CONFIG)) {
+    d_println("SD2 failed to begin");
+    has_sd2 = false;
+  } else {
+    has_sd2 = true;
+  }
+
+  if (has_sd2) {
     String dir = String(core.dir);
     dir.trim();
     if (dir.length() == 0) dir = "/";
     if (dir.charAt(0) != '/') dir = "/" + dir;
     char d[256];
     dir.toCharArray(d, 255);
-    if (!root1.open(&sd1, d)) {
+    if (root2.isOpen()) {
+      root2.close();
+    }
+    if (!root2.open(d)) {
 
         zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-        zxosd.frame(8,8,24,13, 1);
-        zxosd.fill(9,9,23,12, 32);
+        zxosd.frame(8,8,24,12, 1);
+        zxosd.fill(9,9,23,11, 32);
         zxosd.setColor(OSD::COLOR_RED_I, OSD::COLOR_BLACK);
         zxosd.setPos(9, 9);
         zxosd.print("Error occured");
@@ -49,42 +65,42 @@ void app_file_loader_read_list(bool forceIndex = false) {
         zxosd.printf("Bad dir %s", d);
         return;
     }
-    root1.rewind();
+    root2.rewind();
 
     // recreate index
-    if (forceIndex || !sd1.exists(dir + "/index.db")) {
+    if (forceIndex || !sd2.exists(dir + "/index.db")) {
       // drop index
-      if (sd1.exists(dir + "/index.db")) {
-        sd1.remove(dir + "/index.db");
+      if (sd2.exists(dir + "/index.db")) {
+        sd2.remove(dir + "/index.db");
       }
-      if (fileIndex1 = sd1.open(dir + "/index.db", FILE_WRITE)) {
+      if (fileIndex2 = sd2.open(dir + "/index.db", FILE_WRITE)) {
         d_println("Read file list");
         String exts = String(core.file_extensions);
         exts.toLowerCase(); exts.trim();
         char e[33];
         exts.toCharArray(e, 32);
         int cnt = 0;
-        while (file1.openNext(&root1, O_RDONLY)) {
-          char filename[255]; file1.getName(filename, sizeof(filename));
+        while (file2.openNext(&root2, O_RDONLY)) {
+          char filename[255]; file2.getName(filename, sizeof(filename));
           uint8_t len = strlen(filename);
-          if (cnt < MAX_FILES && !file1.isDirectory() && len <= 32) {
+          if (cnt < MAX_FILES && !file2.isDirectory() && len <= 32) {
             if (exts.length() == 0 || exts.indexOf(strlwr(filename + (len - 4))) != -1) {
-              fileIndex1.write(filename);
-              fileIndex1.write("\n");
+              fileIndex2.write(filename);
+              fileIndex2.write("\n");
               cnt++;
             }
           }
-          file1.close();
+          file2.close();
         }
-        fileIndex1.close();
+        fileIndex2.close();
       }
     }
 
     // reading file list from index
-    if (fileIndex1 = sd1.open(dir + "/index.db", FILE_READ)) {
+    if (fileIndex2 = sd2.open(dir + "/index.db", FILE_READ)) {
       files_len = 0;
-      while(fileIndex1.available()) {
-        String s = fileIndex1.readStringUntil('\n'); 
+      while(fileIndex2.available()) {
+        String s = fileIndex2.readStringUntil('\n'); 
         if (s.length() > 0 && s.length() <= 32) {
           s.trim();
           file_list_item_t f;
@@ -93,13 +109,13 @@ void app_file_loader_read_list(bool forceIndex = false) {
           files_len++;
         }
       }
-      fileIndex1.close();
+      fileIndex2.close();
     }
     
   } else {
     zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-    zxosd.frame(8,8,24,13, 1);
-    zxosd.fill(9,9,23,12, 32);
+    zxosd.frame(8,8,24,12, 1);
+    zxosd.fill(9,9,23,11, 32);
     zxosd.setColor(OSD::COLOR_RED_I, OSD::COLOR_BLACK);
     zxosd.setPos(9, 9);
     zxosd.print("Error occured");
@@ -112,7 +128,7 @@ void app_file_loader_read_list(bool forceIndex = false) {
   
   // cleanup error messages
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.fill(8,8,24,13, 32);  
+  zxosd.fill(8,8,24,12, 32);  
 
   // select and load prev file on boot
   if (files_len >0 && strlen(core.last_file) > 0) {
@@ -214,14 +230,14 @@ void app_file_loader_save()
 void app_file_loader_send_file(const char* filename) {
   
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.frame(8,8,24,13, 1);
-  zxosd.fill(9,9,23,12, 32);
+  zxosd.frame(8,8,24,12, 1);
+  zxosd.fill(9,9,23,11, 32);
   zxosd.setColor(OSD::COLOR_GREEN_I, OSD::COLOR_BLACK);
   zxosd.setPos(9, 9);
-  zxosd.print("Preparing...");
+  zxosd.print("Preparing...   ");
   zxosd.setColor(OSD::COLOR_MAGENTA_I, OSD::COLOR_BLACK);
   zxosd.setPos(9,10);
-  zxosd.print("Please wait.");
+  zxosd.print("Please wait.   ");
 
   String dir = String(core.dir);
   dir.trim();
@@ -234,32 +250,32 @@ void app_file_loader_send_file(const char* filename) {
   char new_filename[255+1];
   fullpath.toCharArray(new_filename, 255, 0);
 
-  if (!file1.open(&sd1, new_filename, FILE_READ)) {
+  if (!file2.open(&sd2, new_filename, FILE_READ)) {
     d_printf("Unable to open file %s", new_filename); d_println();
     d_flush();
     app_file_loader_overlay(false, false);
     return;
   }
 
-  uint8_t buf[256];
+  uint8_t buf[512];
   int c;
 
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.frame(8,8,24,13, 1);
-  zxosd.fill(9,9,23,12, 32);
+  zxosd.frame(8,8,24,12, 1);
+  zxosd.fill(9,9,23,11, 32);
   zxosd.setColor(OSD::COLOR_YELLOW_I, OSD::COLOR_BLACK);
   zxosd.setPos(9, 9);
-  zxosd.print("Loading file...");
+  zxosd.print("Loading...     ");
   zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_BLACK);
   zxosd.setPos(9,10);
-  zxosd.print("Please wait.");
+  zxosd.print("Please wait.   ");
   zxosd.setColor(OSD::COLOR_RED_I, OSD::COLOR_BLACK);
 
   // trigger reset
   spi_send(CMD_FILELOADER, 0, 1);
   spi_send(CMD_FILELOADER, 0, 0);
 
-  uint64_t file_size = file1.size();
+  uint64_t file_size = file2.size();
 
   d_printf("Sending file %s (%d bytes)", new_filename, (uint32_t)((file_size))); d_println();
   d_flush();
@@ -267,23 +283,25 @@ void app_file_loader_send_file(const char* filename) {
 uint32_t cnt = 0;
 float perc = 0;
 
-  while(c = file1.read(buf, sizeof(buf))) {
+  while(c = file2.read(buf, sizeof(buf))) {
     for (int j=0; j<c; j++) {
       app_file_loader_send_byte(cnt, buf[j]);
       cnt++;
-      if (cnt % 10000 == 0) {
-        perc = (file_size > 0) ? (((float) cnt) * 100.0) / ((float) file_size) : 0.0;
+      if (cnt % 8192 == 0) {
+        //perc = (file_size > 0) ? (((float) cnt) * 100.0) / ((float) file_size) : 0.0;
         zxosd.setPos(9,11);
-        zxosd.printf("%-3d ", (perc >=0 && perc <= 100) ? (uint8_t) perc : 100); zxosd.print("% ");
+        zxosd.printf("%d bytes ", cnt);
+        //zxosd.printf("%-3d ", (perc >=0 && perc <= 100) ? (uint8_t) perc : 100); zxosd.print("% ");
       }
     }
   }
   zxosd.setColor(OSD::COLOR_GREEN_I, OSD::COLOR_BLACK);
   zxosd.setPos(9,11);
-  zxosd.print("100 % ");
+  zxosd.print("100 % loaded :)");
   
-  file1.close();
+  file2.close();
   d_printf("Sent %u bytes", cnt); d_println();
+  delay(500);
 
   // reload menu
   app_file_loader_overlay(false, false);

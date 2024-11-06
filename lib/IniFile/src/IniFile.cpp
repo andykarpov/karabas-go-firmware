@@ -371,7 +371,7 @@ bool IniFile::browseSections(char* buffer, size_t len, IniFileState &state) cons
 }
 
 //int8_t IniFile::readLine(File &file, char *buffer, size_t len, uint32_t &pos)
-IniFile::error_t IniFile::readLine(FsFile &file, char *buffer, size_t len, uint32_t &pos)
+IniFile::error_t IniFile::readLine(File32 &file, char *buffer, size_t len, uint32_t &pos)
 {
 	if (!file)
 		return errorFileNotOpen;

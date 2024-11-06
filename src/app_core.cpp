@@ -253,7 +253,7 @@ void app_core_on_keyboard() {
             uint64_t fsize = 0;
             spi_send64(CMD_IOCTL_SIZE, fsize);
             String fname = String(file_slots[core.osd[curr_osd_item].slot_id].dir) + "/" + String(file_slots[core.osd[curr_osd_item].slot_id].filename);
-            FsFile file = sd1.open(fname);
+            File32 file = sd1.open(fname);
             fsize = file.size();
             spi_send64(CMD_IOCTL_SIZE, fsize);
 
@@ -276,7 +276,7 @@ void app_core_on_keyboard() {
             uint64_t fsize = 0;
             spi_send64(CMD_IMG_SIZE, fsize);
             String fname = String(file_slots[core.osd[curr_osd_item].slot_id].dir) + "/" + String(file_slots[core.osd[curr_osd_item].slot_id].filename);
-            FsFile file = sd1.open(fname);
+            File32 file = sd1.open(fname);
             fsize = file.size();
             spi_send64(CMD_IMG_SIZE, fsize);
             file.close();
@@ -414,12 +414,15 @@ void app_core_filebrowser(uint8_t vpos) {
   //d_printf("Offset: %d", filebrowser_offset); d_println();
   //d_printf("Special: %d", filebrowser_special); d_println();
 
-  FsFile root;
-  FsFile file;
+  File32 root;
+  File32 file;
+  if (root.isOpen()) {
+    root.close();
+  }
   root = sd1.open(dir);
   uint8_t index = 0;
   if (root) {
-    root1.rewind();
+    root.rewind();
     while (file.openNext(&root, O_RDONLY)) {
       if (index >= filebrowser_offset && index < filebrowser_offset + 16 - filebrowser_special) {
         char d[256];

@@ -29,7 +29,7 @@ typedef struct {
 	char ext[256];
 	char dir[256];
 	char filename[256];
-	FsFile file;
+	File32 file;
 } core_file_slot_t;
 
 typedef struct {

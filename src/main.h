@@ -18,12 +18,12 @@ extern RTC zxrtc;
 extern OSD zxosd;
 
 extern bool has_fs;
-extern bool has_sd;
+extern bool has_sd, has_sd2;
 extern bool has_ft;
 extern bool need_redraw;
 
-extern SdFat sd1;
-extern FsFile root1, file1, fileIndex1;
+extern SdFat32 sd1, sd2;
+extern File32 root1, file1, fileIndex1, root2, file2, fileIndex2;
 extern fs::Dir froot;
 extern fs::File ffile;
 
