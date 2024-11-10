@@ -199,6 +199,9 @@
 
 #define APP_COREBROWSER_MENU_OFFSET 5
 
+#define SORT_HASH_LEN 4
+#define SORT_FILES_MAX 8000
+
 #ifndef WAIT_SERIAL
 #define WAIT_SERIAL 0
 #endif

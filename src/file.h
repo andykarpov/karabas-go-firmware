@@ -14,3 +14,4 @@ uint32_t file_read24(uint32_t pos, bool is_flash);
 uint32_t file_read32(uint32_t pos, bool is_flash);
 void file_get_name(char *buf, size_t len, bool is_flash);
 bool is_flashfs(const char* filename);
+void file_write16(uint32_t pos, uint16_t val, bool is_flash);

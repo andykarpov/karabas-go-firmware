@@ -950,7 +950,7 @@ void read_core(const char* filename) {
   file_seek(FILE_POS_CORE_EEPROM_BANK, is_flash); core.eeprom_bank = file_read(is_flash);
   file_seek(FILE_POS_RTC_TYPE, is_flash); core.rtc_type = file_read(is_flash);
   file_seek(FILE_POS_FILELOADER_DIR, is_flash); file_read_bytes(core.dir, 32, is_flash); core.dir[32] = '\0';
-  file_seek(FILE_POS_FILELOADER_FILE, is_flash); file_read_bytes(core.last_file, 32, is_flash); core.last_file[32] = '\0';
+  file_seek(FILE_POS_FILELOADER_FILE, is_flash); core.last_file_id = file_read16(FILE_POS_FILELOADER_FILE, is_flash);
   file_seek(FILE_POS_FILELOADER_EXTENSIONS, is_flash); file_read_bytes(core.file_extensions, 32, is_flash); core.file_extensions[32] = '\0';
   uint32_t roms_len = file_read32(FILE_POS_ROM_LEN, is_flash);
   uint32_t offset = FILE_POS_BITSTREAM_START + core.bitstream_length + roms_len;
@@ -1030,7 +1030,7 @@ void read_core(const char* filename) {
   core_send_all();
 
   // re-send rtc registers
-  //zxrtc.sendAll();
+  zxrtc.sendAll();
 
   has_ft = false;
 
@@ -1061,7 +1061,7 @@ void read_core(const char* filename) {
   }
 
   // dump parsed OSD items
-  /*for(uint8_t i=0; i<core.osd_len; i++) {
+  for(uint8_t i=0; i<core.osd_len; i++) {
     d_printf("OSD %d: type: %d name: %s def: %d len: %d keys: [%d %d %d]", i, core.osd[i].type, core.osd[i].name, core.osd[i].def, core.osd[i].options_len, core.osd[i].keys[0], core.osd[i].keys[1], core.osd[i].keys[2]); 
     d_println();
     for (uint8_t j=0; j<core.osd[i].options_len; j++) {
@@ -1069,7 +1069,7 @@ void read_core(const char* filename) {
     } 
     d_println();
     d_print(core.osd[i].hotkey); d_println();
-  }*/
+  }
 
   if (is_flash) {
     ffile.close();

@@ -75,13 +75,19 @@ typedef struct {
 	bool osd_need_save;
 	bool eeprom_need_save;
 	char dir[32+1];
-	char last_file[32+1];
+//	char last_file[32+1];
+	uint16_t last_file_id;
 	char file_extensions[32+1];
 } core_item_t;
 
 typedef struct {
 	char name[32+1];
 } file_list_item_t;
+
+typedef struct {
+	uint16_t file_id;
+	char hash[SORT_HASH_LEN];
+} file_list_sort_item_t;
 
 typedef struct {
 	bool debug_enabled;
