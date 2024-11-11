@@ -7,6 +7,12 @@
 #define HW_ID 2
 #endif
 
+#ifndef BUILD_VER
+#define BUILD_VER DEVBUILD
+#endif
+
+#define STRINGIZE(x) #x
+#define STRINGIZE_VALUE_OF(x) STRINGIZE(x)
 
 #if HW_ID==HW_ID_GO
 
@@ -73,12 +79,12 @@
 #define PIN_CONF_CLK 9 
 #define PIN_CONF_DONE 8 
 
-#define PIN_MCU_SD2_CS 16  
-#define PIN_MCU_FT_CS 17 
+#define PIN_MCU_SD2_CS 16 // io2 
+#define PIN_MCU_FT_CS 17  // io3
 
-#define PIN_MCU_SPI_IO0 14 
-#define PIN_MCU_SPI_IO1 15
-#define PIN_MCU_SPI_IO4 18
+#define PIN_MCU_SPI_IO0 14 // io0
+#define PIN_MCU_SPI_IO1 15 // io1
+#define PIN_MCU_SPI_IO4 18 // io4 (will be gone for 50MHz clock)
 
 #define PIN_BTN1 4
 #define PIN_BTN2 6
@@ -109,6 +115,32 @@
 #define CMD_DEBUG_ADDRESS 0x30
 #define CMD_DEBUG_DATA 0x31
 
+#define CMD_IMG_SLOT 0x40
+#define CMD_IMG_SIZE 0x41
+#define CMD_IMG_LBA 0x42
+#define CMD_IMG_SEC 0x43
+#define CMD_IMG_BUF_BANK 0x44
+#define CMD_IMG_BUF_DATA 0x45
+
+// todo: other IMG commands here
+
+// fileloader files will be transferred in the following order:
+// 1. send SLOT num  - 1 byte
+// 2. send file SIZE - 8 bytes
+// 3. send file EXT  - 3 bytes lowercase
+// 4. while not EOF: 
+// 4.1. send bank when pos % 256 = 0
+// 4.2. send data bytes (0-255)
+// on the FPGA side the transfer begins on sending a SLOT number
+// and ends on the last byte was received
+// the core itself should decide what to do with the incoming data, e.g. parse header, write data directly to the memory location, etc
+
+#define CMD_IOCTL_SLOT 0x50 // (0, uint8_t): set current slot number (0-3)
+#define CMD_IOCTL_SIZE 0x51 // (0-7, uint8_t): fileloader file size
+#define CMD_IOCTL_BANK 0x52 // (0-7, uint8_t): fileloader bank
+#define CMD_IOCTL_DATA 0x53 // (0-255, uint8_t): fileloader byte
+#define CMD_IOCTL_EXT 0x54 // (0-3, uint8_t): fileloader file ext
+
 #define CMD_RTC 0xFA
 #define CMD_FLASHBOOT 0xFB
 #define CMD_UART 0xFC
@@ -121,11 +153,13 @@
 #define CORE_TYPE_FILELOADER 0x02
 #define CORE_TYPE_HIDDEN 0xff
 
-#define CORE_OSD_TYPE_SWITCH 0x00
-#define CORE_OSD_TYPE_NSWITCH 0x01
-#define CORE_OSD_TYPE_TRIGGER 0x02
-#define CORE_OSD_TYPE_HIDDEN 0x03
-#define CORE_OSD_TYPE_TEXT 0x04
+#define CORE_OSD_TYPE_SWITCH 0x00        // drop-down like control to select a value from predifined options 
+#define CORE_OSD_TYPE_NSWITCH 0x01       // non-volatile dropdown. the selected value is not stored on change
+#define CORE_OSD_TYPE_TRIGGER 0x02       // sends a pulse while pressed. the value also is not stored anywhere
+#define CORE_OSD_TYPE_HIDDEN 0x03        // hidden value 
+#define CORE_OSD_TYPE_TEXT 0x04          // just a text line (32 characters wide)
+#define CORE_OSD_TYPE_FILEMOUNTER 0x05   // mounts a selected file image as virtual drive (img_*)
+#define CORE_OSD_TYPE_FILELOADER 0x06    // immediately transfer a selected file to the fpga side (ioctl_*)
 
 #define MAX_CORES 255
 #define MAX_FILES 255
@@ -165,30 +199,16 @@
 
 #define APP_COREBROWSER_MENU_OFFSET 5
 
-#ifndef DEBUG
-#define DEBUG 1
-#endif
-
-#ifndef FT_OSD 
-#define FT_OSD 1
-#endif
+#define SORT_HASH_LEN 4
+#define SORT_FILES_MAX 8000
 
 #ifndef WAIT_SERIAL
 #define WAIT_SERIAL 0
 #endif
 
-#if DEBUG
-#define d_begin(...) Serial.begin(__VA_ARGS__);
-#define d_print(...)    Serial.print(__VA_ARGS__)
-#define d_printf(...)    Serial.printf(__VA_ARGS__)
-#define d_write(...)    Serial.write(__VA_ARGS__)
-#define d_println(...)  Serial.println(__VA_ARGS__)
-#define d_flush(...)  Serial.flush(__VA_ARGS__)
-#else
-#define d_begin(...)
-#define d_print(...)
-#define d_printf(...)
-#define d_write(...)
-#define d_println(...)
-#define d_flush(...)
-#endif
+#define d_begin(...)   if (hw_setup.debug_enabled) Serial.begin(__VA_ARGS__);
+#define d_print(...)   if (hw_setup.debug_enabled) Serial.print(__VA_ARGS__);
+#define d_printf(...)  if (hw_setup.debug_enabled) Serial.printf(__VA_ARGS__);
+#define d_write(...)   if (hw_setup.debug_enabled) Serial.write(__VA_ARGS__);
+#define d_println(...) if (hw_setup.debug_enabled) Serial.println(__VA_ARGS__);
+#define d_flush(...)   if (hw_setup.debug_enabled)  Serial.flush(__VA_ARGS__);

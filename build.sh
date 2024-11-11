@@ -7,25 +7,14 @@ echo "Building MCU sources"
 BUILD_VER=`date +%y%m%d%H`
 echo "Build version: $BUILD_VER"
 
-# GO: normal version
+# GO: 
 pio run -t clean
-export PLATFORMIO_BUILD_FLAGS="-DHW_ID=1 -DDEBUG=0 -DFT_OSD=0 -DBUILD_VER=$BUILD_VER"
+export PLATFORMIO_BUILD_FLAGS="-DHW_ID=1 -DBUILD_VER=$BUILD_VER"
 pio run
 cp .pio/build/pico/firmware.uf2 ../karabas-go/firmware/firmware.uf2
-
-# GO: debug version
-pio run -t clean
-export PLATFORMIO_BUILD_FLAGS="-DHW_ID=1 -DDEBUG=1 -DFT_OSD=0 -DBUILD_VER=$BUILD_VER"
-pio run
-cp .pio/build/pico/firmware.uf2 ../karabas-go/firmware/debug/firmware.uf2
-
-# GO: ft812 version
-pio run -t clean
-export PLATFORMIO_BUILD_FLAGS="-DHW_ID=1 -DDEBUG=0 -DFT_OSD=1 -DBUILD_VER=$BUILD_VER"
-pio run
-cp .pio/build/pico/firmware.uf2 ../karabas-go/firmware/ft812/firmware.uf2
+cp src/karabas.ini ../karabas-go/firmware/karabas.ini
+cp src/karabas.ini ../karabas-go/cores/karabas.ini
 
 pio run -t clean
 
 echo "Done"
-

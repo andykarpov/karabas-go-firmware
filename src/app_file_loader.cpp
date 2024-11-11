@@ -9,119 +9,122 @@
 #include <algorithm>
 #include <tuple>
 #include "app_file_loader.h"
+#include <SPI.h>
 
-file_list_item_t files[MAX_FILES];
-uint8_t files_len = 0;
-uint8_t file_sel = 0;
-const uint8_t file_page_size = MAX_CORES_PER_PAGE;
-uint8_t file_pages = 1;
-uint8_t file_page = 1;
+#define SD2_CONFIG SdSpiConfig(PIN_MCU_SD2_CS, SHARED_SPI, SD_SCK_MHZ(16)) // SD2 SPI Settings
+
+file_list_sort_item_t files[SORT_FILES_MAX];
+uint16_t files_len = 0;
+uint16_t file_sel = 0;
+const uint16_t file_page_size = MAX_CORES_PER_PAGE;
+uint16_t file_pages = 1;
+uint16_t file_page = 1;
 
 void app_file_loader_read_list(bool forceIndex = false) {
 
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.frame(8,8,24,13, 1);
-  zxosd.fill(9,9,23,12, 32);
+  zxosd.frame(8,8,24,12, 1);
+  zxosd.fill(9,9,23,11, 32);
   zxosd.setColor(OSD::COLOR_GREEN_I, OSD::COLOR_BLACK);
   zxosd.setPos(9, 9);
   zxosd.print("Scanning files");
   zxosd.setColor(OSD::COLOR_MAGENTA_I, OSD::COLOR_BLACK);
   zxosd.setPos(9,10);
   zxosd.print("Please wait...");
+  delay(500);
 
-  // files from sd card
-  if (has_sd) {
+  // files from sd2 card
+
+  ft.sd2(true);
+
+  if (!sd2.begin(SD2_CONFIG)) {
+    d_println("SD2 failed to begin");
+    has_sd2 = false;
+  } else {
+    has_sd2 = true;
+  }
+
+  if (has_sd2) {
     String dir = String(core.dir);
     dir.trim();
     if (dir.length() == 0) dir = "/";
     if (dir.charAt(0) != '/') dir = "/" + dir;
     char d[256];
     dir.toCharArray(d, 255);
-    if (!root1.open(&sd1, d)) {
+    if (root2.isOpen()) {
+      root2.close();
+    }
+    if (!root2.open(d)) {
 
         zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-        zxosd.frame(8,8,24,13, 1);
-        zxosd.fill(9,9,23,12, 32);
+        zxosd.frame(8,8,24,12, 1);
+        zxosd.fill(9,9,23,11, 32);
         zxosd.setColor(OSD::COLOR_RED_I, OSD::COLOR_BLACK);
         zxosd.setPos(9, 9);
         zxosd.print("Error occured");
         zxosd.setPos(9,10);
         zxosd.printf("Bad dir %s", d);
+        delay(1000);
+        app_file_loader_read_list(forceIndex);
         return;
     }
-    root1.rewind();
+    root2.rewind();
 
-    // recreate index
-    if (forceIndex || !sd1.exists(dir + "/index.db")) {
-      // drop index
-      if (sd1.exists(dir + "/index.db")) {
-        sd1.remove(dir + "/index.db");
-      }
-      if (fileIndex1 = sd1.open(dir + "/index.db", FILE_WRITE)) {
-        d_println("Read file list");
-        String exts = String(core.file_extensions);
-        exts.toLowerCase(); exts.trim();
-        char e[33];
-        exts.toCharArray(e, 32);
-        int cnt = 0;
-        while (file1.openNext(&root1, O_RDONLY)) {
-          char filename[255]; file1.getName(filename, sizeof(filename));
-          uint8_t len = strlen(filename);
-          if (cnt < MAX_FILES && !file1.isDirectory() && len <= 32) {
-            if (exts.length() == 0 || exts.indexOf(strlwr(filename + (len - 4))) != -1) {
-              fileIndex1.write(filename);
-              fileIndex1.write("\n");
-              cnt++;
-            }
-          }
-          file1.close();
-        }
-        fileIndex1.close();
-      }
-    }
-
-    // reading file list from index
-    if (fileIndex1 = sd1.open(dir + "/index.db", FILE_READ)) {
-      files_len = 0;
-      while(fileIndex1.available()) {
-        String s = fileIndex1.readStringUntil('\n'); 
-        if (s.length() > 0 && s.length() <= 32) {
-          s.trim();
-          file_list_item_t f;
-          s.toCharArray(f.name, sizeof(f.name));
-          files[files_len] = f;
+    d_println("Read file list");
+    files_len = 0;
+    file_sel = 0;
+    memset(files, 0, sizeof(files));
+    String exts = String(core.file_extensions);
+    exts.toLowerCase(); exts.trim();
+    char e[33];
+    exts.toCharArray(e, 32);
+    while (file2.openNext(&root2, O_RDONLY)) {
+      char filename[14]; file2.getSFN(filename, sizeof(filename));
+      uint8_t len = strlen(filename);
+      if (!file2.isDirectory() && files_len < SORT_FILES_MAX) {
+        if (exts.length() == 0 || exts.indexOf(strlwr(filename + (len - 4))) != -1) {
+          memcpy(files[files_len].hash, filename, SORT_HASH_LEN);
+          files[files_len].file_id = file2.dirIndex();
           files_len++;
         }
       }
-      fileIndex1.close();
+      file2.close();
     }
-    
+
   } else {
     zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-    zxosd.frame(8,8,24,13, 1);
-    zxosd.fill(9,9,23,12, 32);
+    zxosd.frame(8,8,24,12, 1);
+    zxosd.fill(9,9,23,11, 32);
     zxosd.setColor(OSD::COLOR_RED_I, OSD::COLOR_BLACK);
     zxosd.setPos(9, 9);
     zxosd.print("Error occured");
     zxosd.setPos(9,10);
     zxosd.print("Check SD card");
+    delay(1000);
+    app_file_loader_read_list(forceIndex);
     return;
   }
+
   // sort by file name
   std::sort(files, files + files_len);
   
   // cleanup error messages
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.fill(8,8,24,13, 32);  
+  if (has_sd2) {
+    zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+    zxosd.fill(8,8,24,12, 32);  
+  }
 
   // select and load prev file on boot
-  if (files_len >0 && strlen(core.last_file) > 0) {
-    String lf = String(core.last_file); lf.trim();
-    for (uint8_t i=0; i<files_len; i++) {
-      String f = String(files[i].name); f.trim();
-      if (f == lf) {
+  if (has_sd2 && files_len > 0 && core.last_file_id > 0) {
+    //d_printf("Looking for last file id = %d", core.last_file_id); d_println();
+    for (uint16_t i=0; i<files_len; i++) {
+      if (core.last_file_id == files[i].file_id) {
           file_sel = i;
-          app_file_loader_send_file(files[file_sel].name);
+          //d_printf("Found %d pos", i); d_println();
+          if (file2.open(&root2, core.last_file_id)) {
+            app_file_loader_send_file(core.last_file_id);
+            file2.close();
+          }
           // hide osd
           if (!is_osd_hiding) {
             is_osd_hiding = true;
@@ -136,40 +139,62 @@ void app_file_loader_read_list(bool forceIndex = false) {
 void app_file_loader_menu(uint8_t vpos) {
   file_pages = ceil((float)files_len / file_page_size);
   file_page = ceil((float)(file_sel+1)/file_page_size);
-  uint8_t file_from = (file_page-1)*file_page_size;
-  uint8_t file_to = file_page*file_page_size > files_len ? files_len : file_page*file_page_size;
-  uint8_t file_fill = file_page*file_page_size;
-  uint8_t pos = vpos;
-  for(uint8_t i=file_from; i < file_to; i++) {
-    zxosd.setPos(0, pos);
-    if (file_sel == i) {
-      zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLUE);
-    } else {
-      zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-    }
-    // display 28 chars
-    char name[29]; memcpy(name, files[i].name, 28); name[28] = '\0';
-    zxosd.printf("%-3d ", i+1); 
-    zxosd.print(name);
-    // fill name with spaces
-    uint8_t l = strlen(name);
-    if (l < 28) {
-      for (uint8_t ll=l; ll<28; ll++) {
-        zxosd.print(" ");
+  uint16_t file_from = (file_page-1)*file_page_size;
+  uint16_t file_to = file_page*file_page_size > files_len ? files_len : file_page*file_page_size;
+  uint16_t file_fill = file_page*file_page_size;
+  uint16_t pos = vpos;
+
+  if (files_len > 0) {
+    for(uint16_t i=file_from; i < file_to; i++) {
+      zxosd.setPos(0, pos);
+      if (file_sel == i) {
+        zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLUE);
+      } else {
+        zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
       }
+      // display 28 chars
+      char name[29]; 
+      if (file2.open(&root2, files[i].file_id)) {
+        char filename[255];
+        file2.getName(filename, sizeof(filename));
+        String exts = String(core.file_extensions); exts.toLowerCase(); exts.trim();
+        String f(filename);
+        f.replace("_", " ");
+        f.replace("-", " ");
+        f.replace("[!]", "");
+        f.replace("  ", " "); f.replace("  ", " ");
+        if (exts.indexOf(f.substring(f.length()-4)) != -1) {
+          f.replace(f.substring(f.length()-4), "");
+        }
+        f.trim();
+        f.toCharArray(name, sizeof(name));
+        //memcpy(name, filename, 28); 
+        //name[28] = '\0';
+        file2.close();
+      }
+
+      zxosd.printf("%-3d ", i+1); 
+      zxosd.print(name);
+      // fill name with spaces
+      uint8_t l = strlen(name);
+      if (l < 28) {
+        for (uint8_t ll=l; ll<28; ll++) {
+          zxosd.print(" ");
+        }
+      }
+      pos++;
     }
-    pos++;
   }
   if (file_fill > file_to) {
-    for (uint8_t i=file_to; i<file_fill; i++) {
+    for (uint16_t i=file_to; i<file_fill; i++) {
       zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-      for (uint8_t j=0; j<32; j++) {
+      for (uint16_t j=0; j<32; j++) {
         zxosd.print(" ");
       }
     }
   }
   zxosd.setPos(8, vpos + file_page_size + 1); zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.printf("Page %02d of %02d", file_page, file_pages);
+  zxosd.printf("Page %03d of %03d", file_page, file_pages);
 }
 
 void app_file_loader_overlay(bool initSD = true, bool recreateIndex = false) {
@@ -178,13 +203,12 @@ void app_file_loader_overlay(bool initSD = true, bool recreateIndex = false) {
 
   zxosd.header(core.build, core.id, HW_ID);
 
-  zxosd.setPos(0,5);
-
   // collect files from sd
   if (initSD) {
       app_file_loader_read_list(recreateIndex);
   }
 
+  zxosd.setPos(0,5);
   app_file_loader_menu(APP_COREBROWSER_MENU_OFFSET);  
 
   // footer
@@ -205,85 +229,94 @@ void app_file_loader_save()
       d_println("File is not writable");
       return;
     }
-    memcpy(core.last_file, files[file_sel].name, 32);
-    file1.seek(FILE_POS_FILELOADER_FILE);
-    file1.write(core.last_file, 32);
+    core.last_file_id = files[file_sel].file_id;
+    file_write16(FILE_POS_FILELOADER_FILE, core.last_file_id, false);
     file1.close();
 }
 
-void app_file_loader_send_file(const char* filename) {
+void app_file_loader_send_file(uint16_t file_id) {
   
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.frame(8,8,24,13, 1);
-  zxosd.fill(9,9,23,12, 32);
+  zxosd.frame(8,8,24,12, 1);
+  zxosd.fill(9,9,23,11, 32);
   zxosd.setColor(OSD::COLOR_GREEN_I, OSD::COLOR_BLACK);
   zxosd.setPos(9, 9);
-  zxosd.print("Preparing...");
+  zxosd.print("Preparing...   ");
   zxosd.setColor(OSD::COLOR_MAGENTA_I, OSD::COLOR_BLACK);
   zxosd.setPos(9,10);
-  zxosd.print("Please wait.");
+  zxosd.print("Please wait.   ");
 
-  String dir = String(core.dir);
-  dir.trim();
-  if (dir.length() == 0) dir = "/";
-  if (dir.charAt(0) != '/') dir = "/" + dir;
-  String f = String(filename);
-  f.trim();
-  String fullpath = dir + "/" + f;
-  fullpath.trim();
-  char new_filename[255+1];
-  fullpath.toCharArray(new_filename, 255, 0);
+  if (root2.isOpen()) {
+    root2.close();
+  }
 
-  if (!file1.open(&sd1, new_filename, FILE_READ)) {
-    d_printf("Unable to open file %s", new_filename); d_println();
+  if (!root2.isOpen()) {
+    String dir = String(core.dir);
+    dir.trim();
+    if (dir.length() == 0) dir = "/";
+    if (dir.charAt(0) != '/') dir = "/" + dir;
+    //sd2.chdir(dir);
+    char dirname[255];
+    dir.toCharArray(dirname, sizeof(dirname));
+    if (!root2.open(&sd2, dirname)) {
+      d_printf("Unable to open dir %s", dirname); d_println();
+      return;
+    } else {
+      //d_printf("Dir %s open", dirname); d_println();
+    }
+  }
+
+  if (file2.isOpen()) {
+    file2.close();
+  }
+
+  if (!file2.open(&root2, file_id, FILE_READ)) {
+    d_printf("Unable to open file %d", file_id); d_println();
     d_flush();
     app_file_loader_overlay(false, false);
     return;
   }
 
-  uint8_t buf[256];
+  uint8_t buf[512];
   int c;
 
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.frame(8,8,24,13, 1);
-  zxosd.fill(9,9,23,12, 32);
+  zxosd.frame(8,8,24,12, 1);
+  zxosd.fill(9,9,23,11, 32);
   zxosd.setColor(OSD::COLOR_YELLOW_I, OSD::COLOR_BLACK);
   zxosd.setPos(9, 9);
-  zxosd.print("Loading file...");
+  zxosd.print("Loading...     ");
   zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_BLACK);
   zxosd.setPos(9,10);
-  zxosd.print("Please wait.");
-  zxosd.setColor(OSD::COLOR_RED_I, OSD::COLOR_BLACK);
+  zxosd.print("Please wait.   ");
+  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
 
   // trigger reset
   spi_send(CMD_FILELOADER, 0, 1);
   spi_send(CMD_FILELOADER, 0, 0);
 
-  uint64_t file_size = file1.size();
+  uint64_t file_size = file2.size();
 
-  d_printf("Sending file %s (%d bytes)", new_filename, (uint32_t)((file_size))); d_println();
+  d_printf("Sending file %d (%d bytes)", file_id, (uint32_t)((file_size))); d_println();
   d_flush();
   
 uint32_t cnt = 0;
-float perc = 0;
 
-  while(c = file1.read(buf, sizeof(buf))) {
+  while(c = file2.read(buf, sizeof(buf))) {
     for (int j=0; j<c; j++) {
       app_file_loader_send_byte(cnt, buf[j]);
       cnt++;
-      if (cnt % 10000 == 0) {
-        perc = (file_size > 0) ? (((float) cnt) * 100.0) / ((float) file_size) : 0.0;
-        zxosd.setPos(9,11);
-        zxosd.printf("%-3d ", (perc >=0 && perc <= 100) ? (uint8_t) perc : 100); zxosd.print("% ");
+      if (cnt % 8192 == 0) {
+        zxosd.progress(9, 11, 15, cnt, file_size);
       }
     }
   }
   zxosd.setColor(OSD::COLOR_GREEN_I, OSD::COLOR_BLACK);
-  zxosd.setPos(9,11);
-  zxosd.print("100 % ");
+  zxosd.progress(9, 11, 15, file_size, file_size);
   
-  file1.close();
+  file2.close();
   d_printf("Sent %u bytes", cnt); d_println();
+  delay(500);
 
   // reload menu
   app_file_loader_overlay(false, false);
@@ -337,7 +370,7 @@ void app_file_loader_on_keyboard()
         // enter
         if (usb_keyboard_report.keycode[0] == KEY_ENTER || (joyL & SC_BTN_A) || (joyR & SC_BTN_A) || (joyL & SC_BTN_B) || (joyR & SC_BTN_B)) {
           app_file_loader_save();
-          app_file_loader_send_file(files[file_sel].name);
+          app_file_loader_send_file(files[file_sel].file_id);
           // hide osd
           if (!is_osd_hiding) {
             is_osd_hiding = true;
@@ -370,8 +403,15 @@ void app_file_loader_send_byte(uint32_t addr, uint8_t data) {
 }
 
 bool operator<(const file_list_item_t a, const file_list_item_t b) {
-  // Lexicographically compare the tuples (hour, minute)
+  // Lexicographically compare the tuples
   String s1 = String(a.name); String s2 = String(b.name);
+  s1.toLowerCase(); s2.toLowerCase();
+  return s1 < s2;
+}
+
+bool operator<(const file_list_sort_item_t a, const file_list_sort_item_t b) {
+  // Lexicographically compare the tuples 
+  String s1 = String(a.hash); String s2 = String(b.hash);
   s1.toLowerCase(); s2.toLowerCase();
   return s1 < s2;
 }

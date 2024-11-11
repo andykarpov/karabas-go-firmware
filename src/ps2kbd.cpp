@@ -40,11 +40,65 @@ uint8_t const hid2ps2[] = {
   0x48, 0x50, 0x57, 0x5f
 };
 
+// LCTRL LSHIFT LALT LGUI RCTRL RSHIFT RALT RGUI
+uint8_t const mod2xt[] = { 0x1D, 0x2A, 0x38, 0x5B, 0x1D, 0x36, 0x38, 0x5C }; 
+uint8_t const hid2xt[] = {
+//   .  err  postf  err    A     B     C     D     E     F     G     H     I     J      K     L  
+  0x00, 0x00, 0xfc, 0x00, 0x1e, 0x30, 0x2e, 0x20, 0x12, 0x21, 0x22, 0x23, 0x17, 0x24, 0x25, 0x26,
+// M     N     O     P     Q      R    S     T     U     V     W     X     Y     Z     1     2
+  0x32, 0x31, 0x18, 0x19, 0x10, 0x13, 0x1f, 0x14, 0x16, 0x2f, 0x11, 0x2d, 0x15, 0x2c, 0x02, 0x03,
+// 3     4     5     6     7     8     9     0    ent    esc   bks   tab   spc   -     =      [
+  0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x1c, 0x01, 0x0e, 0x0f, 0x39, 0x0c, 0x0d, 0x1a,
+// ]      \    \     ;     '     `     ,      .     /   caps   f1    f2    f3    f4    f5    f6     
+  0x1b, 0x2b, 0x2b, 0x27, 0x28, 0x29, 0x33, 0x34, 0x35, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f, 0x40,
+// f7    f8    f9    f10   f11   f12  pscr  scrl  paus  ins   home  pgup  del   end   pgdn  right        
+  0x41, 0x42, 0x43, 0x44, 0x57, 0x58, 0x37, 0x46, 0x00, 0x52, 0x47, 0x51, 0x53, 0x4f, 0x51, 0x4d,
+// left down  up    numl  kp/   kp*   kp-   kp+   kpen  kp1   kp2   kp3   kp4   kp5   kp6   kp7
+  0x4b, 0x50, 0x48, 0x45, 0x35, 0x37, 0x4a, 0x4e, 0x1c, 0x4f, 0x50, 0x51, 0x4b, 0x4c, 0x4d, 0x47,
+// kp8  kp9   kp0   kp.   \     app   power kp=   f13   f14   f15   f16   f17   f18   f19   f20 
+  0x48, 0x49, 0x52, 0x53, 0x2b, 0x00, 0x00, 0x0d, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+// f21  f22   f23   f24  
+  0x00, 0x00, 0x00, 0x00
+};
+
+uint32_t const repeats[] = {
+  33333, 37453, 41667, 45872, 48309, 54054, 58480, 62500,
+  66667, 75188, 83333, 91743, 100000, 108696, 116279, 125000,
+  133333, 149254, 166667, 181818, 200000, 217391, 232558, 250000,
+  270270, 303030, 333333, 370370, 400000, 434783, 476190, 500000
+};
+uint16_t const delays[] = { 250, 500, 750, 1000 };
+
+uint8_t repeat = 0;
+bool repeat_state = false;
+uint32_t repeat_us = 33333;
+uint16_t delay_ms = 250;
+alarm_id_t repeater;
+
 hid_keyboard_report_t prev_rpt = {0};
 
 void kb_send(uint8_t byte) {
-    //d_printf("PS/2 Scancode: %02x", byte); d_println();
-    spi_queue(CMD_PS2_SCANCODE, 0x00, byte);
+  //d_printf("PS/2 Scancode: %02x", byte); d_println();
+  spi_queue(CMD_PS2_SCANCODE, 0x00, byte);
+}
+
+void kb_send_xt(uint8_t byte, bool state) {
+  //d_printf("XT Scancode: %02x", byte); d_println();
+  spi_queue(CMD_PS2_SCANCODE, 0x01, byte | (state ? 0x00 : 0x80) );
+}
+
+int64_t repeat_callback(alarm_id_t, void *user_data) {
+  if(repeat) {
+    if(repeat >= HID_KEY_CONTROL_LEFT && repeat <= HID_KEY_GUI_RIGHT) {
+      kb_send_xt(mod2xt[repeat - HID_KEY_CONTROL_LEFT], repeat_state);
+    } else {
+      kb_send_xt(hid2xt[repeat], repeat_state);
+    }
+    repeat_state = !repeat_state;
+    return repeat_us;
+  }  
+  repeater = 0;
+  return 0;
 }
 
 void kb_maybe_send_e0(uint8_t key) {
@@ -89,6 +143,29 @@ void kb_send_key(uint8_t key, bool state, uint8_t modifiers) {
     kb_send(mod2ps2[key - HID_KEY_CONTROL_LEFT]);
   } else {
     kb_send(hid2ps2[key]);
+  }
+
+  // xt + repeater
+  if (state) {
+    // send keypress
+    if(key >= HID_KEY_CONTROL_LEFT && key <= HID_KEY_GUI_RIGHT) {
+      kb_send_xt(mod2xt[key - HID_KEY_CONTROL_LEFT], state);
+    } else {
+      kb_send_xt(hid2xt[key], state);
+    }
+    // init repeater
+    repeat = key;
+    if (repeater) cancel_alarm(repeater);
+    repeat_state = false;
+    repeater = add_alarm_in_ms(delay_ms, repeat_callback, NULL, false);
+  } else {
+    if (key == repeat) repeat = 0;
+    // send release
+    if(key >= HID_KEY_CONTROL_LEFT && key <= HID_KEY_GUI_RIGHT) {
+      kb_send_xt(mod2xt[key - HID_KEY_CONTROL_LEFT], state);
+    } else {
+      kb_send_xt(hid2xt[key], state);
+    }
   }
 }
 

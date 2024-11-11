@@ -18,12 +18,12 @@ extern RTC zxrtc;
 extern OSD zxosd;
 
 extern bool has_fs;
-extern bool has_sd;
+extern bool has_sd, has_sd2;
 extern bool has_ft;
 extern bool need_redraw;
 
-extern SdFat sd1;
-extern FsFile root1, file1, fileIndex1;
+extern SdFat32 sd1, sd2;
+extern File32 root1, file1, fileIndex1, root2, file2, fileIndex2;
 extern fs::Dir froot;
 extern fs::File ffile;
 
@@ -37,6 +37,7 @@ extern uint8_t joyUSB_len;
 
 extern uint8_t osd_state;
 extern core_item_t core;
+extern core_file_slot_t file_slots[4];
 
 extern bool is_osd_hiding;
 extern ElapsedTimer hide_timer; 
@@ -44,8 +45,14 @@ extern ElapsedTimer hide_timer;
 extern hid_joy_config_t joy_drivers[255];
 extern uint8_t joy_drivers_len;
 
+extern setup_t hw_setup;
+
 void spi_queue(uint8_t cmd, uint8_t addr, uint8_t data);
 void spi_send(uint8_t cmd, uint8_t addr, uint8_t data);
+void spi_send16(uint8_t cmd, uint16_t data);
+void spi_send24(uint8_t cmd, uint32_t data);
+void spi_send32(uint8_t cmd, uint32_t data);
+void spi_send64(uint8_t cmd, uint64_t data);
 void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data);
 
 void do_configure(const char* filename);
@@ -61,3 +68,13 @@ void core_send(uint8_t pos);
 
 void on_time();
 void on_keyboard();
+
+bool btn_read(uint8_t num);
+void led_write(uint8_t num, bool on);
+
+void load_setup();
+
+int32_t msc_read_cb_sd (uint32_t lba, void* buffer, uint32_t bufsize);
+int32_t msc_write_cb_sd (uint32_t lba, uint8_t* buffer, uint32_t bufsize);
+void msc_flush_cb_sd (void);
+bool msc_start_stop_cb_sd(uint8_t power_condition, bool start, bool load_eject);

@@ -30,6 +30,7 @@
 
 #include <Arduino.h>
 #include <SPI.h>
+#include <ElapsedTimer.h>
 
 // Library headers
 // Project headers
@@ -45,7 +46,7 @@
 #define FT81x_ROTATE_PORTRAIT_MIRRORED           6  ///< Use with setRotation() to mirror and rotate screen to portrait
 #define FT81x_ROTATE_PORTRAIT_INVERTED_MIRRORED  7  ///< Use with setRotation() to invert, mirror and rotate screen to portrait
 
-#define FT81x_SPI_CLOCK_SPEED 8000000  ///< FT SPI clock speed
+#define FT81x_SPI_CLOCK_SPEED 12000000  ///< FT SPI clock speed
 #define FT81x_SPI_LOW_CLOCK_SPEED 1000000  ///< FT SPI low clock speed
 
 #ifndef FT81x_SPI_SETTINGS
@@ -132,6 +133,7 @@
 #define FT81x_REG_CMDB_WRITE       0x302578  ///< Command DL (bulk) write
 #define FT81x_REG_MEDIAFIFO_READ   0x309014  ///< Read pointer for media FIFO in general purpose graphics RAM
 #define FT81x_REG_MEDIAFIFO_WRITE  0x309018  ///< Write pointer for media FIFO in general purpose graphics RAM
+#define FT81x_REG_ADAPTIVE_FRAMERATE 0x30257C
 
 #define FT81x_RAM_G         0x000000  ///< General purpose graphics RAM
 #define FT81x_ROM_FONT      0x1E0000  ///< Font table and bitmap
@@ -250,18 +252,20 @@ class FT812
   using m_cb = void (*)(uint8_t cmd, uint8_t addr, uint8_t data); // alias function pointer
 
 private:
-  ft_mode_t mode;
   uint8_t ctrl_reg;
   m_cb action;
   uint8_t pin_cs;                    ///< CS pin for FT81x
   uint8_t pin_reset;                 ///< RESET pin for FT81x
   bool has_reset;
+  ElapsedTimer init_timer;
 
 protected:
 
   uint16_t cmdWriteAddress = 0;  ///< Internal pointer to the command buffer of the FT81x chip
 
 public:
+
+    ft_mode_t mode;
 
     /*!
         @brief  Initialize the FT81x chip
@@ -350,6 +354,18 @@ public:
       @param  on boolean state of the MCU VGA buffers
   */
   void vga(bool on);
+
+  /*!
+      @brief  Switch SD2 direct access by MCU
+      @param  on boolean state of the SD2 exclusive access
+  */
+  void sd2(bool on);
+
+  /*!
+      @brief  Switch ESP8266 direct access by MCU
+      @param  on boolean state of the ESP8266 exclusive access
+  */
+  void esp8266(bool on);
 
   /*!
       @brief  Performs a FT812 reset with no wait cycles

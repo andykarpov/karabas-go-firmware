@@ -39,3 +39,5 @@ z = 6,1,1
 ; 4. fill the ini file
 ; 5. profit :)
 ;
+
+; PS: WARNING! comments are not possible, please remove all of them from your ini-file.

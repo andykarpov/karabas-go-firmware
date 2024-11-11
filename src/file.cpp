@@ -104,3 +104,17 @@ bool is_flashfs(const char* filename) {
   return (s.charAt(0) == '/');
 }
 
+void file_write16(uint32_t pos, uint16_t val, bool is_flash) {
+  file_seek(pos, is_flash);
+  if (is_flash) {
+    file_seek(pos, is_flash);
+    ffile.write((uint8_t) val >> 8);
+    file_seek(pos+1, is_flash);
+    ffile.write((uint8_t) val);
+  } else {
+    file_seek(pos, is_flash);
+    file1.write((uint8_t) val >> 8);
+    file_seek(pos+1, is_flash);
+    file1.write((uint8_t) val);
+  }
+}

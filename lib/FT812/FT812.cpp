@@ -28,6 +28,7 @@
 #include <SPI.h>
 #include <FT812.h>
 #include <Arduino.h>
+#include <ElapsedTimer.h>
 
 /****************************************************************************/
 
@@ -94,19 +95,21 @@ const uint8_t ADDR_CONTROL_REGISTER = 0x00;
 const ft_mode_t ft_modes[] =
 {
   // f_mul, f_div, h_fporch, h_sync, h_bporch, h_visible, v_fporch, v_sync, v_bporch, v_visible
-  {6,  2, 16, 96,  48,  640,  18, 2, 24, 480},   //  0: 640x480@57Hz (48MHz)
-  {8,  2, 16, 64,  120, 640,  1,  3, 16, 480},   //  1: 640x480@75Hz (64MHz)
-  {8,  2, 16, 96,  48,  640,  11, 2, 31, 480},   //  2: 640x480@76Hz (64MHz)
-  {5,  1, 40, 128, 88,  800,  1,  4, 23, 600},   //  3: 800x600@60Hz (40MHz)
-  {10, 2, 40, 128, 88,  800,  1,  4, 23, 600},   //  4: 800x600@60Hz (80MHz)
-  {6,  1, 56, 120, 64,  800,  37, 6, 23, 600},   //  5: 800x600@69Hz (48MHz)
-  {7,  1, 32, 64,  152, 800,  1,  3, 27, 600},   //  6: 800x600@85Hz (56MHz)
-  {8,  1, 24, 136, 160, 1024, 3,  6, 29, 768},   //  7: 1024x768@59Hz (64MHz)
-  {9,  1, 24, 136, 144, 1024, 3,  6, 29, 768},   //  8: 1024x768@67Hz (72MHz)
-  {10, 1, 16, 96,  176, 1024, 1,  3, 28, 768},   //  9: 1024x768@76Hz (80MHz)
-  {7,  1, 24, 56,  124, 640,  1,  3, 38, 1024},  // 10: 1280/2x1024@60Hz (56MHz)
-  {9, 1, 110, 40,  220, 1280, 5,  5, 20, 720},   // 11: 1280x720@58Hz (72MHz)
-  {9,  1, 93, 40,  187, 1280, 5,  5, 20, 720},   // 12: 1280x720@60Hz (72MHz)
+  {6,  2, 16, 96,  48,  640,  11, 2, 31, 480},   //  0: 640x480@57Hz (48MHz) pclk 24
+  {8,  2, 24, 40,  128, 640,  9,  3, 28, 480},   //  1: 640x480@74Hz (64MHz) pclk 32
+  {8,  2, 16, 96,  48,  640,  11, 2, 31, 480},   //  2: 640x480@76Hz (64MHz) pclk 32
+  {5,  1, 40, 128, 88,  800,  1,  4, 23, 600},   //  3: 800x600@60Hz (40MHz) pclk 40
+  {10, 2, 40, 128, 88,  800,  1,  4, 23, 600},   //  4: 800x600@60Hz (80MHz) pclk 40
+  {6,  1, 56, 120, 64,  800,  37, 6, 23, 600},   //  5: 800x600@69Hz (48MHz) pclk 48
+  {7,  1, 32, 64,  152, 800,  1,  3, 27, 600},   //  6: 800x600@85Hz (56MHz) pclk 56
+  {8,  1, 24, 136, 160, 1024, 3,  6, 29, 768},   //  7: 1024x768@59Hz (64MHz) pclk 64
+  {9,  1, 24, 136, 144, 1024, 3,  6, 29, 768},   //  8: 1024x768@67Hz (72MHz) pclk 72
+  {10, 1, 16, 96,  176, 1024, 1,  3, 28, 768},   //  9: 1024x768@76Hz (80MHz) pclk 80
+  {7,  1, 24, 56,  124, 640,  1,  3, 38, 1024},  // 10: 1280/2x1024@60Hz (56MHz) pclk 56
+  {9, 1, 110, 40,  220, 1280, 5,  5, 20, 720},   // 11: 1280x720@58Hz (72MHz) pclk 72
+  {9,  1, 93, 40,  187, 1280, 5,  5, 20, 720},   // 12: 1280x720@60Hz (72MHz) pclk 72
+  {5,  1, 40, 128, 88,  800,  1,  4, 23, 748},   // 13: 800x600@48.7Hz (40MHz)  - for ZX-Evo sync pclk 40
+  {8,  1, 24, 136, 160, 1024, 3,  6, 29, 938},   // 14: 1024x768@48.7Hz (64MHz) - for ZX-Evo sync pclk 64
 };
 
 /****************************************************************************/
@@ -132,13 +135,39 @@ void FT812::vga(bool on)
   action(CMD_SPI_CONTROL, ADDR_CONTROL_REGISTER, ctrl_reg);
 }
 
+void FT812::sd2(bool on)
+{
+  ctrl_reg = bitWrite(ctrl_reg, 2, on);
+  action(CMD_SPI_CONTROL, ADDR_CONTROL_REGISTER, ctrl_reg);
+}
+
+void FT812::esp8266(bool on)
+{
+  ctrl_reg = bitWrite(ctrl_reg, 3, on);
+  action(CMD_SPI_CONTROL, ADDR_CONTROL_REGISTER, ctrl_reg);
+}
+
 void FT812::reset()
 {
+    // enable mcu-ft spi
+    spi(true);
     if (has_reset) {
+        // hard reset by MCU side
         digitalWrite(pin_reset, LOW); 
         delay(10);
         digitalWrite(pin_reset, HIGH);
+    } else {
+        // hard reset by FPGA side
+        ctrl_reg = bitWrite(ctrl_reg, 4, 1);
+        action(CMD_SPI_CONTROL, ADDR_CONTROL_REGISTER, ctrl_reg);
+        delay(10);
+        ctrl_reg = bitWrite(ctrl_reg, 4, 0);
+        action(CMD_SPI_CONTROL, ADDR_CONTROL_REGISTER, ctrl_reg);
     }
+    // disable mcu-ft spi
+    spi(false);
+    // disable ft vga switch
+    vga(false);
 }
 
 /**************************************************************************************************/
@@ -147,63 +176,53 @@ bool FT812::init(uint8_t m) {
 
     mode = ft_modes[m];
 
-    // reset
-    sendCommand(FT81x_CMD_RST_PULSE);
-    delay(300);
-
-    // select clock
-    sendCommand(FT81x_CMD_CLKEXT);
-    delay(300);
-
-    // clock multiplier
-    sendCommand(FT81x_CMD_CLKSEL + ((mode.f_mul | 0xC0) << 8)); // f_mul
-
-    // activate
+    sendCommand(FT81x_CMD_PWRDOWN);
     sendCommand(FT81x_CMD_ACTIVE);
-    delay(100);
+    sendCommand(FT81x_CMD_SLEEP);
+    sendCommand(FT81x_CMD_CLKEXT);
+    sendCommand(FT81x_CMD_CLKSEL + ((mode.f_mul | 0xC0) << 8)); // f_mul
+    sendCommand(FT81x_CMD_ACTIVE); 
+    sendCommand(FT81x_CMD_RST_PULSE);
 
-    if (read8(FT81x_REG_ID) != 0x7C) {
-      return false;
+    init_timer.reset();
+
+    while (read8(FT81x_REG_ID) != 0x7C) {
+        if (init_timer.elapsed() > 5000) return false;
+    }
+    while (read16(FT81x_REG_CPURESET) != 0x00) {
+        if (init_timer.elapsed() > 5000) return false;
     }
 
-    //while (read8(FT81x_REG_ID) != 0x7C) {
-    //    __asm__ volatile("nop");
-    //}
-
-    // wait for FT CPU reset complete
-    while (read8(FT81x_REG_CPURESET) != 0x00) {
-        __asm__ volatile("nop");
-    }
-
-    // configure rgb interface
+    // configure vga mode
+    write16(FT81x_REG_HCYCLE, mode.h_fporch + mode.h_sync + mode.h_bporch + mode.h_visible); // h_visible + h_fporch + h_sync + h_bporch
+    write16(FT81x_REG_HOFFSET, mode.h_fporch + mode.h_sync + mode.h_bporch); // h_fporch + h_sync + h_bporch
     write16(FT81x_REG_HSYNC0, mode.h_fporch); // h_fporch
     write16(FT81x_REG_HSYNC1, mode.h_fporch + mode.h_sync); // h_fporch + h_sync
-    write16(FT81x_REG_HOFFSET, mode.h_fporch + mode.h_sync + mode.h_bporch); // h_fporch + h_sync + h_bporch
-    write16(FT81x_REG_HCYCLE, mode.h_fporch + mode.h_sync + mode.h_bporch + mode.h_visible); // h_visible + h_fporch + h_sync + h_bporch
-    write16(FT81x_REG_HSIZE, mode.h_visible); // h_visible
-
+    write16(FT81x_REG_VCYCLE, mode.v_fporch + mode.v_sync + mode.v_bporch + mode.v_visible); // v_visible + v_fporch + v_sync + v_bporch    
+    write16(FT81x_REG_VOFFSET, mode.v_fporch + mode.v_sync + mode.v_bporch - 1); // v_fporch + v_syhc + v_bporch - 1
     write16(FT81x_REG_VSYNC0, mode.v_fporch - 1); // v_fporch - 1
     write16(FT81x_REG_VSYNC1, mode.v_fporch + mode.v_sync - 1); // v_fporch + v_sync - 1
-    write16(FT81x_REG_VOFFSET, mode.v_fporch + mode.v_sync + mode.v_bporch - 1); // v_fporch + v_syhc + v_bporch - 1
-    write16(FT81x_REG_VCYCLE, mode.v_fporch + mode.v_sync + mode.v_bporch + mode.v_visible); // v_visible + v_fporch + v_sync + v_bporch    
-    write16(FT81x_REG_VSIZE, mode.v_visible);
-
+    write8(FT81x_REG_SWIZZLE, 0);
     write8(FT81x_REG_PCLK_POL, 0);
     write8(FT81x_REG_CSPREAD, 0);
+    write16(FT81x_REG_HSIZE, mode.h_visible);
+    write16(FT81x_REG_VSIZE, mode.v_visible);
 
-    // write first display list
+
+    // write first DL
     beginDisplayList();
     clear(0);
-    swapScreen();
+    swapScreen();    
 
-    write8(FT81x_REG_PCLK, mode.f_div); // f_div 1
+    // set PCLK
+    write8(FT81x_REG_ADAPTIVE_FRAMERATE, 0);
+    write32(FT81x_REG_GPIOX_DIR, (uint32_t) 1 << 15); // bit15 - DISP output
+    write32(FT81x_REG_GPIOX, (uint32_t)1 << 15 | ((uint32_t)1 << 12) | ((uint32_t)1 << 9)); // bit15 - DISP level, bit12 - PCLK (and others) drive strength, bit9 - INT_N push/pull
+    write8(FT81x_REG_PCLK, mode.f_div); // f_div
 
-    // funny screen mirroring
-    //write8(FT81x_REG_ROTATE, FT81x_ROTATE_LANDSCAPE_INVERTED);
-
-    // int setup
-    //write8(FT81x_REG_INT_MASK, 1);
-    //write8(FT81x_REG_INT_EN, 1);
+    // Configure INT
+    write8(FT81x_REG_INT_MASK, 1); // FT_INT_SWAP=1
+    write8(FT81x_REG_INT_EN, 1);
 
     return true;
 }
@@ -675,6 +694,7 @@ void FT812::sendCommand(const uint32_t cmd) {
     uint8_t res = SPI.transfer(cmd);
     digitalWrite(pin_cs, HIGH);
     SPI.endTransaction();
+    //delay(200);
     //Serial.printf("Command %d result %d", cmd, res); Serial.println();
 }
 

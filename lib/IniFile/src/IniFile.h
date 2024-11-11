@@ -6,7 +6,7 @@
 #include <stdint.h>
 
 #include "SdFat.h"
-extern SdFat sd1;
+extern SdFat32 sd1;
 #include "IPAddress.h"
 
 #define INIFILE_VERSION "1.3.0"
@@ -125,7 +125,7 @@ public:
 
 	// Utility function to read a line from a file, make available to all
 	//static int8_t readLine(File &file, char *buffer, size_t len, uint32_t &pos);
-	static error_t readLine(FsFile &file, char *buffer, size_t len, uint32_t &pos);
+	static error_t readLine(File32 &file, char *buffer, size_t len, uint32_t &pos);
 	static bool isCommentChar(char c);
 	static char* skipWhiteSpace(char* str);
 	static void removeTrailingWhiteSpace(char* str);
@@ -145,7 +145,7 @@ private:
 	char _filename[INI_FILE_MAX_FILENAME_LEN];
 	mode_t _mode;
 	mutable error_t _error;
-	mutable FsFile _file;
+	mutable File32 _file;
 	bool _caseSensitive;
 };
 

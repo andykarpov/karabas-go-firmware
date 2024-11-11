@@ -85,5 +85,6 @@ static void process_gamepad_report(uint8_t dev_addr, uint8_t instance, uint8_t c
 static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len);
 static void process_driver_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len);
 static uint8_t get_joy_num(uint8_t dev_addr, uint8_t instance);
+static void dump_hid_report(uint8_t instance, uint8_t const* report, uint16_t len);
 
 #endif

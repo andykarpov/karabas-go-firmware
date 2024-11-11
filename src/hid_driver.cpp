@@ -65,6 +65,9 @@ void hid_drivers_load()
 {
     if (has_sd) {
     sd1.chvol();
+    if (root1.isOpen()) {
+      root1.close();
+    }
     if (root1.open(&sd1, "/drivers")) {
       root1.rewind();
       while (file1.openNext(&root1, O_RDONLY)) {
@@ -85,7 +88,7 @@ void hid_drivers_dump()
       if (joy_drivers_len > 0) {
     d_printf("Loaded %d drivers", joy_drivers_len); d_println();
     for (uint8_t i=0; i<joy_drivers_len; i++) {
-      d_printf("Driver for %d:%d:", joy_drivers[i].vid, joy_drivers[i].pid); d_println();
+      d_printf("Driver for %04x:%04x:", joy_drivers[i].vid, joy_drivers[i].pid); d_println();
       for (uint8_t j=0; j<12; j++) {
         if (joy_drivers[i].buttons[j].isAvail) {
           if (joy_drivers[i].buttons[j].isBit) {

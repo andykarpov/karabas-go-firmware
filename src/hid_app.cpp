@@ -417,6 +417,7 @@ static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t c
       break;
       case HID_USAGE_DESKTOP_JOYSTICK:
         //d_printf("HID usage desktop joystick, len=%d", len); d_println();
+        dump_hid_report(instance, report, len);
         if (hid_info[instance].has_driver) {
           process_driver_report(dev_addr, instance, report, len);
         } else {
@@ -431,6 +432,7 @@ static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t c
       break;
       case HID_USAGE_DESKTOP_GAMEPAD:
         //d_printf("HID usage desktop gamepad, len=%d", len); d_println();
+        dump_hid_report(instance, report, len);
         if (hid_info[instance].has_driver) {
           process_driver_report(dev_addr, instance, report, len);
         } else {
@@ -444,6 +446,7 @@ static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t c
         }
       break;
       default: 
+        dump_hid_report(instance, report, len);
         if (hid_info[instance].has_driver) {
           process_driver_report(dev_addr, instance, report, len);
         } else {
@@ -457,3 +460,12 @@ static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t c
   }
 }
 
+static void dump_hid_report(uint8_t instance, uint8_t const* report, uint16_t len) {
+  if (hw_setup.debug_hid) {
+    d_printf("RAW %04x:%04x: ", hid_info[instance].vid, hid_info[instance].pid);
+    for (uint16_t j=0; j<len; j++) {
+      d_printf("%02x ", report[j]);
+    }
+    d_println();
+  }
+}

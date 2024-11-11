@@ -51,18 +51,19 @@
 #include "hid_driver.h"
 
 PioSpi spiSD(PIN_SD_SPI_RX, PIN_SD_SPI_SCK, PIN_SD_SPI_TX); // dedicated SD1 SPI
-#define SD_CONFIG SdSpiConfig(SD_CS_PIN, DEDICATED_SPI, SD_SCK_MHZ(30), &spiSD) // SD1 SPI Settings
-
-SPISettings settingsA(SD_SCK_MHZ(4), MSBFIRST, SPI_MODE0); // MCU SPI settings
+#define SD_CONFIG  SdSpiConfig(SD_CS_PIN, SHARED_SPI, SD_SCK_MHZ(20), &spiSD) // SD1 SPI Settings
+#define SD2_CONFIG SdSpiConfig(PIN_MCU_SD2_CS, SHARED_SPI, SD_SCK_MHZ(16)) // SD2 SPI Settings
+SPISettings settingsA(SD_SCK_MHZ(16), MSBFIRST, SPI_MODE0); // MCU SPI settings
+Adafruit_USBD_MSC usb_msc;
 
 PCA9536 extender;
-ElapsedTimer my_timer;
+ElapsedTimer my_timer, my_timer2;
 ElapsedTimer hide_timer;
 ElapsedTimer popup_timer;
 RTC zxrtc;
-SdFat sd1;
-FsFile file1, fileIndex1;
-FsFile root1;
+SdFat32 sd1, sd2;
+File32 file1, fileIndex1, file2, fileIndex2;
+File32 root1, root2;
 fs::Dir froot;
 fs::File ffile;
 OSD zxosd;
@@ -85,6 +86,8 @@ bool is_popup_hiding = false;
 bool need_redraw = false;
 
 core_item_t core;
+core_file_slot_t file_slots[4];
+
 uint8_t osd_state;
 uint8_t osd_prev_state = state_main;
 
@@ -93,10 +96,14 @@ uint8_t joy_drivers_len;
 
 bool has_extender = false;
 bool has_sd = false;
+bool has_sd2 = false;
 bool has_fs = false;
 bool has_ft = false;
 bool is_flashboot = false;
 bool is_configuring = false;
+bool expose_msc = false;
+bool ejected = false;
+bool msc_blink = false;
 
 uint16_t joyL;
 uint16_t joyR;
@@ -113,13 +120,27 @@ uint16_t prev_debug_address = 0;
 uint16_t debug_data = 0;
 uint16_t prev_debug_data = 0;
 
+setup_t hw_setup;
+
 void setup()
 {
   queue_init(&spi_event_queue, sizeof(queue_spi_t), 64);
 
+  hw_setup.debug_enabled = false;
+
+  usb_msc.setID(0, "Karabas", "SD Card", "1.0");
+  usb_msc.setReadWriteCallback(0, msc_read_cb_sd, msc_write_cb_sd, msc_flush_cb_sd);
+  usb_msc.setStartStopCallback(0, msc_start_stop_cb_sd);
+  usb_msc.setUnitReady(0, false);
+  usb_msc.begin();
+
+  //rp2040.wdt_begin(5000);
+
   joyL = joyR = 0;
   for (uint8_t i=0; i<4; i++) { joyUSB[i] = 0; }
   joyUSB_len = 0;
+
+  for (uint8_t i=0; i<4; i++) { file_slots[i] = {0}; }
 
   // SPI0 to FPGA
   SPI.setSCK(PIN_MCU_SPI_SCK);
@@ -139,6 +160,13 @@ void setup()
   pinMode(PIN_MCU_SPI_CS, OUTPUT); digitalWrite(PIN_MCU_SPI_CS, HIGH);
   pinMode(PIN_MCU_SD2_CS, OUTPUT); digitalWrite(PIN_MCU_SD2_CS, HIGH);
   pinMode(PIN_MCU_FT_CS, OUTPUT); digitalWrite(PIN_MCU_FT_CS, HIGH);
+
+  // unused MCU-FPGA pins (yet)
+  pinMode(PIN_MCU_SPI_IO0, INPUT);
+  pinMode(PIN_MCU_SPI_IO1, INPUT);
+  #if HW_ID==HW_ID_MINI
+  pinMode(PIN_MCU_SPI_IO4, INPUT);
+  #endif
 
   // I2C
   Wire.setSDA(PIN_I2C_SDA);
@@ -167,6 +195,8 @@ void setup()
     extender.pinMode(PIN_EXT_BTN2, INPUT_PULLUP);
     extender.pinMode(PIN_EXT_LED1, OUTPUT);
     extender.pinMode(PIN_EXT_LED2, OUTPUT);
+    extender.digitalWrite(PIN_EXT_LED1, HIGH);
+    extender.digitalWrite(PIN_EXT_LED2, HIGH);
   }
 
   sega.begin(PIN_JOY_SCK, PIN_JOY_LOAD, PIN_JOY_DATA, PIN_JOY_P7);
@@ -207,22 +237,39 @@ void setup()
   }
 
   // load usb joy drivers
-  d_println("Loading usb hid joystock drivers");
+  d_println("Loading usb hid joystick drivers");
   hid_drivers_load();
-  //hid_drivers_dump();
+  hid_drivers_dump();
+
+  // if btn2 pressed on boot - espose msc
+  if (btn_read(1)) {
+    if (has_sd) {
+      expose_msc = true;
+      ejected = false;
+      uint32_t block_count = sd1.card()->sectorCount();
+      usb_msc.setCapacity(0, block_count, 512);
+      usb_msc.setUnitReady(0, true);
+      my_timer.reset();
+    }
+  }
 
   osd_state = state_main;
 
-  // load boot from SD or flashfs
-  if (has_sd && sd1.exists(FILENAME_BOOT)) {  
-    do_configure(FILENAME_BOOT);
-  } else if (has_fs && LittleFS.exists(FILENAME_FBOOT)) {
-    do_configure(FILENAME_FBOOT);
-  } else {
-    halt("Boot file not found. System stopped");
+  if (!expose_msc) {
+    // load setup
+    load_setup();
+
+    // load boot from SD or flashfs
+    if (has_sd && sd1.exists(FILENAME_BOOT)) {  
+      do_configure(FILENAME_BOOT);
+    } else if (has_fs && LittleFS.exists(FILENAME_FBOOT)) {
+      do_configure(FILENAME_FBOOT);
+    } else {
+      halt("Boot file not found. System stopped");
+    }
+    osd_state = state_core_browser;
+    app_core_browser_read_list();
   }
-  osd_state = state_core_browser;
-  app_core_browser_read_list();
 }
 
 void setup1() {
@@ -239,6 +286,39 @@ void setup1() {
 
 void loop()
 {
+  //rp2040.wdt_reset();
+  // read hw buttons to manipulate msc / reboots
+  static bool prev_btn1 = false;
+  static bool prev_btn2 = false;
+  bool btn1 = btn_read(0);
+  bool btn2 = btn_read(1);
+
+  // if eject event registered - reboot rp2040
+  if (ejected) {
+    ejected = false;
+    rp2040.reboot();
+  }
+
+  // if msc mounted but btn1 pressed - also reboot rp2040
+  if (expose_msc) {
+
+    if (my_timer2.elapsed() >= 200) {
+          msc_blink = !msc_blink;
+        led_write(1, msc_blink);
+        my_timer2.reset();
+    }
+
+    if (btn1 && my_timer.elapsed() > 10000) {
+      // wait for btn1 to release
+      while(btn1) { btn1 = btn_read(0); delay(100); }
+      expose_msc = false;
+      rp2040.reboot();
+    }
+
+    // do not process other loop things until exit from msc mode
+    return;
+  }
+
   zxrtc.handle();
 
   // set is_osd off after 200ms of real switching off 
@@ -256,47 +336,32 @@ void loop()
   }
 
   if (my_timer.elapsed() >= 100) {
-#if HW_ID == HW_ID_GO
-    if (has_extender) {
-      extender.digitalWrite(PIN_EXT_LED1, LOW);
+      led_write(0, true);
       my_timer.reset();
-    }
-#elif HW_ID == HW_ID_MINI
-  digitalWrite(PIN_LED1, LOW);
-  my_timer.reset();
-#endif
   }
 
-  static bool prev_btn1 = HIGH;
-  static bool prev_btn2 = HIGH;
-#if HW_ID == HW_ID_GO
-  bool btn1 = has_extender ? extender.digitalRead(PIN_EXT_BTN1) : HIGH;
-  bool btn2 = has_extender ? extender.digitalRead(PIN_EXT_BTN2) : HIGH;
-#elif HW_ID == HW_ID_MINI
-  bool btn1 = digitalRead(PIN_BTN1);
-  bool btn2 = digitalRead(PIN_BTN2);
-#endif
-
   if (prev_btn1 != btn1) {
-    d_print("Button 1: "); d_println((btn1 == LOW) ? "on" : "off");
+    d_print("Button 1: "); d_println((btn1) ? "on" : "off");
     prev_btn1 = btn1;
-    spi_send(CMD_BTN, 0, !btn1);
+    spi_send(CMD_BTN, 0, btn1);
   }
 
   if (prev_btn2 != btn2) {
-    d_print("Button 2: "); d_println((btn2 == LOW) ? "on" : "off");
+    d_print("Button 2: "); d_println((btn2) ? "on" : "off");
     prev_btn2 = btn2;
-    spi_send(CMD_BTN, 1, !btn2);
+    spi_send(CMD_BTN, 1, btn2);
   }
 
   // debug features
   // TODO: remove from production / refactor
-  if (btn1 == LOW) {
+  if (btn1) {
+    // wait until released
+    while (btn1) { btn1 = btn_read(0); delay(100); }
     d_println("Reboot");
     d_flush();
     rp2040.reboot();
   }
-  /*if (btn2 == LOW) {
+  /*if (btn2) {
       d_println("Reboot to bootloader");
       d_flush();
       rp2040.rebootToBootloader();
@@ -513,15 +578,28 @@ void on_keyboard() {
 
 void core_send(uint8_t pos)
 {
-  spi_send(CMD_SWITCHES, pos, core.osd[pos].val);
-  d_printf("Switch: %s %d", core.osd[pos].name, core.osd[pos].val);
+  if (core.osd[pos].type == CORE_OSD_TYPE_FILEMOUNTER) {
+      spi_send(CMD_SWITCHES, pos, (file_slots[core.osd[pos].slot_id].is_mounted) ? 1 : 0);
+      d_printf("File mounter: %s %d", core.osd[pos].name, file_slots[core.osd[pos].slot_id].is_mounted);
+  } else if (core.osd[pos].type == CORE_OSD_TYPE_FILELOADER) {
+    // do nothing
+  } else {
+    spi_send(CMD_SWITCHES, pos, core.osd[pos].val);
+    d_printf("Switch: %s %d", core.osd[pos].name, core.osd[pos].val);
+  }
   d_println();
 }
 
 void core_send_all() 
 {
   for (uint8_t i=0; i<core.osd_len; i++) {
-    spi_send(CMD_SWITCHES, i, core.osd[i].val);
+    if (core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER) {
+      spi_send(CMD_SWITCHES, i, (file_slots[core.osd[i].slot_id].is_mounted) ? 1 : 0);
+    } else if (core.osd[i].type == CORE_OSD_TYPE_FILELOADER) {
+      // do nothing
+    } else {
+      spi_send(CMD_SWITCHES, i, core.osd[i].val);
+    }
   }
 }
 
@@ -557,19 +635,13 @@ void halt(const char* msg) {
   d_println(msg);
   d_flush();
   bool blink = false;
-  while(true) {
+  for(int i=0; i<50; i++) {
       blink = !blink;
-#if HW_ID == HW_ID_GO
-      if (has_extender) {
-        extender.digitalWrite(PIN_EXT_LED1, blink);
-        extender.digitalWrite(PIN_EXT_LED2, blink);
-      }
-#elif HW_ID == HW_ID_MINI
-      digitalWrite(PIN_LED1, blink);
-      digitalWrite(PIN_LED2, blink);
-#endif
+      led_write(0, blink);
+      led_write(1, !blink);
       delay(100);
   }
+  rp2040.reboot();
 }
 
 uint32_t fpga_send(const char* filename) {
@@ -628,15 +700,8 @@ uint32_t fpga_send(const char* filename) {
 
     if (i % 8192 == 0) {
       blink = !blink;
-#if HW_ID == HW_ID_GO
-      if (has_extender) {
-        extender.digitalWrite(PIN_EXT_LED1, blink);
-        extender.digitalWrite(PIN_EXT_LED2, blink);
-      }
-#elif HW_ID == HW_ID_MINI
-      digitalWrite(PIN_LED1, blink);
-      digitalWrite(PIN_LED2, blink);
-#endif
+      led_write(0, blink);
+      led_write(1, blink);
     }
   }
   if (is_flash) {
@@ -677,6 +742,52 @@ void spi_send(uint8_t cmd, uint8_t addr, uint8_t data) {
   if ((rx_cmd > 0) && !is_configuring) {
     process_in_cmd(rx_cmd, rx_addr, rx_data);
   }
+}
+
+void spi_send16(uint8_t cmd, uint16_t data) {
+  uint8_t byte2 = (uint8_t)((data & 0xFF00) >> 8);
+  uint8_t byte1 = (uint8_t)((data & 0x00FF));
+  spi_send(cmd, 0, byte1);
+  spi_send(cmd, 1, byte2);
+}
+
+void spi_send24(uint8_t cmd, uint32_t data) {
+  uint8_t byte3 = (uint8_t)((data & 0x00FF0000) >> 16);
+  uint8_t byte2 = (uint8_t)((data & 0x0000FF00) >> 8);
+  uint8_t byte1 = (uint8_t)((data & 0x000000FF));
+  spi_send(cmd, 0, byte1);
+  spi_send(cmd, 1, byte2);
+  spi_send(cmd, 2, byte3);
+}
+
+void spi_send32(uint8_t cmd, uint32_t data) {
+  uint8_t byte4 = (uint8_t)((data & 0xFF000000) >> 24);
+  uint8_t byte3 = (uint8_t)((data & 0x00FF0000) >> 16);
+  uint8_t byte2 = (uint8_t)((data & 0x0000FF00) >> 8);
+  uint8_t byte1 = (uint8_t)((data & 0x000000FF));
+  spi_send(cmd, 0, byte1);
+  spi_send(cmd, 1, byte2);
+  spi_send(cmd, 2, byte3);
+  spi_send(cmd, 2, byte4);
+}
+
+void spi_send64(uint8_t cmd, uint64_t data) {
+  uint8_t byte8 = (uint8_t)((data & 0xFF00000000000000) >> 56);
+  uint8_t byte7 = (uint8_t)((data & 0x00FF000000000000) >> 48);
+  uint8_t byte6 = (uint8_t)((data & 0x0000FF0000000000) >> 40);
+  uint8_t byte5 = (uint8_t)((data & 0x000000FF00000000) >> 32);
+  uint8_t byte4 = (uint8_t)((data & 0x00000000FF000000) >> 24);
+  uint8_t byte3 = (uint8_t)((data & 0x0000000000FF0000) >> 16);
+  uint8_t byte2 = (uint8_t)((data & 0x000000000000FF00) >> 8);
+  uint8_t byte1 = (uint8_t)((data & 0x00000000000000FF));
+  spi_send(cmd, 0, byte1);
+  spi_send(cmd, 1, byte2);
+  spi_send(cmd, 2, byte3);
+  spi_send(cmd, 2, byte4);
+  spi_send(cmd, 2, byte5);
+  spi_send(cmd, 2, byte6);
+  spi_send(cmd, 2, byte7);
+  spi_send(cmd, 2, byte8);
 }
 
 void flashboot (uint8_t data) {
@@ -782,6 +893,9 @@ void on_time() {
   if (mo < 10) zxosd.print(0); zxosd.print(mo); zxosd.print("/");
   if (y < 10) zxosd.print(0); zxosd.print(y);
 
+  // on time callback
+  app_core_browser_on_time();
+
   if (core.type == CORE_TYPE_BOOT && has_ft == true && is_osd == true) {
     // redraw core browser
     app_core_browser_ft_menu(0);
@@ -836,13 +950,16 @@ void read_core(const char* filename) {
   file_seek(FILE_POS_CORE_EEPROM_BANK, is_flash); core.eeprom_bank = file_read(is_flash);
   file_seek(FILE_POS_RTC_TYPE, is_flash); core.rtc_type = file_read(is_flash);
   file_seek(FILE_POS_FILELOADER_DIR, is_flash); file_read_bytes(core.dir, 32, is_flash); core.dir[32] = '\0';
-  file_seek(FILE_POS_FILELOADER_FILE, is_flash); file_read_bytes(core.last_file, 32, is_flash); core.last_file[32] = '\0';
+  file_seek(FILE_POS_FILELOADER_FILE, is_flash); core.last_file_id = file_read16(FILE_POS_FILELOADER_FILE, is_flash);
   file_seek(FILE_POS_FILELOADER_EXTENSIONS, is_flash); file_read_bytes(core.file_extensions, 32, is_flash); core.file_extensions[32] = '\0';
   uint32_t roms_len = file_read32(FILE_POS_ROM_LEN, is_flash);
   uint32_t offset = FILE_POS_BITSTREAM_START + core.bitstream_length + roms_len;
   //d_print("OSD section: "); d_println(offset);
   file_seek(offset, is_flash); core.osd_len = file_read(is_flash);
   //d_print("OSD len: "); d_println(core.osd_len);
+  
+  for (uint8_t i=0; i<4; i++) { file_slots[i].is_mounted = false; }
+
   for (uint8_t i=0; i<core.osd_len; i++) {
     core.osd[i].type = file_read(is_flash);
     file_read(is_flash);
@@ -850,12 +967,35 @@ void read_core(const char* filename) {
     core.osd[i].def = file_read(is_flash);
     core.osd[i].val = core.osd[i].def;
     core.osd[i].prev_val = core.osd[i].def;
-    core.osd[i].options_len = file_read(is_flash);
-    if (core.osd[i].options_len > 8) {
-      core.osd[i].options_len = 8; // something goes wrong
+
+    // filemounter osd type:
+    // loading initial dir, filename, extensions and trying to mount file, if any
+    if (core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[i].type == CORE_OSD_TYPE_FILELOADER) {
+      core.osd[i].options_len = 0;
+      core.osd[i].slot_id = file_read(is_flash);
+      file_slots[core.osd[i].slot_id].is_mounted = false;
+      file_read_bytes(file_slots[core.osd[i].slot_id].ext, 256, is_flash); file_slots[core.osd[i].slot_id].ext[255] = '\0';
+      file_read_bytes(file_slots[core.osd[i].slot_id].dir, 256, is_flash); file_slots[core.osd[i].slot_id].dir[255] = '\0';
+      String dir = String(file_slots[core.osd[i].slot_id].dir);
+      if (dir == "") { dir = "/"; }
+      if (dir.charAt(0) != '/') { dir = '/' + dir; }
+      dir.toCharArray(file_slots[core.osd[i].slot_id].dir, sizeof(file_slots[core.osd[i].slot_id].dir));
+      file_read_bytes(file_slots[core.osd[i].slot_id].filename, 256, is_flash); file_slots[core.osd[i].slot_id].filename[255] = '\0';
+      String sfilename = String( file_slots[core.osd[i].slot_id].filename);
+      String sfullname = dir + "/" + sfilename;
+      if (sfilename.length() > 0 && sd1.exists(sfullname)) {
+        file_slots[core.osd[i].slot_id].is_mounted = true; //file_slots[core.osd[i].slot_id].file = sd1.open(sfullname, O_READ);
+      }
     } 
-    for (uint8_t j=0; j<core.osd[i].options_len; j++) {
-      file_read_bytes(core.osd[i].options[j].name, 16, is_flash); core.osd[i].options[j].name[16] = '\0';
+      // otherwise - reading options structure
+      else {
+      core.osd[i].options_len = file_read(is_flash);
+      if (core.osd[i].options_len > 8) {
+        core.osd[i].options_len = 8; // something goes wrong
+      } 
+      for (uint8_t j=0; j<core.osd[i].options_len; j++) {
+        file_read_bytes(core.osd[i].options[j].name, 16, is_flash); core.osd[i].options[j].name[16] = '\0';
+      }
     }
     file_read_bytes(core.osd[i].hotkey, 16, is_flash); core.osd[i].hotkey[16] = '\0';
     core.osd[i].keys[0] = file_read(is_flash);
@@ -890,22 +1030,24 @@ void read_core(const char* filename) {
   core_send_all();
 
   // re-send rtc registers
-  //zxrtc.sendAll();
+  zxrtc.sendAll();
 
   has_ft = false;
 
-  // hw ft reset
-  ft.reset();
+  // hw ft reset for other cores types
+  if (core.type != CORE_TYPE_BOOT) {
+    ft.reset();
+  }
 
   // boot core tries to use FT812 as osd handler
   if (core.type == CORE_TYPE_BOOT && is_osd) {
-    if (FT_OSD == 1) {
+    if (hw_setup.ft_enabled) {
       // space skip ft osd
       if (usb_keyboard_report.keycode[0] == KEY_SPACE) {
         d_println("Space pressed: skip FT81x detection, fallback to classic OSD");
       } else {
         ft.spi(true);
-        has_ft = ft.init(1); // 640x480x75
+        has_ft = ft.init(hw_setup.ft_video_mode);
         if (has_ft) {
           d_println("Found FT81x IC, switching to FT OSD");
           ft.vga(true);
@@ -919,7 +1061,7 @@ void read_core(const char* filename) {
   }
 
   // dump parsed OSD items
-  /*for(uint8_t i=0; i<core.osd_len; i++) {
+  for(uint8_t i=0; i<core.osd_len; i++) {
     d_printf("OSD %d: type: %d name: %s def: %d len: %d keys: [%d %d %d]", i, core.osd[i].type, core.osd[i].name, core.osd[i].def, core.osd[i].options_len, core.osd[i].keys[0], core.osd[i].keys[1], core.osd[i].keys[2]); 
     d_println();
     for (uint8_t j=0; j<core.osd[i].options_len; j++) {
@@ -927,12 +1069,28 @@ void read_core(const char* filename) {
     } 
     d_println();
     d_print(core.osd[i].hotkey); d_println();
-  }*/
+  }
 
   if (is_flash) {
     ffile.close();
   } else {
     file1.close();
+  }
+
+  // mount slots
+  for(uint8_t i=0; i<core.osd_len; i++) {
+    if (core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER) {
+      String dir = String(file_slots[core.osd[i].slot_id].dir);
+      if (dir == "") { dir = "/"; }
+      if (dir.charAt(0) != '/') { dir = '/' + dir; }
+      dir.toCharArray(file_slots[core.osd[i].slot_id].dir, sizeof(file_slots[core.osd[i].slot_id].dir));
+      String sfilename = String( file_slots[core.osd[i].slot_id].filename);
+      String sfullname = dir + "/" + sfilename;
+      if (sfilename.length() > 0 && sd1.exists(sfullname)) {
+        file_slots[core.osd[i].slot_id].is_mounted = file_slots[core.osd[i].slot_id].file = sd1.open(sfullname, O_READ);
+      }
+      core_send(i);
+    }
   }
 
   zxosd.hidePopup();
@@ -1025,7 +1183,7 @@ void osd_handle(bool force) {
       osd_prev_state = osd_state;
       switch(osd_state) {
         case state_core_browser:
-          if (FT_OSD == 1 && has_ft == true) {
+          if (hw_setup.ft_enabled && has_ft == true) {
             app_core_browser_ft_overlay();
           } else {
             app_core_browser_overlay();
@@ -1039,5 +1197,176 @@ void osd_handle(bool force) {
         break;
       }
     }
+  }  
+}
+
+bool btn_read(uint8_t num) {
+#if HW_ID == HW_ID_GO
+  if (num == 0) {
+    return !(has_extender ? extender.digitalRead(PIN_EXT_BTN1) : HIGH);
+  } else {
+    return !(has_extender ? extender.digitalRead(PIN_EXT_BTN2) : HIGH);
+  }
+#elif HW_ID == HW_ID_MINI
+  if (num == 0) { 
+    return !digitalRead(PIN_BTN1);
+  } else {
+    return !digitalRead(PIN_BTN2);
+  }
+#endif
+}
+
+void led_write(uint8_t num, bool on) {
+#if HW_ID == HW_ID_GO
+  if (num == 0) {
+    extender.digitalWrite(PIN_EXT_LED1, !on);
+  } else {
+    extender.digitalWrite(PIN_EXT_LED2, !on);
+  }
+#elif HW_ID == HW_ID_MINI
+  if (num == 0) { 
+    digitalWrite(PIN_LED1, !on);
+  } else {
+    digitalWrite(PIN_LED2, !on);
+  }
+#endif
+}
+
+void load_setup() {
+
+  const size_t bufferLen = 80;
+  char buffer[bufferLen];
+  IniFile ini("karabas.ini");
+  
+  // defaults
+  hw_setup.debug_enabled = false;
+  hw_setup.debug_hid = false;
+  hw_setup.ft_enabled = true;
+  hw_setup.ft_video_mode = 0;
+  hw_setup.ft_sound = 1;
+  hw_setup.ft_click = true;
+  hw_setup.ft_time = true;
+  hw_setup.ft_date = true;
+  hw_setup.ft_char = true;
+  hw_setup.ft_3d_buttons = false;
+
+  hw_setup.autoload_enabled = false;
+  hw_setup.autoload_timeout = 15;
+
+  hw_setup.color_bg = 0x00010101;
+  hw_setup.color_gradient = 0x000000c8;
+  hw_setup.color_button = 0x00202026;
+  hw_setup.color_active = 0x000000c8;
+  hw_setup.color_text = 0x00ffffff;
+  hw_setup.color_text_active = 0x00ffffff;
+  hw_setup.color_copyright = 0x00787878;  
+
+  if (!has_sd) return;
+  sd1.chvol();
+
+  if (ini.open()) {
+    // validate file
+    if (!ini.validate(buffer, bufferLen)) {
+      ini.close();
+      return;
+    }
+
+    ini.getValue("setup", "debug", buffer, bufferLen, hw_setup.debug_enabled);
+    ini.getValue("setup", "debug_hid", buffer, bufferLen, hw_setup.debug_hid);
+    
+    ini.getValue("ft812", "enabled", buffer, bufferLen, hw_setup.ft_enabled);
+    hw_setup.ft_video_mode = (ini.getValue("ft812", "video_mode", buffer, bufferLen)) ? strtoul(buffer, 0, 10) : 0;
+    if (hw_setup.ft_video_mode > 15) hw_setup.ft_video_mode = 0;
+    hw_setup.ft_sound = (ini.getValue("ft812", "sound", buffer, bufferLen)) ? strtoul(buffer, 0, 10) : 0;
+    if (hw_setup.ft_sound > 4) hw_setup.ft_sound = 1;
+    ini.getValue("ft812", "click", buffer, bufferLen, hw_setup.ft_click);
+    ini.getValue("ft812", "time", buffer, bufferLen, hw_setup.ft_time);
+    ini.getValue("ft812", "date", buffer, bufferLen, hw_setup.ft_date);
+    ini.getValue("ft812", "char", buffer, bufferLen, hw_setup.ft_char);
+    ini.getValue("ft812", "3d_buttons", buffer, bufferLen, hw_setup.ft_3d_buttons);
+    hw_setup.color_bg = (ini.getValue("ft812", "color_bg", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_bg;
+    hw_setup.color_gradient = (ini.getValue("ft812", "color_gradient", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_gradient;
+    hw_setup.color_button = (ini.getValue("ft812", "color_button", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_button;
+    hw_setup.color_active = (ini.getValue("ft812", "color_active", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_active;
+    hw_setup.color_text = (ini.getValue("ft812", "color_text", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_text;
+    hw_setup.color_text_active = (ini.getValue("ft812", "color_text_active", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_text_active;
+    hw_setup.color_copyright = (ini.getValue("ft812", "color_copyright", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_copyright;
+
+    ini.getValue("autoload", "enabled", buffer, bufferLen, hw_setup.autoload_enabled);
+    hw_setup.autoload_timeout = (ini.getValue("autoload", "timeout", buffer, bufferLen)) ? strtoul(buffer, 0, 10) : 0;
+    if (ini.getValue("autoload", "core", buffer, bufferLen)) {
+          strcpy(hw_setup.autoload_core, buffer);
+    }
+
+    d_println("Setup:");
+    d_print("Debug enabled: "); d_println(hw_setup.debug_enabled ? "yes" : "no"); 
+    d_print("Debug HID enabled: "); d_println(hw_setup.debug_hid ? "yes" : "no"); 
+    d_print("FT812 enabled: "); d_println(hw_setup.ft_enabled ? "yes" : "no"); 
+    d_print("FT812 video mode: "); d_println(hw_setup.ft_video_mode);
+    d_print("FT812 sound: "); d_println(hw_setup.ft_sound); 
+    d_print("FT812 keypress click enabled: "); d_println(hw_setup.ft_click ? "yes" : "no"); 
+    d_print("FT812 show time: "); d_println(hw_setup.ft_time ? "yes" : "no"); 
+    d_print("FT812 show date: "); d_println(hw_setup.ft_date ? "yes" : "no"); 
+    d_print("FT812 show character: "); d_println(hw_setup.ft_char ? "yes" : "no"); 
+    d_print("FT812 use 3d buttons: "); d_println(hw_setup.ft_3d_buttons ? "yes" : "no"); 
+    d_print("Autoload enabled: "); d_println(hw_setup.autoload_enabled ? "yes" : "no"); 
+    d_print("Autoload timeout: "); d_println(hw_setup.autoload_timeout); 
+    d_print("Autoload core: "); d_println(hw_setup.autoload_core); 
+
+    ini.close();
+    return;
   }
 }
+
+// Callback invoked when received READ10 command.
+// Copy disk's data to buffer (up to bufsize) and
+// return number of copied bytes (must be multiple of block size)
+int32_t msc_read_cb_sd (uint32_t lba, void* buffer, uint32_t bufsize)
+{
+  bool rc;
+  rc = sd1.card()->readSectors(lba, (uint8_t*) buffer, bufsize/512);
+  return rc ? bufsize : -1;
+}
+
+// Callback invoked when received WRITE10 command.
+// Process data in buffer to disk's storage and 
+// return number of written bytes (must be multiple of block size)
+int32_t msc_write_cb_sd (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
+{
+  bool rc;
+  rc = sd1.card()->writeSectors(lba, buffer, bufsize/512);
+  return rc ? bufsize : -1;
+}
+
+// Callback invoked when WRITE10 command is completed (status received and accepted by host).
+// used to flush any pending cache.
+void msc_flush_cb_sd (void)
+{
+  sd1.card()->syncDevice();
+  //sd1.cacheClear();
+}
+
+bool msc_start_stop_cb_sd(uint8_t power_condition, bool start, bool load_eject) {
+  //d_printf("Start stop msc %d %d %d", power_condition, start, load_eject);
+  //d_println(); d_flush();
+  (void) power_condition;
+
+  if ( load_eject )
+  {
+    if (start)
+    {
+      // load disk storage
+    }else
+    {
+      // unload disk storage
+      if (expose_msc) {
+        expose_msc = false;
+        ejected = true;
+      }
+    }
+  }
+
+  return true;
+}
+
+/////////

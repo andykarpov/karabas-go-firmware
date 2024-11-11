@@ -62,6 +62,11 @@ void RTC::handle()
 
     tr = n;
   }
+
+  /*if (n - to >= 100) {
+    event();
+    to = n;
+  }*/
 }
 
 void RTC::save() {

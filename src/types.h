@@ -1,6 +1,7 @@
 #pragma once
 
 #include "config.h"
+#include "SdFat.h"
 
 typedef struct {
 	uint8_t cmd;
@@ -10,6 +11,7 @@ typedef struct {
 
 typedef struct {
 	bool flash;
+	char id[32+1];
 	char name[32+1];
 	char filename[32+1];
 	char build[8+1];
@@ -23,6 +25,21 @@ typedef struct {
 } core_osd_option_t;
 
 typedef struct {
+	bool is_mounted;
+	char ext[256];
+	char dir[256];
+	char filename[256];
+	File32 file;
+} core_file_slot_t;
+
+typedef struct {
+	bool is_dir;
+	char name[32];
+	char dir[256];
+	char filename[256];
+} core_filebrowser_item_t;
+
+typedef struct {
 	uint8_t type;
 	uint8_t def;
 	char name[16+1];
@@ -32,6 +49,7 @@ typedef struct {
 	uint8_t options_len;
 	uint8_t val;
 	uint8_t prev_val;
+	uint8_t slot_id;
 } core_osd_t;
 
 typedef struct {
@@ -57,13 +75,42 @@ typedef struct {
 	bool osd_need_save;
 	bool eeprom_need_save;
 	char dir[32+1];
-	char last_file[32+1];
+//	char last_file[32+1];
+	uint16_t last_file_id;
 	char file_extensions[32+1];
 } core_item_t;
 
 typedef struct {
 	char name[32+1];
 } file_list_item_t;
+
+typedef struct {
+	uint16_t file_id;
+	char hash[SORT_HASH_LEN];
+} file_list_sort_item_t;
+
+typedef struct {
+	bool debug_enabled;
+	bool debug_hid;
+	bool ft_enabled;
+	uint8_t ft_video_mode;
+	uint8_t ft_sound;
+	bool ft_click;
+	bool ft_time;
+	bool ft_date;
+	bool ft_char;
+	bool ft_3d_buttons;
+	bool autoload_enabled;
+	uint8_t autoload_timeout;
+	char autoload_core[32+1];
+	uint32_t color_bg;
+	uint32_t color_gradient;
+	uint32_t color_button;
+	uint32_t color_active;
+	uint32_t color_text;
+	uint32_t color_text_active;
+	uint32_t color_copyright;
+} setup_t;
 
 enum osd_state_e {
     state_main = 0,

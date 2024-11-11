@@ -20,6 +20,10 @@ const uint8_t core_page_size = MAX_CORES_PER_PAGE;
 const uint8_t ft_core_page_size = MAX_CORES_PER_PAGE/2;
 uint8_t core_pages = 1;
 uint8_t core_page = 1;
+uint16_t rot = 0;
+ElapsedTimer autoload_timer;
+bool autoload_enabled;
+uint32_t autoload_countdown;
 
 void app_core_browser_overlay() {
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
@@ -68,23 +72,27 @@ void app_core_browser_menu(uint8_t vpos) {
 }
 
 void app_core_browser_ft_overlay() {
-  ft.setSound(FT81x_SOUND_SWITCH, 40);
-  ft.loadImage(0, LOGO_SIZE, logoData, false); // karabas logo, starts from 0 in GRAM
-  ft.loadImage(LOGO_BITMAP_SIZE, BURATO2_SIZE, burato2Data, false); // karabas bg, starts from 1792 in GRAM
-  ft.writeGRAM(LOGO_BITMAP_SIZE + BURATO3_BITMAP_SIZE, KEY_SIZE, keyData); // pcm sound, starts from 65792 in GRAM
-  app_core_browser_ft_menu(0);  
+  ft.setSound(FT81x_SOUND_COWBELL, 60);
+  ft.loadImage(LOGO_OFFSET, LOGO_SIZE, logoData, false); // karabas logo, starts from 0 in GRAM
+  ft.loadImage(BG_OFFSET, BG_SIZE, bgData, false); // karabas bg, starts after logo in GRAM
+  ft.writeGRAM(KEY1_OFFSET, KEY1_SIZE, key1Data); // pcm sound, starts from after logo and bg in GRAM
+  ft.writeGRAM(KEY2_OFFSET, KEY2_SIZE, key2Data); // pcm sound, starts from after logo and bg in GRAM
+  ft.writeGRAM(KEY3_OFFSET, KEY3_SIZE, key3Data); // pcm sound, starts from after logo and bg in GRAM
+  ft.writeGRAM(KEY4_OFFSET, KEY4_SIZE, key4Data); // pcm sound, starts from after logo and bg in GRAM
+  app_core_browser_ft_menu(0);
 }
 
 void app_core_browser_ft_menu(uint8_t play_sounds) {
 
   ft.beginDisplayList();
 
-  uint32_t color_black = FT81x_COLOR_RGB(1, 1, 1);
-  uint32_t color_gradient = FT81x_COLOR_RGB(200, 0, 0);
-  uint32_t color_button = FT81x_COLOR_RGB(32, 32, 38);
-  uint32_t color_button_active = FT81x_COLOR_RGB(200, 0, 0);
-  uint32_t color_text = FT81x_COLOR_RGB(255,255,255);
-  uint32_t color_copyright = FT81x_COLOR_RGB(120, 120, 120);
+  uint32_t color_black = hw_setup.color_bg;
+  uint32_t color_gradient = hw_setup.color_gradient;
+  uint32_t color_button = hw_setup.color_button;
+  uint32_t color_button_active = hw_setup.color_active;
+  uint32_t color_text = hw_setup.color_text;
+  uint32_t color_text_active = hw_setup.color_text_active;
+  uint32_t color_copyright = hw_setup.color_copyright;
 
   ft.clear(color_black);
   ft.drawGradient(ft.width()/2, 0, color_gradient, ft.width()/2, ft.height()-ft.height()/4-1, color_black);
@@ -99,41 +107,91 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
   for(uint8_t i=core_from; i < core_to; i++) {
     char name[18];
     String n = String(cores[i].name); n.trim(); n.toCharArray(name, 18);
-    const uint32_t color = i == core_sel ? color_button_active : color_button;
-    ft.drawButton(160+8, offset + pos*40, 320-16, 32, 28, color_text, color, FT81x_OPT_3D, name);
+    const uint32_t colorb = i == core_sel ? color_button_active : color_button;
+    const uint32_t colort = i == core_sel ? color_text_active : color_text;
+    ft.drawButton(ft.width()/4 + 8, offset + pos*40, ft.width()/2-16, 32, 28, colort, colorb, (hw_setup.ft_3d_buttons) ? FT81x_OPT_3D : FT81x_OPT_FLAT , name);
     if (cores[i].flash) {
-      ft.drawText(160+320-16-24, offset + pos*40 + 16, 28, color_text, FT81x_OPT_CENTERY, "F\0");
+      ft.drawText(ft.width()/4+ft.width()/2-16-24, offset + pos*40 + 16, 28, colort, FT81x_OPT_CENTERY, "F\0");
+    }
+    if (autoload_enabled && i==core_sel) {
+      uint32_t diff = (autoload_timer.elapsed() < autoload_countdown * 1000) ? ceil((autoload_countdown * 1000 - autoload_timer.elapsed())/1000) : 0;
+      ft.drawGauge(ft.width()/4+16+12, offset + pos*40 + 16, 12, colort, colorb, 0, 1, 1, diff, autoload_countdown);
     }
     pos++;
   }
 
-  ft.drawText(112, 440, 27, color_copyright, FT81x_OPT_CENTER, "www.karabas.uk\0");
-  ft.drawText(112, 460, 27, color_copyright, FT81x_OPT_CENTER, "(c) 2024 andykarpov\0");
-  char b[40]; sprintf(b, "Page %d of %d\0", core_page, core_pages);
-  ft.drawText(320, 440, 27, color_copyright, FT81x_OPT_CENTER, b);
+  char b[40]; 
 
-  char time[9];
-  sprintf(time, "%02d:%02d:%02d\0", zxrtc.getHour(), zxrtc.getMinute(), zxrtc.getSecond());
-  ft.drawText(ft.width()-88, 30, 30, color_text, FT81x_OPT_CENTER, time);
-  char date[9];
-  sprintf(date, "%02d/%02d/%02d\0", zxrtc.getDay(), zxrtc.getMonth(), zxrtc.getYear() % 100);
-  ft.drawText(ft.width()-88, 60, 30, color_text, FT81x_OPT_CENTER, date);
+  //ft.drawText(112, ft.height()-40, 27, color_copyright, FT81x_OPT_CENTER, "www.karabas.uk\0");
+  sprintf(b, "FW build: %s\0", STRINGIZE_VALUE_OF(BUILD_VER));
+  ft.drawText(112, ft.height()-40, 27, color_copyright, FT81x_OPT_CENTER, b);
+  ft.drawText(112, ft.height()-20, 27, color_copyright, FT81x_OPT_CENTER, "(c) 2024 andykarpov\0");
+  sprintf(b, "Page %d of %d\0", core_page, core_pages);
+  ft.drawText(ft.width()/2, ft.height()-40, 27, color_copyright, FT81x_OPT_CENTER, b);
 
-
-  if (play_sounds == 1) {
-      ft.playSound();
-  } else if (play_sounds == 2) {
-    ft.playAudio(LOGO_BITMAP_SIZE + BURATO3_BITMAP_SIZE, KEY_SIZE, 22050, FT81x_AUDIO_FORMAT_ULAW, false);
+  if (autoload_enabled) {
+    uint32_t diff = (autoload_timer.elapsed() < autoload_countdown * 1000) ? ceil((autoload_countdown * 1000 - autoload_timer.elapsed())/1000) : 0;
+    sprintf(b, "Autoloading core in %d s\0", diff);
+    ft.drawText(ft.width()/2, ft.height()-20, 27, color_copyright, FT81x_OPT_CENTER, b);
+  } else {
+    sprintf(b, "Autoload disabled\0");
+    ft.drawText(ft.width()/2, ft.height()-20, 27, color_copyright, FT81x_OPT_CENTER, b);
   }
 
-  ft.drawBitmap(0, 8, 8, 56, 16, 4, 0); 
-  ft.overlayBitmap(LOGO_BITMAP_SIZE, 640-200, 480-143, 200, 143, 1, 0);
-  //ft.overlayBitmap(LOGO_BITMAP_SIZE, 640-160-8, 480-200-8, 160, 200, 1, 0);
+  if (hw_setup.ft_time) {
+    char time[9];
+    sprintf(time, "%02d:%02d:%02d\0", zxrtc.getHour(), zxrtc.getMinute(), zxrtc.getSecond());
+    ft.drawText(ft.width()-88, 30, 30, color_text, FT81x_OPT_CENTER, time);
+  }
+  if (hw_setup.ft_date) {
+    char date[9];
+    sprintf(date, "%02d/%02d/%02d\0", zxrtc.getDay(), zxrtc.getMonth(), zxrtc.getYear() % 100);
+    ft.drawText(ft.width()-88, 60, 30, color_text, FT81x_OPT_CENTER, date);
+  }
 
-  /*uint16_t h = (uint16_t) (zxrtc.getHour() % 12);
-  uint16_t m = (uint16_t) (zxrtc.getMinute() % 60);
-  uint16_t s = (uint16_t) (zxrtc.getSecond() % 60);
-  ft.drawClock(640 - 80-8, 80+8, 80, FT81x_COLOR_RGB(255,255,255), FT81x_COLOR_RGB(1,1,1), FT81x_OPT_NOBACK | FT81x_OPT_FLAT, h, m, s);*/
+  if (play_sounds == 1 && hw_setup.ft_click) {
+      ft.playSound();
+  } else if (play_sounds == 2 && hw_setup.ft_sound > 0) {
+    uint32_t key_size, key_samplerate, key_duration, key_offset;
+    switch (hw_setup.ft_sound) {
+      case 1:
+        key_size = KEY1_SIZE;
+        key_samplerate = KEY1_SAMPLERATE;
+        key_duration = KEY1_DURATION;
+        key_offset = KEY1_OFFSET;
+        break;
+      case 2:
+        key_size = KEY2_SIZE;
+        key_samplerate = KEY2_SAMPLERATE;
+        key_duration = KEY2_DURATION;
+        key_offset = KEY2_OFFSET;
+        break;
+      case 3:
+        key_size = KEY3_SIZE;
+        key_samplerate = KEY3_SAMPLERATE;
+        key_duration = KEY3_DURATION;
+        key_offset = KEY3_OFFSET;
+        break;
+      case 4:
+        key_size = KEY4_SIZE;
+        key_samplerate = KEY4_SAMPLERATE;
+        key_duration = KEY4_DURATION;
+        key_offset = KEY4_OFFSET;
+        break;
+      default:
+        key_size = KEY1_SIZE;
+        key_samplerate = KEY1_SAMPLERATE;
+        key_duration = KEY1_DURATION;
+    }
+    ft.playAudio(key_offset, key_size, key_samplerate, FT81x_AUDIO_FORMAT_ULAW, false);
+    delay(key_duration);
+    ft.stopSound();
+  }
+
+  ft.drawBitmap(0, 8, 8, LOGO_WIDTH, LOGO_HEIGHT, 4, 0);  // logo scaled 4x
+  if (hw_setup.ft_char) {
+    ft.overlayBitmap(LOGO_BITMAP_SIZE, ft.width()-BG_WIDTH-8, ft.height()-BG_HEIGHT-8, BG_WIDTH, BG_HEIGHT, 1, 0); // bg image
+  }
 
   ft.swapScreen();
 }
@@ -150,6 +208,7 @@ core_list_item_t app_core_browser_get_item(bool is_flash) {
     file1.getName(core.filename, sizeof(core.filename));
     core.flash = false;
   }
+  file_seek(FILE_POS_CORE_ID, is_flash); file_read_bytes(core.id, 32, is_flash); core.id[32] = '\0';
   file_seek(FILE_POS_CORE_NAME, is_flash); file_read_bytes(core.name, 32, is_flash); core.name[32] = '\0';
   uint8_t visible; file_seek(FILE_POS_CORE_VISIBLE, is_flash); visible = file_read(is_flash); core.visible = (visible > 0);
   file_seek(FILE_POS_CORE_ORDER, is_flash); core.order = file_read(is_flash);
@@ -180,7 +239,9 @@ void app_core_browser_read_list() {
 
   // files from sd card
   if (has_sd) {
-    sd1.chvol();
+    if (root1.isOpen()) {
+      root1.close();
+    }
     if (!root1.open(&sd1, "/")) {
       return;
     }
@@ -197,13 +258,32 @@ void app_core_browser_read_list() {
   }
   // sort by core order number
   std::sort(cores, cores + cores_len);
-  // TODO
+  
+  autoload_enabled = false;
+  // pre-select autoload core
+  for (uint8_t i=0; i<cores_len; i++) {
+    String s1 = String(hw_setup.autoload_core);
+    String s2 = String(cores[i].id);
+    s1.trim();
+    s2.trim();
+//    d_println(s1);
+//    d_println(s2);
+//    d_println(hw_setup.autoload_enabled);
+    if (!autoload_enabled && hw_setup.autoload_enabled && s2.equals(s1)) {
+      autoload_enabled = true;
+      autoload_countdown = hw_setup.autoload_timeout;
+      core_sel = i;
+      autoload_timer.reset();
+    }
+  }
+
 }
 
 void app_core_browser_on_keyboard() {
-          if (cores_len > 0) {
+      if (cores_len > 0) {
         // down
         if (usb_keyboard_report.keycode[0] == KEY_DOWN || (joyL & SC_BTN_DOWN) || (joyR & SC_BTN_DOWN)) {
+          autoload_enabled = false;
           if (core_sel < cores_len-1) {
             core_sel++;
           } else {
@@ -213,6 +293,7 @@ void app_core_browser_on_keyboard() {
 
         // up
         if (usb_keyboard_report.keycode[0] == KEY_UP  || (joyL & SC_BTN_UP) || (joyR & SC_BTN_UP)) {
+          autoload_enabled = false;
           if (core_sel > 0) {
             core_sel--;
           } else {
@@ -222,6 +303,7 @@ void app_core_browser_on_keyboard() {
 
         // right
         if (usb_keyboard_report.keycode[0] == KEY_RIGHT || (joyL & SC_BTN_RIGHT) || (joyR & SC_BTN_RIGHT)) {
+          autoload_enabled = false;
           if (core_sel + core_page_size <= cores_len-1) {
             core_sel += core_page_size;
           } else {
@@ -231,6 +313,7 @@ void app_core_browser_on_keyboard() {
 
         // left
         if (usb_keyboard_report.keycode[0] == KEY_LEFT || (joyL & SC_BTN_LEFT) || (joyR & SC_BTN_LEFT)) {
+          autoload_enabled = false;
           if (core_sel - core_page_size >= 0) {
             core_sel -= core_page_size;
           } else {
@@ -240,9 +323,9 @@ void app_core_browser_on_keyboard() {
         
         // enter
         if (usb_keyboard_report.keycode[0] == KEY_ENTER || (joyL & SC_BTN_A) || (joyR & SC_BTN_A) || (joyL & SC_BTN_B) || (joyR & SC_BTN_B)) {
-          if (FT_OSD == 1 && has_ft == true) {
+          autoload_enabled = false;
+          if (hw_setup.ft_enabled && has_ft == true) {
             app_core_browser_ft_menu(2); // play wav
-            delay(500);
           }
           d_printf("Selected core %s to boot from menu", cores[core_sel].filename); d_println();
           String f = String(cores[core_sel].filename); f.trim(); 
@@ -257,9 +340,21 @@ void app_core_browser_on_keyboard() {
           }
         }
 
+        if (usb_keyboard_report.keycode[0] == KEY_V && hw_setup.debug_enabled && hw_setup.ft_enabled && has_ft) {
+          autoload_enabled = false;
+          uint8_t old_vmode = hw_setup.ft_video_mode;
+          hw_setup.ft_video_mode++;
+          if (hw_setup.ft_video_mode > 14) {
+            hw_setup.ft_video_mode = 0;
+          }
+          d_printf("Changing video mode from %d to %d", old_vmode, hw_setup.ft_video_mode); d_println();
+          ft.init(hw_setup.ft_video_mode);
+          app_core_browser_ft_overlay();
+        }
+
         // redraw core browser on keypress
         if (osd_state == state_core_browser) {
-          if (FT_OSD == 1 && has_ft == true) {
+          if (hw_setup.ft_enabled && has_ft == true) {
             app_core_browser_ft_menu(1);
           } else {
             app_core_browser_menu(APP_COREBROWSER_MENU_OFFSET);
@@ -268,12 +363,30 @@ void app_core_browser_on_keyboard() {
       }
 
       // return back to classic osd
-      if (usb_keyboard_report.keycode[0] == KEY_SPACE && has_ft == true && FT_OSD == 1) {
+      if (usb_keyboard_report.keycode[0] == KEY_SPACE && has_ft == true && hw_setup.ft_enabled) {
         has_ft = false;
         ft.vga(false);
         ft.spi(false);
         app_core_browser_overlay();
       }
+}
+
+void app_core_browser_on_time() {
+  if (autoload_enabled) {
+    if (autoload_timer.elapsed() > autoload_countdown * 1000) {
+      autoload_enabled = false;
+      String f = String(cores[core_sel].filename); f.trim(); 
+      char buf[32]; f.toCharArray(buf, sizeof(buf));
+      has_ft = false;
+      do_configure(buf);
+      switch (core.type) {
+        case CORE_TYPE_BOOT: osd_state = state_core_browser; break;
+        case CORE_TYPE_OSD: osd_state = state_main; break;
+        case CORE_TYPE_FILELOADER: osd_state = state_file_loader; break;
+        default: osd_state = state_main;
+      }
+    }
+  }
 }
 
 bool operator<(const core_list_item_t a, const core_list_item_t b) {

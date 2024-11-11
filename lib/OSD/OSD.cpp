@@ -128,6 +128,21 @@ void OSD::frame(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, uint8_t thicknes
     }
 }
 
+void OSD::progress(uint8_t x, uint8_t y, uint8_t size, uint32_t val, uint32_t max)
+{
+  setPos(x,y);
+  // fill with 0xfe (small square)
+  uint8_t v = map(val, 0, max, 0, size);
+  for (uint8_t i=0; i<v; i++) {
+    write(0xfe);
+  }
+  // fill empty space
+  for (uint8_t i=v; i<size; i++) {
+    write(0x00);
+  }
+}
+
+
 /****************************************************************************/
 
 size_t OSD::write(uint8_t chr)
