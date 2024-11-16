@@ -14,7 +14,8 @@
 
 uint8_t curr_osd_item;
 bool is_filebrowser = false;
-bool is_filebrowser_init = false;
+int filebrowser_slot = -1;
+int prev_filebrowser_slot = -1;
 bool prev_is_filebrowser = false;
 
 uint8_t find_first_item() {
@@ -405,10 +406,10 @@ void app_core_on_keyboard() {
       zxosd.fill(0, APP_COREBROWSER_MENU_OFFSET, 31, APP_COREBROWSER_MENU_OFFSET + 16, ' ');
     }
     if (is_filebrowser) {
-      if (!is_filebrowser_init) {
-        is_filebrowser_init = app_core_init_filebrowser();
+      if (filebrowser_slot == -1 || filebrowser_slot != core.osd[curr_osd_item].slot_id) {
+        filebrowser_slot = app_core_init_filebrowser();
       }
-      if (is_filebrowser_init) {
+      if (filebrowser_slot != -1) {
         app_core_filebrowser(APP_COREBROWSER_MENU_OFFSET);
       } else {
         is_filebrowser = false;
@@ -425,9 +426,9 @@ void app_core_on_keyboard() {
   }
 }
 
-bool app_core_init_filebrowser() {
+int app_core_init_filebrowser() {
 
-  if (!has_sd) return false;
+  if (!has_sd) return -1;
 
   // working dir
   String dir = String(file_slots[core.osd[curr_osd_item].slot_id].dir);
@@ -442,12 +443,20 @@ bool app_core_init_filebrowser() {
     root1.close();
   }
   root1 = sd1.open(dir);
+  d_print("Open dir "); d_print(dir); d_println();
+
+  if (file1.isOpen()) {
+    file1.close();
+  }
 
   d_println("Read file list");
   root1.rewind();
   files_len = 0;
   file_sel = 0;
   memset(files, 0, sizeof(files));
+  memset(cached_names, 0, sizeof(cached_names));
+  cached_file_from = 0;
+  cached_file_to = 0;
 
   // add root entry
   files[files_len].file_id = 0;
@@ -480,6 +489,8 @@ bool app_core_init_filebrowser() {
     file1.close();
   }
 
+  d_print("Files count "); d_print(files_len); d_println();
+
   std::sort(files, files + files_len);
 
   // preselect file in browser after sorting
@@ -489,7 +500,7 @@ bool app_core_init_filebrowser() {
     }
   }
 
-  return true;
+  return core.osd[curr_osd_item].slot_id;
 }
 
 void app_core_filebrowser(uint8_t vpos) {
@@ -501,6 +512,13 @@ void app_core_filebrowser(uint8_t vpos) {
   uint16_t file_fill = file_page*file_page_size;
   uint16_t pos = vpos;
   uint16_t j = 0;
+
+  if (root1.isOpen()){
+    root1.close();
+  }
+
+  String dir = String(file_slots[core.osd[curr_osd_item].slot_id].dir);
+  root1 = sd1.open(dir);
 
   if (files_len > 0) {
     for(uint16_t i=file_from; i < file_to; i++) {
@@ -559,7 +577,6 @@ void app_core_filebrowser(uint8_t vpos) {
   zxosd.line(21);
   zxosd.fill(0, vpos + file_page_size + 1, 31, vpos + file_page_size + 1, ' ');
   zxosd.setPos(8, vpos + file_page_size + 1); 
-  String dir = String(file_slots[core.osd[curr_osd_item].slot_id].dir);
   dir = dir.substring(0, 20);
   zxosd.print("Dir "); zxosd.print(dir);
   // display pager
