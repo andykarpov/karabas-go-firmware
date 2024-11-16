@@ -258,7 +258,6 @@ void app_core_on_keyboard() {
         }
         String hash = String(files[file_sel].hash);
         hash.trim();
-        d_print("Hash "); d_print(hash); d_println();
         // goto root (.)
         if (files[file_sel].file_id == 0 && hash == ".") {
           String dir = "/";
@@ -279,10 +278,9 @@ void app_core_on_keyboard() {
           String dir = String(file_slots[core.osd[curr_osd_item].slot_id].dir);
           String f = "";
           f.toCharArray(file_slots[core.osd[curr_osd_item].slot_id].filename, sizeof(file_slots[core.osd[curr_osd_item].slot_id].filename));
-          d_print("Dir "); d_print(dir); d_println();
           dir = dir.substring(0, dir.lastIndexOf("/"));
           dir.replace("//", "/");
-          d_print("New dir "); d_print(dir); d_println();
+          d_print("Enter directory "); d_print(dir); d_println();
           dir.toCharArray(file_slots[core.osd[curr_osd_item].slot_id].dir, sizeof(file_slots[core.osd[curr_osd_item].slot_id].dir));
           // re-read files from parent dir
           file_sel = 0;
@@ -315,9 +313,9 @@ void app_core_on_keyboard() {
           }
           // file selection (if ext matches)
           else {
-            d_printf("Selecting file %d", files[file_sel].file_id); d_println();
+            d_printf("Selecting file id %d", files[file_sel].file_id); d_println();
             char filename[255];
-            file1.getName(filename, sizeof(filename));
+            file1.getSFN(filename, sizeof(filename));
             d_printf("Filename %s", filename);
             // check file ext match
             String exts = String(file_slots[core.osd[curr_osd_item].slot_id].ext);
@@ -463,18 +461,33 @@ bool app_core_init_filebrowser() {
     files_len++;
   }
 
+  uint16_t presel_id = 0;
   while (file1.openNext(&root1, O_RDONLY)) {
     char filename[14]; file1.getSFN(filename, sizeof(filename));
-    uint8_t len = strlen(filename);
+    uint8_t len = strlen(filename);  
     if (files_len < SORT_FILES_MAX) {
       memcpy(files[files_len].hash, filename, SORT_HASH_LEN);
       files[files_len].file_id = file1.dirIndex();
+      String core_f = String(file_slots[core.osd[curr_osd_item].slot_id].filename);
+      String f = String(filename);
+      core_f.toLowerCase();
+      f.toLowerCase();
+      if (core_f.length() > 0 && core_f.indexOf(f) == 0) {
+        presel_id = files[files_len].file_id;
+      }
       files_len++;
     }
     file1.close();
   }
 
   std::sort(files, files + files_len);
+
+  // preselect file in browser after sorting
+  for (uint16_t i=0; i<files_len; i++) {
+    if (presel_id == files[i].file_id) {
+      file_sel = i;
+    }
+  }
 
   return true;
 }
