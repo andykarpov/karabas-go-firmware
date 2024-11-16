@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <tuple>
 #include "app_core_browser.h"
+#include "sorts.h"
 
 core_list_item_t cores[MAX_CORES];
 uint8_t cores_len = 0;
@@ -388,8 +389,3 @@ void app_core_browser_on_time() {
     }
   }
 }
-
-bool operator<(const core_list_item_t a, const core_list_item_t b) {
-  return a.order < b.order;
-}
-

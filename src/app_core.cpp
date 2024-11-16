@@ -1,24 +1,21 @@
 #include <Arduino.h>
 #include "types.h"
 #include "config.h"
-#include "main.h"
 #include "OSD.h"
 #include "usb_hid_keys.h"
 #include "SegaController.h"
 #include "SdFat.h"
 #include "LittleFS.h"
 #include "app_core.h"
+#include <SPI.h>
+#include <algorithm>
+#include <tuple>
+#include "sorts.h"
 
 uint8_t curr_osd_item;
 bool is_filebrowser = false;
+bool is_filebrowser_init = false;
 bool prev_is_filebrowser = false;
-
-uint8_t filebrowser_len = 0;
-uint8_t filebrowser_sel = 0;
-uint8_t filebrowser_offset = 0;
-uint8_t filebrowser_special = 0;
-uint8_t filebrowser_total = 0;
-core_filebrowser_item_t filebrowser_files[16];
 
 uint8_t find_first_item() {
   if (core.osd_len > 0) {
@@ -125,10 +122,13 @@ void app_core_menu(uint8_t vpos) {
         if (file_slots[core.osd[i].slot_id].is_mounted) {
           option = String(file_slots[core.osd[i].slot_id].filename);
         } else {
-          option = String("Choose... ");
+          option = String("-NO IMAGE-");
         }
       } else {
         option = String(core.osd[i].options[core.osd[i].val].name);
+        while (option.length() < 10) {
+          option = option + " ";
+        }
       }
       zxosd.setPos(11, i+vpos);
       if (curr_osd_item == i) {
@@ -149,6 +149,9 @@ void app_core_menu(uint8_t vpos) {
       }
     }
   }
+  if (core.osd_len <= 19) zxosd.fill(0, 23, 31, 23, ' ');
+  if (core.osd_len <= 18) zxosd.fill(0, 22, 31, 22, ' ');
+  if (core.osd_len <= 17) zxosd.fill(0, 21, 31, 21, ' ');
 }
 
 void app_core_save(uint8_t pos)
@@ -170,7 +173,10 @@ void app_core_save(uint8_t pos)
     ffile.close();
   } else {
     sd1.chvol();
-    if (!file1.open(core.filename, FILE_WRITE)) {
+    if (file1.isOpen()) {
+      file1.close();
+    }
+    if (!file1.open(&sd1, core.filename, FILE_WRITE)) {
       d_println("Unable to open bitstream file to write");
       return;
     }  
@@ -198,16 +204,11 @@ void app_core_on_keyboard() {
 
     // down
     if (usb_keyboard_report.keycode[0] == KEY_DOWN || (joyL & SC_BTN_DOWN) || (joyR & SC_BTN_DOWN)) {
-      if (filebrowser_len > 0) {
-        if (filebrowser_sel < filebrowser_len-1) {
-          filebrowser_sel++;
-          //d_printf("New sel: %d", filebrowser_sel); d_println();
+      if (files_len > 0) {
+        if (file_sel < files_len-1) {
+          file_sel++;
         } else {
-          //filebrowser_sel = 0;
-          if (filebrowser_total > 16 && filebrowser_offset < filebrowser_total-1) {
-            filebrowser_offset++;
-            //d_printf("New offset: %d", filebrowser_offset); d_println();
-          }
+          file_sel = 0;
         }
       }
       need_redraw = true;
@@ -215,73 +216,123 @@ void app_core_on_keyboard() {
 
     // up
     if (usb_keyboard_report.keycode[0] == KEY_UP || (joyL & SC_BTN_UP) || (joyR & SC_BTN_UP)) {
-      if (filebrowser_sel > 0) {
-        filebrowser_sel--;
-        //d_printf("New sel: %d", filebrowser_sel); d_println();
+      if (file_sel > 0) {
+        file_sel--;
       } else {
-        if (filebrowser_offset > 0) filebrowser_offset--;
-        //d_printf("New offset: %d", filebrowser_offset); d_println();
-        //filebrowser_sel = filebrowser_len-1;
+        file_sel = files_len-1;
+      }
+      need_redraw = true;
+    }
+
+    // right
+    if (usb_keyboard_report.keycode[0] == KEY_RIGHT || (joyL & SC_BTN_RIGHT) || (joyR & SC_BTN_RIGHT)) {
+      if (file_sel + file_page_size <= files_len-1) {
+        file_sel += file_page_size;
+      } else {
+        file_sel = files_len-1;
+      }
+      need_redraw = true;
+    }
+
+    // left
+    if (usb_keyboard_report.keycode[0] == KEY_LEFT || (joyL & SC_BTN_LEFT) || (joyR & SC_BTN_LEFT)) {
+      if (file_sel - file_page_size >= 0) {
+        file_sel -= file_page_size;
+      } else {
+        file_sel = 0;
       }
       need_redraw = true;
     }
 
     // enter
     if (usb_keyboard_report.keycode[0] == KEY_ENTER || (joyL & SC_BTN_B) || (joyR & SC_BTN_B) ) {
-      // todo: if dir - enter dir ?
-      // todo: if not dir - save selection, mount and close
-      if (filebrowser_len > 0) {
-        if (filebrowser_files[filebrowser_sel].is_dir) {
-          // enter directory
-          //d_printf("Enter %s dir", filebrowser_files[filebrowser_sel].dir); d_println();
-          strcpy(file_slots[core.osd[curr_osd_item].slot_id].dir, filebrowser_files[filebrowser_sel].dir);
-          filebrowser_offset = 0;
-          filebrowser_sel = 0;
-        } else {
-          d_printf("Selecting file %s / %s", filebrowser_files[filebrowser_sel].dir, filebrowser_files[filebrowser_sel].filename); d_println();
-          is_filebrowser = false;
-          strcpy(file_slots[core.osd[curr_osd_item].slot_id].dir, filebrowser_files[filebrowser_sel].dir);
-          strcpy(file_slots[core.osd[curr_osd_item].slot_id].filename, filebrowser_files[filebrowser_sel].filename);
-          file_slots[core.osd[curr_osd_item].slot_id].is_mounted = true;
-          // todo: update core with selection
-          core.osd_need_save = true;
-
-          if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILELOADER) {
-            // send ioctl slot id, file data for file loader type
-            spi_send(CMD_IOCTL_SLOT, 0, core.osd[curr_osd_item].slot_id);
-
-            uint64_t fsize = 0;
-            spi_send64(CMD_IOCTL_SIZE, fsize);
-            String fname = String(file_slots[core.osd[curr_osd_item].slot_id].dir) + "/" + String(file_slots[core.osd[curr_osd_item].slot_id].filename);
-            File32 file = sd1.open(fname);
-            fsize = file.size();
-            spi_send64(CMD_IOCTL_SIZE, fsize);
-
-            String ext = fname.substring(fname.lastIndexOf('.')+1);
-            for(uint8_t i = 0; i<ext.length(); i++) {
-              spi_send(CMD_IOCTL_EXT, i, ext.charAt(i));
-            }
-
-            for(uint64_t i = 0; i < fsize; i++) {
-              if (i % 256 == 0) {
-                spi_send24(CMD_IOCTL_BANK, i >> 8);
-              }
-              uint8_t data = file.read();
-              spi_send(CMD_IOCTL_DATA, (uint8_t)((i & 0x00000000000000FF)), data);
-            }
-            file.close();
-          } else if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER) {
-            // send img slot id, size for file mounter type
-            spi_send(CMD_IMG_SLOT, 0, core.osd[curr_osd_item].slot_id);
-            uint64_t fsize = 0;
-            spi_send64(CMD_IMG_SIZE, fsize);
-            String fname = String(file_slots[core.osd[curr_osd_item].slot_id].dir) + "/" + String(file_slots[core.osd[curr_osd_item].slot_id].filename);
-            File32 file = sd1.open(fname);
-            fsize = file.size();
-            spi_send64(CMD_IMG_SIZE, fsize);
-            file.close();
-          }
+      if (files_len > 0) {
+        if (file1.isOpen()) {
+          file1.close();
         }
+        String hash = String(files[file_sel].hash);
+        hash.trim();
+        d_print("Hash "); d_print(hash); d_println();
+        // goto root (.)
+        if (files[file_sel].file_id == 0 && hash == ".") {
+          String dir = "/";
+          String f = "";
+          dir.toCharArray(file_slots[core.osd[curr_osd_item].slot_id].dir, sizeof(file_slots[core.osd[curr_osd_item].slot_id].dir));
+          f.toCharArray(file_slots[core.osd[curr_osd_item].slot_id].filename, sizeof(file_slots[core.osd[curr_osd_item].slot_id].filename));
+          // re-read files from root
+          file_sel = 0;
+          cached_file_from = 0;
+          cached_file_to = 0;
+          file_slots[core.osd[curr_osd_item].slot_id].is_mounted = false;
+          app_core_init_filebrowser();
+          app_core_filebrowser(APP_COREBROWSER_MENU_OFFSET);
+          return;
+        }
+        // goto parent (..)
+        else if (files[file_sel].file_id == 0 && hash == "..") {
+          String dir = String(file_slots[core.osd[curr_osd_item].slot_id].dir);
+          String f = "";
+          f.toCharArray(file_slots[core.osd[curr_osd_item].slot_id].filename, sizeof(file_slots[core.osd[curr_osd_item].slot_id].filename));
+          d_print("Dir "); d_print(dir); d_println();
+          dir = dir.substring(0, dir.lastIndexOf("/"));
+          dir.replace("//", "/");
+          d_print("New dir "); d_print(dir); d_println();
+          dir.toCharArray(file_slots[core.osd[curr_osd_item].slot_id].dir, sizeof(file_slots[core.osd[curr_osd_item].slot_id].dir));
+          // re-read files from parent dir
+          file_sel = 0;
+          cached_file_from = 0;
+          cached_file_to = 0;
+          file_slots[core.osd[curr_osd_item].slot_id].is_mounted = false;
+          app_core_init_filebrowser();
+          app_core_filebrowser(APP_COREBROWSER_MENU_OFFSET);
+          return;
+        }
+        // open file / dir
+        else if (file1.open(&root1, files[file_sel].file_id)) {
+          // goto new dir name
+          if (file1.isDir()) {
+            char dirname[255];
+            file1.getName(dirname, sizeof(dirname));
+            String dir = String(file_slots[core.osd[curr_osd_item].slot_id].dir) + "/" + String(dirname);
+            dir.replace("//", "/");
+            String f = "";
+            dir.toCharArray(file_slots[core.osd[curr_osd_item].slot_id].dir, sizeof(file_slots[core.osd[curr_osd_item].slot_id].dir));
+            f.toCharArray(file_slots[core.osd[curr_osd_item].slot_id].filename, sizeof(file_slots[core.osd[curr_osd_item].slot_id].filename));
+            file_sel = 0;
+            cached_file_from = 0;
+            cached_file_to = 0;
+            file1.close();
+            file_slots[core.osd[curr_osd_item].slot_id].is_mounted = false;
+            app_core_init_filebrowser();
+            app_core_filebrowser(APP_COREBROWSER_MENU_OFFSET);
+            return;
+          }
+          // file selection (if ext matches)
+          else {
+            d_printf("Selecting file %d", files[file_sel].file_id); d_println();
+            is_filebrowser = false;
+            char filename[255];
+            file1.getName(filename, sizeof(filename));
+            d_printf("Filename %s", filename);
+            // check file ext match
+            String exts = String(file_slots[core.osd[curr_osd_item].slot_id].ext);
+            exts.toLowerCase(); exts.trim();
+            char e[33];
+            exts.toCharArray(e, 32);
+            uint8_t len = strlen(filename);
+            if (exts.length() == 0 || exts.indexOf(strlwr(filename + (len - 4))) != -1) {
+              strcpy(file_slots[core.osd[curr_osd_item].slot_id].filename, filename);
+              file_slots[core.osd[curr_osd_item].slot_id].is_mounted = true;
+              app_core_on_select_file();
+            } else {
+              d_println("File extension does not match");
+              file_slots[core.osd[curr_osd_item].slot_id].is_mounted = false;
+            }
+          }
+          file1.close();
+        }
+
+        core.osd_need_save = true;
       }
       need_redraw = true;
     }
@@ -350,7 +401,16 @@ void app_core_on_keyboard() {
       zxosd.fill(0, APP_COREBROWSER_MENU_OFFSET, 31, APP_COREBROWSER_MENU_OFFSET + 16, ' ');
     }
     if (is_filebrowser) {
-      app_core_filebrowser(APP_COREBROWSER_MENU_OFFSET);
+      if (!is_filebrowser_init) {
+        is_filebrowser_init = app_core_init_filebrowser();
+      }
+      if (is_filebrowser_init) {
+        app_core_filebrowser(APP_COREBROWSER_MENU_OFFSET);
+      } else {
+        is_filebrowser = false;
+        prev_is_filebrowser = false;
+        app_core_menu(APP_COREBROWSER_MENU_OFFSET);
+      }
     } else {
       app_core_menu(APP_COREBROWSER_MENU_OFFSET);
     }
@@ -361,118 +421,186 @@ void app_core_on_keyboard() {
   }
 }
 
-void app_core_filebrowser_add_entity(const char* dir, const char* name, const char* filename, bool is_dir)
-{
-  //d_printf("Entity %d:  %s / %s / %d", filebrowser_len, dir, filename, is_dir); d_println();
-  core_filebrowser_item_t entity;
-  entity.is_dir = is_dir;
-  strcpy(entity.dir, dir);
-  strcpy(entity.name, name);
-  strcpy(entity.filename, filename);
-  filebrowser_files[filebrowser_len] = entity;
-  filebrowser_len++;
-}
+bool app_core_init_filebrowser() {
 
-void app_core_filebrowser(uint8_t vpos) {
-  // todo:
-  zxosd.setPos(0, vpos);
-  zxosd.setColor(OSD::COLOR_YELLOW_I, OSD::COLOR_BLACK);
-  zxosd.print("Please choose a file to mount:");
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.line(vpos+1);
+  if (!has_sd) return false;
 
+  // working dir
   String dir = String(file_slots[core.osd[curr_osd_item].slot_id].dir);
   if (dir == "") { dir = "/"; }
   if (dir.charAt(0) != '/') { dir = '/' + dir; }
   dir.toCharArray(file_slots[core.osd[curr_osd_item].slot_id].dir, sizeof(file_slots[core.osd[curr_osd_item].slot_id].dir));
   String sfilename = String( file_slots[core.osd[curr_osd_item].slot_id].filename);
   String sfullname = dir + "/" + sfilename;
+  sd1.chdir(dir);
 
-  filebrowser_len = 0;
-  filebrowser_special = 0;
-  if (filebrowser_offset == 0) {
-    filebrowser_special++;
-    app_core_filebrowser_add_entity("/", ".", "", true);
+  if (root1.isOpen()) {
+    root1.close();
+  }
+  root1 = sd1.open(dir);
+
+  d_println("Read file list");
+  root1.rewind();
+  files_len = 0;
+  file_sel = 0;
+  memset(files, 0, sizeof(files));
+
+  // add root entry
+  files[files_len].file_id = 0;
+  String s = String("."); s.toCharArray(files[files_len].hash, sizeof(files[files_len].hash));
+  files_len++;
+
+  // add parent dir entry
+  if (dir.length() > 1) {
+    files[files_len].file_id = 0;
+    String s = String(".."); s.toCharArray(files[files_len].hash, sizeof(files[files_len].hash));
+    files_len++;
   }
 
-  if (sd1.exists(dir) && dir != "/") {
-    sd1.chdir(dir);
-    if (filebrowser_offset < 2) {
-      filebrowser_special++;
-      uint8_t idx = dir.lastIndexOf("/");
-      String parent = dir.substring(0, idx);
-      if (parent == "") parent = "/";
-      char prnt[256];
-      parent.toCharArray(prnt, sizeof(prnt));
-      app_core_filebrowser_add_entity(prnt, "..", "", true);
+  while (file1.openNext(&root1, O_RDONLY)) {
+    char filename[14]; file1.getSFN(filename, sizeof(filename));
+    uint8_t len = strlen(filename);
+    if (files_len < SORT_FILES_MAX) {
+      memcpy(files[files_len].hash, filename, SORT_HASH_LEN);
+      files[files_len].file_id = file1.dirIndex();
+      files_len++;
     }
-  } else {
-    dir = "/";
-    sd1.chdir(dir);
+    file1.close();
   }
 
-  //d_printf("Offset: %d", filebrowser_offset); d_println();
-  //d_printf("Special: %d", filebrowser_special); d_println();
+  std::sort(files, files + files_len);
 
-  File32 root;
-  File32 file;
-  if (root.isOpen()) {
-    root.close();
-  }
-  root = sd1.open(dir);
-  uint8_t index = 0;
-  if (root) {
-    root.rewind();
-    while (file.openNext(&root, O_RDONLY)) {
-      if (index >= filebrowser_offset && index < filebrowser_offset + 16 - filebrowser_special) {
-        char d[256];
-        char name[32];
-        char filename[256];
-        dir.toCharArray(d, sizeof(d));
-        file.getName(name, sizeof(name));
-        file.getName(filename, sizeof(filename));
-        if (file.isDir()) {
-          char nd[256];
-          String new_dir = dir + ((dir != "/") ? "/" : "") + filename;
-          new_dir.toCharArray(nd, sizeof(nd));
-          app_core_filebrowser_add_entity(nd, name, "", file.isDir());
-        } else {
-          app_core_filebrowser_add_entity(d, name, filename, file.isDir());
-        }
-      }
-      file.close();
-      index++;
-    }
-  }
-  filebrowser_total = index;
-  //d_printf("Total filebrowser len %d", filebrowser_len); d_println();
+  return true;
+}
 
-  if (filebrowser_len > 0) {
-    for (uint8_t i=0; i<filebrowser_len; i++) {
-      if (filebrowser_sel == i) {
+void app_core_filebrowser(uint8_t vpos) {
+  // todo: draw files
+  file_pages = ceil((float)files_len / file_page_size);
+  file_page = ceil((float)(file_sel+1)/file_page_size);
+  uint16_t file_from = (file_page-1)*file_page_size;
+  uint16_t file_to = file_page*file_page_size > files_len ? files_len : file_page*file_page_size;
+  uint16_t file_fill = file_page*file_page_size;
+  uint16_t pos = vpos;
+  uint16_t j = 0;
+
+  if (files_len > 0) {
+    for(uint16_t i=file_from; i < file_to; i++) {
+      zxosd.setPos(0, pos);
+      if (file_sel == i) {
         zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLUE);
       } else {
         zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
       }
-      zxosd.setPos(0, vpos + 2 + i);
-      zxosd.print(filebrowser_files[i].name);
-      uint8_t name_len = strlen(filebrowser_files[i].name);
-      if (name_len < 32) {
-        for (uint8_t j=0; j<32-name_len; j++) {
+      // display 32 chars
+      char name[33]; 
+
+      if (cached_file_from == file_from && cached_file_to == file_to) {
+        memcpy(name, cached_names[j].name, sizeof(name));
+      } else {
+        String h = String(files[i].hash);
+        if (files[i].file_id == 0 && (h == "." || h == "..")) {
+          h.toCharArray(name, sizeof(name));
+          h.toCharArray(cached_names[j].name, sizeof(cached_names[j].name));
+        }
+        else if (file1.open(&root1, files[i].file_id)) {
+          char filename[255];
+          file1.getName(filename, sizeof(filename));
+          String f(filename);
+          f.trim();
+          f.toCharArray(name, sizeof(name));
+          f.toCharArray(cached_names[j].name, sizeof(cached_names[j].name));
+          file1.close();
+        }
+      }
+
+      zxosd.print(name);
+      // fill name with spaces
+      uint8_t l = strlen(name);
+      if (l < 32) {
+        for (uint8_t ll=l; ll<32; ll++) {
           zxosd.print(" ");
         }
       }
+      pos++;
+      j++;
     }
+    cached_file_from = file_from;
+    cached_file_to = file_to;
   }
-
-  // fill the space
-  if (filebrowser_len < 16) {
-    zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-    for (uint8_t i=filebrowser_len; i<16; i++) {
-      zxosd.setPos(0, vpos + 2 + i);
-      for (uint8_t j=0; j<32; j++) {
+  if (file_fill > file_to) {
+    for (uint16_t i=file_to; i<file_fill; i++) {
+      zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+      for (uint16_t j=0; j<32; j++) {
         zxosd.print(" ");
       }
     }
+  }
+  // display current dir
+  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+  zxosd.line(21);
+  zxosd.fill(0, vpos + file_page_size + 1, 31, vpos + file_page_size + 1, ' ');
+  zxosd.setPos(8, vpos + file_page_size + 1); 
+  String dir = String(file_slots[core.osd[curr_osd_item].slot_id].dir);
+  dir = dir.substring(0, 20);
+  zxosd.print("Dir "); zxosd.print(dir);
+  // display pager
+  zxosd.setPos(8, vpos + file_page_size + 2); zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+  zxosd.printf("Page %03d of %03d", file_page, file_pages);
+
+}
+
+void app_core_on_select_file() {
+  if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILELOADER) {
+
+    zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+    zxosd.frame(8,8,24,12, 1);
+    zxosd.fill(9,9,23,11, 32);
+    zxosd.setColor(OSD::COLOR_YELLOW_I, OSD::COLOR_BLACK);
+    zxosd.setPos(9, 9);
+    zxosd.print("Loading...     ");
+    zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_BLACK);
+    zxosd.setPos(9,10);
+    zxosd.print("Please wait.   ");
+    zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+
+    // send ioctl slot id, file data for file loader type
+    spi_send(CMD_IOCTL_SLOT, 0, core.osd[curr_osd_item].slot_id);
+
+    uint64_t fsize = 0;
+    spi_send64(CMD_IOCTL_SIZE, fsize);
+    String fname = String(file_slots[core.osd[curr_osd_item].slot_id].dir) + "/" + String(file_slots[core.osd[curr_osd_item].slot_id].filename);
+    File32 file = sd1.open(fname);
+    fsize = file.size();
+    spi_send64(CMD_IOCTL_SIZE, fsize);
+
+    String ext = fname.substring(fname.lastIndexOf('.')+1);
+    for(uint8_t i = 0; i<ext.length(); i++) {
+      spi_send(CMD_IOCTL_EXT, i, ext.charAt(i));
+    }
+
+    for(uint64_t i = 0; i < fsize; i++) {
+      if (i % 8192 == 0) {
+        zxosd.progress(9, 11, 15, i, fsize);
+      }
+      if (i % 256 == 0) {
+        spi_send24(CMD_IOCTL_BANK, i >> 8);
+      }
+      uint8_t data = file.read();
+      spi_send(CMD_IOCTL_DATA, (uint8_t)((i & 0x00000000000000FF)), data);
+    }
+    file.close();
+    zxosd.setColor(OSD::COLOR_GREEN_I, OSD::COLOR_BLACK);
+    zxosd.progress(9, 11, 15, fsize, fsize);
+
+  } else if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER) {
+    // send img slot id, size for file mounter type
+    spi_send(CMD_IMG_SLOT, 0, core.osd[curr_osd_item].slot_id);
+    uint64_t fsize = 0;
+    spi_send64(CMD_IMG_SIZE, fsize);
+    String fname = String(file_slots[core.osd[curr_osd_item].slot_id].dir) + "/" + String(file_slots[core.osd[curr_osd_item].slot_id].filename);
+    File32 file = sd1.open(fname);
+    fsize = file.size();
+    spi_send64(CMD_IMG_SIZE, fsize);
+    file.close();
   }
 }

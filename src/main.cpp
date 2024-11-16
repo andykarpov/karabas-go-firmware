@@ -51,8 +51,7 @@
 #include "hid_driver.h"
 
 PioSpi spiSD(PIN_SD_SPI_RX, PIN_SD_SPI_SCK, PIN_SD_SPI_TX); // dedicated SD1 SPI
-#define SD_CONFIG  SdSpiConfig(SD_CS_PIN, SHARED_SPI, SD_SCK_MHZ(20), &spiSD) // SD1 SPI Settings
-#define SD2_CONFIG SdSpiConfig(PIN_MCU_SD2_CS, SHARED_SPI, SD_SCK_MHZ(16)) // SD2 SPI Settings
+#define SD_CONFIG  SdSpiConfig(SD_CS_PIN, DEDICATED_SPI, SD_SCK_MHZ(16), &spiSD) // SD1 SPI Settings
 SPISettings settingsA(SD_SCK_MHZ(16), MSBFIRST, SPI_MODE0); // MCU SPI settings
 Adafruit_USBD_MSC usb_msc;
 
@@ -61,12 +60,21 @@ ElapsedTimer my_timer, my_timer2;
 ElapsedTimer hide_timer;
 ElapsedTimer popup_timer;
 RTC zxrtc;
-SdFat32 sd1, sd2;
-File32 file1, fileIndex1, file2, fileIndex2;
-File32 root1, root2;
+SdFat32 sd1;
+File32 file1;
+File32 root1;
 fs::Dir froot;
 fs::File ffile;
 OSD zxosd;
+
+file_list_sort_item_t files[SORT_FILES_MAX];
+uint16_t files_len = 0;
+uint16_t file_sel = 0;
+uint16_t file_page_size = MAX_CORES_PER_PAGE;
+uint16_t file_pages = 1;
+uint16_t file_page = 1;
+file_list_item_t cached_names[MAX_CORES_PER_PAGE];
+uint16_t cached_file_from, cached_file_to;
 
 #if HW_ID == HW_ID_GO
 SegaController sega;
@@ -96,7 +104,6 @@ uint8_t joy_drivers_len;
 
 bool has_extender = false;
 bool has_sd = false;
-bool has_sd2 = false;
 bool has_fs = false;
 bool has_ft = false;
 bool is_flashboot = false;
@@ -549,6 +556,10 @@ bool on_global_hotkeys() {
           }
         } else if (core.osd[i].type == CORE_OSD_TYPE_TRIGGER) {
             core_trigger(i);
+        } else if (core.osd[i].type == CORE_OSD_TYPE_FILELOADER || core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER) {
+          is_osd = true;
+          curr_osd_item = i;
+          zxosd.showMenu();
         }
         return true;
       }
@@ -981,12 +992,12 @@ void read_core(const char* filename) {
       if (dir.charAt(0) != '/') { dir = '/' + dir; }
       dir.toCharArray(file_slots[core.osd[i].slot_id].dir, sizeof(file_slots[core.osd[i].slot_id].dir));
       file_read_bytes(file_slots[core.osd[i].slot_id].filename, 256, is_flash); file_slots[core.osd[i].slot_id].filename[255] = '\0';
-      String sfilename = String( file_slots[core.osd[i].slot_id].filename);
-      String sfullname = dir + "/" + sfilename;
+      String sfilename = String( file_slots[core.osd[i].slot_id].filename); sfilename.trim();
+      String sfullname = dir + "/" + sfilename; sfullname.trim();
       if (sfilename.length() > 0 && sd1.exists(sfullname)) {
         file_slots[core.osd[i].slot_id].is_mounted = true; //file_slots[core.osd[i].slot_id].file = sd1.open(sfullname, O_READ);
       }
-    } 
+    }
       // otherwise - reading options structure
       else {
       core.osd[i].options_len = file_read(is_flash);

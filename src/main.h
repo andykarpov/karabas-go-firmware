@@ -13,17 +13,19 @@
 #include "ElapsedTimer.h"
 #include "file.h"
 
+#define SD2_CONFIG SdSpiConfig(PIN_MCU_SD2_CS, SHARED_SPI, SD_SCK_MHZ(16)) // SD2 SPI Settings
+
 extern FT812 ft;
 extern RTC zxrtc;
 extern OSD zxosd;
 
 extern bool has_fs;
-extern bool has_sd, has_sd2;
+extern bool has_sd;
 extern bool has_ft;
 extern bool need_redraw;
 
-extern SdFat32 sd1, sd2;
-extern File32 root1, file1, fileIndex1, root2, file2, fileIndex2;
+extern SdFat32 sd1;
+extern File32 root1, file1;
 extern fs::Dir froot;
 extern fs::File ffile;
 
@@ -46,6 +48,15 @@ extern hid_joy_config_t joy_drivers[255];
 extern uint8_t joy_drivers_len;
 
 extern setup_t hw_setup;
+
+extern file_list_sort_item_t files[SORT_FILES_MAX];
+extern uint16_t files_len;
+extern uint16_t file_sel;
+extern uint16_t file_page_size;
+extern uint16_t file_pages;
+extern uint16_t file_page;
+extern file_list_item_t cached_names[MAX_CORES_PER_PAGE];
+extern uint16_t cached_file_from, cached_file_to;
 
 void spi_queue(uint8_t cmd, uint8_t addr, uint8_t data);
 void spi_send(uint8_t cmd, uint8_t addr, uint8_t data);
