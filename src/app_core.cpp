@@ -164,7 +164,7 @@ void app_core_save(uint8_t pos)
     if (core.osd[pos].type == CORE_OSD_TYPE_FILEMOUNTER) {
       // todo: save file mounter data (dir, filename)
     } else if (core.osd[pos].type == CORE_OSD_TYPE_FILELOADER) {
-      // todo save file loader data (dir)
+      // todo save file loader data (dir, filename)
     } else {
       core.osd[pos].prev_val = core.osd[pos].val;
       ffile.seek(FILE_POS_SWITCHES_DATA + pos);
@@ -173,6 +173,7 @@ void app_core_save(uint8_t pos)
     ffile.close();
   } else {
     sd1.chvol();
+    sd1.chdir("/");
     if (file1.isOpen()) {
       file1.close();
     }
@@ -185,11 +186,16 @@ void app_core_save(uint8_t pos)
       return;
     }
     core.osd_need_save = false;
-    if (core.osd[pos].type == CORE_OSD_TYPE_FILEMOUNTER) {
-      // todo: save file mounter data (dir, filename)
-    } else if (core.osd[pos].type == CORE_OSD_TYPE_FILELOADER) {
-      // todo save file loader data (dir)
+    if (core.osd[pos].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[pos].type == CORE_OSD_TYPE_FILELOADER) {
+      // save file mounter data (dir, filename) into the core
+      uint32_t offset = file_slots[core.osd[pos].slot_id].offset_dir;
+      file_seek(offset, is_flash); 
+      file_write_buf(file_slots[core.osd[pos].slot_id].dir, 256, is_flash);
+      offset = file_slots[core.osd[pos].slot_id].offset_filename;
+      file_seek(offset, is_flash); 
+      file_write_buf(file_slots[core.osd[pos].slot_id].filename, 256, is_flash);
     } else {
+      // save switch state into the core
       core.osd[pos].prev_val = core.osd[pos].val;
       file1.seek(FILE_POS_SWITCHES_DATA + pos);
       file1.write(core.osd[pos].val);

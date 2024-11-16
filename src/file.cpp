@@ -36,6 +36,14 @@ int file_read_buf(char *buf, size_t len, bool is_flash) {
   }
 }
 
+int file_write_buf(char *buf, size_t len, bool is_flash) {
+  if (is_flash) {
+    return ffile.write(buf, len);
+  } else {
+    return file1.write(buf, len);
+  }
+}
+
 uint16_t file_read16(uint32_t pos, bool is_flash) {
   file_seek(pos, is_flash);
   

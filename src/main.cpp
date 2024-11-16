@@ -988,11 +988,13 @@ void read_core(const char* filename) {
       core.osd[i].slot_id = file_read(is_flash);
       file_slots[core.osd[i].slot_id].is_mounted = false;
       file_read_bytes(file_slots[core.osd[i].slot_id].ext, 256, is_flash); file_slots[core.osd[i].slot_id].ext[255] = '\0';
+      file_slots[core.osd[i].slot_id].offset_dir = file1.curPosition();
       file_read_bytes(file_slots[core.osd[i].slot_id].dir, 256, is_flash); file_slots[core.osd[i].slot_id].dir[255] = '\0';
       String dir = String(file_slots[core.osd[i].slot_id].dir);
       if (dir == "") { dir = "/"; }
       if (dir.charAt(0) != '/') { dir = '/' + dir; }
       dir.toCharArray(file_slots[core.osd[i].slot_id].dir, sizeof(file_slots[core.osd[i].slot_id].dir));
+      file_slots[core.osd[i].slot_id].offset_filename = file1.curPosition();
       file_read_bytes(file_slots[core.osd[i].slot_id].filename, 256, is_flash); file_slots[core.osd[i].slot_id].filename[255] = '\0';
       String sfilename = String( file_slots[core.osd[i].slot_id].filename); sfilename.trim();
       String sfullname = dir + "/" + sfilename; sfullname.trim();
