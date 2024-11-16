@@ -310,7 +310,6 @@ void app_core_on_keyboard() {
           // file selection (if ext matches)
           else {
             d_printf("Selecting file %d", files[file_sel].file_id); d_println();
-            is_filebrowser = false;
             char filename[255];
             file1.getName(filename, sizeof(filename));
             d_printf("Filename %s", filename);
@@ -324,6 +323,7 @@ void app_core_on_keyboard() {
               strcpy(file_slots[core.osd[curr_osd_item].slot_id].filename, filename);
               file_slots[core.osd[curr_osd_item].slot_id].is_mounted = true;
               app_core_on_select_file();
+              is_filebrowser = false; // exit from file browser mode
             } else {
               d_println("File extension does not match");
               file_slots[core.osd[curr_osd_item].slot_id].is_mounted = false;

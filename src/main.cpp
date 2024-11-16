@@ -590,8 +590,9 @@ void on_keyboard() {
 void core_send(uint8_t pos)
 {
   if (core.osd[pos].type == CORE_OSD_TYPE_FILEMOUNTER) {
-      spi_send(CMD_SWITCHES, pos, (file_slots[core.osd[pos].slot_id].is_mounted) ? 1 : 0);
-      d_printf("File mounter: %s %d", core.osd[pos].name, file_slots[core.osd[pos].slot_id].is_mounted);
+      // todo
+      //spi_send(CMD_SWITCHES, pos, (file_slots[core.osd[pos].slot_id].is_mounted) ? 1 : 0);
+      //d_printf("File mounter: %s %d", core.osd[pos].name, file_slots[core.osd[pos].slot_id].is_mounted);
   } else if (core.osd[pos].type == CORE_OSD_TYPE_FILELOADER) {
     // do nothing
   } else {
@@ -605,7 +606,8 @@ void core_send_all()
 {
   for (uint8_t i=0; i<core.osd_len; i++) {
     if (core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER) {
-      spi_send(CMD_SWITCHES, i, (file_slots[core.osd[i].slot_id].is_mounted) ? 1 : 0);
+      // todo
+      //spi_send(CMD_SWITCHES, i, (file_slots[core.osd[i].slot_id].is_mounted) ? 1 : 0);
     } else if (core.osd[i].type == CORE_OSD_TYPE_FILELOADER) {
       // do nothing
     } else {
@@ -996,6 +998,7 @@ void read_core(const char* filename) {
       String sfullname = dir + "/" + sfilename; sfullname.trim();
       if (sfilename.length() > 0 && sd1.exists(sfullname)) {
         file_slots[core.osd[i].slot_id].is_mounted = true; //file_slots[core.osd[i].slot_id].file = sd1.open(sfullname, O_READ);
+        // todo: autoload, mounting (spi commands to the host)
       }
     }
       // otherwise - reading options structure
@@ -1098,7 +1101,8 @@ void read_core(const char* filename) {
       String sfilename = String( file_slots[core.osd[i].slot_id].filename);
       String sfullname = dir + "/" + sfilename;
       if (sfilename.length() > 0 && sd1.exists(sfullname)) {
-        file_slots[core.osd[i].slot_id].is_mounted = file_slots[core.osd[i].slot_id].file = sd1.open(sfullname, O_READ);
+        // todo
+        //file_slots[core.osd[i].slot_id].is_mounted = file_slots[core.osd[i].slot_id].file = sd1.open(sfullname, O_READ);
       }
       core_send(i);
     }
