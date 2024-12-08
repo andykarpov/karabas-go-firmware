@@ -94,12 +94,12 @@ bool is_popup_hiding = false;
 bool need_redraw = false;
 
 core_item_t core;
-core_file_slot_t file_slots[4];
+core_file_slot_t file_slots[MAX_FILE_SLOTS];
 
 uint8_t osd_state;
 uint8_t osd_prev_state = state_main;
 
-hid_joy_config_t joy_drivers[255];
+hid_joy_config_t joy_drivers[MAX_JOY_DRIVERS];
 uint8_t joy_drivers_len;
 
 bool has_extender = false;
@@ -114,7 +114,7 @@ bool msc_blink = false;
 
 uint16_t joyL;
 uint16_t joyR;
-uint16_t joyUSB[4];
+uint16_t joyUSB[MAX_USB_JOYSTICKS];
 uint8_t joyUSB_len;
 
 uint8_t uart_idx = 0;
@@ -144,10 +144,10 @@ void setup()
   //rp2040.wdt_begin(5000);
 
   joyL = joyR = 0;
-  for (uint8_t i=0; i<4; i++) { joyUSB[i] = 0; }
+  for (uint8_t i=0; i<MAX_USB_JOYSTICKS; i++) { joyUSB[i] = 0; }
   joyUSB_len = 0;
 
-  for (uint8_t i=0; i<4; i++) { file_slots[i] = {0}; }
+  for (uint8_t i=0; i<MAX_FILE_SLOTS; i++) { file_slots[i] = {0}; }
 
   // SPI0 to FPGA
   SPI.setSCK(PIN_MCU_SPI_SCK);
@@ -971,7 +971,7 @@ void read_core(const char* filename) {
   file_seek(offset, is_flash); core.osd_len = file_read(is_flash);
   //d_print("OSD len: "); d_println(core.osd_len);
   
-  for (uint8_t i=0; i<4; i++) { file_slots[i].is_mounted = false; }
+  for (uint8_t i=0; i<MAX_FILE_SLOTS; i++) { file_slots[i].is_mounted = false; }
 
   for (uint8_t i=0; i<core.osd_len; i++) {
     core.osd[i].type = file_read(is_flash);

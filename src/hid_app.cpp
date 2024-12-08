@@ -76,7 +76,7 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
   
   // reset joy data
   get_joy_num(dev_addr, instance);
-  for (uint8_t i=0; i<4; i++) {
+  for (uint8_t i=0; i<MAX_USB_JOYSTICKS; i++) {
     joyUSB[i] = 0;
   }
   

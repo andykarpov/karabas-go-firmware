@@ -115,6 +115,13 @@
 #define CMD_DEBUG_ADDRESS 0x30
 #define CMD_DEBUG_DATA 0x31
 
+// filemounter files will be initiated (when core start or when new file is selected) in the following order:
+// send SLOT num  - 1 byte
+// send STATUS reg - 1 byte (with bits BUSY=1, DONE=0) - todo
+// send file SIZE - 4 bytes (value=0 when no file is mounted)
+// send MOUNTED - 1 byte (0, then 1 to trigger the latch on fpga side)
+// send STATUS reg - 1 byte (BUSY=0, DONE=1) - todo
+
 #define CMD_IMG_SLOT 0x40
 #define CMD_IMG_SIZE 0x41
 #define CMD_IMG_LBA 0x42
@@ -126,7 +133,7 @@
 
 // fileloader files will be transferred in the following order:
 // 1. send SLOT num  - 1 byte
-// 2. send file SIZE - 8 bytes
+// 2. send file SIZE - 4 bytes
 // 3. send file EXT  - 3 bytes lowercase
 // 4. while not EOF: 
 // 4.1. send bank when pos % 256 = 0
@@ -163,6 +170,9 @@
 
 #define MAX_CORES 255
 #define MAX_FILES 255
+#define MAX_FILE_SLOTS 8
+#define MAX_JOY_DRIVERS 255
+#define MAX_USB_JOYSTICKS 4
 #define MAX_CORES_PER_PAGE 16
 #define MAX_OSD_ITEMS 32
 #define MAX_OSD_ITEM_OPTIONS 8

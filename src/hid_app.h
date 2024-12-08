@@ -3,13 +3,14 @@
 
 #include <Arduino.h>
 #include "Adafruit_TinyUSB.h"
+#include "config.h"
 
 #define LANGUAGE_ID 0x0409 // Language ID: English
 #define MAX_REPORT  4 // Max USB reports per instance
 
 extern hid_keyboard_report_t usb_keyboard_report;
 extern hid_mouse_report_t usb_mouse_report;
-extern uint16_t joyUSB[4];
+extern uint16_t joyUSB[MAX_USB_JOYSTICKS];
 extern uint8_t joyUSB_len;
 
 typedef struct

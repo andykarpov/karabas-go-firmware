@@ -287,8 +287,8 @@ void app_file_loader_send_file(uint16_t file_id) {
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
 
   // trigger reset
-  spi_send(CMD_FILELOADER, 0, 1);
-  spi_send(CMD_FILELOADER, 0, 0);
+  spi_send(CMD_FILELOADER, 0, 3); // 11 - active = 1, reset = 1
+  spi_send(CMD_FILELOADER, 0, 2); // 10 - active = 1, reset = 0
 
   uint64_t file_size = file1.size();
 
@@ -309,6 +309,9 @@ uint32_t cnt = 0;
   zxosd.setColor(OSD::COLOR_GREEN_I, OSD::COLOR_BLACK);
   zxosd.progress(9, 11, 15, file_size, file_size);
   
+  // 00 - active = 0, reset = 0
+  spi_send(CMD_FILELOADER, 0, 0);
+
   file1.close();
   d_printf("Sent %u bytes", cnt); d_println();
   delay(500);
