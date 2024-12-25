@@ -25,9 +25,9 @@ extern bool has_ft;
 extern bool need_redraw;
 
 extern SdFat32 sd1;
-extern File32 root1, file1;
+extern File32 root1, file1, file2;
 extern fs::Dir froot;
-extern fs::File ffile;
+extern fs::File ffile, ffile2;
 
 extern hid_keyboard_report_t usb_keyboard_report;
 extern hid_mouse_report_t usb_mouse_report;

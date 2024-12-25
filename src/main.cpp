@@ -61,10 +61,10 @@ ElapsedTimer hide_timer;
 ElapsedTimer popup_timer;
 RTC zxrtc;
 SdFat32 sd1;
-File32 file1;
+File32 file1, file2;
 File32 root1;
 fs::Dir froot;
-fs::File ffile;
+fs::File ffile, ffile2;
 OSD zxosd;
 
 file_list_sort_item_t files[SORT_FILES_MAX];
@@ -746,11 +746,11 @@ void spi_queue(uint8_t cmd, uint8_t addr, uint8_t data) {
 
 void spi_send(uint8_t cmd, uint8_t addr, uint8_t data) {
   SPI.beginTransaction(settingsA);
-  digitalWrite(PIN_MCU_SPI_CS, LOW);
+  gpio_put(PIN_MCU_SPI_CS, LOW);
   uint8_t rx_cmd = SPI.transfer(cmd);
   uint8_t rx_addr = SPI.transfer(addr);
   uint8_t rx_data = SPI.transfer(data);
-  digitalWrite(PIN_MCU_SPI_CS, HIGH);
+  gpio_put(PIN_MCU_SPI_CS, HIGH);
   SPI.endTransaction();
   if ((rx_cmd > 0) && !is_configuring) {
     process_in_cmd(rx_cmd, rx_addr, rx_data);
@@ -864,7 +864,8 @@ void serial_data(uint8_t addr, uint8_t data) {
 
 void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data) {
 
-  if (cmd == CMD_FLASHBOOT && !is_flashboot && strcmp(core.id, "zxnext")==0) {
+  //if (cmd == CMD_FLASHBOOT && !is_flashboot && strcmp(core.id, "zxnext")==0) {
+  if (cmd == CMD_FLASHBOOT && !is_flashboot) {
     flashboot(data);
   } else if (cmd == CMD_UART) {
     serial_data(addr, data);
@@ -986,6 +987,8 @@ void read_core(const char* filename) {
     if (core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[i].type == CORE_OSD_TYPE_FILELOADER) {
       core.osd[i].options_len = 0;
       core.osd[i].slot_id = file_read(is_flash);
+      file_slots[core.osd[i].slot_id].is_autoload = bitRead(core.osd[i].slot_id, 7);
+      core.osd[i].slot_id = bitClear(core.osd[i].slot_id, 7);
       file_slots[core.osd[i].slot_id].is_mounted = false;
       file_read_bytes(file_slots[core.osd[i].slot_id].ext, 256, is_flash); file_slots[core.osd[i].slot_id].ext[255] = '\0';
       file_slots[core.osd[i].slot_id].offset_dir = file1.curPosition();
@@ -1000,7 +1003,10 @@ void read_core(const char* filename) {
       String sfullname = dir + "/" + sfilename; sfullname.trim();
       if (sfilename.length() > 0 && sd1.exists(sfullname)) {
         file_slots[core.osd[i].slot_id].is_mounted = true; //file_slots[core.osd[i].slot_id].file = sd1.open(sfullname, O_READ);
-        // todo: autoload, mounting (spi commands to the host)
+        if (file_slots[core.osd[i].slot_id].is_autoload) {
+          // todo: autoload (spi commands to the host)
+          // todo: depends on type
+        }
       }
     }
       // otherwise - reading options structure
@@ -1143,36 +1149,79 @@ void read_roms(const char* filename) {
   uint32_t rom_idx = 0;
   while (roms_len > 0) {
     uint32_t rom_len = file_read32(FILE_POS_BITSTREAM_START + bitstream_length + offset, is_flash);
+    bool rom_is_external = bitRead(rom_len, 31);
+    rom_len = bitClear(rom_len, 31);
     uint32_t rom_addr = file_read32(FILE_POS_BITSTREAM_START + bitstream_length + offset + 4, is_flash);
     //d_print("ROM #"); d_print(rom_idx); d_print(": addr="); d_print(rom_addr); d_print(", len="); d_println(rom_len);
-    for (uint32_t i=0; i<rom_len/256; i++) {
-      char buf[256];
-      int c = file_read_bytes(buf, sizeof(buf), is_flash);
-      for (int j=0; j<256; j++) {
+    if (rom_is_external) {
+      char rom_filename[256];
 
-        uint32_t addr = rom_addr + i*256 + j;
-        uint8_t data = buf[j];
+      // todo: read and send external rom from sd1
+      if (sd1.exists(rom_filename)) {
+        file2 = sd1.open(rom_filename, FILE_READ);
+        char buf[256];
+        int i=0;
+        while (int c = file2.read(buf, sizeof(buf))) {
+          for (int j=0; j<256; j++) {
 
-        // send rombank address every 256 bytes
-          if (addr % 256 == 0) {
-            uint8_t rombank3 = (uint8_t)((addr & 0xFF000000) >> 24);
-            uint8_t rombank2 = (uint8_t)((addr & 0x00FF0000) >> 16);
-            uint8_t rombank1 = (uint8_t)((addr & 0x0000FF00) >> 8);
-            //d_printf("ROM bank %d %d %d", rombank1, rombank2, rombank3); d_println();
-            spi_send(CMD_ROMBANK, 0, rombank1);
-            spi_send(CMD_ROMBANK, 1, rombank2);
-            spi_send(CMD_ROMBANK, 2, rombank3);
+            uint32_t addr = rom_addr + i*256 + j;
+            uint8_t data = buf[j];
+
+            // send rombank address every 256 bytes
+              if (addr % 256 == 0) {
+                uint8_t rombank3 = (uint8_t)((addr & 0xFF000000) >> 24);
+                uint8_t rombank2 = (uint8_t)((addr & 0x00FF0000) >> 16);
+                uint8_t rombank1 = (uint8_t)((addr & 0x0000FF00) >> 8);
+                //d_printf("ROM bank %d %d %d", rombank1, rombank2, rombank3); d_println();
+                spi_send(CMD_ROMBANK, 0, rombank1);
+                spi_send(CMD_ROMBANK, 1, rombank2);
+                spi_send(CMD_ROMBANK, 2, rombank3);
+              }
+              // send lower 256 bytes
+              uint8_t romaddr = (uint8_t)((addr & 0x000000FF));
+              spi_send(CMD_ROMDATA, romaddr, data);
+
           }
-          // send lower 256 bytes
-          uint8_t romaddr = (uint8_t)((addr & 0x000000FF));
-          spi_send(CMD_ROMDATA, romaddr, data);
-
+          if (rom_len > 0) {
+            zxosd.setPos(4,5+rom_idx);
+            //uint8_t perc = ceil((float) i*256 * (100.0 / rom_len));
+            zxosd.print(rom_idx+1); zxosd.print(": ");
+            zxosd.printf("%05d", (i+1)*256); zxosd.print(" ");
+          }
+          i++;
+        }
+        file2.close();
       }
-      if (rom_len > 0) {
-        zxosd.setPos(4,5+rom_idx);
-        //uint8_t perc = ceil((float) i*256 * (100.0 / rom_len));
-        zxosd.print(rom_idx+1); zxosd.print(": ");
-        zxosd.printf("%05d", (i+1)*256); zxosd.print(" ");
+    } else {
+      for (uint32_t i=0; i<rom_len/256; i++) {
+        char buf[256];
+        int c = file_read_bytes(buf, sizeof(buf), is_flash);
+        for (int j=0; j<256; j++) {
+
+          uint32_t addr = rom_addr + i*256 + j;
+          uint8_t data = buf[j];
+
+          // send rombank address every 256 bytes
+            if (addr % 256 == 0) {
+              uint8_t rombank3 = (uint8_t)((addr & 0xFF000000) >> 24);
+              uint8_t rombank2 = (uint8_t)((addr & 0x00FF0000) >> 16);
+              uint8_t rombank1 = (uint8_t)((addr & 0x0000FF00) >> 8);
+              //d_printf("ROM bank %d %d %d", rombank1, rombank2, rombank3); d_println();
+              spi_send(CMD_ROMBANK, 0, rombank1);
+              spi_send(CMD_ROMBANK, 1, rombank2);
+              spi_send(CMD_ROMBANK, 2, rombank3);
+            }
+            // send lower 256 bytes
+            uint8_t romaddr = (uint8_t)((addr & 0x000000FF));
+            spi_send(CMD_ROMDATA, romaddr, data);
+
+        }
+        if (rom_len > 0) {
+          zxosd.setPos(4,5+rom_idx);
+          //uint8_t perc = ceil((float) i*256 * (100.0 / rom_len));
+          zxosd.print(rom_idx+1); zxosd.print(": ");
+          zxosd.printf("%05d", (i+1)*256); zxosd.print(" ");
+        }
       }
     }
     offset = offset + rom_len + 8;

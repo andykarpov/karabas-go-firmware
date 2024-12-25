@@ -26,6 +26,7 @@ typedef struct {
 
 typedef struct {
 	bool is_mounted;
+	bool is_autoload;
 	char ext[256];
 	char dir[256];
 	char filename[256];
