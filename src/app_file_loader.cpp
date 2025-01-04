@@ -314,7 +314,7 @@ uint32_t cnt = 0;
 
   file1.close();
   d_printf("Sent %u bytes", cnt); d_println();
-  delay(500);
+  delay(100);
 
   // reload menu
   app_file_loader_overlay(false, false);

@@ -745,7 +745,9 @@ void spi_queue(uint8_t cmd, uint8_t addr, uint8_t data) {
 }
 
 void spi_send(uint8_t cmd, uint8_t addr, uint8_t data) {
-  SPI.beginTransaction(settingsA);
+  // use default (16 MHz) or custom spi freq from the core config
+  SPISettings spi_settings = (core.spi_freq == 0 || core.spi_freq == 255) ? settingsA : SPISettings(SD_SCK_MHZ(core.spi_freq), MSBFIRST, SPI_MODE0);
+  SPI.beginTransaction(spi_settings);
   gpio_put(PIN_MCU_SPI_CS, LOW);
   uint8_t rx_cmd = SPI.transfer(cmd);
   uint8_t rx_addr = SPI.transfer(addr);
@@ -966,11 +968,14 @@ void read_core(const char* filename) {
   file_seek(FILE_POS_FILELOADER_DIR, is_flash); file_read_bytes(core.dir, 32, is_flash); core.dir[32] = '\0';
   file_seek(FILE_POS_FILELOADER_FILE, is_flash); core.last_file_id = file_read16(FILE_POS_FILELOADER_FILE, is_flash);
   file_seek(FILE_POS_FILELOADER_EXTENSIONS, is_flash); file_read_bytes(core.file_extensions, 32, is_flash); core.file_extensions[32] = '\0';
+  file_seek(FILE_POS_SPI_FREQ, is_flash); core.spi_freq = file_read(is_flash);
   uint32_t roms_len = file_read32(FILE_POS_ROM_LEN, is_flash);
   uint32_t offset = FILE_POS_BITSTREAM_START + core.bitstream_length + roms_len;
   //d_print("OSD section: "); d_println(offset);
   file_seek(offset, is_flash); core.osd_len = file_read(is_flash);
   //d_print("OSD len: "); d_println(core.osd_len);
+
+  d_print("Core SPI Frequency: "); if (core.spi_freq > 0 && core.spi_freq < 255) { d_print(core.spi_freq); d_println(" MHz"); } else d_println("default");
   
   for (uint8_t i=0; i<MAX_FILE_SLOTS; i++) { file_slots[i].is_mounted = false; }
 

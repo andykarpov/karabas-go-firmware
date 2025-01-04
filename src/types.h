@@ -72,6 +72,7 @@ typedef struct {
 	uint32_t bitstream_length;
 	uint8_t eeprom_bank;
 	uint8_t rtc_type;
+	uint8_t spi_freq;
 	core_osd_t osd[MAX_OSD_ITEMS];
 	uint8_t osd_len;
 	core_eeprom_t eeprom[MAX_EEPROM_ITEMS];
