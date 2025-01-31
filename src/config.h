@@ -107,8 +107,8 @@
 #define CMD_FILEDATA 0x0D
 #define CMD_FILELOADER 0x0E
 
-#define CMD_USB_GAMEPAD 0x11
-#define CMD_USB_JOYSTICK 0x12
+#define CMD_USB_GAMEPAD 0x11 // deprecated
+#define CMD_USB_JOYSTICK 0x12 // deprecated
 
 #define CMD_OSD 0x20
 

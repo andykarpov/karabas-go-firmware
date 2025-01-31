@@ -7,8 +7,10 @@
  */
 
 #include <SPI.h>
+#include <RTClib.h>
 #include <RTC.h>
 #include <Arduino.h>
+#include <Wire.h>
 
 /****************************************************************************/
 
@@ -20,6 +22,8 @@ RTC::RTC(void)
 
 void RTC::begin(spi_cb act, osd_cb evt)
 {
+  delay(100);
+
   // init eeprom
   eeprom.setMemoryType(8);
   has_eeprom = eeprom.begin();
@@ -28,7 +32,16 @@ void RTC::begin(spi_cb act, osd_cb evt)
   action = act;
   event = evt;
 
-  rtc_clock.setClockMode(false); // 24h format always
+  rtc_clock.begin(&Wire);
+
+  if (rtc_clock.lostPower()) {
+    DateTime now = rtc_clock.now();
+    if (now.isValid()) {
+      rtc_clock.adjust(now); // this will flip the OSF bit also
+    } else {
+      rtc_clock.adjust(DateTime(F(__DATE__), F(__TIME__)));
+    }
+  }
   is_started = true;
 }
 
@@ -44,16 +57,17 @@ void RTC::handle()
   // read time from rtc
   if (n - tr >= 500) {
 
-    DateTime now = rtc_lib.now();
+    DateTime now = rtc_clock.now();
+    if (now.isValid())
 
-    rtc_year = get_year(now.getYear());
-    rtc_month = now.getMonth();
-    rtc_day = now.getDay();
-    rtc_week = now.getWeekDay();
+    rtc_year = get_year(now.year());
+    rtc_month = now.month();
+    rtc_day = now.day();
+    rtc_week = now.dayOfTheWeek();
 
-    rtc_hours = now.getHour();
-    rtc_minutes = now.getMinute();
-    rtc_seconds = now.getSecond();
+    rtc_hours = now.hour();
+    rtc_minutes = now.minute();
+    rtc_seconds = now.second();
 
     sendTime();
 
@@ -70,14 +84,8 @@ void RTC::handle()
 }
 
 void RTC::save() {
-  rtc_clock.setClockMode(false); // 24h always
-  rtc_clock.setDate(rtc_day);
-  rtc_clock.setMonth(rtc_month);
-  rtc_clock.setYear(rtc_year);
-  rtc_clock.setDoW(rtc_week);
-  rtc_clock.setHour(rtc_hours);
-  rtc_clock.setMinute(rtc_minutes);
-  rtc_clock.setSecond(rtc_seconds);
+  rtc_clock.adjust(DateTime(2000 + rtc_year, rtc_month, rtc_day, rtc_hours, rtc_minutes, rtc_seconds));
+  // todo: set dow
 }
 
 void RTC::send(uint8_t reg, uint8_t data) {
@@ -168,13 +176,13 @@ void RTC::setData(uint8_t addr, uint8_t data) {
         addr = bitClear(addr, 7);
         addr = bitClear(addr, 6);
         switch (addr) {
-          case 0: rtc_seconds = bcd2bin(data); rtc_clock.setSecond(rtc_seconds); break;
-          case 1: rtc_minutes = bcd2bin(data); rtc_clock.setMinute(rtc_minutes); break;
-          case 2: data = bitClear(data, 7); data = bitClear(data, 6); rtc_hours = bcd2bin(data); rtc_clock.setClockMode(false); rtc_clock.setHour(rtc_hours); break;
-          case 3: rtc_week = bcd2bin(data); rtc_clock.setDoW(rtc_week); break;
-          case 4: rtc_day = bcd2bin(data); rtc_clock.setDate(rtc_day); break;
-          case 5: rtc_month = bcd2bin(data); rtc_clock.setMonth(rtc_month); break;
-          case 6: rtc_year = bcd2bin(data); rtc_clock.setYear(rtc_year); break;
+          case 0: rtc_seconds = bcd2bin(data); break;
+          case 1: rtc_minutes = bcd2bin(data); break;
+          case 2: data = bitClear(data, 7); data = bitClear(data, 6); rtc_hours = bcd2bin(data); break;
+          case 3: rtc_week = bcd2bin(data); break;
+          case 4: rtc_day = bcd2bin(data); break;
+          case 5: rtc_month = bcd2bin(data); break;
+          case 6: rtc_year = bcd2bin(data); break;
           case 7: data = bitClear(data,6); // control register
                   data = bitClear(data, 5); 
                   data = bitClear(data, 3); 
@@ -182,6 +190,11 @@ void RTC::setData(uint8_t addr, uint8_t data) {
                   setEepromReg(addr, data);
                   break;
           default: setEepromReg(addr, data); // eeprom
+
+          if (addr <= 6) {
+              DateTime now = DateTime(2000 + rtc_year, rtc_month, rtc_day, rtc_hours, rtc_minutes, rtc_seconds); 
+              rtc_clock.adjust(now);
+          }
       }
 
   } else {
@@ -198,16 +211,16 @@ void RTC::setData(uint8_t addr, uint8_t data) {
       uint8_t prev;
 
       switch (addr) {
-        case 0: rtc_seconds = rtc_is_bcd ? bcd2bin(data) : data; rtc_clock.setSecond(rtc_seconds); break;
+        case 0: rtc_seconds = rtc_is_bcd ? bcd2bin(data) : data; break;
         case 1: rtc_seconds_alarm = rtc_is_bcd ? bcd2bin(data) : data; break;
-        case 2: rtc_minutes = rtc_is_bcd ? bcd2bin(data) : data; rtc_clock.setMinute(rtc_minutes); break;
+        case 2: rtc_minutes = rtc_is_bcd ? bcd2bin(data) : data; break;
         case 3: rtc_minutes_alarm = rtc_is_bcd ? bcd2bin(data) : data;  break;
-        case 4: rtc_hours = rtc_is_bcd ? bcd2bin(data) : data; rtc_clock.setClockMode(false); rtc_clock.setHour(rtc_hours); break;
+        case 4: rtc_hours = rtc_is_bcd ? bcd2bin(data) : data; break;
         case 5: rtc_hours_alarm = rtc_is_bcd ? bcd2bin(data) : data; break;
-        case 6: rtc_week = rtc_is_bcd ? bcd2bin(data) : data; rtc_clock.setDoW(rtc_week); break;
-        case 7: rtc_day = rtc_is_bcd ? bcd2bin(data) : data; rtc_clock.setDate(rtc_day); break;
-        case 8: rtc_month = rtc_is_bcd ? bcd2bin(data) : data; rtc_clock.setMonth(rtc_month); break;
-        case 9: rtc_year = (rtc_is_bcd ? bcd2bin(data) : data); rtc_clock.setYear(rtc_year); break;
+        case 6: rtc_week = rtc_is_bcd ? bcd2bin(data) : data; break;
+        case 7: rtc_day = rtc_is_bcd ? bcd2bin(data) : data; break;
+        case 8: rtc_month = rtc_is_bcd ? bcd2bin(data) : data; break;
+        case 9: rtc_year = (rtc_is_bcd ? bcd2bin(data) : data); break;
         case 0xA: bitClear(data, 7); setEepromReg(addr, data); break;
         case 0xB: rtc_is_bcd = !bitRead(data, 2); 
                   rtc_is_24h = true; //bitRead(data, 1);  
@@ -223,21 +236,26 @@ void RTC::setData(uint8_t addr, uint8_t data) {
         case 0xD: break;
         default: setEepromReg(addr, data);
       }
+
+      if (addr <= 9) {
+          DateTime now = DateTime(2000 + rtc_year, rtc_month, rtc_day, rtc_hours, rtc_minutes, rtc_seconds); 
+          rtc_clock.adjust(now);
+      }
   }
 }
 
 void RTC::readAll() {
 
-  DateTime now = rtc_lib.now();
+  DateTime now = rtc_clock.now();
 
-  rtc_year = get_year(now.getYear());
-  rtc_month = now.getMonth();
-  rtc_day = now.getDay();
-  rtc_week = now.getWeekDay();
+  rtc_year = get_year(now.year());
+  rtc_month = now.month();
+  rtc_day = now.day();
+  rtc_week = now.dayOfTheWeek();
 
-  rtc_hours = now.getHour();
-  rtc_minutes = now.getMinute();
-  rtc_seconds = now.getSecond();
+  rtc_hours = now.hour();
+  rtc_minutes = now.minute();
+  rtc_seconds = now.second();
 
   // read is_bcd, is_24h
   uint8_t reg_b = getEepromReg(0xB);

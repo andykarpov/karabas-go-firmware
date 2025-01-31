@@ -11,7 +11,7 @@
 
 #include <Arduino.h>
 #include <SparkFun_External_EEPROM.h>
-#include <DS3231-RTC.h>
+#include <RTClib.h>
 
 /****************************************************************************/
 
@@ -30,8 +30,7 @@ class RTC
 
 private:
 
-  DS3231 rtc_clock;
-  RTClib rtc_lib;
+  RTC_DS3231 rtc_clock;
   ExternalEEPROM eeprom;
   spi_cb action;
   osd_cb event;
