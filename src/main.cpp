@@ -1146,7 +1146,7 @@ void read_roms(const char* filename) {
 
   uint32_t bitstream_length = file_read32(FILE_POS_BITSTREAM_LEN, is_flash);
   uint32_t roms_len = file_read32(FILE_POS_ROM_LEN, is_flash);
-  //d_print("ROMS len "); d_println(roms_len);
+  d_print("ROMS len "); d_println(roms_len);
   if (roms_len > 0) {
     spi_send(CMD_ROMLOADER, 0, 1);
   }
@@ -1157,9 +1157,10 @@ void read_roms(const char* filename) {
     bool rom_is_external = bitRead(rom_len, 31);
     rom_len = bitClear(rom_len, 31);
     uint32_t rom_addr = file_read32(FILE_POS_BITSTREAM_START + bitstream_length + offset + 4, is_flash);
-    //d_print("ROM #"); d_print(rom_idx); d_print(": addr="); d_print(rom_addr); d_print(", len="); d_println(rom_len);
+    d_print("ROM #"); d_print(rom_idx); d_print(": addr="); d_print(rom_addr); d_print(", len="); d_println(rom_len);
     if (rom_is_external) {
       char rom_filename[256];
+      d_print("External ROM "); d_println(rom_filename);
 
       // todo: read and send external rom from sd1
       if (sd1.exists(rom_filename)) {
@@ -1196,6 +1197,10 @@ void read_roms(const char* filename) {
           i++;
         }
         file2.close();
+      } else {
+        zxosd.setPos(4,5+rom_idx);
+        zxosd.print(rom_idx+1); zxosd.print(": ");
+        zxosd.print(" NO FILE");
       }
     } else {
       for (uint32_t i=0; i<rom_len/256; i++) {
