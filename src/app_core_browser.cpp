@@ -49,7 +49,7 @@ void app_core_browser_menu(uint8_t vpos) {
   for(uint8_t i=core_from; i < core_to; i++) {
     zxosd.setPos(0, pos);
     if (core_sel == i) {
-      zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLUE);
+      zxosd.setColor(OSD::COLOR_BLACK, OSD::COLOR_WHITE);
     } else {
       zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
     }
