@@ -132,7 +132,7 @@ void app_file_loader_menu(uint8_t vpos) {
     for(uint16_t i=file_from; i < file_to; i++) {
       zxosd.setPos(0, pos);
       if (file_sel == i) {
-        zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLUE);
+        zxosd.setColor(OSD::COLOR_BLACK, OSD::COLOR_WHITE);
       } else {
         zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
       }
