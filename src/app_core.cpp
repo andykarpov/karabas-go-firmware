@@ -5,7 +5,6 @@
 #include "usb_hid_keys.h"
 #include "SegaController.h"
 #include "SdFat.h"
-#include "LittleFS.h"
 #include "app_core.h"
 #include <SPI.h>
 #include <algorithm>
@@ -157,22 +156,6 @@ void app_core_menu(uint8_t vpos) {
 
 void app_core_save(uint8_t pos)
 {
-  bool is_flash = is_flashfs(core.filename);
-
-  if (is_flash) {
-    ffile = LittleFS.open(core.filename, "r+"); // read+write
-    core.osd_need_save = false;
-    if (core.osd[pos].type == CORE_OSD_TYPE_FILEMOUNTER) {
-      // todo: save file mounter data (dir, filename)
-    } else if (core.osd[pos].type == CORE_OSD_TYPE_FILELOADER) {
-      // todo save file loader data (dir, filename)
-    } else {
-      core.osd[pos].prev_val = core.osd[pos].val;
-      ffile.seek(FILE_POS_SWITCHES_DATA + pos);
-      ffile.write(core.osd[pos].val);
-    }
-    ffile.close();
-  } else {
     sd1.chvol();
     sd1.chdir("/");
     if (file1.isOpen()) {
@@ -190,19 +173,18 @@ void app_core_save(uint8_t pos)
     if (core.osd[pos].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[pos].type == CORE_OSD_TYPE_FILELOADER) {
       // save file mounter data (dir, filename) into the core
       uint32_t offset = file_slots[core.osd[pos].slot_id].offset_dir;
-      file_seek(offset, is_flash); 
-      file_write_buf(file_slots[core.osd[pos].slot_id].dir, 256, is_flash);
+      file_seek(offset); 
+      file_write_buf(file_slots[core.osd[pos].slot_id].dir, 256);
       offset = file_slots[core.osd[pos].slot_id].offset_filename;
-      file_seek(offset, is_flash); 
-      file_write_buf(file_slots[core.osd[pos].slot_id].filename, 256, is_flash);
+      file_seek(offset); 
+      file_write_buf(file_slots[core.osd[pos].slot_id].filename, 256);
     } else {
       // save switch state into the core
       core.osd[pos].prev_val = core.osd[pos].val;
       file1.seek(FILE_POS_SWITCHES_DATA + pos);
       file1.write(core.osd[pos].val);
     }
-    file1.close();
-  }
+    file1.close();  
 }
 
 void app_core_on_keyboard() {
@@ -581,7 +563,9 @@ void app_core_filebrowser(uint8_t vpos) {
   zxosd.print("Dir "); zxosd.print(dir);
   // display pager
   zxosd.setPos(8, vpos + file_page_size + 2); zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.printf("Page %03d of %03d", file_page, file_pages);
+  char b[40];
+  sprintf(b, "Page %03d of %03d", file_page, file_pages); 
+  zxosd.print(b);
 
 }
 
