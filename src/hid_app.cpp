@@ -7,6 +7,17 @@
 #include "ps2kbd.h"
 #include "SegaController.h"
 
+typedef struct {
+  tusb_desc_device_t desc_device;
+  uint16_t manufacturer[32];
+  uint16_t product[48];
+  uint16_t serial[16];
+  bool mounted;
+} dev_info_t;
+
+// CFG_TUH_DEVICE_MAX is defined by tusb_config header
+dev_info_t dev_info[CFG_TUH_DEVICE_MAX] = { 0 };
+
 bool hid_has_driver(uint16_t vid, uint16_t pid)
 {
   if (joy_drivers_len > 0) {
@@ -32,7 +43,46 @@ hid_joy_config_t hid_load_driver(uint16_t vid, uint16_t pid)
   return cfg; 
 }
 
-extern "C" {
+void print_device_descriptor(tuh_xfer_t *xfer)
+{
+  if (XFER_RESULT_SUCCESS != xfer->result) {
+    d_printf("Failed to get device descriptor\r\n");
+    return;
+  }
+  uint8_t const daddr = xfer->daddr;
+  dev_info_t *dev = &dev_info[daddr - 1];
+  tusb_desc_device_t *desc = &dev->desc_device;
+  d_printf("Device %u: ID %04x:%04x\r\n", daddr, desc->idVendor, desc->idProduct);
+  d_printf("Device Descriptor:\r\n");
+  d_printf("  bLength             %u\r\n"     , desc->bLength);
+  d_printf("  bDescriptorType     %u\r\n"     , desc->bDescriptorType);
+  d_printf("  bcdUSB              %04x\r\n"   , desc->bcdUSB);
+  d_printf("  bDeviceClass        %u\r\n"     , desc->bDeviceClass);
+  d_printf("  bDeviceSubClass     %u\r\n"     , desc->bDeviceSubClass);
+  d_printf("  bDeviceProtocol     %u\r\n"     , desc->bDeviceProtocol);
+  d_printf("  bMaxPacketSize0     %u\r\n"     , desc->bMaxPacketSize0);
+  d_printf("  idVendor            0x%04x\r\n" , desc->idVendor);
+  d_printf("  idProduct           0x%04x\r\n" , desc->idProduct);
+  d_printf("  bcdDevice           %04x\r\n"   , desc->bcdDevice);
+  d_printf("  iManufacturer       %u     "    , desc->iManufacturer);  
+}
+
+// Invoked when device is mounted (configured)
+void tuh_mount_cb(uint8_t daddr) {
+  d_printf("Device attached, address = %d\r\n", daddr);
+
+  dev_info_t *dev = &dev_info[daddr - 1];
+  dev->mounted = true;
+
+  // Get Device Descriptor
+  tuh_descriptor_get_device(daddr, &dev->desc_device, 18, print_device_descriptor, 0);
+}
+
+void tuh_umount_cb(uint8_t daddr) {
+  Serial1.printf("Device removed, address = %d\r\n", daddr);
+  dev_info_t *dev = &dev_info[daddr - 1];
+  dev->mounted = false;
+}
 
 // Invoked when device is mounted (configured)
 void tuh_hid_mount_cb (uint8_t dev_addr, uint8_t instance, uint8_t const* desc_report, uint16_t desc_len)
@@ -129,8 +179,6 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
   // continue to request to receive report
   tuh_hid_receive_report(dev_addr, instance);
 }
-
-} // extern C
 
 static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_report_t const *report, uint16_t len)
 {
