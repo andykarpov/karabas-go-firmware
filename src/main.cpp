@@ -27,7 +27,7 @@
 #include "types.h"
 #include <SPI.h>
 #include <Wire.h>
-#include "PioSpi.h"
+#include <PioSPI.h>
 #include <SparkFun_PCA9536_Arduino_Library.h>
 #include "SdFat.h"
 #include "LittleFS.h"
@@ -50,10 +50,11 @@
 #include <IniFile.h>
 #include "hid_driver.h"
 
-PioSpi spiSD(PIN_SD_SPI_RX, PIN_SD_SPI_SCK, PIN_SD_SPI_TX); // dedicated SD1 SPI
+PioSPI spiSD(PIN_SD_SPI_TX, PIN_SD_SPI_RX, PIN_SD_SPI_SCK, SD_CS_PIN, SPI_MODE0, SD_SCK_MHZ(16)); // dedicated SD1 SPI
 #define SD_CONFIG  SdSpiConfig(SD_CS_PIN, DEDICATED_SPI, SD_SCK_MHZ(16), &spiSD) // SD1 SPI Settings
 SPISettings settingsA(SD_SCK_MHZ(16), MSBFIRST, SPI_MODE0); // MCU SPI settings
 Adafruit_USBD_MSC usb_msc;
+Adafruit_USBH_Host usb_host;
 
 PCA9536 extender;
 ElapsedTimer my_timer, my_timer2;
@@ -282,13 +283,14 @@ void setup()
 void setup1() {
   pio_usb_configuration_t pio_cfg = PIO_USB_DEFAULT_CONFIG;
   pio_cfg.pin_dp = HOST_PIN_DP;
-#if HW_ID == HW_ID_GO
+
+  #if HW_ID == HW_ID_GO
   pio_cfg.pinout = PIO_USB_PINOUT_DMDP;
 #elif HW_ID == HW_ID_MINI
   pio_cfg.pinout = PIO_USB_PINOUT_DPDM;
 #endif
-  tuh_configure(1, TUH_CFGID_RPI_PIO_USB_CONFIGURATION, &pio_cfg);
-  tuh_init(1);
+  usb_host.configure_pio_usb(1, &pio_cfg);
+  usb_host.begin(1);
 }
 
 void loop()
@@ -460,7 +462,7 @@ void loop()
 
 void loop1()
 {
-   tuh_task();
+  usb_host.task();
 }
 
 void do_configure(const char* filename) {

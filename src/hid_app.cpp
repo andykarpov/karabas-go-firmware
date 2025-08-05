@@ -32,6 +32,8 @@ hid_joy_config_t hid_load_driver(uint16_t vid, uint16_t pid)
   return cfg; 
 }
 
+extern "C" {
+
 // Invoked when device is mounted (configured)
 void tuh_hid_mount_cb (uint8_t dev_addr, uint8_t instance, uint8_t const* desc_report, uint16_t desc_len)
 {
@@ -127,6 +129,8 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
   // continue to request to receive report
   tuh_hid_receive_report(dev_addr, instance);
 }
+
+} // extern C
 
 static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_report_t const *report, uint16_t len)
 {
