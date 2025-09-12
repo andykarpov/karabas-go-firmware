@@ -158,8 +158,8 @@ void setup()
   pinMode(PIN_CONF_INIT_B, INPUT_PULLUP);
   pinMode(PIN_CONF_PRG_B, OUTPUT);
   pinMode(PIN_CONF_DONE, INPUT);
-  pinMode(PIN_CONF_CLK, OUTPUT);
-  pinMode(PIN_CONF_IO1, OUTPUT);
+  pinMode(PIN_CONF_CLK, INPUT);
+  pinMode(PIN_CONF_IO1, INPUT);
 
   // FT, SD2, MCU CS lines 
   pinMode(PIN_MCU_SPI_CS, OUTPUT); digitalWrite(PIN_MCU_SPI_CS, HIGH);
@@ -659,6 +659,9 @@ uint32_t fpga_send(const char* filename) {
   // seek to bitstream start
   file_seek(FILE_POS_BITSTREAM_START);
 
+  pinMode(PIN_CONF_CLK, OUTPUT);
+  pinMode(PIN_CONF_IO1, OUTPUT);
+
   // pulse PROG_B
   digitalWrite(PIN_CONF_PRG_B, HIGH);
   digitalWrite(PIN_CONF_PRG_B, LOW);
@@ -698,6 +701,9 @@ uint32_t fpga_send(const char* filename) {
     }
   }
   file1.close();
+
+  pinMode(PIN_CONF_CLK, INPUT);
+  pinMode(PIN_CONF_IO1, INPUT);
 
   d_print(i, DEC); d_println(" bytes done");
   d_print("Elapsed time: "); d_print(my_timer.elapsed(), DEC); d_println(" ms");
