@@ -30,9 +30,6 @@
 #include <PioSPI.h>
 #include <SparkFun_PCA9536_Arduino_Library.h>
 #include "SdFat.h"
-#include "LittleFS.h"
-#include "pio_usb.h"
-#include "Adafruit_TinyUSB.h"
 #include <ElapsedTimer.h>
 #include <RTC.h>
 #include <OSD.h>
@@ -49,12 +46,14 @@
 #include "file.h"
 #include <IniFile.h>
 #include "hid_driver.h"
+#include "tusb.h"
+#include "pio_usb.h"
+#include "Adafruit_TinyUSB.h"
 
-PioSPI spiSD(PIN_SD_SPI_TX, PIN_SD_SPI_RX, PIN_SD_SPI_SCK, SD_CS_PIN, SPI_MODE0, SD_SCK_MHZ(16)); // dedicated SD1 SPI
-#define SD_CONFIG  SdSpiConfig(SD_CS_PIN, DEDICATED_SPI, SD_SCK_MHZ(16), &spiSD) // SD1 SPI Settings
+PioSPI spiSD(PIN_SD_SPI_TX, PIN_SD_SPI_RX, PIN_SD_SPI_SCK, SD_CS_PIN, SPI_MODE0, SD_SCK_MHZ(20)); // dedicated SD1 SPI
+#define SD_CONFIG  SdSpiConfig(SD_CS_PIN, DEDICATED_SPI, SD_SCK_MHZ(20), &spiSD) // SD1 SPI Settings
 SPISettings settingsA(SD_SCK_MHZ(16), MSBFIRST, SPI_MODE0); // MCU SPI settings
 Adafruit_USBD_MSC usb_msc;
-Adafruit_USBH_Host usb_host;
 
 PCA9536 extender;
 ElapsedTimer my_timer, my_timer2;
@@ -64,8 +63,6 @@ RTC zxrtc;
 SdFat32 sd1;
 File32 file1, file2;
 File32 root1;
-fs::Dir froot;
-fs::File ffile, ffile2;
 OSD zxosd;
 
 file_list_sort_item_t files[SORT_FILES_MAX];
@@ -134,7 +131,7 @@ void setup()
 {
   queue_init(&spi_event_queue, sizeof(queue_spi_t), 64);
 
-  hw_setup.debug_enabled = false;
+  hw_setup.debug_enabled = true;
 
   usb_msc.setID(0, "Karabas", "SD Card", "1.0");
   usb_msc.setReadWriteCallback(0, msc_read_cb_sd, msc_write_cb_sd, msc_flush_cb_sd);
@@ -221,24 +218,14 @@ void setup()
   zxosd.begin(spi_send);
   ft.begin(spi_send);
 
-  // LittleFS
-  d_print("Mounting Flash... ");
-  LittleFSConfig cfg;
-  cfg.setAutoFormat(true);
-  LittleFS.setConfig(cfg);
-  if (!LittleFS.begin()) {
-    has_fs = false;
-    d_println("Failed");
-  } else {
-    has_fs = true;
-    d_println("Done");
-  }
+  has_fs = false;
 
   // SD
   d_print("Mounting SD card... ");
   if (!sd1.begin(SD_CONFIG)) {
     has_sd = false;
     d_println("Failed");
+    sd1.initErrorPrint(&Serial);
   } else {
     has_sd = true;
     d_println("Done");
@@ -270,8 +257,6 @@ void setup()
     // load boot from SD or flashfs
     if (has_sd && sd1.exists(FILENAME_BOOT)) {  
       do_configure(FILENAME_BOOT);
-    } else if (has_fs && LittleFS.exists(FILENAME_FBOOT)) {
-      do_configure(FILENAME_FBOOT);
     } else {
       halt("Boot file not found. System stopped");
     }
@@ -289,8 +274,8 @@ void setup1() {
 #elif HW_ID == HW_ID_MINI
   pio_cfg.pinout = PIO_USB_PINOUT_DPDM;
 #endif
-  usb_host.configure_pio_usb(1, &pio_cfg);
-  usb_host.begin(1);
+  tuh_configure(1, TUH_CFGID_RPI_PIO_USB_CONFIGURATION, &pio_cfg);
+  tuh_init(1);
 }
 
 void loop()
@@ -462,7 +447,7 @@ void loop()
 
 void loop1()
 {
-  usb_host.task();
+  tuh_task();
 }
 
 void do_configure(const char* filename) {
@@ -663,23 +648,20 @@ uint32_t fpga_send(const char* filename) {
 
   d_print("Configuring FPGA by "); d_println(filename);
 
-  bool is_flash = is_flashfs(filename);
-
-  if (is_flash) {
-    ffile = LittleFS.open(filename, "r");
-   } else {
-    sd1.chvol();
-    if (!file1.open(filename, FILE_READ)) {
-      halt("Unable to open bitstream file to read");
-    }
-   }
+  sd1.chvol();
+  if (!file1.open(filename, FILE_READ)) {
+    halt("Unable to open bitstream file to read");
+  }
 
   // get bitstream size
-  uint32_t length = file_read32(FILE_POS_BITSTREAM_LEN, is_flash);
+  uint32_t length = file_read32(FILE_POS_BITSTREAM_LEN);
   d_print("Bitstream size: "); d_println(length, DEC);
 
   // seek to bitstream start
-  file_seek(FILE_POS_BITSTREAM_START, is_flash);
+  file_seek(FILE_POS_BITSTREAM_START);
+
+  pinMode(PIN_CONF_CLK, OUTPUT);
+  pinMode(PIN_CONF_IO1, OUTPUT);
 
   pinMode(PIN_CONF_CLK, OUTPUT);
   pinMode(PIN_CONF_IO1, OUTPUT);
@@ -701,7 +683,7 @@ uint32_t fpga_send(const char* filename) {
 
   digitalWrite(PIN_CONF_CLK, LOW);
 
-  while ((n = file_read_buf(line, (sizeof(line) < length ? sizeof(line) : length), is_flash ))) {
+  while ((n = file_read_buf(line, (sizeof(line) < length ? sizeof(line) : length) ))) {
     i += n;
     length -=n;
 
@@ -722,11 +704,10 @@ uint32_t fpga_send(const char* filename) {
       led_write(1, blink);
     }
   }
-  if (is_flash) {
-    ffile.close();
-  } else {
-    file1.close();
-  }
+  file1.close();
+
+  pinMode(PIN_CONF_CLK, INPUT);
+  pinMode(PIN_CONF_IO1, INPUT);
 
   pinMode(PIN_CONF_CLK, INPUT);
   pinMode(PIN_CONF_IO1, INPUT);
@@ -928,30 +909,18 @@ void on_time() {
 
 void read_core(const char* filename) {
 
-  bool is_flash = is_flashfs(filename);
-
-  if (is_flash) {
-    ffile = LittleFS.open(filename, "r");
-  } else {
-    sd1.chvol();
-    if (!file1.open(filename, FILE_READ)) {
-      halt("Unable to open bitstream file to read");
-    }
+  sd1.chvol();
+  if (!file1.open(filename, FILE_READ)) {
+    halt("Unable to open bitstream file to read");
   }
 
-  core.flash = is_flash;
-  if (is_flash) {
-    String s = String(ffile.fullName());
-    s = "/" + s;
-    s.toCharArray(core.filename, sizeof(core.filename));
-  } else {
-    file1.getName(core.filename, sizeof(core.filename));
-  }
+  core.flash = false;
+  file1.getName(core.filename, sizeof(core.filename));
   core.filename[32] = '\0';
-  file_seek(FILE_POS_CORE_NAME, is_flash); file_read_bytes(core.name, 32, is_flash); core.name[32] = '\0';
-  uint8_t visible; file_seek(FILE_POS_CORE_VISIBLE, is_flash); visible = file_read(is_flash); core.visible = (visible > 0);
-  file_seek(FILE_POS_CORE_ORDER, is_flash); core.order = file_read(is_flash);
-  file_seek(FILE_POS_CORE_TYPE, is_flash); core.type = file_read(is_flash);
+  file_seek(FILE_POS_CORE_NAME); file_read_bytes(core.name, 32); core.name[32] = '\0';
+  uint8_t visible; file_seek(FILE_POS_CORE_VISIBLE); visible = file_read(); core.visible = (visible > 0);
+  file_seek(FILE_POS_CORE_ORDER); core.order = file_read();
+  file_seek(FILE_POS_CORE_TYPE); core.type = file_read();
   // show OSD on boot (only for boot and fileloader cores)
   is_osd = false;
   switch (core.type) {
@@ -968,19 +937,19 @@ void read_core(const char* filename) {
     case CORE_TYPE_HIDDEN: d_println("Hidden"); break;
     default: d_println("Reserved");
   }
-  core.bitstream_length = file_read32(FILE_POS_BITSTREAM_LEN, is_flash);
-  file_seek(FILE_POS_CORE_ID, is_flash); file_read_bytes(core.id, 32, is_flash); core.id[32] = '\0';
-  file_seek(FILE_POS_CORE_BUILD, is_flash); file_read_bytes(core.build, 8, is_flash); core.build[8] = '\0';
-  file_seek(FILE_POS_CORE_EEPROM_BANK, is_flash); core.eeprom_bank = file_read(is_flash);
-  file_seek(FILE_POS_RTC_TYPE, is_flash); core.rtc_type = file_read(is_flash);
-  file_seek(FILE_POS_FILELOADER_DIR, is_flash); file_read_bytes(core.dir, 32, is_flash); core.dir[32] = '\0';
-  file_seek(FILE_POS_FILELOADER_FILE, is_flash); core.last_file_id = file_read16(FILE_POS_FILELOADER_FILE, is_flash);
-  file_seek(FILE_POS_FILELOADER_EXTENSIONS, is_flash); file_read_bytes(core.file_extensions, 32, is_flash); core.file_extensions[32] = '\0';
-  file_seek(FILE_POS_SPI_FREQ, is_flash); core.spi_freq = file_read(is_flash);
-  uint32_t roms_len = file_read32(FILE_POS_ROM_LEN, is_flash);
+  core.bitstream_length = file_read32(FILE_POS_BITSTREAM_LEN);
+  file_seek(FILE_POS_CORE_ID); file_read_bytes(core.id, 32); core.id[32] = '\0';
+  file_seek(FILE_POS_CORE_BUILD); file_read_bytes(core.build, 8); core.build[8] = '\0';
+  file_seek(FILE_POS_CORE_EEPROM_BANK); core.eeprom_bank = file_read();
+  file_seek(FILE_POS_RTC_TYPE); core.rtc_type = file_read();
+  file_seek(FILE_POS_FILELOADER_DIR); file_read_bytes(core.dir, 32); core.dir[32] = '\0';
+  file_seek(FILE_POS_FILELOADER_FILE); core.last_file_id = file_read16(FILE_POS_FILELOADER_FILE);
+  file_seek(FILE_POS_FILELOADER_EXTENSIONS); file_read_bytes(core.file_extensions, 32); core.file_extensions[32] = '\0';
+  file_seek(FILE_POS_SPI_FREQ); core.spi_freq = file_read();
+  uint32_t roms_len = file_read32(FILE_POS_ROM_LEN);
   uint32_t offset = FILE_POS_BITSTREAM_START + core.bitstream_length + roms_len;
   //d_print("OSD section: "); d_println(offset);
-  file_seek(offset, is_flash); core.osd_len = file_read(is_flash);
+  file_seek(offset); core.osd_len = file_read();
   //d_print("OSD len: "); d_println(core.osd_len);
 
   d_print("Core SPI Frequency: "); if (core.spi_freq > 0 && core.spi_freq < 255) { d_print(core.spi_freq); d_println(" MHz"); } else d_println("default");
@@ -988,10 +957,10 @@ void read_core(const char* filename) {
   for (uint8_t i=0; i<MAX_FILE_SLOTS; i++) { file_slots[i].is_mounted = false; }
 
   for (uint8_t i=0; i<core.osd_len; i++) {
-    core.osd[i].type = file_read(is_flash);
-    file_read(is_flash);
-    file_read_bytes(core.osd[i].name, 16, is_flash); core.osd[i].name[16] = '\0';
-    core.osd[i].def = file_read(is_flash);
+    core.osd[i].type = file_read();
+    file_read();
+    file_read_bytes(core.osd[i].name, 16); core.osd[i].name[16] = '\0';
+    core.osd[i].def = file_read();
     core.osd[i].val = core.osd[i].def;
     core.osd[i].prev_val = core.osd[i].def;
 
@@ -999,19 +968,19 @@ void read_core(const char* filename) {
     // loading initial dir, filename, extensions and trying to mount file, if any
     if (core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[i].type == CORE_OSD_TYPE_FILELOADER) {
       core.osd[i].options_len = 0;
-      core.osd[i].slot_id = file_read(is_flash);
+      core.osd[i].slot_id = file_read();
       file_slots[core.osd[i].slot_id].is_autoload = bitRead(core.osd[i].slot_id, 7);
       core.osd[i].slot_id = bitClear(core.osd[i].slot_id, 7);
       file_slots[core.osd[i].slot_id].is_mounted = false;
-      file_read_bytes(file_slots[core.osd[i].slot_id].ext, 256, is_flash); file_slots[core.osd[i].slot_id].ext[255] = '\0';
+      file_read_bytes(file_slots[core.osd[i].slot_id].ext, 256); file_slots[core.osd[i].slot_id].ext[255] = '\0';
       file_slots[core.osd[i].slot_id].offset_dir = file1.curPosition();
-      file_read_bytes(file_slots[core.osd[i].slot_id].dir, 256, is_flash); file_slots[core.osd[i].slot_id].dir[255] = '\0';
+      file_read_bytes(file_slots[core.osd[i].slot_id].dir, 256); file_slots[core.osd[i].slot_id].dir[255] = '\0';
       String dir = String(file_slots[core.osd[i].slot_id].dir);
       if (dir == "") { dir = "/"; }
       if (dir.charAt(0) != '/') { dir = '/' + dir; }
       dir.toCharArray(file_slots[core.osd[i].slot_id].dir, sizeof(file_slots[core.osd[i].slot_id].dir));
       file_slots[core.osd[i].slot_id].offset_filename = file1.curPosition();
-      file_read_bytes(file_slots[core.osd[i].slot_id].filename, 256, is_flash); file_slots[core.osd[i].slot_id].filename[255] = '\0';
+      file_read_bytes(file_slots[core.osd[i].slot_id].filename, 256); file_slots[core.osd[i].slot_id].filename[255] = '\0';
       String sfilename = String( file_slots[core.osd[i].slot_id].filename); sfilename.trim();
       String sfullname = dir + "/" + sfilename; sfullname.trim();
       if (sfilename.length() > 0 && sd1.exists(sfullname)) {
@@ -1024,28 +993,28 @@ void read_core(const char* filename) {
     }
       // otherwise - reading options structure
       else {
-      core.osd[i].options_len = file_read(is_flash);
+      core.osd[i].options_len = file_read();
       if (core.osd[i].options_len > 8) {
         core.osd[i].options_len = 8; // something goes wrong
       } 
       for (uint8_t j=0; j<core.osd[i].options_len; j++) {
-        file_read_bytes(core.osd[i].options[j].name, 16, is_flash); core.osd[i].options[j].name[16] = '\0';
+        file_read_bytes(core.osd[i].options[j].name, 16); core.osd[i].options[j].name[16] = '\0';
       }
     }
-    file_read_bytes(core.osd[i].hotkey, 16, is_flash); core.osd[i].hotkey[16] = '\0';
-    core.osd[i].keys[0] = file_read(is_flash);
-    core.osd[i].keys[1] = file_read(is_flash);
-    file_read(is_flash); // reserved
-    file_read(is_flash); 
-    file_read(is_flash);
+    file_read_bytes(core.osd[i].hotkey, 16); core.osd[i].hotkey[16] = '\0';
+    core.osd[i].keys[0] = file_read();
+    core.osd[i].keys[1] = file_read();
+    file_read(); // reserved
+    file_read(); 
+    file_read();
   }
 
   // read eeprom data from file (in case rombank = 4 and up)
   // 255 means no eeprom allowed by core
   if (core.eeprom_bank >= MAX_EEPROM_BANKS && core.eeprom_bank != NO_EEPROM_BANK) {
     for (uint8_t i=0; i<255; i++) {
-      file_seek(FILE_POS_EEPROM_DATA + i, is_flash);
-      core.eeprom[i].val = file_read(is_flash);
+      file_seek(FILE_POS_EEPROM_DATA + i);
+      core.eeprom[i].val = file_read();
       core.eeprom[i].prev_val = core.eeprom[i].val;
     }
   }
@@ -1055,8 +1024,8 @@ void read_core(const char* filename) {
 
   // read saved switches
   for(uint8_t i=0; i<core.osd_len; i++) {
-    file_seek(FILE_POS_SWITCHES_DATA + i, is_flash);
-    core.osd[i].val = file_read(is_flash);
+    file_seek(FILE_POS_SWITCHES_DATA + i);
+    core.osd[i].val = file_read();
     if (core.osd[i].val > core.osd[i].options_len-1) {
       core.osd[i].val = core.osd[i].def;
     }
@@ -1106,11 +1075,7 @@ void read_core(const char* filename) {
     d_print(core.osd[i].hotkey); d_println();
   }
 
-  if (is_flash) {
-    ffile.close();
-  } else {
-    file1.close();
-  }
+  file1.close();
 
   // mount slots
   for(uint8_t i=0; i<core.osd_len; i++) {
@@ -1141,19 +1106,13 @@ void read_core(const char* filename) {
 
 void read_roms(const char* filename) {
 
-  bool is_flash = is_flashfs(filename);
-
-  if (is_flash) {
-    ffile = LittleFS.open(filename, "r");
-  } else {
-    sd1.chvol();
-    if (!file1.open(filename, FILE_READ)) {
-      halt("Unable to open bitstream file to read");
-    }
+  sd1.chvol();
+  if (!file1.open(filename, FILE_READ)) {
+    halt("Unable to open bitstream file to read");
   }
 
-  uint32_t bitstream_length = file_read32(FILE_POS_BITSTREAM_LEN, is_flash);
-  uint32_t roms_len = file_read32(FILE_POS_ROM_LEN, is_flash);
+  uint32_t bitstream_length = file_read32(FILE_POS_BITSTREAM_LEN);
+  uint32_t roms_len = file_read32(FILE_POS_ROM_LEN);
   d_print("ROMS len "); d_println(roms_len);
   if (roms_len > 0) {
     spi_send(CMD_ROMLOADER, 0, 1);
@@ -1161,10 +1120,10 @@ void read_roms(const char* filename) {
   uint32_t offset = 0;
   uint32_t rom_idx = 0;
   while (roms_len > 0) {
-    uint32_t rom_len = file_read32(FILE_POS_BITSTREAM_START + bitstream_length + offset, is_flash);
+    uint32_t rom_len = file_read32(FILE_POS_BITSTREAM_START + bitstream_length + offset);
     bool rom_is_external = bitRead(rom_len, 31);
     rom_len = bitClear(rom_len, 31);
-    uint32_t rom_addr = file_read32(FILE_POS_BITSTREAM_START + bitstream_length + offset + 4, is_flash);
+    uint32_t rom_addr = file_read32(FILE_POS_BITSTREAM_START + bitstream_length + offset + 4);
     d_print("ROM #"); d_print(rom_idx); d_print(": addr="); d_print(rom_addr); d_print(", len="); d_println(rom_len);
     if (rom_is_external) {
       char rom_filename[256];
@@ -1200,7 +1159,8 @@ void read_roms(const char* filename) {
             zxosd.setPos(4,5+rom_idx);
             //uint8_t perc = ceil((float) i*256 * (100.0 / rom_len));
             zxosd.print(rom_idx+1); zxosd.print(": ");
-            zxosd.printf("%05d", (i+1)*256); zxosd.print(" ");
+            char b[40];
+            sprintf(b, "%05d", (i+1)*256); zxosd.print(b); zxosd.print(" ");
           }
           i++;
         }
@@ -1213,7 +1173,7 @@ void read_roms(const char* filename) {
     } else {
       for (uint32_t i=0; i<rom_len/256; i++) {
         char buf[256];
-        int c = file_read_bytes(buf, sizeof(buf), is_flash);
+        int c = file_read_bytes(buf, sizeof(buf));
         for (int j=0; j<256; j++) {
 
           uint32_t addr = rom_addr + i*256 + j;
@@ -1238,7 +1198,8 @@ void read_roms(const char* filename) {
           zxosd.setPos(4,5+rom_idx);
           //uint8_t perc = ceil((float) i*256 * (100.0 / rom_len));
           zxosd.print(rom_idx+1); zxosd.print(": ");
-          zxosd.printf("%05d", (i+1)*256); zxosd.print(" ");
+          char b[40];
+          sprintf(b, "%05d", (i+1)*256); zxosd.print(b); zxosd.print(" ");
         }
       }
     }
@@ -1254,11 +1215,7 @@ void read_roms(const char* filename) {
   //delay(100);
   spi_send(CMD_ROMLOADER, 0, 0);
 
-  if (is_flash) {
-    ffile.close();
-  } else {
-    file1.close();
-  }
+  file1.close();
 }
 
 void osd_handle(bool force) {

@@ -67,7 +67,14 @@
 			"typeinfo": "cpp",
 			"unordered_set": "cpp",
 			"cstring": "cpp",
-			"set": "cpp"
+			"set": "cpp",
+			"forward_list": "cpp",
+			"optional": "cpp",
+			"fstream": "cpp",
+			"format": "cpp",
+			"span": "cpp",
+			"text_encoding": "cpp",
+			"regex": "cpp"
 		}
 	}
 }

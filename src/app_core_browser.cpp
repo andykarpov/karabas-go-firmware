@@ -6,13 +6,15 @@
 #include "bitmaps.h"
 #include "OSD.h"
 #include "SdFat.h"
-#include "LittleFS.h"
 #include "SegaController.h"
 #include "usb_hid_keys.h"
 #include <algorithm>
 #include <tuple>
 #include "app_core_browser.h"
 #include "sorts.h"
+#include <cstdio>
+#include <iostream>
+using namespace std;
 
 core_list_item_t cores[MAX_CORES];
 uint8_t cores_len = 0;
@@ -54,7 +56,9 @@ void app_core_browser_menu(uint8_t vpos) {
       zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
     }
     char name[18]; memcpy(name, cores[i].name, 17); name[17] = '\0';
-    zxosd.printf("%-3d ", i+1); 
+    char b[40];
+    sprintf(b, "%-3d ", i+1); 
+    zxosd.print(b);
     zxosd.print(name);
     zxosd.print(cores[i].build);
     zxosd.print(cores[i].flash ? "  F" : " SD");
@@ -69,7 +73,9 @@ void app_core_browser_menu(uint8_t vpos) {
     }
   }
   zxosd.setPos(8, vpos + core_page_size + 1); zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.printf("Page %02d of %02d", core_page, core_pages);
+  char b[40];
+  sprintf(b, "Page %02d of %02d", core_page, core_pages); 
+  zxosd.print(b);
 }
 
 void app_core_browser_ft_overlay() {
@@ -198,45 +204,20 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
 }
 
 
-core_list_item_t app_core_browser_get_item(bool is_flash) {
+core_list_item_t app_core_browser_get_item() {
   core_list_item_t core;
-  if (is_flash) {
-    String s = String(ffile.fullName());
-    s = "/" + s;
-    s.toCharArray(core.filename, sizeof(core.filename));
-    core.flash = true;
-  } else {
-    file1.getName(core.filename, sizeof(core.filename));
-    core.flash = false;
-  }
-  file_seek(FILE_POS_CORE_ID, is_flash); file_read_bytes(core.id, 32, is_flash); core.id[32] = '\0';
-  file_seek(FILE_POS_CORE_NAME, is_flash); file_read_bytes(core.name, 32, is_flash); core.name[32] = '\0';
-  uint8_t visible; file_seek(FILE_POS_CORE_VISIBLE, is_flash); visible = file_read(is_flash); core.visible = (visible > 0);
-  file_seek(FILE_POS_CORE_ORDER, is_flash); core.order = file_read(is_flash);
-  file_seek(FILE_POS_CORE_TYPE, is_flash); core.type = file_read(is_flash);
-  file_seek(FILE_POS_CORE_BUILD, is_flash); file_read_bytes(core.build, 8, is_flash); core.build[8] = '\0';
+  file1.getName(core.filename, sizeof(core.filename));
+  core.flash = false;
+  file_seek(FILE_POS_CORE_ID); file_read_bytes(core.id, 32); core.id[32] = '\0';
+  file_seek(FILE_POS_CORE_NAME); file_read_bytes(core.name, 32); core.name[32] = '\0';
+  uint8_t visible; file_seek(FILE_POS_CORE_VISIBLE); visible = file_read(); core.visible = (visible > 0);
+  file_seek(FILE_POS_CORE_ORDER); core.order = file_read();
+  file_seek(FILE_POS_CORE_TYPE); core.type = file_read();
+  file_seek(FILE_POS_CORE_BUILD); file_read_bytes(core.build, 8); core.build[8] = '\0';
   return core;
 }
 
 void app_core_browser_read_list() {
-
-  // files from flash
-  if (has_fs) {
-    fs::Dir dir = LittleFS.openDir("/");
-    dir.rewind();
-    while (dir.next()) {
-      if (dir.isFile()) {
-        ffile = dir.openFile("r");
-        char filename[32]; file_get_name(filename, sizeof(filename), true);
-        uint8_t len = strlen(filename);
-        if (strstr(strlwr(filename + (len - 4)), CORE_EXT)) {
-          cores[cores_len] = app_core_browser_get_item(true);
-          cores_len++;
-        }
-        ffile.close();
-      }
-    }
-  }
 
   // files from sd card
   if (has_sd) {
@@ -251,7 +232,7 @@ void app_core_browser_read_list() {
       char filename[32]; file1.getName(filename, sizeof(filename));
       uint8_t len = strlen(filename);
       if (strstr(strlwr(filename + (len - 4)), CORE_EXT)) {
-        cores[cores_len] = app_core_browser_get_item(false);
+        cores[cores_len] = app_core_browser_get_item();
         cores_len++;
       }
       file1.close();

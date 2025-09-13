@@ -46,7 +46,9 @@ void app_file_loader_read_list(bool forceIndex = false) {
         zxosd.setPos(9, 9);
         zxosd.print("Error occured");
         zxosd.setPos(9,10);
-        zxosd.printf("Bad dir %s", d);
+        char b[255];
+        sprintf(b, "Bad dir %s", d); 
+        zxosd.print(b);
         delay(1000);
         app_file_loader_read_list(forceIndex);
         return;
@@ -189,7 +191,9 @@ void app_file_loader_menu(uint8_t vpos) {
     }
   }
   zxosd.setPos(8, vpos + file_page_size + 1); zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.printf("Page %03d of %03d", file_page, file_pages);
+  char b[40];
+  sprintf(b, "Page %03d of %03d", file_page, file_pages); 
+  zxosd.print(b);
 }
 
 void app_file_loader_overlay(bool initSD = true, bool recreateIndex = false) {
@@ -225,7 +229,7 @@ void app_file_loader_save()
       return;
     }
     core.last_file_id = files[file_sel].file_id;
-    file_write16(FILE_POS_FILELOADER_FILE, core.last_file_id, false);
+    file_write16(FILE_POS_FILELOADER_FILE, core.last_file_id);
     file1.close();
 }
 
