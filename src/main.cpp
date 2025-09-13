@@ -50,8 +50,8 @@
 #include "pio_usb.h"
 #include "Adafruit_TinyUSB.h"
 
-PioSPI spiSD(PIN_SD_SPI_TX, PIN_SD_SPI_RX, PIN_SD_SPI_SCK, SD_CS_PIN, SPI_MODE0, SD_SCK_MHZ(16)); // dedicated SD1 SPI
-#define SD_CONFIG  SdSpiConfig(SD_CS_PIN, DEDICATED_SPI, SD_SCK_MHZ(16), &spiSD) // SD1 SPI Settings
+PioSPI spiSD(PIN_SD_SPI_TX, PIN_SD_SPI_RX, PIN_SD_SPI_SCK, SD_CS_PIN, SPI_MODE0, SD_SCK_MHZ(20)); // dedicated SD1 SPI
+#define SD_CONFIG  SdSpiConfig(SD_CS_PIN, DEDICATED_SPI, SD_SCK_MHZ(20), &spiSD) // SD1 SPI Settings
 SPISettings settingsA(SD_SCK_MHZ(16), MSBFIRST, SPI_MODE0); // MCU SPI settings
 Adafruit_USBD_MSC usb_msc;
 
@@ -131,7 +131,7 @@ void setup()
 {
   queue_init(&spi_event_queue, sizeof(queue_spi_t), 64);
 
-  hw_setup.debug_enabled = false;
+  hw_setup.debug_enabled = true;
 
   usb_msc.setID(0, "Karabas", "SD Card", "1.0");
   usb_msc.setReadWriteCallback(0, msc_read_cb_sd, msc_write_cb_sd, msc_flush_cb_sd);
@@ -225,6 +225,7 @@ void setup()
   if (!sd1.begin(SD_CONFIG)) {
     has_sd = false;
     d_println("Failed");
+    sd1.initErrorPrint(&Serial);
   } else {
     has_sd = true;
     d_println("Done");

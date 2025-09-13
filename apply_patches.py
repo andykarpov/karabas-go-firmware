@@ -8,7 +8,7 @@ FRAMEWORK_DIR = env.PioPlatform().get_package_dir("framework-arduinopico")
 patches = [
     [join("patches", "1-adafruit-usbh-host.patch"), join(FRAMEWORK_DIR, "libraries", "Adafruit_TinyUSB_Arduino", "src", "arduino", "Adafruit_USBH_Host.cpp")],
 #    [join("patches", "1-adafruit-usbh-host.patch"), join(LIBDEPS_DIR, "pico", "Adafruit TinyUSB Library", "src", "arduino", "Adafruit_USBH_Host.cpp")],
-#    [join("patches", "2-adafruit-sdfatconfig.patch"), join(LIBDEPS_DIR, "pico", "SdFat - Adafruit Fork", "src", "SdFatConfig.h")],
+    [join("patches", "2-adafruit-sdfatconfig.patch"), join(LIBDEPS_DIR, "pico", "SdFat - Adafruit Fork", "src", "SdFatConfig.h")],
 ]
 
 for patch in patches:
