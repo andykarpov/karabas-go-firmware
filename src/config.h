@@ -2,9 +2,10 @@
 
 #define HW_ID_GO 1
 #define HW_ID_MINI 2
+#define HW_ID_MINIG 3
 
 #ifndef HW_ID
-#define HW_ID 2
+#define HW_ID 3
 #endif
 
 #ifndef BUILD_VER
@@ -85,6 +86,47 @@
 #define PIN_MCU_SPI_IO0 14 // io0
 #define PIN_MCU_SPI_IO1 15 // io1
 #define PIN_MCU_SPI_IO4 18 // io4 (will be gone for 50MHz clock)
+
+#define PIN_BTN1 4
+#define PIN_BTN2 6
+#define PIN_LED1 7
+#define PIN_LED2 5
+
+#elif HW_ID==HW_ID_MINIG
+
+#define HOST_PIN_DP   24
+
+#define PIN_MCU_SPI_SCK 22 // sck
+#define PIN_MCU_SPI_CS 21  // ss
+#define PIN_MCU_SPI_RX 20 // miso
+#define PIN_MCU_SPI_TX 23 // mosi
+
+#define PIN_SD_SPI_SCK 2 
+#define PIN_SD_SPI_CS 1 
+#define PIN_SD_SPI_RX 0 
+#define PIN_SD_SPI_TX 3 
+#define SD_CS_PIN PIN_SD_SPI_CS
+
+#define PIN_I2C_SDA 12 
+#define PIN_I2C_SCL 13 
+
+#define PIN_CONF_INIT_B 11 
+#define PIN_CONF_PRG_B 19 
+#define PIN_CONF_IO1 10 
+#define PIN_CONF_CLK 9 
+#define PIN_CONF_DONE 8 
+
+#define PIN_MCU_SD2_CS 16 // io2 
+#define PIN_MCU_FT_CS 17  // io3
+
+#define PIN_MCU_SPI_IO0 14 // io0
+#define PIN_MCU_SPI_IO1 15 // io1
+#define PIN_MCU_SPI_IO4 18 // io4 (will be gone for 50MHz clock)
+#define PIN_MCU_SPI_IO5 26 // io5
+
+#define PIN_FT_RESET 27
+#define PIN_MIDI_RESET 28
+#define PIN_ESP_RESET 29
 
 #define PIN_BTN1 4
 #define PIN_BTN2 6
@@ -206,6 +248,10 @@
 #define FILENAME_BOOT "boot.kg2"
 #define FILENAME_FBOOT "/boot.kg2"
 #define CORE_EXT ".kg2"
+#elif HW_ID==HW_ID_MINIG
+#define FILENAME_BOOT "boot.kg3"
+#define FILENAME_FBOOT "/boot.kg3"
+#define CORE_EXT ".kg3"
 #endif
 
 #define APP_COREBROWSER_MENU_OFFSET 5

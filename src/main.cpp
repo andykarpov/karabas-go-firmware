@@ -19,7 +19,7 @@
 -- RP2040 firmware for Karabas-Go
 --
 -- @author Andy Karpov <andy.karpov@gmail.com>
--- EU, 2024
+-- EU, 2024, 2025
 ------------------------------------------------------------------------------------------------------------------*/
 
 #include <Arduino.h>
@@ -77,8 +77,10 @@ uint16_t cached_file_from, cached_file_to;
 #if HW_ID == HW_ID_GO
 SegaController sega;
 FT812 ft(PIN_MCU_FT_CS, PIN_FT_RESET);
-#elif HW_ID == HW_ID_MINI 
+#elif HW_ID == HW_ID_MINI
 FT812 ft(PIN_MCU_FT_CS);
+#elif HW_ID == HW_ID_MINIG
+FT812 ft(PIN_MCU_FT_CS, PIN_FT_RESET);
 #endif
 
 static queue_t spi_event_queue;
@@ -171,6 +173,15 @@ void setup()
   pinMode(PIN_MCU_SPI_IO1, INPUT);
   #if HW_ID==HW_ID_MINI
   pinMode(PIN_MCU_SPI_IO4, INPUT);
+  #elif HW_ID==HW_ID_MINIG
+  pinMode(PIN_MCU_SPI_IO4, INPUT);
+  pinMode(PIN_MCU_SPI_IO5, INPUT);
+  pinMode(PIN_FT_RESET, OUTPUT);
+  pinMode(PIN_ESP_RESET, OUTPUT);
+  pinMode(PIN_MIDI_RESET, OUTPUT);
+  digitalWrite(PIN_FT_RESET, HIGH);
+  digitalWrite(PIN_ESP_RESET, HIGH);
+  digitalWrite(PIN_MIDI_RESET, HIGH);
   #endif
 
   // I2C
@@ -206,7 +217,7 @@ void setup()
 
   sega.begin(PIN_JOY_SCK, PIN_JOY_LOAD, PIN_JOY_DATA, PIN_JOY_P7);
 
-#elif HW_ID == HW_ID_MINI
+#elif HW_ID == HW_ID_MINI || HW_ID == HW_ID_MINIG
   has_extender = false;
   pinMode(PIN_BTN1, INPUT_PULLUP);
   pinMode(PIN_BTN2, INPUT_PULLUP);
@@ -271,7 +282,7 @@ void setup1() {
 
   #if HW_ID == HW_ID_GO
   pio_cfg.pinout = PIO_USB_PINOUT_DMDP;
-#elif HW_ID == HW_ID_MINI
+#elif HW_ID == HW_ID_MINI || HW_ID == HW_ID_MINIG
   pio_cfg.pinout = PIO_USB_PINOUT_DPDM;
 #endif
   tuh_configure(1, TUH_CFGID_RPI_PIO_USB_CONFIGURATION, &pio_cfg);
@@ -365,7 +376,7 @@ void loop()
 #if HW_ID == HW_ID_GO
   joyL = sega.getState(true);
   joyR = sega.getState(false);
-#elif HW_ID == HW_ID_MINI
+#elif HW_ID == HW_ID_MINI || HW_ID == HW_ID_MINIG
   joyL = 0;
   joyR = 0;
 #endif
@@ -403,7 +414,7 @@ void loop()
     if (packet.cmd == CMD_USB_KBD) {
 #if HW_ID==HW_ID_GO
       if (has_extender) extender.digitalWrite(PIN_EXT_LED2, !(usb_keyboard_report.modifier != 0 || usb_keyboard_report.keycode[0] != 0));
-#elif HW_ID==HW_ID_MINI
+#elif HW_ID==HW_ID_MINI || HW_ID==HW_ID_MINIG
       digitalWrite(PIN_LED2, !(usb_keyboard_report.modifier != 0 || usb_keyboard_report.keycode[0] != 0));
 #endif
       if (packet.addr == 1 && packet.data != 0) {
@@ -613,6 +624,14 @@ void core_trigger(uint8_t pos)
   if (memcmp(core.osd[pos].name, "Rese", 4) == 0) {
     d_println("Reset FT812");
     ft.reset();
+// reset ESP and MIDI ot soft reset for mini revG
+#if HW_ID==HW_ID_MINIG
+    digitalWrite(PIN_MIDI_RESET, LOW);
+    digitalWrite(PIN_ESP_RESET, LOW);
+    delay(50);
+    digitalWrite(PIN_MIDI_RESET, HIGH);
+    digitalWrite(PIN_ESP_RESET, HIGH);
+#endif
     delay(100);
   }
 
@@ -1043,6 +1062,15 @@ void read_core(const char* filename) {
     ft.reset();
   }
 
+  // reset ESP and MIDI on mini revG
+#if HW_ID==HW_ID_MINIG
+  digitalWrite(PIN_MIDI_RESET, LOW);
+  digitalWrite(PIN_ESP_RESET, LOW);
+  delay(50);
+  digitalWrite(PIN_MIDI_RESET, HIGH);
+  digitalWrite(PIN_ESP_RESET, HIGH);
+#endif
+
   // boot core tries to use FT812 as osd handler
   if (core.type == CORE_TYPE_BOOT && is_osd) {
     if (hw_setup.ft_enabled) {
@@ -1248,7 +1276,7 @@ bool btn_read(uint8_t num) {
   } else {
     return !(has_extender ? extender.digitalRead(PIN_EXT_BTN2) : HIGH);
   }
-#elif HW_ID == HW_ID_MINI
+#elif HW_ID == HW_ID_MINI || HW_ID == HW_ID_MINIG
   if (num == 0) { 
     return !digitalRead(PIN_BTN1);
   } else {
@@ -1264,7 +1292,7 @@ void led_write(uint8_t num, bool on) {
   } else {
     extender.digitalWrite(PIN_EXT_LED2, !on);
   }
-#elif HW_ID == HW_ID_MINI
+#elif HW_ID == HW_ID_MINI || HW_ID == HW_ID_MINIG
   if (num == 0) { 
     digitalWrite(PIN_LED1, !on);
   } else {

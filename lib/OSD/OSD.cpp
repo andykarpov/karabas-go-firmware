@@ -240,7 +240,7 @@ void OSD::logo(uint8_t x, uint8_t y, uint8_t hw) {
   setColor(OSD::COLOR_BLUE_I, OSD::COLOR_BLACK);
   write(0x16); // -
 
-  if (hw == 2) {
+  if (hw == 2 || hw == 3) {
     setPos(x+6, y+3);
     setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
     print("mini");
