@@ -222,7 +222,13 @@ void RTC::setData(uint8_t addr, uint8_t data) {
         case 8: rtc_month = rtc_is_bcd ? bcd2bin(data) : data; break;
         case 9: rtc_year = (rtc_is_bcd ? bcd2bin(data) : data); break;
         case 0xA: bitClear(data, 7); setEepromReg(addr, data); break;
-        case 0xB: rtc_is_bcd = !bitRead(data, 2); 
+        case 0xB: 
+                  if (rtc_type == RTC_TYPE_ZXEVO) {
+                    bitClear(data, 2);
+                    rtc_is_bcd = true; // zxevo always uses BCD
+                  } else {
+                    rtc_is_bcd = bitRead(data, 2);
+                  } 
                   rtc_is_24h = true; //bitRead(data, 1);  
                   bitSet(data, 1); // always 24-h format
                   bitClear(data, 7);
@@ -262,7 +268,7 @@ void RTC::readAll() {
   if (rtc_type == RTC_TYPE_DS1307) {
     rtc_is_bcd = true;
   } else {
-    rtc_is_bcd = !bitRead(reg_b, 2);
+    rtc_is_bcd = (rtc_type == RTC_TYPE_ZXEVO) ? true : bitRead(reg_b, 2);
   }
   rtc_is_24h = true; //bitRead(reg_b, 1);
 }

@@ -22,6 +22,7 @@ extern void core_eeprom_set(uint8_t pos, uint8_t val);
 #define CMD_RTC 0xFA
 #define RTC_TYPE_DS1307 1
 #define RTC_TYPE_MC146818A 0
+#define RTC_TYPE_ZXEVO 2
 
 class RTC
 {
