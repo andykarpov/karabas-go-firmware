@@ -132,7 +132,7 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
   //ft.drawText(112, ft.height()-40, 27, color_copyright, FT81x_OPT_CENTER, "www.karabas.uk\0");
   sprintf(b, "FW build: %s\0", STRINGIZE_VALUE_OF(BUILD_VER));
   ft.drawText(112, ft.height()-40, 27, color_copyright, FT81x_OPT_CENTER, b);
-  ft.drawText(112, ft.height()-20, 27, color_copyright, FT81x_OPT_CENTER, "(c) 2025 andykarpov\0");
+  ft.drawText(112, ft.height()-20, 27, color_copyright, FT81x_OPT_CENTER, "(c) 2026 andykarpov\0");
   sprintf(b, "Page %d of %d\0", core_page, core_pages);
   ft.drawText(ft.width()/2, ft.height()-40, 27, color_copyright, FT81x_OPT_CENTER, b);
 
