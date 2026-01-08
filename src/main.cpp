@@ -467,6 +467,8 @@ void do_configure(const char* filename) {
   ft.spi(false);
   fpga_send(filename);
   spi_send(CMD_INIT_START, 0, 0);
+  spi_send(CMD_HW_SETUP, 0, HW_ID); // hw id
+  spi_send(CMD_HW_SETUP, 1, hw_setup.dvi_only); // dvi only flag
   // trigger font loader reset
   zxosd.fontReset();
   // send font data
@@ -1330,6 +1332,8 @@ void load_setup() {
   hw_setup.color_text_active = 0x00ffffff;
   hw_setup.color_copyright = 0x00787878;  
 
+  hw_setup.dvi_only = false;
+
   if (!has_sd) return;
   sd1.chvol();
 
@@ -1342,6 +1346,8 @@ void load_setup() {
 
     ini.getValue("setup", "debug", buffer, bufferLen, hw_setup.debug_enabled);
     ini.getValue("setup", "debug_hid", buffer, bufferLen, hw_setup.debug_hid);
+    ini.getValue("setup", "dvi_only", buffer, bufferLen, hw_setup.dvi_only);
+
     
     ini.getValue("ft812", "enabled", buffer, bufferLen, hw_setup.ft_enabled);
     hw_setup.ft_video_mode = (ini.getValue("ft812", "video_mode", buffer, bufferLen)) ? strtoul(buffer, 0, 10) : 0;
@@ -1370,6 +1376,7 @@ void load_setup() {
     d_println("Setup:");
     d_print("Debug enabled: "); d_println(hw_setup.debug_enabled ? "yes" : "no"); 
     d_print("Debug HID enabled: "); d_println(hw_setup.debug_hid ? "yes" : "no"); 
+    d_print("DVI only: "); d_println(hw_setup.dvi_only ? "yes" : "no"); 
     d_print("FT812 enabled: "); d_println(hw_setup.ft_enabled ? "yes" : "no"); 
     d_print("FT812 video mode: "); d_println(hw_setup.ft_video_mode);
     d_print("FT812 sound: "); d_println(hw_setup.ft_sound); 

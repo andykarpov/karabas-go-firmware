@@ -190,6 +190,7 @@
 #define CMD_IOCTL_DATA 0x53 // (0-255, uint8_t): fileloader byte
 #define CMD_IOCTL_EXT 0x54 // (0-3, uint8_t): fileloader file ext
 
+#define CMD_HW_SETUP 0xF9
 #define CMD_RTC 0xFA
 #define CMD_FLASHBOOT 0xFB
 #define CMD_UART 0xFC

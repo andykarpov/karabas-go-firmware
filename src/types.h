@@ -105,6 +105,7 @@ typedef struct {
 	bool ft_char;
 	bool ft_3d_buttons;
 	bool autoload_enabled;
+	bool dvi_only;
 	uint8_t autoload_timeout;
 	char autoload_core[32+1];
 	uint32_t color_bg;
