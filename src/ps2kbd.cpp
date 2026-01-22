@@ -71,19 +71,19 @@ uint16_t const delays[] = { 250, 500, 750, 1000 };
 
 uint8_t repeat = 0;
 bool repeat_state = false;
-uint32_t repeat_us = 33333;
-uint16_t delay_ms = 250;
+uint32_t repeat_us = 91743;
+uint16_t delay_ms = 500;
 alarm_id_t repeater;
 
 hid_keyboard_report_t prev_rpt = {0};
 
 void kb_send(uint8_t byte) {
-  //d_printf("PS/2 Scancode: %02x", byte); d_println();
+//  d_printf("PS/2 Scancode: %02x", byte); d_println();
   spi_queue(CMD_PS2_SCANCODE, 0x00, byte);
 }
 
 void kb_send_xt(uint8_t byte, bool state) {
-  //d_printf("XT Scancode: %02x", byte); d_println();
+// d_printf("XT Scancode: %02x", byte | (state ? 0x00 : 0x80)); d_println();
   spi_queue(CMD_PS2_SCANCODE, 0x01, byte | (state ? 0x00 : 0x80) );
 }
 
@@ -166,6 +166,30 @@ void kb_send_key(uint8_t key, bool state, uint8_t modifiers) {
     } else {
       kb_send_xt(hid2xt[key], state);
     }
+  }
+}
+
+void ps2_command_receive(uint8_t cmd, uint8_t val) {
+  d_printf("Received ps2 command %02x : %02x", cmd, val); d_println();
+  switch (cmd) {
+    case 0xED: // set leds
+      // todo: usb set leds
+      d_printf("Set LEDs %02x", val); d_println();
+    break;
+    case 0xF0: 
+      d_printf("Set scancodeset %d", val); d_println();
+    break; // set scancodeset
+    case 0xF3: // set typematic and delays
+      repeat_us = repeats[val & 0x1f];
+      delay_ms = delays[(val & 0x60) >> 5];
+      d_printf("Set repeat rate %d us, delay rate %d ms", repeat_us, delay_ms); d_println();
+    break; 
+    case 0xF6: 
+    case 0xFF: // set defaults, reset
+      d_println("Set defaults");
+      repeat_us = 91743;
+      delay_ms = 500;
+    break;
   }
 }
 

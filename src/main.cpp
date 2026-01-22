@@ -49,6 +49,7 @@
 #include "tusb.h"
 #include "pio_usb.h"
 #include "Adafruit_TinyUSB.h"
+#include "ps2kbd.h"
 
 PioSPI spiSD(PIN_SD_SPI_TX, PIN_SD_SPI_RX, PIN_SD_SPI_SCK, SD_CS_PIN, SPI_MODE0, SD_SCK_MHZ(20)); // dedicated SD1 SPI
 #define SD_CONFIG  SdSpiConfig(SD_CS_PIN, DEDICATED_SPI, SD_SCK_MHZ(20), &spiSD) // SD1 SPI Settings
@@ -876,23 +877,23 @@ void serial_data(uint8_t addr, uint8_t data) {
 
 void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data) {
 
-  //if (cmd == CMD_FLASHBOOT && !is_flashboot && strcmp(core.id, "zxnext")==0) {
-  if (cmd == CMD_FLASHBOOT && !is_flashboot) {
-    flashboot(data);
-  } else if (cmd == CMD_UART) {
-    serial_data(addr, data);
-  } else if (cmd == CMD_RTC) {
-    zxrtc.setData(addr, data);
-  } else if (cmd == CMD_DEBUG_DATA) {
-    debug_data = addr*256 + data;
-  } else if (cmd == CMD_DEBUG_ADDRESS) {
-    debug_address = addr*256 + data;
-  } else if (cmd == CMD_NOP) {
-    //d_println("Nop");
+  switch(cmd) {
+    case CMD_FLASHBOOT: if (!is_flashboot) flashboot(data); break;
+    case CMD_UART: serial_data(addr, data); break;
+    case CMD_RTC: zxrtc.setData(addr, data); break;
+    case CMD_PS2_SCANCODE: ps2_command_receive(addr, data); break;
+    case CMD_DEBUG_ADDRESS: debug_address = addr*256+data; break;
+    case CMD_DEBUG_DATA: debug_data = addr*256+data; break;
+    case CMD_NOP: break;
+  }
+
+  if (prev_debug_address != debug_address) {
+    prev_debug_address = debug_address;
+    d_printf("Debug Address: %04x", debug_address); d_println();
   }
   if (prev_debug_data != debug_data) {
     prev_debug_data = debug_data;
-    d_printf("Debug: %04x", debug_data); d_println();
+    d_printf("Debug Data: %04x", debug_data); d_println();
   }
 }
 
