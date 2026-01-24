@@ -466,6 +466,7 @@ void do_configure(const char* filename) {
   is_configuring = true;
   ft.vga(false);
   ft.spi(false);
+  kb_reset(); // ps/2 defaults
   fpga_send(filename);
   spi_send(CMD_INIT_START, 0, 0);
   spi_send(CMD_HW_SETUP, 0, HW_ID); // hw id

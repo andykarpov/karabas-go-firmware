@@ -74,31 +74,49 @@ bool repeat_state = false;
 uint32_t repeat_us = 91743;
 uint16_t delay_ms = 500;
 alarm_id_t repeater;
+uint8_t kb_scancodeset = 2;
+uint8_t kb_leds = 0;
 
 hid_keyboard_report_t prev_rpt = {0};
 
+void kb_set_scancodeset(uint8_t val) {
+  if (val > 0 && val <= 3) {
+    kb_scancodeset = val;
+    d_printf("Set ps/2 kb scancodeset %d", val); d_println();
+  }
+}
+
+void kb_set_typematic(uint8_t val) {
+  repeat_us = repeats[val & 0x1f];
+  delay_ms = delays[(val & 0x60) >> 5];
+  d_printf("Set ps/2 kb repeat rate %d us, delay rate %d ms", repeat_us, delay_ms); d_println();
+}
+
+void kb_set_leds(uint8_t val) {
+  kb_leds = val;
+  d_printf("Set ps/2 kb LEDs %02x", val); d_println();
+}
+
+void kb_reset() {
+  d_println("Set ps/2 kb defaults");
+  kb_set_scancodeset(2);
+  kb_set_leds(0);
+  repeat_us = 91743;
+  delay_ms = 500;
+}
+
 void kb_send(uint8_t byte) {
-//  d_printf("PS/2 Scancode: %02x", byte); d_println();
-  spi_queue(CMD_PS2_SCANCODE, 0x00, byte);
+  //if (kb_scancodeset == 2) {
+    spi_queue(CMD_PS2_SCANCODE, 0x00, byte);
+    //d_printf("PS/2 Scancode: %02x", byte); d_println();
+  //}
 }
 
 void kb_send_xt(uint8_t byte, bool state) {
-// d_printf("XT Scancode: %02x", byte | (state ? 0x00 : 0x80)); d_println();
-  spi_queue(CMD_PS2_SCANCODE, 0x01, byte | (state ? 0x00 : 0x80) );
-}
-
-int64_t repeat_callback(alarm_id_t, void *user_data) {
-  if(repeat) {
-    if(repeat >= HID_KEY_CONTROL_LEFT && repeat <= HID_KEY_GUI_RIGHT) {
-      kb_send_xt(mod2xt[repeat - HID_KEY_CONTROL_LEFT], repeat_state);
-    } else {
-      kb_send_xt(hid2xt[repeat], repeat_state);
-    }
-    repeat_state = !repeat_state;
-    return repeat_us;
-  }  
-  repeater = 0;
-  return 0;
+  //if (kb_scancodeset == 1) {
+    spi_queue(CMD_PS2_SCANCODE, 0x01, byte | (state ? 0x00 : 0x80) );
+    //d_printf("XT Scancode: %02x", byte | (state ? 0x00 : 0x80)); d_println();
+  //}
 }
 
 void kb_maybe_send_e0(uint8_t key) {
@@ -110,7 +128,23 @@ void kb_maybe_send_e0(uint8_t key) {
      key == HID_KEY_POWER ||
      key >= HID_KEY_GUI_LEFT && key != HID_KEY_SHIFT_RIGHT) {
     kb_send(0xe0);
+    kb_send_xt(0xe0, true);
   }
+}
+
+int64_t repeat_callback(alarm_id_t, void *user_data) {
+  if(repeat) {
+    kb_maybe_send_e0(repeat);
+    if(repeat >= HID_KEY_CONTROL_LEFT && repeat <= HID_KEY_GUI_RIGHT) {
+      kb_send_xt(mod2xt[repeat - HID_KEY_CONTROL_LEFT], true);
+    } else {
+      kb_send_xt(hid2xt[repeat], true);
+    }
+    repeat_state = !repeat_state;
+    return repeat_us;
+  }  
+  repeater = 0;
+  return 0;
 }
 
 void kb_send_key(uint8_t key, bool state, uint8_t modifiers) {
@@ -173,20 +207,16 @@ void ps2_command_receive(uint8_t cmd, uint8_t val) {
   d_printf("Received ps2 command %02x : %02x", cmd, val); d_println();
   switch (cmd) {
     case 0xED: // set leds
-      // todo: usb set leds
-      d_printf("Set LEDs %02x", val); d_println();
+      kb_set_leds(val);
     break;
-    case 0xF0: 
-      d_printf("Set scancodeset %d", val); d_println();
-    break; // set scancodeset
+    case 0xF0: // set scancodeset
+      kb_set_scancodeset(val);
+    break; 
     case 0xF3: // set typematic and delays
-      repeat_us = repeats[val & 0x1f];
-      delay_ms = delays[(val & 0x60) >> 5];
-      d_printf("Set repeat rate %d us, delay rate %d ms", repeat_us, delay_ms); d_println();
+      kb_set_typematic(val);
     break; 
     case 0xF6: 
     case 0xFF: // set defaults, reset
-      d_println("Set defaults");
       repeat_us = 91743;
       delay_ms = 500;
     break;
