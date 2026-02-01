@@ -189,6 +189,7 @@
 #define CMD_IOCTL_BANK 0x52 // (0-7, uint8_t): fileloader bank
 #define CMD_IOCTL_DATA 0x53 // (0-255, uint8_t): fileloader byte
 #define CMD_IOCTL_EXT 0x54 // (0-3, uint8_t): fileloader file ext
+#define CMD_IOCTL_STATE 0x55 // 1 - active, 0 - inactive
 
 #define CMD_HW_SETUP 0xF9
 #define CMD_RTC 0xFA

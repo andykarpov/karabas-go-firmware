@@ -584,6 +584,7 @@ void app_core_on_select_file() {
     zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
 
     // send ioctl slot id, file data for file loader type
+    spi_send(CMD_IOCTL_STATE, 0, 1); // start
     spi_send(CMD_IOCTL_SLOT, 0, core.osd[curr_osd_item].slot_id);
 
     uint64_t fsize = 0;
@@ -609,6 +610,8 @@ void app_core_on_select_file() {
       spi_send(CMD_IOCTL_DATA, (uint8_t)((i & 0x00000000000000FF)), data);
     }
     file.close();
+    spi_send(CMD_IOCTL_STATE, 0, 0); // finish
+
     zxosd.setColor(OSD::COLOR_GREEN_I, OSD::COLOR_BLACK);
     zxosd.progress(9, 11, 15, fsize, fsize);
 
