@@ -36,9 +36,6 @@ const uint8_t ADDR_FONT_RST = 0x20;
 const uint8_t ADDR_FONT_DATA = 0x21;
 const uint8_t ADDR_FONT_DATA_WR = 0x22;
 
-const uint8_t SIZE_X = 32;
-const uint8_t SIZE_Y = 26;
-
 /****************************************************************************/
 
 OSD::OSD(void)
@@ -75,7 +72,7 @@ void OSD::setPos(uint8_t x, uint8_t y)
 void OSD::clear(void)
 {
   setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  fill(0);
+  fill(OSD::CHAR_VOID);
 }
 
 void OSD::fill(uint8_t chr)
@@ -106,23 +103,23 @@ void OSD::frame(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, uint8_t thicknes
         setPos(x1, y);
         for(uint8_t x=x1; x<=x2; x++) {
             if (y==y1 && x==x1) {
-                write(210); // lt
+                write(OSD::CHAR_LT); // lt
             }
             else if (y==y2 && x==x1) {
-                write(212); // lb
+                write(OSD::CHAR_LB); // lb
             }
             else if (y==y1 && x==x2) {
-                write(211); // rt
+                write(OSD::CHAR_RT); // rt
             }
             else if (y==y2 && x==x2) {
-                write(213); // rb
+                write(OSD::CHAR_RB); // rb
             }
             else if (y==y1 || y == y2) {
-                write(209); // t / b
+                write(OSD::CHAR_TB); // t / b
             }
             else if ((x==x1 && y>y1 && y<y2) || (x==x2 && y>y1 && y<y2)) {
                 setPos(x,y);
-                write(208); // l / r
+                write(OSD::CHAR_LR); // l / r
             }
         }
     }
@@ -134,27 +131,52 @@ void OSD::progress(uint8_t x, uint8_t y, uint8_t size, uint32_t val, uint32_t ma
   // fill with 0xfe (small square)
   uint8_t v = map(val, 0, max, 0, size);
   for (uint8_t i=0; i<v; i++) {
-    write(0xfe);
+    write(OSD::CHAR_SQUARE);
   }
   // fill empty space
   for (uint8_t i=v; i<size; i++) {
-    write(0x00);
+    write(OSD::CHAR_VOID);
   }
 }
 
+void OSD::scrollbar(uint8_t x, uint8_t y, uint8_t height, uint32_t val, uint32_t max)
+{
+  uint8_t v = map(val, 0, max, 0, height);
+  for (uint8_t i=0; i<height; i++) {
+    setPos(x, y+i);
+    write(i == v ? OSD::CHAR_SCROLL_HANDLE : OSD::CHAR_LR);
+  }
+}
 
 /****************************************************************************/
 
 size_t OSD::write(uint8_t chr)
 {
-  uint8_t color = fg_color << 4;  
-  action(CMD_OSD, ADDR_SET_POS_X, current_x);
-  action(CMD_OSD, ADDR_SET_POS_Y, current_y);
-//  action(CMD_CHAR, chr-32);
-  action(CMD_OSD, ADDR_CHAR, chr);
-  action(CMD_OSD, ADDR_ATTR, bg_color + color);
+  uint8_t prev_attr = attr[current_y][current_x];
+  uint8_t prev_data = data[current_y][current_x];
+  uint8_t color = fg_color << 4;
+  data[current_y][current_x] = chr;
+  attr[current_y][current_x] = bg_color + color;
+  if (prev_attr != bg_color+color || prev_data != chr) {
+    changed[current_y][current_x] = true;
+  }
   setPos(current_x+1, current_y);
-  return 1; 
+  return 1;
+}
+
+void OSD::update()
+{
+  for (uint8_t y=0; y<OSD::SIZE_Y; y++) {
+    for (uint8_t x=0; x<OSD::SIZE_X; x++) {
+      if (changed[y][x]) {
+        action(CMD_OSD, ADDR_SET_POS_X, x);
+        action(CMD_OSD, ADDR_SET_POS_Y, y);
+        action(CMD_OSD, ADDR_CHAR, data[y][x]);
+        action(CMD_OSD, ADDR_ATTR, attr[y][x]);
+        changed[y][x] = false;
+      }
+    }
+  }
 }
 
 /****************************************************************************/
@@ -195,50 +217,31 @@ void OSD::fontSend(uint8_t data) {
 
 void OSD::line(uint8_t y) {
   setPos(0,y);
-  for (uint8_t i=0; i<32; i++) {
-    write(0xd1); 
+  for (uint8_t i=0; i<OSD::SIZE_X; i++) {
+    write(OSD::CHAR_LINE); 
   }
 }
 
 void OSD::logo(uint8_t x, uint8_t y, uint8_t hw) {
-  setPos(x,y);
-  setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-
   // karabas go logo
-  write(0xb0); write(0xb1); // k
-  write(0xb2); write(0xb3); // a
-  write(0xb4); write(0xb5); // r
-  write(0xb2); write(0xb3); // a
-  write(0xb6); write(0xb7); // b
-  write(0xb2); write(0xb3); // a
-  write(0xb8); write(0xb9); // s
+  uint8_t logo[56] = {
+    0xb0, 0xb1, 0xb2, 0xb3, 0xb4, 0xb5, 0xb2, 0xb3, 0xb6, 0xb7, 0xb2, 0xb3, 0xb8, 0xb9,
+    0xc0, 0xc1, 0xc2, 0xc3, 0xc4, 0xc5, 0xc2, 0xc3, 0xc6, 0xc7, 0xc2, 0xc3, 0xc8, 0xc9,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xba, 0xbb, 0xbc, 0xbd,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xca, 0xcb, 0xcc, 0xcd 
+  };
 
-  setPos(x,y+1);
-  write(0xc0); write(0xc1); // k
-  write(0xc2); write(0xc3); // a
-  write(0xc4); write(0xc5); // r
-  write(0xc2); write(0xc3); // a
-  write(0xc6); write(0xc7); // b
-  write(0xc2); write(0xc3); // a
-  write(0xc8); write(0xc9); // s
-
-  setPos(x+10, y+2);
-  write(0xba); write(0xbb); // g
-  write(0xbc); write(0xbd); // o
-
-  setPos(x+10, y+3);
-  write(0xca); write(0xcb); // g
-  write(0xcc); write(0xcd); // o
+  setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+  for (uint8_t i=0; i<56; i++) {
+    if (i % 14 == 0) setPos(x, y+(i/14));
+    write(logo[i]);
+  }
 
   setPos(x+1, y+2);
-  setColor(OSD::COLOR_RED_I, OSD::COLOR_BLACK);
-  write(0x16); // -
-  setColor(OSD::COLOR_YELLOW_I, OSD::COLOR_BLACK);
-  write(0x16); // -
-  setColor(OSD::COLOR_GREEN_I, OSD::COLOR_BLACK);
-  write(0x16); // -
-  setColor(OSD::COLOR_BLUE_I, OSD::COLOR_BLACK);
-  write(0x16); // -
+  setColor(OSD::COLOR_RED_I, OSD::COLOR_BLACK); write(OSD::CHAR_BRICK);
+  setColor(OSD::COLOR_YELLOW_I, OSD::COLOR_BLACK); write(OSD::CHAR_BRICK);
+  setColor(OSD::COLOR_GREEN_I, OSD::COLOR_BLACK); write(OSD::CHAR_BRICK);
+  setColor(OSD::COLOR_BLUE_I, OSD::COLOR_BLACK); write(OSD::CHAR_BRICK);
 
   if (hw == 2 || hw == 3) {
     setPos(x+6, y+3);

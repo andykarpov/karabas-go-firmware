@@ -27,10 +27,15 @@ class OSD : public Print
   using m_cb = void (*)(uint8_t cmd, uint8_t addr, uint8_t data); // alias function pointer
 
 private:
+  static const uint8_t SIZE_X = 32;
+  static const uint8_t SIZE_Y = 26;
   uint8_t fg_color;
   uint8_t bg_color;
   uint8_t current_x=0;
   uint8_t current_y=0;
+  uint8_t data[SIZE_Y][SIZE_X] = {0};
+  uint8_t attr[SIZE_Y][SIZE_X] = {0};
+  bool changed[SIZE_Y][SIZE_X] = {false};
   m_cb action;
 
 protected:
@@ -53,6 +58,26 @@ public:
   static const uint8_t COLOR_MAGENTA_I = 0b1011;
   static const uint8_t COLOR_CYAN = 0b0110;
   static const uint8_t COLOR_CYAN_I = 0b0111;
+
+  static const uint8_t CHAR_VOID = 0;
+  static const uint8_t CHAR_LT = 210;
+  static const uint8_t CHAR_RT = 211;
+  static const uint8_t CHAR_LB = 212;
+  static const uint8_t CHAR_RB = 213;
+  static const uint8_t CHAR_LR = 208;
+  static const uint8_t CHAR_TB = 209;
+  static const uint8_t CHAR_SQUARE = 254;
+  static const uint8_t CHAR_SMALL_SQUARE = 249;
+  static const uint8_t CHAR_LINE = 209;
+  static const uint8_t CHAR_BRICK = 22;
+  static const uint8_t CHAR_ARROW_UP = 30;
+  static const uint8_t CHAR_ARROW_DOWN = 31;
+  static const uint8_t CHAR_ARROW_LEFT = 17;
+  static const uint8_t CHAR_ARROW_RIGHT = 16;
+  static const uint8_t CHAR_FILLED_CELL = 219;
+  static const uint8_t CHAR_HALF_CELL = 221;
+  static const uint8_t CHAR_SCROLL_HANDLE = 220;
+  static const uint8_t CHAR_COPYRIGHT = 127;
 
   /**
    * Constructor
@@ -95,11 +120,17 @@ public:
    */
   virtual size_t write(uint8_t chr);
 
+  /**
+   * Send the changed data of the internal framebuffer to the FPGA side
+   */
+  void update(void);
+
   void fill(uint8_t chr);
   void fill(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, uint8_t chr);
   void frame(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, uint8_t thickness);
   void line(uint8_t y);
   void progress(uint8_t x, uint8_t y, uint8_t size, uint32_t val, uint32_t max);
+  void scrollbar(uint8_t x, uint8_t y, uint8_t height, uint32_t val, uint32_t max);
   void logo(uint8_t x, uint8_t y, uint8_t hw);
   void header(char* build, char* id, uint8_t hw);
   void footer();
