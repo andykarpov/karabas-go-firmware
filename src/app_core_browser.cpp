@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <tuple>
 #include "app_core_browser.h"
+#include "app_setup.h"
 #include "sorts.h"
 #include <cstdio>
 #include <iostream>
@@ -32,13 +33,18 @@ void app_core_browser_overlay() {
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
   zxosd.clear();
   zxosd.header(core.build, core.id, HW_ID);
+  print_time();
   zxosd.setPos(0,5);
   app_core_browser_menu(APP_COREBROWSER_MENU_OFFSET);  
   // footer
   zxosd.line(21);
+  zxosd.setPos(0, 22); 
+  zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_FLASH); zxosd.print("S");
+  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK); zxosd.print("etup");
   zxosd.line(23);
   zxosd.setPos(1,24); zxosd.print("Please use arrows to navigate");
   zxosd.setPos(1,25); zxosd.print("Press Enter to load selection");
+  zxosd.update();
 }
 
 void app_core_browser_menu(uint8_t vpos) {
@@ -76,6 +82,7 @@ void app_core_browser_menu(uint8_t vpos) {
   char b[40];
   sprintf(b, "Page %02d of %02d", core_page, core_pages); 
   zxosd.print(b);
+  zxosd.update();
 }
 
 void app_core_browser_ft_overlay() {
@@ -332,6 +339,16 @@ void app_core_browser_on_keyboard() {
           d_printf("Changing video mode from %d to %d", old_vmode, hw_setup.ft_video_mode); d_println();
           ft.init(hw_setup.ft_video_mode);
           app_core_browser_ft_overlay();
+        }
+
+        // enter setup mode
+        if (usb_keyboard_report.keycode[0] == KEY_S) {
+          autoload_enabled = false;
+          has_ft = false;
+          ft.vga(false);
+          ft.spi(false);
+          osd_return_state = state_core_browser;
+          osd_state = state_setup;
         }
 
         // redraw core browser on keypress

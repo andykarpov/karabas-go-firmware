@@ -42,6 +42,8 @@
 #include "osd_font.h"
 #include "app_core_browser.h"
 #include "app_file_loader.h"
+#include "app_setup.h"
+#include "app_about.h"
 #include "app_core.h"
 #include "file.h"
 #include <IniFile.h>
@@ -98,6 +100,7 @@ core_item_t core;
 core_file_slot_t file_slots[MAX_FILE_SLOTS];
 
 uint8_t osd_state;
+uint8_t osd_return_state;
 uint8_t osd_prev_state = state_main;
 
 hid_joy_config_t joy_drivers[MAX_JOY_DRIVERS];
@@ -484,6 +487,7 @@ void do_configure(const char* filename) {
     zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
     zxosd.setPos(0,5);
     zxosd.print("ROM ");
+    zxosd.update();
     zxosd.showPopup();
   }
   read_roms(filename);
@@ -548,6 +552,7 @@ bool on_global_hotkeys() {
               zxosd.print(core.osd[i].name);
               zxosd.setPos(0,6);
               zxosd.print(core.osd[i].options[core.osd[i].val].name);
+              zxosd.update();
               is_popup_hiding = true;
               popup_timer.reset();
               zxosd.showPopup();
@@ -585,6 +590,8 @@ void on_keyboard() {
       case state_core_browser: app_core_browser_on_keyboard(); break;
       case state_main: app_core_on_keyboard(); break;
       case state_file_loader: app_file_loader_on_keyboard(); break;
+      case state_setup: app_setup_on_keyboard(); break;
+      case state_about: app_about_on_keyboard(); break;
     }
   }
 }
@@ -898,7 +905,7 @@ void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data) {
   }
 }
 
-void on_time() {
+void print_time() {
   zxosd.setPos(24, 0);
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
   static bool dots_blink = !dots_blink;
@@ -920,9 +927,15 @@ void on_time() {
   if (d < 10) zxosd.print(0); zxosd.print(d); zxosd.print("/");
   if (mo < 10) zxosd.print(0); zxosd.print(mo); zxosd.print("/");
   if (y < 10) zxosd.print(0); zxosd.print(y);
+}
+
+void on_time() {
+  print_time();
+  zxosd.update();
 
   // on time callback
   app_core_browser_on_time();
+  app_setup_on_time();
 
   if (core.type == CORE_TYPE_BOOT && has_ft == true && is_osd == true) {
     // redraw core browser
@@ -1193,6 +1206,7 @@ void read_roms(const char* filename) {
             zxosd.print(rom_idx+1); zxosd.print(": ");
             char b[40];
             sprintf(b, "%05d", (i+1)*256); zxosd.print(b); zxosd.print(" ");
+            zxosd.update();
           }
           i++;
         }
@@ -1201,6 +1215,7 @@ void read_roms(const char* filename) {
         zxosd.setPos(4,5+rom_idx);
         zxosd.print(rom_idx+1); zxosd.print(": ");
         zxosd.print(" NO FILE");
+        zxosd.update();
       }
     } else {
       for (uint32_t i=0; i<rom_len/256; i++) {
@@ -1232,6 +1247,7 @@ void read_roms(const char* filename) {
           zxosd.print(rom_idx+1); zxosd.print(": ");
           char b[40];
           sprintf(b, "%05d", (i+1)*256); zxosd.print(b); zxosd.print(" ");
+          zxosd.update();
         }
       }
     }
@@ -1242,6 +1258,7 @@ void read_roms(const char* filename) {
       // next rom
       zxosd.setPos(0, 5+rom_idx);
       zxosd.print("ROM ");
+      zxosd.update();
     }
   }
   //delay(100);
@@ -1263,14 +1280,20 @@ void osd_handle(bool force) {
           }
         break;
         case state_main:
-          app_core_overlay();
+          app_core_overlay(true);
         break;
         case state_file_loader:
           app_file_loader_overlay(true, false);
         break;
+        case state_setup:
+          app_setup_overlay();
+        break;
+        case state_about:
+          app_about_overlay();
+        break;
       }
     }
-  }  
+  }
 }
 
 bool btn_read(uint8_t num) {

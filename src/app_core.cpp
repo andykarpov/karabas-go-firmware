@@ -82,7 +82,7 @@ uint8_t find_next_item() {
 
 }
 
-void app_core_overlay()
+void app_core_overlay(bool force)
 {
   osd_state = state_main;
 
@@ -93,14 +93,24 @@ void app_core_overlay()
   zxosd.clear();
 
   zxosd.header(core.build, core.id, HW_ID);
+  print_time();
 
-  curr_osd_item = find_first_item();
+  if (force) {
+    curr_osd_item = find_first_item();
+  }
   app_core_menu(APP_COREBROWSER_MENU_OFFSET);
 
   // footer
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+  zxosd.setPos(0, 23);
+  zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_FLASH); zxosd.print("S");
+  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK); zxosd.print("etup");
+  zxosd.print(" ");
+  zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_FLASH); zxosd.print("A");
+  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK); zxosd.print("bout");
+  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK); 
   zxosd.line(24);
   zxosd.setPos(0,25); zxosd.print("Press Menu+Esc to toggle OSD");
+  zxosd.update();
 }
 
 void app_core_menu(uint8_t vpos) {
@@ -152,6 +162,7 @@ void app_core_menu(uint8_t vpos) {
   if (core.osd_len <= 19) zxosd.fill(0, 23, 31, 23, ' ');
   if (core.osd_len <= 18) zxosd.fill(0, 22, 31, 22, ' ');
   if (core.osd_len <= 17) zxosd.fill(0, 21, 31, 21, ' ');
+  zxosd.update();
 }
 
 void app_core_save(uint8_t pos)
@@ -378,6 +389,18 @@ void app_core_on_keyboard() {
           }
           need_redraw = true;
         }
+
+        // s
+        if (usb_keyboard_report.keycode[0] == KEY_S) {
+          osd_return_state = state_main;
+          osd_state = state_setup;
+        }
+
+        // a
+        if (usb_keyboard_report.keycode[0] == KEY_A) {
+          osd_return_state = state_main;
+          osd_state = state_about;
+        }
   }
 
   if (need_redraw) {
@@ -396,16 +419,17 @@ void app_core_on_keyboard() {
       } else {
         is_filebrowser = false;
         prev_is_filebrowser = false;
-        app_core_menu(APP_COREBROWSER_MENU_OFFSET);
+        app_core_overlay(false);
       }
     } else {
-      app_core_menu(APP_COREBROWSER_MENU_OFFSET);
+      app_core_overlay(false);
     }
   }
 
   if (core.osd_need_save) {
     app_core_save(curr_osd_item);
   }
+  zxosd.update();
 }
 
 int app_core_init_filebrowser() {
@@ -567,6 +591,7 @@ void app_core_filebrowser(uint8_t vpos) {
   sprintf(b, "Page %03d of %03d", file_page, file_pages); 
   zxosd.print(b);
 
+  zxosd.update();
 }
 
 void app_core_on_select_file() {
@@ -602,6 +627,7 @@ void app_core_on_select_file() {
     for(uint64_t i = 0; i < fsize; i++) {
       if (i % 8192 == 0) {
         zxosd.progress(9, 11, 15, i, fsize);
+        zxosd.update();
       }
       if (i % 256 == 0) {
         spi_send24(CMD_IOCTL_BANK, i >> 8);
@@ -614,6 +640,7 @@ void app_core_on_select_file() {
 
     zxosd.setColor(OSD::COLOR_GREEN_I, OSD::COLOR_BLACK);
     zxosd.progress(9, 11, 15, fsize, fsize);
+    zxosd.update();
 
   } else if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER) {
     // send img slot id, size for file mounter type

@@ -119,7 +119,8 @@ typedef struct {
 
 enum osd_state_e {
     state_main = 0,
-    state_rtc,
+	state_setup,
+	state_about,
 	state_core_browser,
 	state_file_loader
 };

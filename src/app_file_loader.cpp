@@ -23,7 +23,8 @@ void app_file_loader_read_list(bool forceIndex = false) {
   zxosd.setColor(OSD::COLOR_MAGENTA_I, OSD::COLOR_BLACK);
   zxosd.setPos(9,10);
   zxosd.print("Please wait...");
-  delay(500);
+  zxosd.update();
+  delay(100);
 
   // files from sd1 card
 
@@ -49,6 +50,7 @@ void app_file_loader_read_list(bool forceIndex = false) {
         char b[255];
         sprintf(b, "Bad dir %s", d); 
         zxosd.print(b);
+        zxosd.update();
         delay(1000);
         app_file_loader_read_list(forceIndex);
         return;
@@ -85,6 +87,7 @@ void app_file_loader_read_list(bool forceIndex = false) {
     zxosd.print("Error occured");
     zxosd.setPos(9,10);
     zxosd.print("Check SD card");
+    zxosd.update();
     delay(1000);
     app_file_loader_read_list(forceIndex);
     return;
@@ -96,7 +99,8 @@ void app_file_loader_read_list(bool forceIndex = false) {
   // cleanup error messages
   if (has_sd) {
     zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-    zxosd.fill(8,8,24,12, 32);  
+    zxosd.fill(8,8,24,12, 32);
+    zxosd.update();
   }
 
   // select and load prev file on boot
@@ -194,6 +198,7 @@ void app_file_loader_menu(uint8_t vpos) {
   char b[40];
   sprintf(b, "Page %03d of %03d", file_page, file_pages); 
   zxosd.print(b);
+  zxosd.update();
 }
 
 void app_file_loader_overlay(bool initSD = true, bool recreateIndex = false) {
@@ -201,6 +206,7 @@ void app_file_loader_overlay(bool initSD = true, bool recreateIndex = false) {
   zxosd.clear();
 
   zxosd.header(core.build, core.id, HW_ID);
+  print_time();
 
   // collect files from sd
   if (initSD) {
@@ -215,6 +221,7 @@ void app_file_loader_overlay(bool initSD = true, bool recreateIndex = false) {
   zxosd.line(23);
   zxosd.setPos(1,24); zxosd.print("Please use arrows to navigate");
   zxosd.setPos(1,25); zxosd.print("Press Enter to load selection");
+  zxosd.update();
 }
 
 void app_file_loader_save()
@@ -244,6 +251,7 @@ void app_file_loader_send_file(uint16_t file_id) {
   zxosd.setColor(OSD::COLOR_MAGENTA_I, OSD::COLOR_BLACK);
   zxosd.setPos(9,10);
   zxosd.print("Please wait.   ");
+  zxosd.update();
 
   if (root1.isOpen()) {
     root1.close();
@@ -289,6 +297,7 @@ void app_file_loader_send_file(uint16_t file_id) {
   zxosd.setPos(9,10);
   zxosd.print("Please wait.   ");
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+  zxosd.update();
 
   // trigger reset
   spi_send(CMD_FILELOADER, 0, 3); // 11 - active = 1, reset = 1
@@ -307,11 +316,13 @@ uint32_t cnt = 0;
       cnt++;
       if (cnt % 8192 == 0) {
         zxosd.progress(9, 11, 15, cnt, file_size);
+        zxosd.update();
       }
     }
   }
   zxosd.setColor(OSD::COLOR_GREEN_I, OSD::COLOR_BLACK);
   zxosd.progress(9, 11, 15, file_size, file_size);
+  zxosd.update();
   
   // 00 - active = 0, reset = 0
   spi_send(CMD_FILELOADER, 0, 0);

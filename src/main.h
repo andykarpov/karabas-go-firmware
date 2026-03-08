@@ -35,6 +35,7 @@ extern uint16_t joyUSB[MAX_USB_JOYSTICKS];
 extern uint8_t joyUSB_len;
 
 extern uint8_t osd_state;
+extern uint8_t osd_return_state;
 extern core_item_t core;
 extern core_file_slot_t file_slots[MAX_FILE_SLOTS];
 
@@ -74,6 +75,7 @@ void read_roms(const char* filename);
 void core_trigger(uint8_t pos);
 void core_send(uint8_t pos);
 
+void print_time();
 void on_time();
 void on_keyboard();
 
