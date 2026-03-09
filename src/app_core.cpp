@@ -101,12 +101,14 @@ void app_core_overlay(bool force)
   app_core_menu(APP_COREBROWSER_MENU_OFFSET);
 
   // footer
-  zxosd.setPos(0, 23);
-  zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_FLASH); zxosd.print("S");
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK); zxosd.print("etup");
-  zxosd.print(" ");
-  zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_FLASH); zxosd.print("A");
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK); zxosd.print("bout");
+  if (!is_filebrowser) {
+    zxosd.setPos(0, 23);
+    zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_FLASH); zxosd.print("S");
+    zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK); zxosd.print("etup");
+    zxosd.print(" ");
+    zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_FLASH); zxosd.print("A");
+    zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK); zxosd.print("bout");
+  }
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK); 
   zxosd.line(24);
   zxosd.setPos(0,25); zxosd.print("Press Menu+Esc to toggle OSD");
@@ -586,6 +588,8 @@ void app_core_filebrowser(uint8_t vpos) {
   dir = dir.substring(0, 20);
   zxosd.print("Dir "); zxosd.print(dir);
   // display pager
+  zxosd.setPos(0, vpos + file_page_size + 2); zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+  zxosd.print("        ");
   zxosd.setPos(8, vpos + file_page_size + 2); zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
   char b[40];
   sprintf(b, "Page %03d of %03d", file_page, file_pages); 

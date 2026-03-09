@@ -30,6 +30,8 @@ void app_setup_overlay() {
   setup_hour = zxrtc.getHour();
   setup_minute = zxrtc.getMinute();
 
+  setup_menu.setBackSign("< Return back");
+
   setup_menu.onPrint([](const char* str, size_t len) {
       String s = String(str, len);
       zxosd.print(s);
