@@ -52,6 +52,7 @@
 #include "pio_usb.h"
 #include "Adafruit_TinyUSB.h"
 #include "ps2kbd.h"
+#include "EspSerial.h"
 
 PioSPI spiSD(PIN_SD_SPI_TX, PIN_SD_SPI_RX, PIN_SD_SPI_SCK, SD_CS_PIN, SPI_MODE0, SD_SCK_MHZ(20)); // dedicated SD1 SPI
 #define SD_CONFIG  SdSpiConfig(SD_CS_PIN, DEDICATED_SPI, SD_SCK_MHZ(20), &spiSD) // SD1 SPI Settings
@@ -67,6 +68,7 @@ SdFat32 sd1;
 File32 file1, file2;
 File32 root1;
 OSD zxosd;
+EspSerial esp_serial;
 
 file_list_sort_item_t files[SORT_FILES_MAX];
 uint16_t files_len = 0;
@@ -275,6 +277,12 @@ void setup()
     } else {
       halt("Boot file not found. System stopped");
     }
+
+    esp_serial.begin(115200);
+
+    // test
+    // esp_serial.print("AT+GMR\r\n");
+
     osd_state = state_core_browser;
     app_core_browser_read_list();
   }
@@ -452,6 +460,17 @@ void loop()
   } else {
     spi_send(CMD_NOP, 0 ,0);
   }
+
+  // send byte from esp tx fifo
+  int esp_tx = esp_serial.tx_queue_pull();
+  if (esp_tx >= 0) {
+    spi_send(CMD_ESP_UART, 0, esp_tx);
+  }
+
+  // test
+  //if (esp_serial.available()) {
+  //  Serial.write(esp_serial.read());
+  //}
 
   if (core.type == CORE_TYPE_BOOT && has_ft == true && is_osd == true) {
     // todo: playSound
@@ -888,6 +907,7 @@ void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data) {
   switch(cmd) {
     case CMD_FLASHBOOT: if (!is_flashboot) flashboot(data); break;
     case CMD_UART: serial_data(addr, data); break;
+    case CMD_ESP_UART: esp_serial.rx_queue_push(data); break;
     case CMD_RTC: zxrtc.setData(addr, data); break;
     case CMD_PS2_SCANCODE: ps2_command_receive(addr, data); break;
     case CMD_DEBUG_ADDRESS: debug_address = addr*256+data; break;

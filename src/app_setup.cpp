@@ -59,13 +59,9 @@ void app_setup_overlay() {
       b.ValueInt<uint8_t>("Minute", &setup_minute, 0, 59, 1, DEC, "", [](uint8_t v) { zxrtc.setMinute(v); zxrtc.save(); });
       b.Label("");
     });
-    b.Page(GM_NEXT, "Setup Wi-Fi", [](gm::Builder& b) {
-      b.Label("Setup Wi-Fi");
-      b.Label("TODO");
-      b.Label("");
-    });
     b.Page(GM_NEXT, "Options", [](gm::Builder& b) {
       b.Label("Setup Options");
+      b.Label("");
       b.Label("TODO");
       b.Label("");
     });
