@@ -4,6 +4,9 @@
 #include <map>
 #include <GyverFIFO.h>
 
+const uint8_t CMD_ESP_UART = 0xF8;
+const uint8_t CMD_NOP = 0xFF;
+
 EspSerial::EspSerial() {
 
 }
@@ -22,6 +25,13 @@ void EspSerial::begin(unsigned long baud, uint16_t config) {
     _running = true;
     rx_fifo.clear();
     tx_fifo.clear();
+}
+
+void EspSerial::begin(m_cb act) {
+    _running = true;
+    rx_fifo.clear();
+    tx_fifo.clear();
+    _action = act;
 }
 
 void EspSerial::end() {
@@ -93,13 +103,25 @@ EspSerial::operator bool() {
 
 void EspSerial::rx_queue_push(uint8_t c) {
     if (_running && rx_fifo.availableForWrite()) {
+        //Serial.write(c);
         rx_fifo.write(c);
     }
 }
 
 int EspSerial::tx_queue_pull() {
     if (_running && tx_fifo.available()) {
-        return tx_fifo.read();
+        uint8_t c = tx_fifo.read();
+        //Serial.write(c);
+        return c;
     }
     return -1;
+}
+
+void EspSerial::handle() {
+  int esp_tx = tx_queue_pull();
+  if (esp_tx >= 0) {
+    _action(CMD_ESP_UART, 0, esp_tx);
+  } else {
+    _action(CMD_NOP, 0, 0);
+  }
 }

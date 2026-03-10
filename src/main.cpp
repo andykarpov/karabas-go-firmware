@@ -278,10 +278,7 @@ void setup()
       halt("Boot file not found. System stopped");
     }
 
-    esp_serial.begin(115200);
-
-    // test
-    // esp_serial.print("AT+GMR\r\n");
+    esp_serial.begin(spi_send);
 
     osd_state = state_core_browser;
     app_core_browser_read_list();
@@ -457,15 +454,10 @@ void loop()
     if (uart_rx != -1) {
       spi_send(CMD_UART, uart_idx, (uint8_t) uart_rx);
     }
-  } else {
-    spi_send(CMD_NOP, 0 ,0);
   }
 
   // send byte from esp tx fifo
-  int esp_tx = esp_serial.tx_queue_pull();
-  if (esp_tx >= 0) {
-    spi_send(CMD_ESP_UART, 0, esp_tx);
-  }
+  esp_serial.handle();
 
   // test
   //if (esp_serial.available()) {
@@ -874,8 +866,8 @@ void serial_set_speed(uint8_t dll, uint8_t dlm) {
   // switch serial spseed
   if (serial_speed != speed) {
     serial_speed = speed;
-    Serial.end();
-    Serial.begin(speed);
+    //Serial.end();
+    //Serial.begin(speed);
   }
 }
 
@@ -884,8 +876,8 @@ void serial_data(uint8_t addr, uint8_t data) {
       // ts zifi 115200
       if (serial_speed != 115200) {
         serial_speed = 115200;
-        Serial.end();
-        Serial.begin(serial_speed);
+        //Serial.end();
+        //Serial.begin(serial_speed);
       }
       Serial.write(data);
     } else if (addr == 1) {
