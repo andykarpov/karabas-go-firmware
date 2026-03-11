@@ -82,18 +82,16 @@ int EspSerial::availableForWrite() {
 }
 
 void EspSerial::flush() {
-    // todo ?
+    tx_all();
 }
 
 size_t EspSerial::write(uint8_t c) {
     if (!_running) {
         return 0;
     }
-
     if (tx_fifo.availableForWrite()) {
         tx_fifo.write(c);
     }
-
     return 1;
 }
 
@@ -124,4 +122,10 @@ void EspSerial::handle() {
   } else {
     _action(CMD_NOP, 0, 0);
   }
+}
+
+void EspSerial::tx_all() {
+    while (tx_fifo.available() > 0) {
+        handle();
+    }
 }

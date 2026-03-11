@@ -117,3 +117,27 @@ void app_setup_on_time() {
   setup_hour = zxrtc.getHour();
   setup_minute = zxrtc.getMinute();
 }
+
+void app_esp_test() {
+    uint8_t buffer[8192] = {0};
+
+    if (wifi.createTCP("www.karabas.uk", 80)) {
+        d_println("ESP8266 create tcp link to karabas.uk ok");
+    } else {
+        d_println("ESP8266 create tcp link to karabas.uk err");
+    }
+
+    char *hello = "GET / HTTP/1.0\r\nHost: www.karabas.uk\r\nConnection: close\r\n\r\n";
+    wifi.send((const uint8_t*)hello, strlen(hello));
+
+    uint32_t len = 0;
+    while (len = wifi.recv(buffer, sizeof(buffer), 10000)) {
+      d_write(buffer, len);
+    }
+
+    if (wifi.releaseTCP()) {
+      d_println("ESP8266 release tcp link ok");
+    } else {
+      d_println("ESP8266 release tcp link err");
+    }
+}

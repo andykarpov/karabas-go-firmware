@@ -12,6 +12,7 @@
 #include "ElapsedTimer.h"
 #include "file.h"
 #include "EspSerial.h"
+#include "ESP8266AT.h"
 
 #define SD2_CONFIG SdSpiConfig(PIN_MCU_SD2_CS, SHARED_SPI, SD_SCK_MHZ(16)) // SD2 SPI Settings
 
@@ -19,6 +20,7 @@ extern FT812 ft;
 extern RTC zxrtc;
 extern OSD zxosd;
 extern EspSerial esp_serial;
+extern ESP8266 wifi;
 
 extern bool has_fs;
 extern bool has_sd;

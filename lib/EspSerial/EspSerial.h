@@ -35,6 +35,7 @@ class EspSerial : public arduino::HardwareSerial {
         // spi to/from fifo
         void rx_queue_push(uint8_t c);
         int tx_queue_pull();
+        void tx_all();
 
         // rx/tx fifos
         GyverFIFO<uint8_t, 4096> rx_fifo;

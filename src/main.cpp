@@ -53,6 +53,7 @@
 #include "Adafruit_TinyUSB.h"
 #include "ps2kbd.h"
 #include "EspSerial.h"
+#include "ESP8266AT.h"
 
 PioSPI spiSD(PIN_SD_SPI_TX, PIN_SD_SPI_RX, PIN_SD_SPI_SCK, SD_CS_PIN, SPI_MODE0, SD_SCK_MHZ(20)); // dedicated SD1 SPI
 #define SD_CONFIG  SdSpiConfig(SD_CS_PIN, DEDICATED_SPI, SD_SCK_MHZ(20), &spiSD) // SD1 SPI Settings
@@ -69,6 +70,7 @@ File32 file1, file2;
 File32 root1;
 OSD zxosd;
 EspSerial esp_serial;
+ESP8266 wifi(esp_serial, 115200);
 
 file_list_sort_item_t files[SORT_FILES_MAX];
 uint16_t files_len = 0;
@@ -279,6 +281,10 @@ void setup()
     }
 
     esp_serial.begin(spi_send);
+    wifi.init();
+
+    d_println("ESP8266 FW Version:");
+    d_println(wifi.getVersion());
 
     osd_state = state_core_browser;
     app_core_browser_read_list();
