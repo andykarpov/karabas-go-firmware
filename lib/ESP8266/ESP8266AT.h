@@ -3,6 +3,9 @@
  * @brief The definition of class ESP8266. 
  * @author Wu Pengfei<pengfei.wu@itead.cc> 
  * @date 2015.02
+ * @details Modified version for virtual serial port over SPI (EspSerial)
+ * @author Andy Karpov
+ * @date 2026.03
  * 
  * @par Copyright:
  * Copyright (c) 2015 ITEAD Intelligent Systems Co., Ltd. \n\n
@@ -53,12 +56,9 @@ class ESP8266 {
     /*
      * Constuctor. 
      *
-     * @param uart - an reference of HardwareSerial object. 
-     * @param baud - the buad rate to communicate with ESP8266(default:9600). 
-     *
-     * @warning parameter baud depends on the AT firmware. 9600 is an common value. 
+     * @param uart - an reference of EspSerial object. 
      */
-    ESP8266(EspSerial &uart, uint32_t baud = 115200);
+    ESP8266(EspSerial &uart);
     
     /**
      * @brief Init wifi module with default settings

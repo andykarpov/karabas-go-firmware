@@ -70,7 +70,7 @@ File32 file1, file2;
 File32 root1;
 OSD zxosd;
 EspSerial esp_serial;
-ESP8266 wifi(esp_serial, 115200);
+ESP8266 wifi(esp_serial);
 
 file_list_sort_item_t files[SORT_FILES_MAX];
 uint16_t files_len = 0;
@@ -280,6 +280,7 @@ void setup()
       halt("Boot file not found. System stopped");
     }
 
+    d_println("ESP8266 Init");
     esp_serial.begin(spi_send);
     wifi.init();
 

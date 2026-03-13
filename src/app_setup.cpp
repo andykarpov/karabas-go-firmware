@@ -127,7 +127,7 @@ void app_esp_test() {
         d_println("ESP8266 create tcp link to karabas.uk err");
     }
 
-    char *hello = "GET / HTTP/1.0\r\nHost: www.karabas.uk\r\nConnection: close\r\n\r\n";
+    const char *hello = "GET / HTTP/1.0\r\nHost: www.karabas.uk\r\nConnection: close\r\n\r\n";
     wifi.send((const uint8_t*)hello, strlen(hello));
 
     uint32_t len = 0;

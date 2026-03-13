@@ -3,6 +3,9 @@
  * @brief The implementation of class ESP8266. 
  * @author Wu Pengfei<pengfei.wu@itead.cc> 
  * @date 2015.02
+ * @details Modified version for virtual serial port over SPI (EspSerial)
+ * @author Andy Karpov
+ * @date 2026.03
  * 
  * @par Copyright:
  * Copyright (c) 2015 ITEAD Intelligent Systems Co., Ltd. \n\n
@@ -39,15 +42,15 @@
         }\
     } while(0)
 
-ESP8266::ESP8266(EspSerial &uart, uint32_t baud): m_puart(&uart)
+ESP8266::ESP8266(EspSerial &uart): m_puart(&uart)
 {
-    m_puart->begin(baud);
-    rx_empty();
+    // nothing here except m_puart assignment
 }
 
 void ESP8266::init(void)
 {
-        // cleanup startup messages
+    rx_empty();
+    // cleanup startup messages
     while (m_puart->available()) {
       m_puart->read();
     }
@@ -650,7 +653,7 @@ bool ESP8266::sATCWJAP(String ssid, String pwd)
 {
     String data;
     rx_empty();
-    printAT("CWJAP=\"");
+    printAT("CWJAP_DEF=\"");
     m_puart->print(ssid);
     m_puart->print("\",\"");
     m_puart->print(pwd);
