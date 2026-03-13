@@ -135,6 +135,8 @@ uint16_t prev_debug_address = 0;
 uint16_t debug_data = 0;
 uint16_t prev_debug_data = 0;
 
+bool prev_kb_repeat_state = false;
+
 setup_t hw_setup;
 
 void setup()
@@ -421,6 +423,12 @@ void loop()
     spi_send(CMD_JOYSTICK, 2, lowByte(joyR));
     spi_send(CMD_JOYSTICK, 3, highByte(joyR));
   }
+
+  // use repeat state to fire on_keyboard event for osd repeating navigation
+  if (is_osd && kb_repeat_key && kb_repeat_state && !prev_kb_repeat_state) {
+    on_keyboard();
+  }
+  prev_kb_repeat_state = kb_repeat_state;
 
   osd_handle(false);
 

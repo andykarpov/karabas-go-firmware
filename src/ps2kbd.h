@@ -4,6 +4,9 @@
 #include <Arduino.h>
 #include "hid_app.h"
 
+extern uint8_t kb_repeat_key;
+extern bool kb_repeat_state;
+
 void kb_send(uint8_t byte);
 void kb_send_xt(uint8_t byte, bool state);
 void kb_maybe_send_e0(uint8_t key);

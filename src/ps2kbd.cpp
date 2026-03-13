@@ -69,13 +69,14 @@ uint32_t const repeats[] = {
 };
 uint16_t const delays[] = { 250, 500, 750, 1000 };
 
-uint8_t repeat = 0;
-bool repeat_state = false;
+uint8_t kb_repeat_key = 0;
+bool kb_repeat_state = false;
 uint32_t repeat_us = 91743;
 uint16_t delay_ms = 500;
 alarm_id_t repeater;
 uint8_t kb_scancodeset = 2;
 uint8_t kb_leds = 0;
+bool kb_repeating = false;
 
 hid_keyboard_report_t prev_rpt = {0};
 
@@ -133,14 +134,14 @@ void kb_maybe_send_e0(uint8_t key) {
 }
 
 int64_t repeat_callback(alarm_id_t, void *user_data) {
-  if(repeat) {
-    kb_maybe_send_e0(repeat);
-    if(repeat >= HID_KEY_CONTROL_LEFT && repeat <= HID_KEY_GUI_RIGHT) {
-      kb_send_xt(mod2xt[repeat - HID_KEY_CONTROL_LEFT], true);
+  if(kb_repeat_key) {
+    kb_maybe_send_e0(kb_repeat_key);
+    if(kb_repeat_key >= HID_KEY_CONTROL_LEFT && kb_repeat_key <= HID_KEY_GUI_RIGHT) {
+      kb_send_xt(mod2xt[kb_repeat_key - HID_KEY_CONTROL_LEFT], true);
     } else {
-      kb_send_xt(hid2xt[repeat], true);
+      kb_send_xt(hid2xt[kb_repeat_key], true);
     }
-    repeat_state = !repeat_state;
+    kb_repeat_state = !kb_repeat_state;
     return repeat_us;
   }  
   repeater = 0;
@@ -188,12 +189,12 @@ void kb_send_key(uint8_t key, bool state, uint8_t modifiers) {
       kb_send_xt(hid2xt[key], state);
     }
     // init repeater
-    repeat = key;
+    kb_repeat_key = key;
     if (repeater) cancel_alarm(repeater);
-    repeat_state = false;
+    kb_repeat_state = false;
     repeater = add_alarm_in_ms(delay_ms, repeat_callback, NULL, false);
   } else {
-    if (key == repeat) repeat = 0;
+    if (key == kb_repeat_key) kb_repeat_key = 0;
     // send release
     if(key >= HID_KEY_CONTROL_LEFT && key <= HID_KEY_GUI_RIGHT) {
       kb_send_xt(mod2xt[key - HID_KEY_CONTROL_LEFT], state);
