@@ -129,11 +129,12 @@ public:
   void fill(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, uint8_t chr);
   void frame(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, uint8_t thickness);
   void line(uint8_t y);
-  void progress(uint8_t x, uint8_t y, uint8_t size, uint32_t val, uint32_t max);
+  void progress(uint8_t x, uint8_t y, uint8_t size, uint32_t val, uint32_t max, uint8_t cl = OSD::COLOR_WHITE, uint8_t bg = OSD::COLOR_BLACK);
   void scrollbar(uint8_t x, uint8_t y, uint8_t height, uint32_t val, uint32_t max);
   void logo(uint8_t x, uint8_t y, uint8_t hw);
   void header(char* build, char* id, uint8_t hw);
   void footer();
+  void loadingPopup(uint32_t val = 0, uint32_t max = 100);
 
   void showMenu();
   void hideMenu();

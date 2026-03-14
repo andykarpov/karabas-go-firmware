@@ -601,16 +601,8 @@ void app_core_filebrowser(uint8_t vpos) {
 void app_core_on_select_file() {
   if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILELOADER) {
 
-    zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-    zxosd.frame(8,8,24,12, 1);
-    zxosd.fill(9,9,23,11, 32);
-    zxosd.setColor(OSD::COLOR_YELLOW_I, OSD::COLOR_BLACK);
-    zxosd.setPos(9, 9);
-    zxosd.print("Loading...     ");
-    zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_BLACK);
-    zxosd.setPos(9,10);
-    zxosd.print("Please wait.   ");
-    zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+    zxosd.loadingPopup();
+    zxosd.update();
 
     // send ioctl slot id, file data for file loader type
     spi_send(CMD_IOCTL_STATE, 0, 1); // start
@@ -630,7 +622,7 @@ void app_core_on_select_file() {
 
     for(uint64_t i = 0; i < fsize; i++) {
       if (i % 8192 == 0) {
-        zxosd.progress(9, 11, 15, i, fsize);
+        zxosd.loadingPopup(i, fsize);
         zxosd.update();
       }
       if (i % 256 == 0) {
@@ -642,8 +634,7 @@ void app_core_on_select_file() {
     file.close();
     spi_send(CMD_IOCTL_STATE, 0, 0); // finish
 
-    zxosd.setColor(OSD::COLOR_GREEN_I, OSD::COLOR_BLACK);
-    zxosd.progress(9, 11, 15, fsize, fsize);
+    zxosd.loadingPopup(fsize, fsize);
     zxosd.update();
 
   } else if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER) {

@@ -31,23 +31,31 @@ void app_setup_overlay() {
   setup_minute = zxrtc.getMinute();
 
   setup_menu.setBackSign("< Return back");
+  setup_menu.setFastCursor(false);
 
   setup_menu.onPrint([](const char* str, size_t len) {
       String s = String(str, len);
       zxosd.print(s);
       zxosd.update();
   });
+
   setup_menu.onCursor([](uint8_t row, bool choosen, bool active) -> uint8_t {
     zxosd.setPos(0, 5+row);
-    uint8_t color = (choosen && !active) ? OSD::COLOR_BLACK : OSD::COLOR_WHITE;
-    uint8_t bg_color = (choosen && !active) ? OSD::COLOR_WHITE : OSD::COLOR_BLACK;
+    uint8_t color = (choosen && !active)  ? OSD::COLOR_BLACK : 
+                    (choosen && active)  ? OSD::COLOR_YELLOW_I : 
+                    OSD::COLOR_WHITE;
+    uint8_t bg_color = (choosen && !active) ? OSD::COLOR_WHITE : 
+                       (choosen && active ) ? OSD::COLOR_FLASH : 
+                       OSD::COLOR_BLACK;
     zxosd.setColor(color, bg_color);
     zxosd.update();
     return 0;
   });
+
   setup_menu.onBuild([](gm::Builder& b) {
     b.Label("Setup");
     b.Label("");
+
     b.Page(GM_NEXT, "Setup RTC", [](gm::Builder& b){
       b.Label("Setup RTC");
       b.Label("");
@@ -59,6 +67,7 @@ void app_setup_overlay() {
       b.ValueInt<uint8_t>("Minute", &setup_minute, 0, 59, 1, DEC, "", [](uint8_t v) { zxrtc.setMinute(v); zxrtc.save(); });
       b.Label("");
     });
+
     b.Page(GM_NEXT, "Options", [](gm::Builder& b) {
       b.Label("Setup Options");
       b.Label("");

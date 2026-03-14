@@ -241,16 +241,8 @@ void app_file_loader_save()
 }
 
 void app_file_loader_send_file(uint16_t file_id) {
-  
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.frame(8,8,24,12, 1);
-  zxosd.fill(9,9,23,11, 32);
-  zxosd.setColor(OSD::COLOR_GREEN_I, OSD::COLOR_BLACK);
-  zxosd.setPos(9, 9);
-  zxosd.print("Preparing...   ");
-  zxosd.setColor(OSD::COLOR_MAGENTA_I, OSD::COLOR_BLACK);
-  zxosd.setPos(9,10);
-  zxosd.print("Please wait.   ");
+
+  zxosd.loadingPopup();
   zxosd.update();
 
   if (root1.isOpen()) {
@@ -287,18 +279,6 @@ void app_file_loader_send_file(uint16_t file_id) {
   uint8_t buf[512];
   int c;
 
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.frame(8,8,24,12, 1);
-  zxosd.fill(9,9,23,11, 32);
-  zxosd.setColor(OSD::COLOR_YELLOW_I, OSD::COLOR_BLACK);
-  zxosd.setPos(9, 9);
-  zxosd.print("Loading...     ");
-  zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_BLACK);
-  zxosd.setPos(9,10);
-  zxosd.print("Please wait.   ");
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.update();
-
   // trigger reset
   spi_send(CMD_FILELOADER, 0, 3); // 11 - active = 1, reset = 1
   spi_send(CMD_FILELOADER, 0, 2); // 10 - active = 1, reset = 0
@@ -309,19 +289,21 @@ void app_file_loader_send_file(uint16_t file_id) {
   d_flush();
   
 uint32_t cnt = 0;
+uint32_t c1 = 0;
 
   while(c = file1.read(buf, sizeof(buf))) {
     for (int j=0; j<c; j++) {
       app_file_loader_send_byte(cnt, buf[j]);
       cnt++;
-      if (cnt % 8192 == 0) {
-        zxosd.progress(9, 11, 15, cnt, file_size);
+      c1++;
+      if (c1 == 16384) {
+        c1 = 0;
+        zxosd.loadingPopup(cnt, file_size);
         zxosd.update();
       }
     }
   }
-  zxosd.setColor(OSD::COLOR_GREEN_I, OSD::COLOR_BLACK);
-  zxosd.progress(9, 11, 15, file_size, file_size);
+  zxosd.loadingPopup(file_size, file_size);
   zxosd.update();
   
   // 00 - active = 0, reset = 0
@@ -401,7 +383,7 @@ void app_file_loader_on_keyboard()
 
 void app_file_loader_send_byte(uint32_t addr, uint8_t data) {
   // send file bank address every 256 bytes
-  if (addr % 256 == 0) {
+  if ((addr & 0x000000FF) == 0) {
     uint8_t filebank3 = (uint8_t)((addr & 0xFF000000) >> 24);
     uint8_t filebank2 = (uint8_t)((addr & 0x00FF0000) >> 16);
     uint8_t filebank1 = (uint8_t)((addr & 0x0000FF00) >> 8);

@@ -125,18 +125,37 @@ void OSD::frame(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, uint8_t thicknes
     }
 }
 
-void OSD::progress(uint8_t x, uint8_t y, uint8_t size, uint32_t val, uint32_t max)
+void OSD::progress(uint8_t x, uint8_t y, uint8_t size, uint32_t val, uint32_t max, uint8_t cl, uint8_t bg)
 {
   setPos(x,y);
   // fill with 0xfe (small square)
   uint8_t v = map(val, 0, max, 0, size);
   for (uint8_t i=0; i<v; i++) {
+    setColor(cl, bg);
     write(OSD::CHAR_SQUARE);
   }
   // fill empty space
   for (uint8_t i=v; i<size; i++) {
-    write(OSD::CHAR_VOID);
+    setColor(OSD::COLOR_GREY, bg);
+    write(OSD::CHAR_SQUARE);
   }
+}
+
+void OSD::loadingPopup(uint32_t val, uint32_t max)
+{
+  uint8_t bg = OSD::COLOR_BLUE;
+  setColor(OSD::COLOR_WHITE, bg);
+  frame(8,8,24,12, 1);
+  setColor(OSD::COLOR_WHITE, bg);
+  fill(9,9,23,11, OSD::CHAR_VOID);
+  setColor(OSD::COLOR_YELLOW_I, bg);
+  setPos(9, 9);
+  print("Loading...");
+  setColor(OSD::COLOR_CYAN_I, bg);
+  setPos(9,10);
+  print("Please wait.");
+  setColor(OSD::COLOR_WHITE, bg);
+  progress(9, 11, 15, val, max, OSD::COLOR_WHITE, bg);
 }
 
 void OSD::scrollbar(uint8_t x, uint8_t y, uint8_t height, uint32_t val, uint32_t max)
@@ -232,9 +251,11 @@ void OSD::logo(uint8_t x, uint8_t y, uint8_t hw) {
   };
 
   setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  for (uint8_t i=0; i<56; i++) {
-    if (i % 14 == 0) setPos(x, y+(i/14));
-    write(logo[i]);
+  for (uint8_t j=0; j<4; j++) {
+    for (uint8_t i=0; i<14; i++) {
+      setPos(x+i, y+j);
+      write(logo[i+14*j]);
+    }
   }
 
   setPos(x+1, y+2);
