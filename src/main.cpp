@@ -282,12 +282,13 @@ void setup()
       halt("Boot file not found. System stopped");
     }
 
+    // todo: move this code to the app_setup 
     d_println("ESP8266 Init");
     esp_serial.begin(spi_send);
-    wifi.init();
+    //wifi.init();
 
-    d_println("ESP8266 FW Version:");
-    d_println(wifi.getVersion());
+    //d_println("ESP8266 FW Version:");
+    //d_println(wifi.getVersion());
 
     osd_state = state_core_browser;
     app_core_browser_read_list();
@@ -377,13 +378,13 @@ void loop()
 
   // debug features
   // TODO: remove from production / refactor
-  if (btn1) {
+  /*if (btn1) {
     // wait until released
     while (btn1) { btn1 = btn_read(0); delay(100); }
     d_println("Reboot");
     d_flush();
     rp2040.reboot();
-  }
+  }*/
   /*if (btn2) {
       d_println("Reboot to bootloader");
       d_flush();

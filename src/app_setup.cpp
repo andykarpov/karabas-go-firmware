@@ -68,6 +68,16 @@ void app_setup_overlay() {
       b.Label("");
     });
 
+    if (core.type == CORE_TYPE_BOOT) {
+      b.Page(GM_NEXT, "Setup Wi-Fi", [](gm::Builder& b) {
+        b.Label("Setup Wi-Fi");
+        b.Label("");
+        b.Label("Scanning AP list...");
+        b.Label("Please wait");
+        b.Label("");
+      });
+    }
+
     b.Page(GM_NEXT, "Options", [](gm::Builder& b) {
       b.Label("Setup Options");
       b.Label("");
