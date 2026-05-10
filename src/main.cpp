@@ -55,8 +55,8 @@
 #include "EspSerial.h"
 #include "ESP8266AT.h"
 
-PioSPI spiSD(PIN_SD_SPI_TX, PIN_SD_SPI_RX, PIN_SD_SPI_SCK, SD_CS_PIN, SPI_MODE0, SD_SCK_MHZ(20)); // dedicated SD1 SPI
-#define SD_CONFIG  SdSpiConfig(SD_CS_PIN, DEDICATED_SPI, SD_SCK_MHZ(20), &spiSD) // SD1 SPI Settings
+PioSPI spiSD(PIN_SD_SPI_TX, PIN_SD_SPI_RX, PIN_SD_SPI_SCK, SD_CS_PIN, SPI_MODE0, SD_SCK_MHZ(16)); // dedicated SD1 SPI
+#define SD_CONFIG  SdSpiConfig(SD_CS_PIN, DEDICATED_SPI, SD_SCK_MHZ(16), &spiSD) // SD1 SPI Settings
 SPISettings settingsA(SD_SCK_MHZ(16), MSBFIRST, SPI_MODE0); // MCU SPI settings
 Adafruit_USBD_MSC usb_msc;
 
@@ -852,18 +852,22 @@ void spi_send64(uint8_t cmd, uint64_t data) {
 }
 
 void flashboot (uint8_t data) {
+  if (is_flashboot) return; // skip already in flashboot mode
   uint8_t flashboot_coreid = data;
   d_printf("Flashboot core id: %02x", data); d_println();
   d_flush(); delay(100);
   // todo: add flashboot_id to the core structure, search for desired id and boot it
   // now it's implemented as hack: reload the same core (required for zx next hard reset)
-  d_printf("Core id %s", core.id); d_println();
-  d_printf("Core filename %s", core.filename); d_println();
+  // d_printf("Core id %s", core.id); d_println();
+  // d_printf("Core filename %s", core.filename); d_println();
   //String f = String(core.filename); f.trim(); 
   //d_printf("Loading core %s", f); d_println();
   //char buf[33]; f.toCharArray(buf, sizeof(buf));
-  is_flashboot = true;
-  do_configure(core.filename);
+  String id = String(core.id); id.trim();
+  if (id.compareTo("zxnext") == 0) { // allow flashboot only for zxnext core
+    is_flashboot = true;
+    do_configure(core.filename);
+  }
 }
 
 void serial_set_speed(uint8_t dll, uint8_t dlm) {
@@ -913,7 +917,7 @@ void serial_data(uint8_t addr, uint8_t data) {
 void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data) {
 
   switch(cmd) {
-    case CMD_FLASHBOOT: if (!is_flashboot) flashboot(data); break;
+    case CMD_FLASHBOOT: flashboot(data); break;
     case CMD_UART: serial_data(addr, data); break;
     case CMD_ESP_UART: esp_serial.rx_queue_push(data); break;
     case CMD_RTC: zxrtc.setData(addr, data); break;
