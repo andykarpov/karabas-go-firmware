@@ -204,7 +204,7 @@ void setup()
   while ( !Serial ) yield();   // wait for native usb
 #endif
 
-  d_begin(115200);
+  Serial.begin(serial_speed);
   d_println("Karabas Go RP2040 firmware");
 
 #if HW_ID == HW_ID_GO
@@ -886,8 +886,8 @@ void serial_set_speed(uint8_t dll, uint8_t dlm) {
   // switch serial spseed
   if (serial_speed != speed) {
     serial_speed = speed;
-    //Serial.end();
-    //Serial.begin(speed);
+    Serial.end();
+    Serial.begin(speed);
   }
 }
 
@@ -896,8 +896,8 @@ void serial_data(uint8_t addr, uint8_t data) {
       // ts zifi 115200
       if (serial_speed != 115200) {
         serial_speed = 115200;
-        //Serial.end();
-        //Serial.begin(serial_speed);
+        Serial.end();
+        Serial.begin(serial_speed);
       }
       Serial.write(data);
     } else if (addr == 1) {

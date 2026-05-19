@@ -135,7 +135,9 @@ void kb_maybe_send_e0(uint8_t key) {
 
 int64_t repeat_callback(alarm_id_t, void *user_data) {
   if(kb_repeat_key) {
-    kb_maybe_send_e0(kb_repeat_key);
+    if (kb_scancodeset == 1) { // hotfix to not trigger e0 in scancodeset 2
+      kb_maybe_send_e0(kb_repeat_key);
+    }
     if(kb_repeat_key >= HID_KEY_CONTROL_LEFT && kb_repeat_key <= HID_KEY_GUI_RIGHT) {
       kb_send_xt(mod2xt[kb_repeat_key - HID_KEY_CONTROL_LEFT], true);
     } else {
