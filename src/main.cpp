@@ -494,9 +494,12 @@ void loop1()
 
 void do_configure(const char* filename) {
   is_configuring = true;
-  ft.vga(false);
+  ft.vga(false); // FT off
   ft.spi(false);
-  kb_reset(); // ps/2 defaults
+  kb_reset(); // reset to ps/2 defaults
+  queue_spi_t packet;
+	while (queue_try_remove(&spi_event_queue, &packet)) { } // cleanup usb kbd/mouse/joy event queue
+
   fpga_send(filename);
   spi_send(CMD_INIT_START, 0, 0);
   spi_send(CMD_HW_SETUP, 0, HW_ID); // hw id
