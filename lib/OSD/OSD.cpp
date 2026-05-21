@@ -216,8 +216,8 @@ void OSD::hideMenu() {
   action(CMD_OSD, ADDR_SHOW, 0);
 }
 
-void OSD::showPopup() {
-  action(CMD_OSD, ADDR_POPUP, 1);
+void OSD::showPopup(uint8_t i) {
+  action(CMD_OSD, ADDR_POPUP, (i << 4) + 1);
 }
 
 void OSD::hidePopup() {

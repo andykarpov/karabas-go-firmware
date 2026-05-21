@@ -597,7 +597,7 @@ bool on_global_hotkeys() {
               zxosd.update();
               is_popup_hiding = true;
               popup_timer.reset();
-              zxosd.showPopup();
+              zxosd.showPopup(i);
             }
             if (core.osd[i].type == CORE_OSD_TYPE_SWITCH) {
               core.osd_need_save = true;

@@ -138,7 +138,7 @@ public:
 
   void showMenu();
   void hideMenu();
-  void showPopup();
+  void showPopup(uint8_t i = 0);
   void hidePopup();
 
   void fontReset();
