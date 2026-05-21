@@ -129,6 +129,7 @@ uint8_t uart_idx = 0;
 uint8_t evo_rs232_dll = 0;
 uint8_t evo_rs232_dlm = 0;
 uint32_t serial_speed = 115200;
+unsigned long uart_rx_last = 0;
 
 uint16_t debug_address = 0;
 uint16_t prev_debug_address = 0;
@@ -145,11 +146,13 @@ void setup()
 
   hw_setup.debug_enabled = true;
 
+#if ENABLE_MSC
   usb_msc.setID(0, "Karabas", "SD Card", "1.0");
   usb_msc.setReadWriteCallback(0, msc_read_cb_sd, msc_write_cb_sd, msc_flush_cb_sd);
   usb_msc.setStartStopCallback(0, msc_start_stop_cb_sd);
   usb_msc.setUnitReady(0, false);
   usb_msc.begin();
+#endif
 
   //rp2040.wdt_begin(5000);
 
@@ -258,6 +261,7 @@ void setup()
   hid_drivers_dump();
 
   // if btn2 pressed on boot - espose msc
+#if ENABLE_MSC
   if (btn_read(1)) {
     if (has_sd) {
       expose_msc = true;
@@ -268,6 +272,7 @@ void setup()
       my_timer.reset();
     }
   }
+#endif
 
   osd_state = state_main;
 
@@ -323,6 +328,7 @@ void loop()
     rp2040.reboot();
   }
 
+#if ENABLE_MSC
   // if msc mounted but btn1 pressed - also reboot rp2040
   if (expose_msc) {
 
@@ -342,6 +348,7 @@ void loop()
     // do not process other loop things until exit from msc mode
     return;
   }
+#endif
 
   zxrtc.handle();
 
@@ -465,10 +472,15 @@ void loop()
   }
 
   if (Serial.available() > 0) {
-    uart_idx++;
-    int uart_rx = Serial.read();
-    if (uart_rx != -1) {
-      spi_send(CMD_UART, uart_idx, (uint8_t) uart_rx);
+    // receive at least on the serial_speed
+    unsigned long uart_rx_delay = 30 * 1e6 / serial_speed;
+    if (micros() - uart_rx_last >= uart_rx_delay) {
+      uart_idx++;
+      uart_rx_last = micros();
+      int uart_rx = Serial.read();
+      if (uart_rx != -1) {
+        spi_send(CMD_UART, uart_idx, (uint8_t) uart_rx);
+      }
     }
   }
 
@@ -1454,6 +1466,7 @@ void load_setup() {
   }
 }
 
+#if ENABLE_MSC
 // Callback invoked when received READ10 command.
 // Copy disk's data to buffer (up to bufsize) and
 // return number of copied bytes (must be multiple of block size)
@@ -1504,5 +1517,6 @@ bool msc_start_stop_cb_sd(uint8_t power_condition, bool start, bool load_eject) 
 
   return true;
 }
+#endif
 
 /////////

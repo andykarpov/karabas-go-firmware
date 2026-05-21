@@ -8,6 +8,10 @@
 #define HW_ID 3
 #endif
 
+#ifndef ENABLE_MSC
+#define ENABLE_MSC 1
+#endif
+
 #ifndef BUILD_VER
 #define BUILD_VER DEVBUILD
 #endif
