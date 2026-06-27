@@ -13,6 +13,7 @@
 #include "file.h"
 #include "EspSerial.h"
 #include "ESP8266AT.h"
+#include "MultiMatrixDisplay.h"
 
 #define SD2_CONFIG SdSpiConfig(PIN_MCU_SD2_CS, SHARED_SPI, SD_SCK_MHZ(16)) // SD2 SPI Settings
 
@@ -25,6 +26,7 @@ extern ESP8266 wifi;
 extern bool has_fs;
 extern bool has_sd;
 extern bool has_ft;
+extern bool has_matrix;
 extern bool need_redraw;
 
 extern SdFat32 sd1;
@@ -59,6 +61,9 @@ extern uint16_t file_pages;
 extern uint16_t file_page;
 extern file_list_item_t cached_names[MAX_CORES_PER_PAGE];
 extern uint16_t cached_file_from, cached_file_to;
+
+extern bool matrix_allow_scroll;
+extern MultiMatrixDisplay matrix;
 
 void spi_queue(uint8_t cmd, uint8_t addr, uint8_t data);
 void spi_send(uint8_t cmd, uint8_t addr, uint8_t data);

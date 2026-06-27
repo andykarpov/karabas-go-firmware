@@ -54,6 +54,9 @@
 #include "ps2kbd.h"
 #include "EspSerial.h"
 #include "ESP8266AT.h"
+#include <Adafruit_GFX.h>
+#include "Adafruit_LEDBackpack.h"
+#include "MultiMatrixDisplay.h"
 
 PioSPI spiSD(PIN_SD_SPI_TX, PIN_SD_SPI_RX, PIN_SD_SPI_SCK, SD_CS_PIN, SPI_MODE0, SD_SCK_MHZ(16)); // dedicated SD1 SPI
 #define SD_CONFIG  SdSpiConfig(SD_CS_PIN, DEDICATED_SPI, SD_SCK_MHZ(16), &spiSD) // SD1 SPI Settings
@@ -71,6 +74,7 @@ File32 root1;
 OSD zxosd;
 EspSerial esp_serial;
 ESP8266 wifi(esp_serial);
+MultiMatrixDisplay matrix = MultiMatrixDisplay();
 
 file_list_sort_item_t files[SORT_FILES_MAX];
 uint16_t files_len = 0;
@@ -114,6 +118,7 @@ bool has_extender = false;
 bool has_sd = false;
 bool has_fs = false;
 bool has_ft = false;
+bool has_matrix = false;
 bool is_flashboot = false;
 bool is_configuring = false;
 bool expose_msc = false;
@@ -139,6 +144,23 @@ uint16_t prev_debug_data = 0;
 bool prev_kb_repeat_state = false;
 
 setup_t hw_setup;
+
+const String matrix_msg = "KARABAS GO ";
+const int matrix_msg_width = matrix_msg.length() * 6; // 6 pixels per character width
+int matrix_msg_scrollpos = 16;
+bool matrix_allow_scroll = true;
+ElapsedTimer matrix_msg_scroll_timer;
+
+void matrix_init()
+{
+  if (has_matrix) {
+    // todo: get from global config ?
+    matrix.setTextWrap(false);
+    matrix.setTextSize(1);
+    matrix.setTextColor(LED_YELLOW);
+    matrix.setBrightness(4); // safe enough
+  }
+}
 
 void setup()
 {
@@ -237,6 +259,15 @@ void setup()
   pinMode(PIN_LED1, OUTPUT); digitalWrite(PIN_LED1, HIGH);
   pinMode(PIN_LED2, OUTPUT); digitalWrite(PIN_LED2, HIGH);
 #endif
+
+  has_matrix = matrix.begin();
+  if (has_matrix) {
+    d_println("Found a matrix display");
+  } else {
+    d_println("Matrix display was not found");
+  }
+
+  matrix_init();
 
   zxrtc.begin(spi_send, on_time);
   zxosd.begin(spi_send);
@@ -497,6 +528,19 @@ void loop()
     // todo: timer
   }
 
+  if (has_matrix && matrix_allow_scroll && matrix_msg_scroll_timer.elapsed() >= 100) {
+    matrix_msg_scroll_timer.reset();
+    matrix.clear();
+    matrix.setCursor(matrix_msg_scrollpos, 0);
+    matrix.print(matrix_msg);
+    matrix.writeDisplay();
+    if (matrix_msg_scrollpos >= -matrix_msg_width) {
+      matrix_msg_scrollpos--;
+    } else {
+      matrix_msg_scrollpos = 16;
+    }
+  }
+
 }
 
 void loop1()
@@ -505,6 +549,11 @@ void loop1()
 }
 
 void do_configure(const char* filename) {
+  matrix_allow_scroll = false;
+  if (has_matrix) {
+    matrix.clear();
+    matrix.writeDisplay();
+  }
   is_configuring = true;
   ft.vga(false); // FT off
   ft.spi(false);
@@ -540,6 +589,14 @@ void do_configure(const char* filename) {
   spi_send(CMD_INIT_DONE, 0, 0);
   is_flashboot = false;
   is_configuring = false;
+
+  // reinit matrix
+  if (has_matrix) {
+    matrix_init();
+    matrix.clear();
+    matrix.writeDisplay();
+    matrix_allow_scroll = (core.type == CORE_TYPE_BOOT);
+  }
 }
 
 bool on_global_hotkeys() {
@@ -770,10 +827,15 @@ uint32_t fpga_send(const char* filename) {
       }
     }
 
-    if (i % 8192 == 0) {
+    if ((i % 8192 == 0) || (i == length-1)) {
       blink = !blink;
       led_write(0, blink);
       led_write(1, blink);
+      if (has_matrix) {
+        matrix.drawLine(0, 0, map(i, 0, length, 0, 15), 0, LED_GREEN);
+        matrix.drawLine(0, 1, map(i, 0, length, 0, 15), 1, LED_GREEN);
+        matrix.writeDisplay();
+      }
     }
   }
   file1.close();
@@ -929,6 +991,33 @@ void serial_data(uint8_t addr, uint8_t data) {
     }
 }
 
+void matrix_ctl_data(uint8_t addr, uint8_t data) {
+  if (has_matrix) {
+    switch (addr) {
+      case 0: matrix.clear(); break;
+      case 1: matrix.setBrightness(data & 0x0F); break;
+      case 2: matrix.writeDisplay(); break;
+    }
+  }
+}
+
+void matrix_pixel_data(uint8_t x, uint8_t y, uint8_t color) {
+  if (has_matrix) {
+    matrix.drawPixel(x, y, color);
+  }
+}
+
+void matrix_bitplan_data(uint8_t addr, uint8_t data) {
+  if (has_matrix) {
+    // todo:
+    // addr 0-7:   matrix1, red
+    // addr 8-15:  matrix1, green
+    // addr 16-23: matrix2, red
+    // addr 24-31: matrix2, green
+    //matrix.drawBitmap()
+  }
+}
+
 void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data) {
 
   switch(cmd) {
@@ -939,6 +1028,9 @@ void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data) {
     case CMD_PS2_SCANCODE: ps2_command_receive(addr, data); break;
     case CMD_DEBUG_ADDRESS: debug_address = addr*256+data; break;
     case CMD_DEBUG_DATA: debug_data = addr*256+data; break;
+    case CMD_MATRIX_CTL: matrix_ctl_data(addr, data); break;
+    case CMD_MATRIX_PIXEL: matrix_pixel_data(addr & 0x0F, addr >> 4, data & 0x03); break;
+    case CMD_MATRIX_BITPLAN: matrix_bitplan_data(addr & 0x1F, data); break;
     case CMD_NOP: break;
   }
 
