@@ -993,11 +993,9 @@ void serial_data(uint8_t addr, uint8_t data) {
 
 void matrix_ctl_data(uint8_t addr, uint8_t data) {
   if (has_matrix) {
-    switch (addr) {
-      case 0: matrix.clear(); break;
-      case 1: matrix.setBrightness(data & 0x0F); break;
-      case 2: matrix.writeDisplay(); break;
-    }
+    if (bitRead(data, 0)) matrix.clear(); 
+    if (bitRead(data, 1)) matrix.writeDisplay();
+    if (bitRead(data, 2)) matrix.setBrightness(data >> 4);
   }
 }
 

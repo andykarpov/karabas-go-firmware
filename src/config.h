@@ -196,8 +196,8 @@
 #define CMD_IOCTL_STATE 0x55 // 1 - active, 0 - inactive
 
 // LED matrix registers
-#define CMD_MATRIX_CTL 0x60 // adr 0 - clear, adr 1 - brightness, adr 2 - write display
-#define CMD_MATRIX_PIXEL 0x61 // xy + color (00 - black, 01 - red, 10 - green, 11 - yellow)
+#define CMD_MATRIX_CTL 0x60 // adr 0, bit 0 - clear, bit1 - update, bit2 - brightness, bit 4-7 - brightness level
+#define CMD_MATRIX_PIXEL 0x61 // adr: xy, data - color (00 - black, 01 - red, 10 - green, 11 - yellow)
 #define CMD_MATRIX_BITPLAN 0x62 // 0...31 - address of byte, 32 bytes total (16 bytes per matrix)
 
 #define CMD_ESP_UART 0xF8
