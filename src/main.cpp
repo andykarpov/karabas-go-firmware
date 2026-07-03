@@ -148,8 +148,10 @@ setup_t hw_setup;
 const String matrix_msg = "KARABAS GO ";
 const int matrix_msg_width = matrix_msg.length() * 6; // 6 pixels per character width
 int matrix_msg_scrollpos = 16;
-bool matrix_allow_scroll = true;
-ElapsedTimer matrix_msg_scroll_timer;
+ElapsedTimer matrix_timer, audio_peaks_timer;
+uint8_t matrix_mode = MATRIX_MODE_SCROLL;
+
+uint16_t audio_l, audio_r;
 
 void matrix_init()
 {
@@ -161,6 +163,7 @@ void matrix_init()
     matrix.setBrightness(4); // safe enough
   }
 }
+
 
 void setup()
 {
@@ -528,17 +531,14 @@ void loop()
     // todo: timer
   }
 
-  if (has_matrix && matrix_allow_scroll && matrix_msg_scroll_timer.elapsed() >= 100) {
-    matrix_msg_scroll_timer.reset();
-    matrix.clear();
-    matrix.setCursor(matrix_msg_scrollpos, 0);
-    matrix.print(matrix_msg);
-    matrix.writeDisplay();
-    if (matrix_msg_scrollpos >= -matrix_msg_width) {
-      matrix_msg_scrollpos--;
-    } else {
-      matrix_msg_scrollpos = 16;
-    }
+  if (has_matrix && matrix_mode == MATRIX_MODE_SCROLL && matrix_timer.elapsed() >= 100) {
+    matrix_timer.reset();
+    matrix_scroll_text();
+  }
+
+  if (has_matrix && matrix_mode == MATRIX_MODE_AUDIO && matrix_timer.elapsed() >= 20) {
+    matrix_timer.reset();
+    matrix_draw_audio();
   }
 
 }
@@ -549,7 +549,7 @@ void loop1()
 }
 
 void do_configure(const char* filename) {
-  matrix_allow_scroll = false;
+  matrix_mode = MATRIX_MODE_AUDIO;
   if (has_matrix) {
     matrix.clear();
     matrix.writeDisplay();
@@ -595,7 +595,9 @@ void do_configure(const char* filename) {
     matrix_init();
     matrix.clear();
     matrix.writeDisplay();
-    matrix_allow_scroll = (core.type == CORE_TYPE_BOOT);
+    matrix_mode = (core.type == CORE_TYPE_BOOT) ? MATRIX_MODE_SCROLL : MATRIX_MODE_AUDIO;
+    audio_l = 32000;
+    audio_r = 32000;
   }
 }
 
@@ -996,6 +998,16 @@ void matrix_ctl_data(uint8_t addr, uint8_t data) {
     if (bitRead(data, 0)) matrix.clear(); 
     if (bitRead(data, 1)) matrix.writeDisplay();
     if (bitRead(data, 2)) matrix.setBrightness(data >> 4);
+    if (bitRead(data, 3) && matrix_mode == MATRIX_MODE_DRAW) {
+      matrix_mode = MATRIX_MODE_AUDIO;
+      matrix.clear();
+      matrix.writeDisplay();
+    }
+    if (!bitRead(data, 3) && matrix_mode != MATRIX_MODE_AUDIO) {
+      matrix_mode = MATRIX_MODE_DRAW;
+      matrix.clear();
+      matrix.writeDisplay();
+    }
   }
 }
 
@@ -1016,7 +1028,61 @@ void matrix_bitplan_data(uint8_t addr, uint8_t data) {
   }
 }
 
+uint8_t led_bar(uint16_t val) {
+  uint16_t values[16] = {20000, 16000, 10000, 8000, 6500, 5000, 3500, 3000, 2000, 1500, 1000, 750, 600, 500, 350, 200};
+  for (uint8_t i=0; i<=15; i++) {
+    if (val >= values[i]) 
+      return constrain(16-i, 1, 16);
+  }
+  return 0;
+}
+
+void matrix_draw_bar(uint8_t y, uint8_t val) {
+  if (val > 0) {
+    for (uint8_t x=0; x<=15; x++) {
+      if (val >= x) {
+          matrix.drawPixel(x, y, (x > 14) ? LED_RED : (x > 12) ? LED_YELLOW : LED_GREEN);
+      }
+    }
+  }
+}
+
+void matrix_draw_audio() {
+  matrix.clear();
+  uint8_t l = led_bar(audio_l);
+  uint8_t r = led_bar(audio_r);
+  matrix_draw_bar(1, l);
+  matrix_draw_bar(2, l);
+  matrix_draw_bar(5, r);
+  matrix_draw_bar(6, r);
+  matrix.writeDisplay();
+  
+  // decay (todo)
+  //if (audio_peaks_timer.elapsed() >= 100) { 
+  //  audio_peaks_timer.reset();
+    uint16_t decay_l = audio_l >> 4;
+    uint16_t decay_r = audio_r >> 4;
+    audio_l = (audio_l > decay_l) ? audio_l - decay_l : 0;
+    audio_r = (audio_r > decay_r) ? audio_r - decay_r : 0;
+  //}
+}
+
+void matrix_scroll_text()
+{
+  matrix.clear();
+  matrix.setCursor(matrix_msg_scrollpos, 0);
+  matrix.print(matrix_msg);
+  matrix.writeDisplay();
+  if (matrix_msg_scrollpos >= -matrix_msg_width) {
+    matrix_msg_scrollpos--;
+  } else {
+    matrix_msg_scrollpos = 16;
+  }
+}
+
 void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data) {
+
+  uint16_t new_audio = 0;
 
   switch(cmd) {
     case CMD_FLASHBOOT: flashboot(data); break;
@@ -1026,9 +1092,11 @@ void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data) {
     case CMD_PS2_SCANCODE: ps2_command_receive(addr, data); break;
     case CMD_DEBUG_ADDRESS: debug_address = addr*256+data; break;
     case CMD_DEBUG_DATA: debug_data = addr*256+data; break;
-    case CMD_MATRIX_CTL: matrix_ctl_data(addr, data); break;
-    case CMD_MATRIX_PIXEL: matrix_pixel_data(addr & 0x0F, addr >> 4, data & 0x03); break;
-    case CMD_MATRIX_BITPLAN: matrix_bitplan_data(addr & 0x1F, data); break;
+    case CMD_MATRIX_CTL: matrix_mode = MATRIX_MODE_DRAW; matrix_ctl_data(addr, data); break;
+    case CMD_MATRIX_PIXEL: matrix_mode = MATRIX_MODE_DRAW; matrix_pixel_data(addr & 0x0F, addr >> 4, data & 0x03); break;
+    case CMD_MATRIX_BITPLAN: matrix_mode = MATRIX_MODE_DRAW; matrix_bitplan_data(addr & 0x1F, data); break;
+    case CMD_AUDIO_PEAKS_L: new_audio = ((uint16_t)(addr) << 8) | (uint16_t)data; if (new_audio > audio_l) audio_l = new_audio; break;
+    case CMD_AUDIO_PEAKS_R: new_audio = ((uint16_t)(addr) << 8) | (uint16_t)data; if (new_audio > audio_r) audio_r = new_audio; break;
     case CMD_NOP: break;
   }
 

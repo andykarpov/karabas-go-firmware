@@ -62,7 +62,7 @@ extern uint16_t file_page;
 extern file_list_item_t cached_names[MAX_CORES_PER_PAGE];
 extern uint16_t cached_file_from, cached_file_to;
 
-extern bool matrix_allow_scroll;
+extern uint8_t matrix_mode;
 extern MultiMatrixDisplay matrix;
 
 void spi_queue(uint8_t cmd, uint8_t addr, uint8_t data);
@@ -97,3 +97,7 @@ int32_t msc_read_cb_sd (uint32_t lba, void* buffer, uint32_t bufsize);
 int32_t msc_write_cb_sd (uint32_t lba, uint8_t* buffer, uint32_t bufsize);
 void msc_flush_cb_sd (void);
 bool msc_start_stop_cb_sd(uint8_t power_condition, bool start, bool load_eject);
+
+uint8_t led_bar(uint16_t val);
+void matrix_draw_audio();
+void matrix_scroll_text();

@@ -199,6 +199,11 @@
 #define CMD_MATRIX_CTL 0x60 // adr 0, bit 0 - clear, bit1 - update, bit2 - brightness, bit 4-7 - brightness level
 #define CMD_MATRIX_PIXEL 0x61 // adr: xy, data - color (00 - black, 01 - red, 10 - green, 11 - yellow)
 #define CMD_MATRIX_BITPLAN 0x62 // 0...31 - address of byte, 32 bytes total (16 bytes per matrix)
+#define CMD_MATRIX_BTN 0x63
+
+// Audio data (slow peaks)
+#define CMD_AUDIO_PEAKS_L 0x70
+#define CMD_AUDIO_PEAKS_R 0x71
 
 #define CMD_ESP_UART 0xF8
 #define CMD_HW_SETUP 0xF9
@@ -274,6 +279,10 @@
 #ifndef WAIT_SERIAL
 #define WAIT_SERIAL 0
 #endif
+
+#define MATRIX_MODE_SCROLL 0
+#define MATRIX_MODE_DRAW 1
+#define MATRIX_MODE_AUDIO 2
 
 #define d_begin(...)   if (hw_setup.debug_enabled) Serial.begin(__VA_ARGS__);
 #define d_print(...)   if (hw_setup.debug_enabled) Serial.print(__VA_ARGS__);
