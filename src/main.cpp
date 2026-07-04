@@ -908,7 +908,7 @@ void spi_send32(uint8_t cmd, uint32_t data) {
   spi_send(cmd, 0, byte1);
   spi_send(cmd, 1, byte2);
   spi_send(cmd, 2, byte3);
-  spi_send(cmd, 2, byte4);
+  spi_send(cmd, 3, byte4);
 }
 
 void spi_send64(uint8_t cmd, uint64_t data) {
@@ -923,11 +923,11 @@ void spi_send64(uint8_t cmd, uint64_t data) {
   spi_send(cmd, 0, byte1);
   spi_send(cmd, 1, byte2);
   spi_send(cmd, 2, byte3);
-  spi_send(cmd, 2, byte4);
-  spi_send(cmd, 2, byte5);
-  spi_send(cmd, 2, byte6);
-  spi_send(cmd, 2, byte7);
-  spi_send(cmd, 2, byte8);
+  spi_send(cmd, 3, byte4);
+  spi_send(cmd, 4, byte5);
+  spi_send(cmd, 5, byte6);
+  spi_send(cmd, 6, byte7);
+  spi_send(cmd, 7, byte8);
 }
 
 void flashboot (uint8_t data) {
