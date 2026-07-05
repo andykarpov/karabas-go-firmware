@@ -1049,7 +1049,7 @@ void matrix_ctl_data(uint8_t addr, uint8_t data) {
       matrix.clear();
       matrix.writeDisplay();
     }
-    if (!bitRead(data, 3) && matrix_mode != MATRIX_MODE_AUDIO) {
+    if (!bitRead(data, 3) && matrix_mode == MATRIX_MODE_AUDIO) {
       matrix_mode = MATRIX_MODE_DRAW;
       matrix.clear();
       matrix.writeDisplay();
@@ -1135,7 +1135,7 @@ void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data) {
     case CMD_PS2_SCANCODE: ps2_command_receive(addr, data); break;
     case CMD_DEBUG_ADDRESS: debug_address = addr*256+data; break;
     case CMD_DEBUG_DATA: debug_data = addr*256+data; break;
-    case CMD_MATRIX_CTL: matrix_mode = MATRIX_MODE_DRAW; matrix_ctl_data(addr, data); break;
+    case CMD_MATRIX_CTL: matrix_ctl_data(addr, data); break;
     case CMD_MATRIX_PIXEL: matrix_mode = MATRIX_MODE_DRAW; matrix_pixel_data(addr & 0x0F, addr >> 4, data & 0x03); break;
     case CMD_MATRIX_BITPLAN: matrix_mode = MATRIX_MODE_DRAW; matrix_bitplan_data(addr & 0x1F, data); break;
     case CMD_AUDIO_PEAKS_L: new_audio = ((uint16_t)(addr) << 8) | (uint16_t)data; if (new_audio > audio_l) audio_l = new_audio; break;
