@@ -30,6 +30,21 @@ bool MultiMatrixDisplay::begin() {
     return result;
 }
 
+uint8_t MultiMatrixDisplay::readKeys() {
+    uint8_t keyState = 0;
+    
+    Wire.beginTransmission(_addresses[0]);
+    Wire.write(0x40); // Read from the first data reg
+    Wire.endTransmission();
+
+    Wire.requestFrom(_addresses[0], 2); // Read first 2 bytes from the chip
+    if (Wire.available() >= 2) {
+        keyState = Wire.read(); // Lower 8 bits for row 0
+        Wire.read(); // read and ignore the second byte
+    }
+    return keyState;
+}
+
 void MultiMatrixDisplay::drawPixel(int16_t x, int16_t y, uint16_t color) {
     if (x < 0 || x >= width() || y < 0 || y >= height()) return;
 

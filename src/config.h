@@ -199,7 +199,7 @@
 #define CMD_MATRIX_CTL 0x60 // adr 0, bit 0 - clear, bit1 - update, bit2 - brightness, bit 4-7 - brightness level
 #define CMD_MATRIX_PIXEL 0x61 // adr: xy, data - color (00 - black, 01 - red, 10 - green, 11 - yellow)
 #define CMD_MATRIX_BITPLAN 0x62 // 0...31 - address of byte, 32 bytes total (16 bytes per matrix)
-#define CMD_MATRIX_BTN 0x63
+#define CMD_MATRIX_BTN 0x63 // bits 0-3 represents keypresses for shield buttons
 
 // Audio data (slow peaks)
 #define CMD_AUDIO_PEAKS_L 0x70

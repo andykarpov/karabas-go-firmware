@@ -148,8 +148,9 @@ setup_t hw_setup;
 const String matrix_msg = "KARABAS GO ";
 const int matrix_msg_width = matrix_msg.length() * 6; // 6 pixels per character width
 int matrix_msg_scrollpos = 16;
-ElapsedTimer matrix_timer, audio_peaks_timer;
+ElapsedTimer matrix_timer, matrix_scroll_timer, matrix_poll_timer;
 uint8_t matrix_mode = MATRIX_MODE_SCROLL;
+uint8_t matrix_btns, matrix_prev_btns;
 
 uint16_t audio_l, audio_r;
 
@@ -531,14 +532,55 @@ void loop()
     // todo: timer
   }
 
-  if (has_matrix && matrix_mode == MATRIX_MODE_SCROLL && matrix_timer.elapsed() >= 100) {
+  if (has_matrix && matrix_timer.elapsed() >= 20) {
     matrix_timer.reset();
-    matrix_scroll_text();
-  }
 
-  if (has_matrix && matrix_mode == MATRIX_MODE_AUDIO && matrix_timer.elapsed() >= 20) {
-    matrix_timer.reset();
-    matrix_draw_audio();
+    switch (matrix_mode) {
+      case MATRIX_MODE_AUDIO:
+        matrix_draw_audio();
+        break;
+      case MATRIX_MODE_SCROLL:
+        if (matrix_scroll_timer.elapsed() >= 100) {
+          matrix_scroll_timer.reset();
+          matrix_scroll_text();
+        }
+        break;
+    }
+
+    static bool prev_matrix_btn1 = false;
+    static bool prev_matrix_btn2 = false;
+    static bool prev_matrix_btn3 = false;
+    static bool prev_matrix_btn4 = false;
+
+    // poll HT16k33 for buttons
+    if (matrix_poll_timer.elapsed() >= 100) {
+      matrix_poll_timer.reset();
+      uint8_t matrix_btns = matrix.readKeys();
+      bool matrix_btn1 = bitRead(matrix_btns, 0);
+      bool matrix_btn2 = bitRead(matrix_btns, 1);
+      bool matrix_btn3 = bitRead(matrix_btns, 2);
+      bool matrix_btn4 = bitRead(matrix_btns, 3);
+      if (prev_matrix_btn1 != matrix_btn1) {
+        d_print("Matrix Button 1: "); d_println((matrix_btn1) ? "on" : "off");
+        prev_matrix_btn1 = matrix_btn1;
+        spi_send(CMD_MATRIX_BTN, 0, matrix_btn1);
+      }
+      if (prev_matrix_btn2 != matrix_btn2) {
+        d_print("Matrix Button 2: "); d_println((matrix_btn2) ? "on" : "off");
+        prev_matrix_btn2 = matrix_btn2;
+        spi_send(CMD_MATRIX_BTN, 1, matrix_btn2);
+      }
+      if (prev_matrix_btn3 != matrix_btn3) {
+        d_print("Matrix Button 3: "); d_println((matrix_btn3) ? "on" : "off");
+        prev_matrix_btn3 = matrix_btn3;
+        spi_send(CMD_MATRIX_BTN, 2, matrix_btn3);
+      }
+      if (prev_matrix_btn4 != matrix_btn4) {
+        d_print("Matrix Button 4: "); d_println((matrix_btn4) ? "on" : "off");
+        prev_matrix_btn4 = matrix_btn4;
+        spi_send(CMD_MATRIX_BTN, 3, matrix_btn4);
+      }
+    }
   }
 
 }
@@ -1057,14 +1099,11 @@ void matrix_draw_audio() {
   matrix_draw_bar(6, r);
   matrix.writeDisplay();
   
-  // decay (todo)
-  //if (audio_peaks_timer.elapsed() >= 100) { 
-  //  audio_peaks_timer.reset();
-    uint16_t decay_l = audio_l >> 4;
-    uint16_t decay_r = audio_r >> 4;
-    audio_l = (audio_l > decay_l) ? audio_l - decay_l : 0;
-    audio_r = (audio_r > decay_r) ? audio_r - decay_r : 0;
-  //}
+  // decay
+  uint16_t decay_l = audio_l >> 4;
+  uint16_t decay_r = audio_r >> 4;
+  audio_l = (audio_l > decay_l) ? audio_l - decay_l : 0;
+  audio_r = (audio_r > decay_r) ? audio_r - decay_r : 0;
 }
 
 void matrix_scroll_text()

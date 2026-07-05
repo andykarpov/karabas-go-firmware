@@ -42,6 +42,11 @@ public:
     void clear();
 
     /**
+     * Read keys state from the butons attached to first matrix.
+     */
+    uint8_t readKeys();
+
+    /**
      * Set the brightness to the virtual display.
      * @param brightness Value from 0 to 15.
      */
