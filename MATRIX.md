@@ -41,7 +41,7 @@ The higher bits 7-4 are to set the Y position (from 0 to 7)
 Write to this register will set the color to the pixel at position x-y (from the 0xF1 register) to the virtual framebuffer. 
 Do display the pixel or set of pixels - please call the "update" action to the control register 0xF0.
 
-## Example program for the Barriel ZX Basic Compiler
+## Example program for the Boriel ZX Basic Compiler
 
 This code will fill the matrix with random pixels and will update it in the loop.
 
