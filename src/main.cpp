@@ -56,6 +56,7 @@
 #include "ESP8266AT.h"
 #include <Adafruit_GFX.h>
 #include "Adafruit_LEDBackpack.h"
+#include "Adafruit_SSD1306.h"
 #include "MultiMatrixDisplay.h"
 
 PioSPI spiSD(PIN_SD_SPI_TX, PIN_SD_SPI_RX, PIN_SD_SPI_SCK, SD_CS_PIN, SPI_MODE0, SD_SCK_MHZ(16)); // dedicated SD1 SPI
@@ -120,6 +121,7 @@ bool has_sd = false;
 bool has_fs = false;
 bool has_ft = false;
 bool has_matrix = false;
+bool has_oled = false;
 bool is_flashboot = false;
 bool is_configuring = false;
 bool expose_msc = false;
@@ -152,8 +154,8 @@ int matrix_msg_scrollpos = 16;
 ElapsedTimer matrix_timer, matrix_scroll_timer, matrix_poll_timer;
 uint8_t matrix_mode = MATRIX_MODE_SCROLL;
 uint8_t matrix_btns, matrix_prev_btns;
-
 uint16_t audio_l, audio_r;
+Adafruit_SSD1306 oled(128, 32, &Wire, -1);
 
 void matrix_init()
 {
@@ -273,6 +275,14 @@ void setup()
   }
 
   matrix_init();
+
+  has_oled = oled.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  if (has_oled) {
+    d_println("Found SSD1306 OLED display"); 
+    oled.display(); // show default adafruit buffer
+  } else {
+    d_println("SSD1306 OLED display was not found");
+  }
 
   zxrtc.begin(spi_send, on_time);
   zxosd.begin(spi_send);
