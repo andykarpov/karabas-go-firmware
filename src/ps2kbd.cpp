@@ -104,6 +104,9 @@ void kb_reset() {
   kb_set_leds(0);
   repeat_us = 91743;
   delay_ms = 500;
+  kb_repeat_key = 0;
+  kb_repeat_state = false;
+  kb_repeating = false;
 }
 
 void kb_send(uint8_t byte) {

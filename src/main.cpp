@@ -95,6 +95,7 @@ FT812 ft(PIN_MCU_FT_CS, PIN_FT_RESET);
 #endif
 
 static queue_t spi_event_queue;
+volatile bool queue_locked = false;
 
 hid_keyboard_report_t usb_keyboard_report;
 hid_mouse_report_t usb_mouse_report;
@@ -600,8 +601,6 @@ void do_configure(const char* filename) {
   ft.vga(false); // FT off
   ft.spi(false);
   kb_reset(); // reset to ps/2 defaults
-  queue_spi_t packet;
-	while (queue_try_remove(&spi_event_queue, &packet)) { } // cleanup usb kbd/mouse/joy event queue
 
   fpga_send(filename);
   spi_send(CMD_INIT_START, 0, 0);
@@ -628,7 +627,11 @@ void do_configure(const char* filename) {
     zxosd.hidePopup();
     osd_handle(true); // reinit osd
   }
+  for (uint8_t i=0; i<6; i++) { // cleanup kbd
+    spi_queue(CMD_USB_KBD, i, 0);
+  }
   spi_send(CMD_INIT_DONE, 0, 0);
+  queue_locked = false;
   is_flashboot = false;
   is_configuring = false;
 
@@ -908,7 +911,8 @@ void spi_queue(uint8_t cmd, uint8_t addr, uint8_t data) {
   packet.cmd = cmd;
   packet.addr = addr;
   packet.data = data;
-  queue_try_add(&spi_event_queue, &packet);
+  if (!queue_locked)
+    queue_try_add(&spi_event_queue, &packet);
 }
 
 void spi_send(uint8_t cmd, uint8_t addr, uint8_t data) {
