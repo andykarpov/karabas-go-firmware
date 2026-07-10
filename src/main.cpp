@@ -56,6 +56,7 @@
 #include "ESP8266AT.h"
 #include <Adafruit_GFX.h>
 #include "Adafruit_LEDBackpack.h"
+#define SSD1306_NO_SPLASH
 #include "Adafruit_SSD1306.h"
 #include "MultiMatrixDisplay.h"
 
@@ -151,11 +152,12 @@ setup_t hw_setup;
 const String matrix_msg = "KARABAS GO ";
 const int matrix_msg_width = matrix_msg.length() * 6; // 6 pixels per character width
 int matrix_msg_scrollpos = 16;
-ElapsedTimer matrix_timer, matrix_scroll_timer, matrix_poll_timer;
+ElapsedTimer matrix_timer, matrix_scroll_timer, matrix_poll_timer, oled_timer;
 uint8_t matrix_mode = MATRIX_MODE_SCROLL;
 uint8_t matrix_btns, matrix_prev_btns;
 uint16_t audio_l, audio_r;
 Adafruit_SSD1306 oled(128, 32, &Wire, -1);
+int oled_scrollpos = -128;
 
 void matrix_init()
 {
@@ -278,7 +280,9 @@ void setup()
 
   has_oled = oled.begin(SSD1306_SWITCHCAPVCC, 0x3C);
   if (has_oled) {
-    d_println("Found SSD1306 OLED display"); 
+    d_println("Found SSD1306 OLED display");
+    oled.clearDisplay();
+    oled.drawBitmap(8, 0, logoBw, 112, 32, WHITE); // karabas go logo 112x32 bw
     oled.display(); // show default adafruit buffer
   } else {
     d_println("SSD1306 OLED display was not found");
@@ -592,6 +596,18 @@ void loop()
         spi_send(CMD_MATRIX_BTN, 3, matrix_btn4);
       }
     }
+  }
+
+  if (has_oled && oled_timer.elapsed() >= 20) {
+    oled_timer.reset();
+    if (oled_scrollpos >= -112) {
+      oled_scrollpos--;
+    } else {
+      oled_scrollpos = 128;
+    }
+    oled.clearDisplay();
+    oled.drawBitmap(oled_scrollpos, 0, logoBw, 112, 32, WHITE); // karabas go logo 112x32 bw
+    oled.display(); // show default adafruit buffer
   }
 
 }
