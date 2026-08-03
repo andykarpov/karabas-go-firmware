@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import HelloWorld from './components/HelloWorld.vue'
+import GamepadMapper from './components/GamepadMapper.vue'
 </script>
 
 <template>
-  <HelloWorld />
+  <GamepadMapper />
 </template>
