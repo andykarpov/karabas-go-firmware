@@ -2,6 +2,10 @@
 import { ref, reactive } from 'vue';
 import { HidParserService } from '../services/HidParserService';
 import type { GamepadConfig } from '../services/HidParserService';
+import { TranslationService } from '../services/TranslationService';
+
+// Используем реактивный объект переводов
+const t = TranslationService.t;
 
 // Список стандартных кнопок Sega MD2 для маппинга
 const MD2_BUTTONS = ['up', 'down', 'left', 'right', 'a', 'b', 'c', 'x', 'y', 'z', 'start', 'mode'];
@@ -148,27 +152,57 @@ const downloadIni = () => {
   a.click();
   URL.revokeObjectURL(url);
 };
+
+const copyToClipboard = async () => {
+  const iniText = HidParserService.generateIni(config);
+  try {
+    await navigator.clipboard.writeText(iniText);
+  } catch (err) {
+    console.error('Failed to copy:', err);
+  }
+};
 </script>
 
 <template>
   <div class="p-6 max-w-5xl mx-auto space-y-6 text-slate-800">
-    <header class="flex justify-between items-center bg-white p-4 rounded-xl shadow">
+    <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-4 rounded-xl shadow gap-4">
       <div>
-        <h1 class="text-xl font-bold">Karabas USB HID Gamepad Mapper</h1>
-        <p class="text-sm text-slate-500" v-if="device">Устройство: {{ config.name }} (VID: {{ config.vid }}, PID: {{ config.pid }})</p>
+        <h1 class="text-xl font-bold">{{ t.title }}</h1>
+        <p class="text-sm text-slate-500" v-if="device">
+          {{ TranslationService.format(t.connectedDevice, { name: config.name, vid: config.vid, pid: config.pid }) }}
+        </p>
       </div>
-      <button v-if="!device" @click="connectDevice" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition">
-        Подключить геймпад
-      </button>
-      <button v-else @click="downloadIni" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium transition">
-        Скачать .INI драйвер
-      </button>
+      
+      <div class="flex items-center space-x-3 self-end sm:self-auto">
+        <!-- Выпадающий список языков -->
+        <select 
+          :value="TranslationService.currentLocale.value" 
+          @change="TranslationService.setLocale(($event.target as HTMLSelectElement).value as any)"
+          class="bg-slate-100 border border-slate-300 rounded-lg px-2 py-1.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          <option v-for="lang in TranslationService.availableLocales" :key="lang.code" :value="lang.code">
+            {{ lang.label }}
+          </option>
+        </select>
+
+        <button v-if="!device" @click="connectDevice" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition text-sm">
+          {{ t.btnConnect }}
+        </button>
+        <div v-else class="flex space-x-2">
+          <button @click="copyToClipboard" class="bg-slate-600 hover:bg-slate-700 text-white px-3 py-2 rounded-lg font-medium transition text-sm">
+            {{ t.btnCopy }}
+          </button>
+          <button @click="downloadIni" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium transition text-sm">
+            {{ t.btnDownload }}
+          </button>
+        </div>
+      </div>
     </header>
 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
       <!-- Панель маппинга -->
       <div class="bg-white p-4 rounded-xl shadow space-y-3">
-        <h2 class="font-bold border-b pb-2">Назначение кнопок</h2>
+        <h2 class="font-bold border-b pb-2">{{ t.mappingTitle }}</h2>
         <div v-for="btn in MD2_BUTTONS" :key="btn" class="flex flex-col p-1 rounded bg-slate-50 space-y-0">
           <div class="flex items-center justify-between">
             <span class="uppercase font-mono text-sm font-semibold text-slate-700">{{ btn }}</span>
@@ -177,7 +211,7 @@ const downloadIni = () => {
               :class="currentTargetButton === btn ? 'bg-amber-500 text-white' : config.buttons[btn] ? 'bg-green-500 text-white' : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-600'"
               class="text-xs px-3 py-1 rounded font-medium transition"
             >
-              {{ currentTargetButton === btn ? 'Нажмите кнопку...' : config.buttons[btn] ? 'Перезаписать' : 'Записать' }}
+              {{ currentTargetButton === btn ? t.btnRecording : config.buttons[btn] ? t.btnRetryRecord : t.btnRecord }}
             </button>
           </div>
           
@@ -252,8 +286,8 @@ const downloadIni = () => {
 
         <!-- Лог сырых данных -->
         <div class="bg-slate-900 text-emerald-400 p-4 rounded-xl shadow font-mono text-sm space-y-2">
-          <div class="text-slate-400 text-xs uppercase tracking-wider font-sans">Сырой USB Report (Hex):</div>
-          <div class="break-all tracking-widest text-lg">{{ rawReportHex || 'Ожидание ввода...' }}</div>
+          <div class="text-slate-400 text-xs uppercase tracking-wider font-sans">{{ t.rawReportTitle }}</div>
+          <div class="break-all tracking-widest text-lg">{{ rawReportHex || t.waitingInput }}</div>
           <div class="grid grid-cols-8 gap-1 pt-2 text-center text-xs text-slate-400">
             <div v-for="(byte, idx) in lastReportBytes" :key="idx" class="bg-slate-800 p-1 rounded">
               B{{ idx }}: <span class="text-white">{{ byte }}</span>
