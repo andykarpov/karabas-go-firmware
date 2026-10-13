@@ -818,7 +818,6 @@ void core_trigger(uint8_t pos)
     delay(100);
   }
 
-  d_println("Reset Host");
   spi_send(CMD_SWITCHES, pos, 1);
   delay(100);
   spi_send(CMD_SWITCHES, pos, 0);
