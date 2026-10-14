@@ -14,6 +14,7 @@ int pio_usb_host_add_port(uint8_t pin_dp, PIO_USB_PINOUT pinout);
 void pio_usb_host_task(void);
 void pio_usb_host_stop(void);
 void pio_usb_host_restart(void);
+bool pio_usb_host_programs_loaded(void); // karabas: false if a PIO program did not fit
 uint32_t pio_usb_host_get_frame_number(void);
 
 // Call this every 1ms when skip_alarm_pool is true.

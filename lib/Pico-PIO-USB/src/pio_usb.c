@@ -125,6 +125,13 @@ void __no_inline_not_in_flash_func(pio_usb_bus_start_receive)(const pio_port_t *
 extern volatile int32_t pio_usb_probe_hs[4]; // karabas: RTOS boot probe, defined below
 #endif
 
+// karabas: pio_add_program returns a negative error code (stored in the unsigned offsets)
+// when there is no instruction memory left; check it after init instead of failing silently
+bool pio_usb_host_programs_loaded(void) {
+  pio_port_t *pp = PIO_USB_PIO_PORT(0);
+  return (int) pp->offset_tx >= 0 && (int) pp->offset_rx >= 0 && (int) pp->offset_eop >= 0;
+}
+
 uint8_t __no_inline_not_in_flash_func(pio_usb_bus_wait_handshake)(pio_port_t* pp) {
   int16_t t = 240;
   int16_t idx = 0;

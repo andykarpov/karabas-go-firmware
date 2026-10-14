@@ -43,12 +43,18 @@ ESP8266 wifi(esp_serial);
 static ElapsedTimer led_timer;
 
 #ifdef __FREERTOS
-// Under FreeRTOS the core puts its cycle counter (ccount) on the first free PIO state machine
-// in main(), before setup(). Reserve pio0 sm0 for the PIO-USB transmitter already in a static
-// constructor (runs before main), so the usb host gets the same PIO layout as without FreeRTOS.
-// usb_host_setup() releases it right before PIO-USB claims it.
+// Under FreeRTOS SysTick belongs to the scheduler, so the core runs its cycle counter (ccount,
+// 2 instructions) on a PIO state machine, allocated in main() before setup(). It lands on pio1,
+// whose whole 32-word instruction memory the PIO-USB receiver needs (decoder 15 + edge
+// detector 17): the edge detector then fails to load and the host never sees a handshake.
+// Reserve pio1 and pio0 sm0 (PIO-USB tx) in a static constructor, which runs before main(),
+// so ccount goes to pio0 sm1. usb_host_setup() releases them right before PIO-USB init,
+// which gives the usb host the same PIO layout as without FreeRTOS.
 static struct UsbPioReserve {
-  UsbPioReserve() { pio_sm_claim(pio0, 0); }
+  UsbPioReserve() {
+    pio_sm_claim(pio0, 0);
+    pio_claim_sm_mask(pio1, 0xf);
+  }
 } usb_pio_reserve;
 #endif
 
@@ -230,7 +236,9 @@ static void usb_host_setup() {
   // one is taken. Under FreeRTOS the core already uses a PIO SM (usually pio0 sm0) as cycle
   // counter, so pick free ones. Without FreeRTOS this yields the same defaults.
 #ifdef __FREERTOS
-  pio_sm_unclaim(pio0, 0); // reserved before main(), see usb_pio_reserve
+  // reserved before main(), see usb_pio_reserve
+  pio_sm_unclaim(pio0, 0);
+  for (uint i=0; i<4; i++) pio_sm_unclaim(pio1, i);
 #endif
   int sm_tx = pio_claim_unused_sm(pio0, false);
   int sm_rx = pio_claim_unused_sm(pio1, false);
@@ -244,6 +252,11 @@ static void usb_host_setup() {
   PROBE("tuh_init");
   tuh_init(1);
   PROBE("tuh_init returned");
+  if (!pio_usb_host_programs_loaded()) {
+    // pio_add_program failed: no PIO instruction memory left for the usb host programs
+    d_println("USB host: PIO programs did not load, usb devices will not work");
+    PROBE("USB host: PIO programs did not load");
+  }
 #ifdef PIO_USB_PROBE_COUNTERS
   usb_probe_record_irq();
 #endif
