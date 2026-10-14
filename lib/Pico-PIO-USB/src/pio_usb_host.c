@@ -35,6 +35,10 @@ static bool sof_timer(repeating_timer_t *_rt);
 // Application API
 //--------------------------------------------------------------------+
 
+// karabas: boot probe hook for the FreeRTOS build (defined in main.cpp only with RTOS_PROBE)
+extern void pio_usb_probe(const char *msg) __attribute__((weak));
+#define PIO_USB_PROBE(msg) do { if (pio_usb_probe) pio_usb_probe(msg); } while (0)
+
 static void start_timer(alarm_pool_t *alarm_pool) {
   if (timer_active) {
     return;
@@ -78,10 +82,13 @@ usb_device_t *pio_usb_host_init(const pio_usb_configuration_t *c) {
   if (!c->skip_alarm_pool) {
     _alarm_pool = c->alarm_pool;
     if (!_alarm_pool) {
+      PIO_USB_PROBE("pio-usb: alarm_pool_create");
       _alarm_pool = alarm_pool_create(2, 1);
     }
   }
+  PIO_USB_PROBE("pio-usb: start_timer");
   start_timer(_alarm_pool);
+  PIO_USB_PROBE("pio-usb: sof timer started");
 
   return &pio_usb_device[0];
 }

@@ -290,17 +290,26 @@ static void port_pin_drive_setting(const root_port_t *port) {
   gpio_set_drive_strength(port->pin_dm, GPIO_DRIVE_STRENGTH_12MA);
 }
 
+// karabas: boot probe hook for the FreeRTOS build (defined in main.cpp only with RTOS_PROBE)
+extern void pio_usb_probe(const char *msg) __attribute__((weak));
+#define PIO_USB_PROBE(msg) do { if (pio_usb_probe) pio_usb_probe(msg); } while (0)
+
 void pio_usb_bus_init(pio_port_t *pp, const pio_usb_configuration_t *c,
                       root_port_t *root) {
   memset(root, 0, sizeof(root_port_t));
 
   pp->pio_usb_tx = c->pio_tx_num == 0 ? pio0 : pio1;
+  PIO_USB_PROBE("pio-usb: claiming dma");
   dma_claim_mask(1<<c->tx_ch);
   configure_tx_channel(c->tx_ch, pp->pio_usb_tx, c->sm_tx);
 
+  PIO_USB_PROBE("pio-usb: apply_config");
   apply_config(pp, c, root);
+  PIO_USB_PROBE("pio-usb: initialize_host_programs");
   initialize_host_programs(pp, c, root);
+  PIO_USB_PROBE("pio-usb: port_pin_drive_setting");
   port_pin_drive_setting(root);
+  PIO_USB_PROBE("pio-usb: bus_init done");
   root->initialized = true;
   root->dev_addr = 0;
 }

@@ -42,6 +42,33 @@ ESP8266 wifi(esp_serial);
 
 static ElapsedTimer led_timer;
 
+// RTOS_PROBE (env *_rtos_probe): boot step by step and report every step to USB serial,
+// to find where the RTOS build stops on real hardware.
+// 1 = full boot, 2 = usb host task only (core0 keeps reporting if core1 hangs)
+#ifndef RTOS_PROBE
+#define RTOS_PROBE 0
+#endif
+
+#if defined(__FREERTOS) && RTOS_PROBE
+static volatile uint32_t probe_app_loops = 0;
+static volatile uint32_t probe_usb_loops = 0;
+
+static void probe(const char *msg) {
+  Serial.print("PROBE: "); Serial.println(msg);
+  Serial.flush();
+  delay(200); // let the line leave before a possible crash
+}
+#define PROBE(msg) probe(msg)
+#define PROBE_COUNT(var) (var)++
+
+// called from lib/Pico-PIO-USB (weak reference there)
+extern "C" void pio_usb_probe(const char *msg) { probe(msg); }
+#else
+#define PROBE(msg)
+#define PROBE_COUNT(var)
+#endif
+
+
 // firmware init, runs on core0
 static void karabas_setup()
 {
@@ -147,8 +174,11 @@ static void usb_host_setup() {
   pio_usb_configuration_t pio_cfg = PIO_USB_DEFAULT_CONFIG;
   pio_cfg.pin_dp = HOST_PIN_DP;
   pio_cfg.pinout = (PIO_USB_PINOUT) board_usb_pinout();
+  PROBE("tuh_configure");
   tuh_configure(1, TUH_CFGID_RPI_PIO_USB_CONFIGURATION, &pio_cfg);
+  PROBE("tuh_init");
   tuh_init(1);
+  PROBE("tuh_init returned");
   usb_host_ready = true;
 }
 
@@ -216,28 +246,6 @@ static void usb_host_loop()
 #define APP_TASK_PRIORITY (configMAX_PRIORITIES / 2)
 #define USB_TASK_PRIORITY (configMAX_PRIORITIES - 2) // above everything but the framework's flash idle tasks
 
-// RTOS_PROBE=1 (env *_rtos_probe): boot step by step and report every step to USB serial,
-// to find where the RTOS build stops on real hardware
-#ifndef RTOS_PROBE
-#define RTOS_PROBE 0
-#endif
-
-#if RTOS_PROBE
-static volatile uint32_t probe_app_loops = 0;
-static volatile uint32_t probe_usb_loops = 0;
-
-static void probe(const char *msg) {
-  Serial.print("PROBE: "); Serial.println(msg);
-  Serial.flush();
-  delay(200); // let the line leave before a possible crash
-}
-#define PROBE(msg) probe(msg)
-#define PROBE_COUNT(var) (var)++
-#else
-#define PROBE(msg)
-#define PROBE_COUNT(var)
-#endif
-
 static void app_task(void *param) {
   PROBE("APP task started");
   karabas_setup();
@@ -277,10 +285,14 @@ void setup() {
   }
   delay(1000);
   PROBE(usb_host_ready ? "usb_host_ready = 1" : "usb_host_ready = 0");
+#if RTOS_PROBE == 1
   PROBE("creating APP task");
   if (xTaskCreateAffinitySet(app_task, "APP", APP_TASK_STACK, nullptr, APP_TASK_PRIORITY, 1 << 0, nullptr) != pdPASS) {
     PROBE("APP task creation FAILED");
   }
+#else
+  PROBE("APP task skipped (RTOS_PROBE=2)");
+#endif
   PROBE("setup() done");
   return;
 #endif
