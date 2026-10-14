@@ -121,6 +121,10 @@ void __no_inline_not_in_flash_func(pio_usb_bus_start_receive)(const pio_port_t *
   pp->pio_usb_rx->irq = IRQ_RX_ALL_MASK;
 }
 
+#ifdef PIO_USB_PROBE_COUNTERS
+extern volatile int32_t pio_usb_probe_hs[4]; // karabas: RTOS boot probe, defined below
+#endif
+
 uint8_t __no_inline_not_in_flash_func(pio_usb_bus_wait_handshake)(pio_port_t* pp) {
   int16_t t = 240;
   int16_t idx = 0;
@@ -140,6 +144,13 @@ uint8_t __no_inline_not_in_flash_func(pio_usb_bus_wait_handshake)(pio_port_t* pp
       continue;
     }
   }
+
+#ifdef PIO_USB_PROBE_COUNTERS
+  pio_usb_probe_hs[0] = t;
+  pio_usb_probe_hs[1] = pp->usb_rx_buffer[0];
+  pio_usb_probe_hs[2] = pp->usb_rx_buffer[1];
+  pio_usb_probe_hs[3] = pio_sm_get_rx_fifo_level(pp->pio_usb_rx, pp->sm_rx);
+#endif
 
   pio_sm_set_enabled(pp->pio_usb_rx, pp->sm_rx, false);
 
@@ -431,6 +442,14 @@ bool __no_inline_not_in_flash_func(pio_usb_ll_transfer_continue)(
 #ifdef PIO_USB_PROBE_COUNTERS
 // karabas: RTOS boot probe transfer counters: setup, in, out, complete, error, stalled
 volatile uint32_t pio_usb_probe_xfer[6];
+// last handshake wait: loops left (0 = timeout), first two bytes received, rx fifo level after
+volatile int32_t pio_usb_probe_hs[4];
+
+void pio_usb_probe_port(uint32_t out[6]) {
+  pio_port_t *pp = PIO_USB_PIO_PORT(0);
+  out[0] = pp->sm_tx; out[1] = pp->sm_rx; out[2] = pp->sm_eop;
+  out[3] = pp->offset_tx; out[4] = pp->offset_rx; out[5] = pp->offset_eop;
+}
 #endif
 
 void __no_inline_not_in_flash_func(pio_usb_ll_transfer_complete)(

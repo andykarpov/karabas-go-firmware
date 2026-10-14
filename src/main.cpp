@@ -73,12 +73,50 @@ static void probe(const char *msg) {
 
 // called from lib/Pico-PIO-USB (weak reference there)
 extern "C" void pio_usb_probe(const char *msg) { probe(msg); }
-extern "C" void pio_usb_probe_state(uint32_t *sof_count, int *connected, int *line_state, int *alarm_core, int *alarm_num);
-extern "C" volatile uint32_t pio_usb_probe_xfer[6];
-static volatile int probe_sof_irq_enabled_core1 = -1;
 #else
 #define PROBE(msg)
 #define PROBE_COUNT(var)
+#endif
+
+// PIO_USB_PROBE_COUNTERS (env *_probe*): usb host bus counters, printed every 2 s,
+// works with and without FreeRTOS to compare the two builds
+#ifdef PIO_USB_PROBE_COUNTERS
+extern "C" void pio_usb_probe_state(uint32_t *sof_count, int *connected, int *line_state, int *alarm_core, int *alarm_num);
+extern "C" void pio_usb_probe_port(uint32_t out[6]);
+extern "C" volatile uint32_t pio_usb_probe_xfer[6];
+extern "C" volatile int32_t pio_usb_probe_hs[4];
+static volatile int probe_sof_irq_enabled_core1 = -1;
+
+// runs on core1 after usb init: NVIC is per core
+static void usb_probe_record_irq() {
+  uint32_t sof; int conn, line, acore, anum;
+  pio_usb_probe_state(&sof, &conn, &line, &acore, &anum);
+  if (anum >= 0) probe_sof_irq_enabled_core1 = irq_is_enabled(TIMER_IRQ_0 + anum);
+}
+
+static uint8_t pio_claimed_mask(PIO pio) {
+  uint8_t m = 0;
+  for (uint8_t i=0; i<4; i++) if (pio_sm_is_claimed(pio, i)) m |= (1 << i);
+  return m;
+}
+
+static void usb_probe_print() {
+  uint32_t sof; int conn, line, acore, anum;
+  pio_usb_probe_state(&sof, &conn, &line, &acore, &anum);
+  Serial.printf("PROBE: usb sof frames %lu, root connected %d, line state %d, alarm core %d num %d, irq enabled on core1 %d, timer inte %02lx armed %02lx\r\n",
+    (unsigned long) sof, conn, line, acore, anum, probe_sof_irq_enabled_core1,
+    (unsigned long) timer_hw->inte, (unsigned long) timer_hw->armed);
+  uint32_t port[6];
+  pio_usb_probe_port(port);
+  Serial.printf("PROBE: pio0 claimed %x enabled %lx, pio1 claimed %x enabled %lx | usb sm tx %lu rx %lu eop %lu, offset tx %lu rx %lu eop %lu\r\n",
+    pio_claimed_mask(pio0), (unsigned long) (pio0->ctrl & 0xf), pio_claimed_mask(pio1), (unsigned long) (pio1->ctrl & 0xf),
+    (unsigned long) port[0], (unsigned long) port[1], (unsigned long) port[2],
+    (unsigned long) port[3], (unsigned long) port[4], (unsigned long) port[5]);
+  Serial.printf("PROBE: usb xfers: setup %lu in %lu out %lu | complete %lu error %lu stalled %lu | last handshake: loops left %ld, bytes %02lx %02lx, rx fifo %ld\r\n",
+    (unsigned long) pio_usb_probe_xfer[0], (unsigned long) pio_usb_probe_xfer[1], (unsigned long) pio_usb_probe_xfer[2],
+    (unsigned long) pio_usb_probe_xfer[3], (unsigned long) pio_usb_probe_xfer[4], (unsigned long) pio_usb_probe_xfer[5],
+    (long) pio_usb_probe_hs[0], (unsigned long) pio_usb_probe_hs[1], (unsigned long) pio_usb_probe_hs[2], (long) pio_usb_probe_hs[3]);
+}
 #endif
 
 
@@ -206,6 +244,9 @@ static void usb_host_setup() {
   PROBE("tuh_init");
   tuh_init(1);
   PROBE("tuh_init returned");
+#ifdef PIO_USB_PROBE_COUNTERS
+  usb_probe_record_irq();
+#endif
   usb_host_ready = true;
 }
 
@@ -214,6 +255,10 @@ static void karabas_loop()
 {
   diag_loop_core0();
   diag_tick();
+#if defined(PIO_USB_PROBE_COUNTERS) && !defined(__FREERTOS)
+  static ElapsedTimer probe_timer;
+  if (probe_timer.elapsed() >= 2000) { probe_timer.reset(); usb_probe_print(); }
+#endif
 
   //rp2040.wdt_reset();
   // read hw buttons to manipulate msc / reboots
@@ -294,13 +339,6 @@ static void usb_task(void *param) {
   PROBE("USB task started");
   usb_host_setup();
   PROBE("usb_host_setup done");
-#if RTOS_PROBE
-  {
-    uint32_t sof; int conn, line, acore, anum;
-    pio_usb_probe_state(&sof, &conn, &line, &acore, &anum);
-    if (anum >= 0) probe_sof_irq_enabled_core1 = irq_is_enabled(TIMER_IRQ_0 + anum); // NVIC is per core
-  }
-#endif
   for (;;) {
     usb_host_loop();
     PROBE_COUNT(probe_usb_loops);
@@ -352,17 +390,7 @@ void loop() {
   delay(2000);
   Serial.printf("PROBE: alive, app loops %lu, usb loops %lu, usb_host_ready %d, heap free %d\r\n",
     (unsigned long) probe_app_loops, (unsigned long) probe_usb_loops, usb_host_ready, rp2040.getFreeHeap());
-  uint32_t sof; int conn, line, acore, anum;
-  pio_usb_probe_state(&sof, &conn, &line, &acore, &anum);
-  Serial.printf("PROBE: usb sof frames %lu, root connected %d, line state %d, alarm core %d num %d, irq enabled on core1 %d, timer inte %02lx armed %02lx\r\n",
-    (unsigned long) sof, conn, line, acore, anum, probe_sof_irq_enabled_core1,
-    (unsigned long) timer_hw->inte, (unsigned long) timer_hw->armed);
-  Serial.printf("PROBE: pio0 claimed sm mask %x, pio1 claimed sm mask %x\r\n",
-    (pio_sm_is_claimed(pio0,0)?1:0)|(pio_sm_is_claimed(pio0,1)?2:0)|(pio_sm_is_claimed(pio0,2)?4:0)|(pio_sm_is_claimed(pio0,3)?8:0),
-    (pio_sm_is_claimed(pio1,0)?1:0)|(pio_sm_is_claimed(pio1,1)?2:0)|(pio_sm_is_claimed(pio1,2)?4:0)|(pio_sm_is_claimed(pio1,3)?8:0));
-  Serial.printf("PROBE: usb xfers: setup %lu in %lu out %lu | complete %lu error %lu stalled %lu\r\n",
-    (unsigned long) pio_usb_probe_xfer[0], (unsigned long) pio_usb_probe_xfer[1], (unsigned long) pio_usb_probe_xfer[2],
-    (unsigned long) pio_usb_probe_xfer[3], (unsigned long) pio_usb_probe_xfer[4], (unsigned long) pio_usb_probe_xfer[5]);
+  usb_probe_print();
 #else
   vTaskDelay(portMAX_DELAY);
 #endif
