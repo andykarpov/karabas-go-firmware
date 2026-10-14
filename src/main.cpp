@@ -96,8 +96,10 @@ FT812 ft(PIN_MCU_FT_CS);
 FT812 ft(PIN_MCU_FT_CS, PIN_FT_RESET);
 #endif
 
+// events from core1 (usb hid, ps/2) to core0. sized to survive a core load (a few seconds) without drops
+#define SPI_EVENT_QUEUE_SIZE 512
 static queue_t spi_event_queue;
-volatile bool queue_locked = false;
+volatile uint32_t spi_queue_dropped = 0;
 
 hid_keyboard_report_t usb_keyboard_report;
 hid_mouse_report_t usb_mouse_report;
@@ -173,7 +175,7 @@ void matrix_init()
 
 void setup()
 {
-  queue_init(&spi_event_queue, sizeof(queue_spi_t), 64);
+  queue_init(&spi_event_queue, sizeof(queue_spi_t), SPI_EVENT_QUEUE_SIZE);
 
   hw_setup.debug_enabled = true;
 
@@ -490,6 +492,12 @@ void loop()
 
   osd_handle(false);
 
+  static uint32_t prev_spi_queue_dropped = 0;
+  if (spi_queue_dropped != prev_spi_queue_dropped) {
+    prev_spi_queue_dropped = spi_queue_dropped;
+    d_printf("SPI event queue overflow, dropped: %lu", (unsigned long) spi_queue_dropped); d_println();
+  }
+
   queue_spi_t packet;
 	while (queue_try_remove(&spi_event_queue, &packet)) {
     // skip keyboard transmission when osd is active
@@ -654,11 +662,10 @@ void do_configure(const char* filename) {
     zxosd.hidePopup();
     osd_handle(true); // reinit osd
   }
-  for (uint8_t i=0; i<6; i++) { // cleanup kbd
+  for (uint8_t i=0; i<7; i++) { // cleanup kbd: modifier + 6 keycodes
     spi_queue(CMD_USB_KBD, i, 0);
   }
   spi_send(CMD_INIT_DONE, 0, 0);
-  queue_locked = false;
   is_flashboot = false;
   is_configuring = false;
 
@@ -942,8 +949,9 @@ void spi_queue(uint8_t cmd, uint8_t addr, uint8_t data) {
   packet.cmd = cmd;
   packet.addr = addr;
   packet.data = data;
-  if (!queue_locked)
-    queue_try_add(&spi_event_queue, &packet);
+  if (!queue_try_add(&spi_event_queue, &packet)) {
+    spi_queue_dropped++;
+  }
 }
 
 void spi_send(uint8_t cmd, uint8_t addr, uint8_t data) {
