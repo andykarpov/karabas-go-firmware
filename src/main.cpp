@@ -233,11 +233,16 @@ static void usb_task(void *param) {
 }
 
 void setup() {
-  TaskHandle_t usb, app;
-  xTaskCreate(usb_task, "USB", USB_TASK_STACK, nullptr, USB_TASK_PRIORITY, &usb);
-  vTaskCoreAffinitySet(usb, 1 << 1);
-  xTaskCreate(app_task, "APP", APP_TASK_STACK, nullptr, APP_TASK_PRIORITY, &app);
-  vTaskCoreAffinitySet(app, 1 << 0);
+  // tasks must be created already pinned: the USB task has a higher priority than the
+  // framework's CORE0 task running this code, so it starts immediately on creation.
+  // Unpinned, it could start on core0 and starve CORE0 forever (it never blocks),
+  // and PIO-USB would set up its SOF timer on the wrong core.
+  if (xTaskCreateAffinitySet(app_task, "APP", APP_TASK_STACK, nullptr, APP_TASK_PRIORITY, 1 << 0, nullptr) != pdPASS) {
+    panic("Unable to create APP task");
+  }
+  if (xTaskCreateAffinitySet(usb_task, "USB", USB_TASK_STACK, nullptr, USB_TASK_PRIORITY, 1 << 1, nullptr) != pdPASS) {
+    panic("Unable to create USB task");
+  }
 }
 
 void loop() {
