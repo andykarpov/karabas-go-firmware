@@ -295,6 +295,8 @@ void app_file_loader_send_file(uint16_t file_id) {
   
 uint32_t cnt = 0;
 uint32_t c1 = 0;
+  ElapsedTimer send_timer;
+  send_timer.reset();
   uint32_t crc = KG_CRC32_INIT; // debug: compare with the crc32 of the file on a pc
 
   while((c = file1.read(buf, sizeof(buf))) > 0) {
@@ -320,7 +322,8 @@ uint32_t c1 = 0;
   spi_bus_unlock();
 
   file1.close();
-  d_printf("Sent %u bytes, crc32 %08x", cnt, kg_crc32_final(crc)); d_println();
+  d_printf("Sent %u bytes in %lu ms (%s), crc32 %08x", cnt, (unsigned long) send_timer.elapsed(),
+    link_burst_available() ? "burst" : "classic", kg_crc32_final(crc)); d_println();
   delay(100);
 
   // reload menu

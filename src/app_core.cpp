@@ -621,6 +621,8 @@ void app_core_on_select_file() {
     uint8_t buf[512];
     uint64_t i = 0;
     int c;
+    ElapsedTimer send_timer;
+    send_timer.reset();
     while (i < fsize && (c = file.read(buf, sizeof(buf))) > 0) {
       if (i % 8192 == 0) {
         zxosd.loadingPopup(i, fsize);
@@ -638,6 +640,9 @@ void app_core_on_select_file() {
     }
     file.close();
     spi_send(CMD_IOCTL_STATE, 0, 0); // finish
+    d_printf("Ioctl: %lu bytes in %lu ms (%s)", (unsigned long) i, (unsigned long) send_timer.elapsed(),
+      link_burst_available() ? "burst" : "classic");
+    d_println();
 
     zxosd.loadingPopup(fsize, fsize);
     zxosd.update();
