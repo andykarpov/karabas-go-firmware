@@ -714,7 +714,8 @@ bool on_global_hotkeys() {
 
   // osd hotkey
   for (uint8_t i=0; i<core.osd_len; i++) {
-    if (core.osd[i].keys[0] != 0 && (usb_keyboard_report.modifier & core.osd[i].keys[0]) || (core.osd[i].keys[0] == 0)) {
+    // modifier matches (or the hotkey has no modifier)
+    if ((core.osd[i].keys[0] != 0 && (usb_keyboard_report.modifier & core.osd[i].keys[0])) || (core.osd[i].keys[0] == 0)) {
       if (core.osd[i].keys[1] != 0 && (usb_keyboard_report.keycode[0] == core.osd[i].keys[1])) {
         if (core.osd[i].type == CORE_OSD_TYPE_SWITCH || core.osd[i].type == CORE_OSD_TYPE_NSWITCH) {
           if (core.osd[i].options_len > 0) {
