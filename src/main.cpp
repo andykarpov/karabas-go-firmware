@@ -63,6 +63,8 @@ static void probe(const char *msg) {
 
 // called from lib/Pico-PIO-USB (weak reference there)
 extern "C" void pio_usb_probe(const char *msg) { probe(msg); }
+extern "C" void pio_usb_probe_state(uint32_t *sof_count, int *connected, int *line_state, int *alarm_core, int *alarm_num);
+static volatile int probe_sof_irq_enabled_core1 = -1;
 #else
 #define PROBE(msg)
 #define PROBE_COUNT(var)
@@ -278,6 +280,13 @@ static void usb_task(void *param) {
   PROBE("USB task started");
   usb_host_setup();
   PROBE("usb_host_setup done");
+#if RTOS_PROBE
+  {
+    uint32_t sof; int conn, line, acore, anum;
+    pio_usb_probe_state(&sof, &conn, &line, &acore, &anum);
+    if (anum >= 0) probe_sof_irq_enabled_core1 = irq_is_enabled(TIMER_IRQ_0 + anum); // NVIC is per core
+  }
+#endif
   for (;;) {
     usb_host_loop();
     PROBE_COUNT(probe_usb_loops);
@@ -327,8 +336,13 @@ void setup() {
 void loop() {
 #if RTOS_PROBE
   delay(2000);
-  Serial.printf("PROBE: alive, app loops %lu, usb loops %lu, usb_host_ready %d, heap free %d\n",
+  Serial.printf("PROBE: alive, app loops %lu, usb loops %lu, usb_host_ready %d, heap free %d\r\n",
     (unsigned long) probe_app_loops, (unsigned long) probe_usb_loops, usb_host_ready, rp2040.getFreeHeap());
+  uint32_t sof; int conn, line, acore, anum;
+  pio_usb_probe_state(&sof, &conn, &line, &acore, &anum);
+  Serial.printf("PROBE: usb sof frames %lu, root connected %d, line state %d, alarm core %d num %d, irq enabled on core1 %d, timer inte %02lx armed %02lx\r\n",
+    (unsigned long) sof, conn, line, acore, anum, probe_sof_irq_enabled_core1,
+    (unsigned long) timer_hw->inte, (unsigned long) timer_hw->armed);
 #else
   vTaskDelay(portMAX_DELAY);
 #endif

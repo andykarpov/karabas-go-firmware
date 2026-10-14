@@ -216,7 +216,23 @@ static int usb_setup_transaction(pio_port_t *pp, endpoint_t *ep);
 static int usb_in_transaction(pio_port_t *pp, endpoint_t *ep);
 static int usb_out_transaction(pio_port_t *pp, endpoint_t *ep);
 
+#ifdef PIO_USB_PROBE_COUNTERS
+// karabas: RTOS boot probe state (only built with -D PIO_USB_PROBE_COUNTERS)
+static volatile uint32_t probe_sof_count = 0;
+void pio_usb_probe_state(uint32_t *sof_count, int *connected, int *line_state, int *alarm_core, int *alarm_num) {
+  root_port_t *root = PIO_USB_ROOT_PORT(0);
+  *sof_count = probe_sof_count;
+  *connected = root->connected;
+  *line_state = root->initialized ? (int) pio_usb_bus_get_line_state(root) : -1;
+  *alarm_core = _alarm_pool ? (int) alarm_pool_core_num(_alarm_pool) : -1;
+  *alarm_num = _alarm_pool ? (int) alarm_pool_hardware_alarm_num(_alarm_pool) : -1;
+}
+#endif
+
 void __not_in_flash_func(pio_usb_host_frame)(void) {
+#ifdef PIO_USB_PROBE_COUNTERS
+  probe_sof_count++;
+#endif
   if (!timer_active) {
     return;
   }
