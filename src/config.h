@@ -4,8 +4,9 @@
 #define HW_ID_MINI 2
 #define HW_ID_MINIG 3
 
+// HW_ID is set per board env in platformio.ini (pio run -e go|mini|minig)
 #ifndef HW_ID
-#define HW_ID 3
+#error "HW_ID is not defined, build with pio run -e go|mini|minig"
 #endif
 
 #ifndef ENABLE_MSC
