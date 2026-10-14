@@ -12,9 +12,11 @@ Each board has its own PlatformIO env, which sets `HW_ID`:
 
 | Env | HW_ID | Board | Core file ext | Release script |
 |---|---|---|---|---|
-| `go` | 1 | Karabas Go | `.kg1` | `build.sh` |
-| `mini` | 2 | Karabas Mini | `.kg2` | `build_mini.sh` |
-| `minig` | 3 | Karabas Mini G | `.kg3` | `build_minig.sh` |
+| `go` / `go_rtos` | 1 | Karabas Go | `.kg1` | `build.sh` / `build_rtos.sh` |
+| `mini` / `mini_rtos` | 2 | Karabas Mini | `.kg2` | `build_mini.sh` / `build_mini_rtos.sh` |
+| `minig` / `minig_rtos` | 3 | Karabas Mini G | `.kg3` | `build_minig.sh` / `build_minig_rtos.sh` |
+
+The plain envs are still the release builds. The `*_rtos` envs (FreeRTOS) build alongside them as `firmware*_rtos.uf2`. They are verified on Mini G hardware only, and they become the default once Go and Mini are checked.
 
 - To build one board: `pio run -e go`. A plain `pio run` builds `minig` (`default_envs`).
 - To build all boards: `pio run -e go -e mini -e minig`. A change must keep all three compiling. CI (`.github/workflows/build.yml`) builds all three and runs the tests.
