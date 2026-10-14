@@ -250,7 +250,8 @@ static uint8_t burst_mhz = 0;
 void link_burst_reset() {
   burst_caps = 0;
   burst_mhz = 0;
-  pinMode(PIN_BURST_CS, INPUT); // only driven for cores that support bursts
+  pinMode(PIN_BURST_CS, INPUT_PULLUP); // only driven for cores that support bursts; idle high, so
+                                       // the burst receiver of a core never sees a floating chip select
 }
 
 void link_caps_query() {
