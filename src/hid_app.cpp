@@ -8,6 +8,11 @@
 #include "SegaController.h"
 #include "pico/mutex.h"
 
+hid_keyboard_report_t usb_keyboard_report;
+hid_mouse_report_t usb_mouse_report;
+uint16_t joyUSB[MAX_USB_JOYSTICKS];
+uint8_t joyUSB_len;
+
 // keyboard report is written by core1 (usb host) and read by core0 (osd, hotkeys)
 auto_init_mutex(kbd_report_mutex);
 static hid_keyboard_report_t kbd_report_shared = {0};

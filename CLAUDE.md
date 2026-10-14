@@ -27,15 +27,24 @@ Each board has its own PlatformIO env, which sets `HW_ID`:
 
 ## Architecture
 
-**Dual-core split** (`src/main.cpp`):
-- Core 0 (`setup`/`loop`) runs everything else: SD, FPGA config, OSD, RTC, joysticks, LED matrix and OLED, and MSC mode.
-- Core 1 (`setup1`/`loop1`) only runs the TinyUSB host stack on PIO-USB (`tuh_task`). HID reports reach core 0 through `hid_app.cpp`/`hid_driver.cpp`.
+**Dual-core split**:
+- Core 0 (`setup`/`loop`) runs everything else. `src/main.cpp` only does init and calls the module ticks in order: MSC, RTC, UI timers, buttons, joysticks, OSD redraw, input event queue, serial bridge, ESP, matrix, OLED. The order matters, so keep it when adding a tick.
+- Core 1 (`setup1`/`loop1`) only runs the TinyUSB host stack on PIO-USB (`tuh_task`). HID callbacks in `hid_app.cpp` push events with `spi_queue()`, and core 0 drains them in `input_drain_events()`. The keyboard report crosses cores only through `hid_kbd_report_sync()`.
+
+**Modules** (`src/`):
+- `fpga/`: `link` (SPI protocol), `bitstream` (FPGA configuration), `core_loader` (core file header, OSD items, ROMs, `do_configure`).
+- `input/`: buttons, joysticks, the core 1 event queue and global hotkeys.
+- `ui/`: OSD state and the app table, plus the shared file list arrays.
+- `storage/`: SD card, `karabas.ini` settings and USB MSC.
+- `periph/`: the LED matrix, OLED and USB serial bridge.
+- `board/`: per-board code (see below).
+- `main.h` is an umbrella header that includes every module header. Each module owns its state, and state is `static` unless other modules need it.
 
 **MCU↔FPGA SPI protocol**:
-- Every transfer is a 3-byte frame `cmd, addr, data` (`spi_send`). The FPGA replies with a 3-byte frame in the same transaction. Any non-zero reply cmd is dispatched by `process_in_cmd()`, so the FPGA can only send data when the MCU sends something.
+- Every transfer is a 3-byte frame `cmd, addr, data` (`spi_send`). The FPGA replies with a 3-byte frame in the same transaction. Any non-zero reply cmd is dispatched to the handler registered with `link_on(cmd, fn)`, so the FPGA can only send data when the MCU sends something. Handlers are registered in `setup()` and `matrix_register_handlers()`. Incoming commands are ignored while the FPGA is being configured (`link_set_rx_enabled`).
 - All `CMD_*` opcodes are defined in `src/config.h`, along with comments on the multi-byte sequences for the file mounter (`CMD_IMG_*`) and the file loader (`CMD_IOCTL_*`).
 - A new command needs matching support in the FPGA cores, which live in a separate repo.
-- The SPI clock defaults to 16 MHz. A core can override it with its `spi_freq` header field.
+- The SPI clock defaults to 16 MHz. A core can override it with its `spi_freq` header field, which `read_core()` passes to `link_set_freq()`.
 
 **Core files (`.kg1/.kg2/.kg3`)**:
 - Each file has a fixed binary header followed by the FPGA bitstream. Field offsets are the `FILE_POS_*` constants in `config.h`. The bitstream starts at 1024. EEPROM and switches data live at 256 and 512.
@@ -46,7 +55,7 @@ Each board has its own PlatformIO env, which sets `HW_ID`:
 
 **OSD apps**:
 - `osd_state` (`osd_state_e` in `types.h`) selects which `app_*.cpp` module owns the overlay and the keyboard: `app_core` (the per-core menu and file mounter), `app_core_browser`, `app_file_loader`, `app_setup` and `app_about`.
-- `osd_handle()` redraws the overlay whenever the state changes.
+- `osd_handle()` redraws the overlay whenever the state changes, and `ui_on_keyboard()` routes keys. Both go through the `apps[]` table in `ui/osd_ui.cpp`, which is indexed by `osd_state_e`. A new screen needs an enum value and a table entry in the same order.
 - The core browser has two renderers: a text one through the FPGA OSD (`lib/OSD`) and a graphical one through the FT812 (`lib/FT812`), used when it's present and enabled.
 
 **Per-board code**: pin maps are in `config.h`. Board behaviour lives behind the `src/board/board.h` API, implemented by `board_go.cpp` (I2C extender, Sega joysticks) and `board_mini.cpp` (Mini and Mini G, including the Mini G ESP, MIDI and FT reset lines). Outside `config.h`, `bitmaps.h` (logo selection) and `src/board/`, code must not use `#if HW_ID`. Add a `board_*` function instead.
@@ -56,5 +65,3 @@ Each board has its own PlatformIO env, which sets `HW_ID`:
 **Runtime config**: on the SD card, `karabas.ini` is read by `load_setup()` (see `src/karabas.ini` for the keys). USB joystick mappings are `*.ini` files in `drivers/`, described in `drivers/example_ini.txt`.
 
 **Optional peripherals** are detected at boot and tracked by flags (`has_ft`, `has_matrix`, `has_oled`, `has_extender`, ...). Code should check the relevant flag before touching the device. The dot-matrix add-on and its ZX-side register interface are documented in `MATRIX.md`.
-
-Shared globals and the SPI helpers are declared `extern` in `src/main.h`, which every app module includes.

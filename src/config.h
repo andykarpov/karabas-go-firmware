@@ -281,9 +281,6 @@
 #define WAIT_SERIAL 0
 #endif
 
-#define MATRIX_MODE_SCROLL 0
-#define MATRIX_MODE_DRAW 1
-#define MATRIX_MODE_AUDIO 2
 
 #define d_begin(...)   if (hw_setup.debug_enabled) Serial.begin(__VA_ARGS__);
 #define d_print(...)   if (hw_setup.debug_enabled) Serial.print(__VA_ARGS__);

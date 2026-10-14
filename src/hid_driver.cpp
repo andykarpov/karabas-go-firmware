@@ -6,6 +6,9 @@
 #include <SegaController.h>
 #include "IniFile.h"
 
+hid_joy_config_t joy_drivers[MAX_JOY_DRIVERS];
+uint8_t joy_drivers_len;
+
 hid_joy_config_t hid_driver_load(char* filename)
 {
   hid_joy_config_t cfg = {0};
