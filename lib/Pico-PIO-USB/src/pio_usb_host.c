@@ -505,8 +505,16 @@ bool pio_usb_host_endpoint_abort_transfer(uint8_t root_idx, uint8_t device_addre
 // Transaction helper
 //--------------------------------------------------------------------+
 
+#ifdef PIO_USB_PROBE_COUNTERS
+extern volatile uint32_t pio_usb_probe_xfer[6];
+#define PROBE_XFER(i) (pio_usb_probe_xfer[i]++)
+#else
+#define PROBE_XFER(i)
+#endif
+
 static int __no_inline_not_in_flash_func(usb_in_transaction)(pio_port_t *pp,
                                                              endpoint_t *ep) {
+  PROBE_XFER(1);
   int res = 0;
   uint8_t expect_pid = (ep->data_id == 1) ? USB_PID_DATA1 : USB_PID_DATA0;
 
@@ -545,6 +553,7 @@ static int __no_inline_not_in_flash_func(usb_in_transaction)(pio_port_t *pp,
 
 static int __no_inline_not_in_flash_func(usb_out_transaction)(pio_port_t *pp,
                                                               endpoint_t *ep) {
+  PROBE_XFER(2);
   int res = 0;
 
   uint16_t const xact_len = pio_usb_ll_get_transaction_len(ep);
@@ -582,6 +591,7 @@ static int __no_inline_not_in_flash_func(usb_out_transaction)(pio_port_t *pp,
 
 static int __no_inline_not_in_flash_func(usb_setup_transaction)(
     pio_port_t *pp,  endpoint_t *ep) {
+  PROBE_XFER(0);
 
   int res = 0;
 

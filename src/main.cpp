@@ -64,6 +64,7 @@ static void probe(const char *msg) {
 // called from lib/Pico-PIO-USB (weak reference there)
 extern "C" void pio_usb_probe(const char *msg) { probe(msg); }
 extern "C" void pio_usb_probe_state(uint32_t *sof_count, int *connected, int *line_state, int *alarm_core, int *alarm_num);
+extern "C" volatile uint32_t pio_usb_probe_xfer[6];
 static volatile int probe_sof_irq_enabled_core1 = -1;
 #else
 #define PROBE(msg)
@@ -343,6 +344,9 @@ void loop() {
   Serial.printf("PROBE: usb sof frames %lu, root connected %d, line state %d, alarm core %d num %d, irq enabled on core1 %d, timer inte %02lx armed %02lx\r\n",
     (unsigned long) sof, conn, line, acore, anum, probe_sof_irq_enabled_core1,
     (unsigned long) timer_hw->inte, (unsigned long) timer_hw->armed);
+  Serial.printf("PROBE: usb xfers: setup %lu in %lu out %lu | complete %lu error %lu stalled %lu\r\n",
+    (unsigned long) pio_usb_probe_xfer[0], (unsigned long) pio_usb_probe_xfer[1], (unsigned long) pio_usb_probe_xfer[2],
+    (unsigned long) pio_usb_probe_xfer[3], (unsigned long) pio_usb_probe_xfer[4], (unsigned long) pio_usb_probe_xfer[5]);
 #else
   vTaskDelay(portMAX_DELAY);
 #endif

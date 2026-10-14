@@ -428,10 +428,20 @@ bool __no_inline_not_in_flash_func(pio_usb_ll_transfer_continue)(
   }
 }
 
+#ifdef PIO_USB_PROBE_COUNTERS
+// karabas: RTOS boot probe transfer counters: setup, in, out, complete, error, stalled
+volatile uint32_t pio_usb_probe_xfer[6];
+#endif
+
 void __no_inline_not_in_flash_func(pio_usb_ll_transfer_complete)(
     endpoint_t *ep, uint32_t flag) {
   root_port_t *rport = PIO_USB_ROOT_PORT(ep->root_idx);
   uint32_t const ep_mask = (1u << (ep - pio_usb_ep_pool));
+#ifdef PIO_USB_PROBE_COUNTERS
+  if (flag == PIO_USB_INTS_ENDPOINT_COMPLETE_BITS) pio_usb_probe_xfer[3]++;
+  else if (flag == PIO_USB_INTS_ENDPOINT_ERROR_BITS) pio_usb_probe_xfer[4]++;
+  else if (flag == PIO_USB_INTS_ENDPOINT_STALLED_BITS) pio_usb_probe_xfer[5]++;
+#endif
 
   rport->ints |= flag;
 
