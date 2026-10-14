@@ -174,6 +174,17 @@ static void usb_host_setup() {
   pio_usb_configuration_t pio_cfg = PIO_USB_DEFAULT_CONFIG;
   pio_cfg.pin_dp = HOST_PIN_DP;
   pio_cfg.pinout = (PIO_USB_PINOUT) board_usb_pinout();
+
+  // PIO-USB hard-claims its state machines (default pio0 sm0, pio1 sm0/sm1) and panics if
+  // one is taken. Under FreeRTOS the core already uses a PIO SM (usually pio0 sm0) as cycle
+  // counter, so pick free ones. Without FreeRTOS this yields the same defaults.
+  int sm_tx = pio_claim_unused_sm(pio0, false);
+  int sm_rx = pio_claim_unused_sm(pio1, false);
+  int sm_eop = pio_claim_unused_sm(pio1, false);
+  if (sm_tx >= 0) { pio_sm_unclaim(pio0, sm_tx); pio_cfg.sm_tx = sm_tx; }
+  if (sm_rx >= 0) { pio_sm_unclaim(pio1, sm_rx); pio_cfg.sm_rx = sm_rx; }
+  if (sm_eop >= 0) { pio_sm_unclaim(pio1, sm_eop); pio_cfg.sm_eop = sm_eop; }
+
   PROBE("tuh_configure");
   tuh_configure(1, TUH_CFGID_RPI_PIO_USB_CONFIGURATION, &pio_cfg);
   PROBE("tuh_init");
@@ -248,6 +259,11 @@ static void usb_host_loop()
 
 static void app_task(void *param) {
   PROBE("APP task started");
+  // let PIO-USB claim its PIO memory, state machines and DMA channel first:
+  // the SD card driver (PioSPI) would otherwise take PIO memory that the usb rx programs need
+  ElapsedTimer wait;
+  while (!usb_host_ready && wait.elapsed() < 2000) { delay(1); }
+  PROBE(usb_host_ready ? "APP: usb host is ready" : "APP: usb host not ready, continuing");
   karabas_setup();
   PROBE("karabas_setup done");
   // no yield here: every scheduler call takes the SMP kernel lock with interrupts off,
@@ -300,11 +316,11 @@ void setup() {
   // framework's CORE0 task running this code, so it starts immediately on creation.
   // Unpinned, it could start on core0 and starve CORE0 forever (it never blocks),
   // and PIO-USB would set up its SOF timer on the wrong core.
-  if (xTaskCreateAffinitySet(app_task, "APP", APP_TASK_STACK, nullptr, APP_TASK_PRIORITY, 1 << 0, nullptr) != pdPASS) {
-    panic("Unable to create APP task");
-  }
   if (xTaskCreateAffinitySet(usb_task, "USB", USB_TASK_STACK, nullptr, USB_TASK_PRIORITY, 1 << 1, nullptr) != pdPASS) {
     panic("Unable to create USB task");
+  }
+  if (xTaskCreateAffinitySet(app_task, "APP", APP_TASK_STACK, nullptr, APP_TASK_PRIORITY, 1 << 0, nullptr) != pdPASS) {
+    panic("Unable to create APP task");
   }
 }
 
