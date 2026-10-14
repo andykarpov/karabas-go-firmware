@@ -241,7 +241,7 @@ void spi_send64(uint8_t cmd, uint64_t data) { spi_send_le(cmd, data, 8); }
 
 #define CAPS_BURST_WRITE 0x01
 #define CAPS_BURST_READY 0x02
-#define CAPS_QUERY_POLLS 8
+#define CAPS_QUERY_POLLS 16 // queue-based cores keep a few NOPs queued ahead of the answer
 #define BURST_READY_TIMEOUT_US 100000
 
 static uint8_t burst_caps = 0;

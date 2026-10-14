@@ -35,7 +35,7 @@ The MCU drives `BURST_CS_N` only after the loaded core has announced burst suppo
 During every core load the MCU asks the core what it supports, using the classic link. The query comes after `CMD_INIT_START` and `CMD_HW_SETUP`, before ROMs are sent.
 
 1. MCU sends the classic frame `{0xF7, 0x00, 0x01}`. `addr = 0x00` means "query", `data = 0x01` is the protocol version.
-2. MCU then sends up to 8 `CMD_NOP` frames. A core that supports bursts answers in the **reply bytes** of any of these transfers (the bytes the FPGA shifts out on MISO), with the frame `{0xF7, caps, max_mhz}`:
+2. MCU then sends up to 16 `CMD_NOP` frames. A core that supports bursts answers in the **reply bytes** of any of these transfers (the bytes the FPGA shifts out on MISO), with the frame `{0xF7, caps, max_mhz}`. Cores that send to the MCU through a queue can answer through it: frames already queued ahead of the answer (e.g. the NOPs some cores keep queued) only delay it, and should stay well below 16.
    - `caps` bit 0: burst write supported.
    - `caps` bit 1: `BURST_READY` is driven by the core. If 0, the MCU does not look at it.
    - `caps` bit 2: burst read supported (see "Burst read" below; requires bit 1).
