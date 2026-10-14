@@ -459,40 +459,37 @@ int app_core_init_filebrowser() {
 
   d_println("Read file list");
   root1.rewind();
-  files_len = 0;
+  files_clear();
   file_sel = 0;
-  memset(files, 0, sizeof(files));
   memset(cached_names, 0, sizeof(cached_names));
   cached_file_from = 0;
   cached_file_to = 0;
 
   // add root entry
-  files[files_len].file_id = 0;
-  String s = String("."); s.toCharArray(files[files_len].hash, sizeof(files[files_len].hash));
-  files_len++;
+  file_list_sort_item_t *item = files_append();
+  if (item) strcpy(item->hash, "."); // file_id 0
 
   // add parent dir entry
   if (dir.length() > 1) {
-    files[files_len].file_id = 0;
-    String s = String(".."); s.toCharArray(files[files_len].hash, sizeof(files[files_len].hash));
-    files_len++;
+    item = files_append();
+    if (item) strcpy(item->hash, ".."); // file_id 0
   }
 
   uint16_t presel_id = 0;
   while (file1.openNext(&root1, O_RDONLY)) {
     char filename[14]; file1.getSFN(filename, sizeof(filename));
     uint8_t len = strlen(filename);  
-    if (files_len < SORT_FILES_MAX) {
-      memcpy(files[files_len].hash, filename, SORT_HASH_LEN);
-      files[files_len].file_id = file1.dirIndex();
+    item = files_append();
+    if (item) {
+      memcpy(item->hash, filename, SORT_HASH_LEN);
+      item->file_id = file1.dirIndex();
       String core_f = String(file_slots[core.osd[curr_osd_item].slot_id].filename);
       String f = String(filename);
       core_f.toLowerCase();
       f.toLowerCase();
       if (core_f.length() > 0 && core_f.indexOf(f) == 0) {
-        presel_id = files[files_len].file_id;
+        presel_id = item->file_id;
       }
-      files_len++;
     }
     file1.close();
   }

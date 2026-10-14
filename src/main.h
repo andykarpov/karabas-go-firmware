@@ -53,8 +53,10 @@ extern hid_joy_config_t joy_drivers[MAX_JOY_DRIVERS];
 extern uint8_t joy_drivers_len;
 
 // ui/file_list.cpp
-extern file_list_sort_item_t files[SORT_FILES_MAX];
+extern file_list_sort_item_t *files;
 extern uint16_t files_len;
+void files_clear();                       // empty the list (frees a large buffer)
+file_list_sort_item_t *files_append();    // zeroed slot for a new entry, nullptr if full / no memory
 extern uint16_t file_sel;
 extern uint16_t file_page_size;
 extern uint16_t file_pages;

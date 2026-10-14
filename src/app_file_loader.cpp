@@ -58,9 +58,8 @@ void app_file_loader_read_list(bool forceIndex = false) {
     root1.rewind();
 
     d_println("Read file list");
-    files_len = 0;
+    files_clear();
     file_sel = 0;
-    memset(files, 0, sizeof(files));
     String exts = String(core.file_extensions);
     exts.toLowerCase(); exts.trim();
     char e[33];
@@ -68,11 +67,13 @@ void app_file_loader_read_list(bool forceIndex = false) {
     while (file1.openNext(&root1, O_RDONLY)) {
       char filename[14]; file1.getSFN(filename, sizeof(filename));
       uint8_t len = strlen(filename);
-      if (!file1.isDirectory() && files_len < SORT_FILES_MAX) {
+      if (!file1.isDirectory()) {
         if (exts.length() == 0 || exts.indexOf(strlwr(filename + (len - 4))) != -1) {
-          memcpy(files[files_len].hash, filename, SORT_HASH_LEN);
-          files[files_len].file_id = file1.dirIndex();
-          files_len++;
+          file_list_sort_item_t *item = files_append();
+          if (item) {
+            memcpy(item->hash, filename, SORT_HASH_LEN);
+            item->file_id = file1.dirIndex();
+          }
         }
       }
       file1.close();
