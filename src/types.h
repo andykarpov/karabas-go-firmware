@@ -96,6 +96,7 @@ typedef struct {
 typedef struct {
 	bool debug_enabled;
 	bool debug_hid;
+	bool burst_enabled; // burst transfers to cores that support them (docs/burst_protocol.md)
 	bool ft_enabled;
 	uint8_t ft_video_mode;
 	uint8_t ft_sound;

@@ -35,6 +35,7 @@ void load_setup() {
   hw_setup.color_copyright = 0x00787878;  
 
   hw_setup.dvi_only = false;
+  hw_setup.burst_enabled = true;
 
   if (!has_sd) return;
   sd1.chvol();
@@ -49,6 +50,7 @@ void load_setup() {
     ini.getValue("setup", "debug", buffer, bufferLen, hw_setup.debug_enabled);
     ini.getValue("setup", "debug_hid", buffer, bufferLen, hw_setup.debug_hid);
     ini.getValue("setup", "dvi_only", buffer, bufferLen, hw_setup.dvi_only);
+    ini.getValue("setup", "burst", buffer, bufferLen, hw_setup.burst_enabled);
 
     
     ini.getValue("ft812", "enabled", buffer, bufferLen, hw_setup.ft_enabled);

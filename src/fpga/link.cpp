@@ -254,6 +254,10 @@ void link_burst_reset() {
 }
 
 void link_caps_query() {
+  if (!hw_setup.burst_enabled) {
+    d_println("FPGA caps: not queried, burst=0 in karabas.ini (classic link)");
+    return;
+  }
   SpiBusGuard bus;
   uint8_t rx[3];
   // query (protocol version 1), then poll: the answer comes in the reply bytes of a later transfer

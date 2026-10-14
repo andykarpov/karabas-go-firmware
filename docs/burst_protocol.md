@@ -97,3 +97,4 @@ The FPGA usually needs time to fetch the data (from SDRAM, a sector buffer, ...)
 - `link_caps_query()` runs in `do_configure()`. `link_burst_available()` / `link_burst_write()` are in `src/fpga/link.cpp`.
 - The users are `rom_send()` (ROMs), the file loader and the ioctl loader. They fall back to classic frames from the first byte a burst could not send.
 - The `debug=1` log prints the answer: `FPGA caps: ...` or `FPGA caps: none (classic link)`.
+- `burst=0` in the `[setup]` section of `karabas.ini` skips the query, so every core stays on classic frames. Use it to compare a core with and without bursts.
