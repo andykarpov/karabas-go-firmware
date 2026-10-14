@@ -25,7 +25,7 @@ Each board has its own PlatformIO env, which sets `HW_ID`:
   - `USB` (core 1) runs the USB host.
   - SPI0 (the FPGA link and FT812) is shared. Every transfer holds the recursive `spi_bus_lock`. Hold a `SpiBusGuard` around multi-frame sequences that must not interleave, such as core load, ROM and file transfers.
   - Incoming FPGA commands are always handled in `APP`. Frames received by another task are queued and handled by `link_dispatch_pending()`.
-  - `PERIPH` (core 0, same priority as `APP`, time-sliced with it) runs the LED matrix and OLED ticks. A full OLED frame is about 46 ms of busy-polled I2C at 100 kHz.
+  - `PERIPH` (core 0, same priority as `APP`, time-sliced with it) runs the LED matrix and OLED ticks. A full OLED frame is about 12 ms of busy-polled I2C. The bus runs at 400 kHz, set in `karabas_setup`. The SSD1306 is constructed so that it does not drop the clock back to 100 kHz after a frame.
   - I2C is shared by `PERIPH` and `APP` (RTC/EEPROM through hooks in `lib/RTC`, matrix commands from the FPGA, the Go extender). Hold an `I2cGuard` around every I2C access. **Lock order:** taking the I2C lock while holding the SPI lock is fine, but never call `spi_send()` while holding the I2C lock. FPGA command handlers run after the SPI lock is released.
   - SD and the OSD state are used only from `APP`. Keep it that way, or add a lock first.
   - In the plain build the locks are no-ops and everything runs in the main loop as before.

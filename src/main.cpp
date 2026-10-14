@@ -104,7 +104,7 @@ static void karabas_setup()
   // I2C
   Wire.setSDA(PIN_I2C_SDA);
   Wire.setSCL(PIN_I2C_SCL);
-  Wire.setClock(100000);
+  Wire.setClock(400000); // all devices on the bus are fast-mode (SSD1306, HT16K33, DS3231, 24xx EEPROM, PCA9536)
   Wire.begin();
 
 #if WAIT_SERIAL

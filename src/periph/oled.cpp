@@ -6,7 +6,9 @@
 
 // Optional SSD1306 128x32 I2C OLED with a scrolling logo
 
-static Adafruit_SSD1306 oled(128, 32, &Wire, -1);
+// the library switches the bus clock around each transfer (default: 400 kHz during, 100 kHz
+// after); keep the global 400 kHz set in setup()
+static Adafruit_SSD1306 oled(128, 32, &Wire, -1, 400000UL, 400000UL);
 static bool has_oled = false;
 static int oled_scrollpos = -128;
 static ElapsedTimer oled_timer;
