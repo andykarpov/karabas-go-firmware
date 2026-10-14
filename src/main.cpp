@@ -216,23 +216,74 @@ static void usb_host_loop()
 #define APP_TASK_PRIORITY (configMAX_PRIORITIES / 2)
 #define USB_TASK_PRIORITY (configMAX_PRIORITIES - 2) // above everything but the framework's flash idle tasks
 
+// RTOS_PROBE=1 (env *_rtos_probe): boot step by step and report every step to USB serial,
+// to find where the RTOS build stops on real hardware
+#ifndef RTOS_PROBE
+#define RTOS_PROBE 0
+#endif
+
+#if RTOS_PROBE
+static volatile uint32_t probe_app_loops = 0;
+static volatile uint32_t probe_usb_loops = 0;
+
+static void probe(const char *msg) {
+  Serial.print("PROBE: "); Serial.println(msg);
+  Serial.flush();
+  delay(200); // let the line leave before a possible crash
+}
+#define PROBE(msg) probe(msg)
+#define PROBE_COUNT(var) (var)++
+#else
+#define PROBE(msg)
+#define PROBE_COUNT(var)
+#endif
+
 static void app_task(void *param) {
+  PROBE("APP task started");
   karabas_setup();
+  PROBE("karabas_setup done");
   // no yield here: every scheduler call takes the SMP kernel lock with interrupts off,
   // which could delay the PIO-USB SOF interrupt on core1
   for (;;) {
     karabas_loop();
+    PROBE_COUNT(probe_app_loops);
   }
 }
 
 static void usb_task(void *param) {
+  PROBE("USB task started");
   usb_host_setup();
+  PROBE("usb_host_setup done");
   for (;;) {
     usb_host_loop();
+    PROBE_COUNT(probe_usb_loops);
   }
 }
 
 void setup() {
+#if RTOS_PROBE
+#ifdef PIN_LED1
+  // LED1 on: the scheduler runs and the framework's CORE0 task reached setup()
+  pinMode(PIN_LED1, OUTPUT); digitalWrite(PIN_LED1, LOW);
+#endif
+  Serial.begin(115200);
+  // give the host time to enumerate the CDC port and open a terminal
+  while (!Serial && millis() < 15000) { delay(10); }
+  delay(500);
+  PROBE("scheduler running, CORE0 task in setup()");
+  PROBE("creating USB task");
+  if (xTaskCreateAffinitySet(usb_task, "USB", USB_TASK_STACK, nullptr, USB_TASK_PRIORITY, 1 << 1, nullptr) != pdPASS) {
+    PROBE("USB task creation FAILED");
+  }
+  delay(1000);
+  PROBE(usb_host_ready ? "usb_host_ready = 1" : "usb_host_ready = 0");
+  PROBE("creating APP task");
+  if (xTaskCreateAffinitySet(app_task, "APP", APP_TASK_STACK, nullptr, APP_TASK_PRIORITY, 1 << 0, nullptr) != pdPASS) {
+    PROBE("APP task creation FAILED");
+  }
+  PROBE("setup() done");
+  return;
+#endif
   // tasks must be created already pinned: the USB task has a higher priority than the
   // framework's CORE0 task running this code, so it starts immediately on creation.
   // Unpinned, it could start on core0 and starve CORE0 forever (it never blocks),
@@ -246,7 +297,13 @@ void setup() {
 }
 
 void loop() {
+#if RTOS_PROBE
+  delay(2000);
+  Serial.printf("PROBE: alive, app loops %lu, usb loops %lu, usb_host_ready %d, heap free %d\n",
+    (unsigned long) probe_app_loops, (unsigned long) probe_usb_loops, usb_host_ready, rp2040.getFreeHeap());
+#else
   vTaskDelay(portMAX_DELAY);
+#endif
 }
 
 #else
