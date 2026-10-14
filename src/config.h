@@ -140,6 +140,14 @@
 
 #endif // HW_ID
 
+// burst transfers (docs/burst_protocol.md). Same RP2040 pins on all boards; on Go the FPGA
+// port index is swapped (IO0 = MCU_SPI_IO[1], IO1 = MCU_SPI_IO[0]).
+// MCU_IO4 (GPIO18 on Mini / Mini G) must stay an input: it carries the FT812 clock after the
+// revF clock mod and is disconnected on Rev.G.
+#define PIN_BURST_CS PIN_MCU_SPI_IO0
+#define PIN_BURST_READY PIN_MCU_SPI_IO1
+#define BURST_MAX_LEN 512
+
 #define CMD_USB_KBD 0x01
 #define CMD_USB_MOUSE 0x02
 #define CMD_JOYSTICK 0x03
@@ -206,6 +214,7 @@
 #define CMD_AUDIO_PEAKS_L 0x70
 #define CMD_AUDIO_PEAKS_R 0x71
 
+#define CMD_CAPS 0xF7 // core capability query / answer, see docs/burst_protocol.md
 #define CMD_ESP_UART 0xF8
 #define CMD_HW_SETUP 0xF9
 #define CMD_RTC 0xFA

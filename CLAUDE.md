@@ -61,6 +61,10 @@ The plain envs are still the release builds. The `*_rtos` envs (FreeRTOS) build 
 - All `CMD_*` opcodes are defined in `src/config.h`, along with comments on the multi-byte sequences for the file mounter (`CMD_IMG_*`) and the file loader (`CMD_IOCTL_*`).
 - A new command needs matching support in the FPGA cores, which live in a separate repo.
 - The SPI clock defaults to 16 MHz. A core can override it with its `spi_freq` header field, which `read_core()` passes to `link_set_freq()`.
+- **Burst transfers** (`docs/burst_protocol.md`). A second chip select (`PIN_BURST_CS` = `PIN_MCU_SPI_IO0`), optional `PIN_BURST_READY` = `PIN_MCU_SPI_IO1`, a 5-byte header (type + 32-bit address) and up to 512 data bytes.
+  - They are used only if the core answered the `CMD_CAPS` query that `do_configure()` sends. Otherwise everything stays on classic frames, so old cores are unaffected.
+  - ROMs, the file loader and ioctl data try `link_burst_write()` first and send the rest with classic frames.
+  - **MCU_IO4 (GPIO18) must stay an input:** on modded Mini boards it is the FT812 clock from the FPGA.
 
 **Core files (`.kg1/.kg2/.kg3`)**:
 - Each file has a fixed binary header followed by the FPGA bitstream. Field offsets are the `FILE_POS_*` constants in `config.h`. The bitstream starts at 1024. EEPROM and switches data live at 256 and 512.

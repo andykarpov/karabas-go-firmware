@@ -29,6 +29,14 @@ void link_set_event_task(void *task);     // task woken by spi_queue (INPUT)
 void link_dispatch_pending();             // handle frames received by other tasks
 void link_poll();                         // once per main loop: NOP to the fpga if the link was idle
 
+// burst transfers, docs/burst_protocol.md
+void link_burst_reset();                  // at a core load: no bursts until the next query
+void link_caps_query();                   // ask the loaded core for its capabilities (CMD_CAPS)
+bool link_burst_available();
+// send data to `type`'s target starting at addr; returns how many bytes went out as bursts
+// (less than len if the fpga stopped being ready: send the rest with classic frames)
+size_t link_burst_write(uint8_t type, uint32_t addr, const uint8_t *data, size_t len);
+
 void spi_queue(uint8_t cmd, uint8_t addr, uint8_t data); // enqueue from any core / irq, sent by the input handler
 bool link_queue_pop(queue_spi_t *packet);
 void link_report_drops();

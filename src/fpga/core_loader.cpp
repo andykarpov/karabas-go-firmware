@@ -92,6 +92,7 @@ void do_configure(const char* filename) {
   SpiBusGuard bus;
   matrix_on_configure_start();
   link_set_rx_enabled(false);
+  link_burst_reset(); // the new core may not support bursts
   ft.vga(false); // FT off
   ft.spi(false);
   kb_reset(); // reset to ps/2 defaults
@@ -100,6 +101,8 @@ void do_configure(const char* filename) {
   spi_send(CMD_INIT_START, 0, 0);
   spi_send(CMD_HW_SETUP, 0, HW_ID); // hw id
   spi_send(CMD_HW_SETUP, 1, hw_setup.dvi_only); // dvi only flag
+  // burst transfers for the roms / files below, if the core supports them
+  link_caps_query();
   // trigger font loader reset
   zxosd.fontReset();
   // send font data
@@ -336,6 +339,11 @@ void read_core(const char* filename) {
 
 // send a chunk of rom data to the fpga, starting at the given rom address
 void rom_send(uint32_t addr, const uint8_t* buf, size_t len) {
+  // bursts if the core supports them; classic frames for whatever they did not send
+  size_t done = link_burst_write(CMD_ROMDATA, addr, buf, len);
+  addr += done;
+  buf += done;
+  len -= done;
   for (size_t j=0; j<len; j++) {
     uint32_t a = addr + j;
     // send rombank address every 256 bytes (and on the first byte of an unaligned chunk)

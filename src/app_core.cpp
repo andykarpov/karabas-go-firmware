@@ -622,12 +622,15 @@ void app_core_on_select_file() {
     uint64_t i = 0;
     int c;
     while (i < fsize && (c = file.read(buf, sizeof(buf))) > 0) {
-      for (int j = 0; j < c; j++, i++) {
-        if (i % 8192 == 0) {
-          zxosd.loadingPopup(i, fsize);
-          zxosd.update();
-        }
-        if (i % 256 == 0) {
+      if (i % 8192 == 0) {
+        zxosd.loadingPopup(i, fsize);
+        zxosd.update();
+      }
+      // bursts if the core supports them; classic frames for whatever they did not send
+      int done = link_burst_write(CMD_IOCTL_DATA, (uint32_t) i, buf, c);
+      i += done;
+      for (int j = done; j < c; j++, i++) {
+        if (j == done || i % 256 == 0) {
           spi_send24(CMD_IOCTL_BANK, i >> 8);
         }
         spi_send(CMD_IOCTL_DATA, (uint8_t)((i & 0x00000000000000FF)), buf[j]);

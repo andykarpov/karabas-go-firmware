@@ -296,15 +296,17 @@ uint32_t cnt = 0;
 uint32_t c1 = 0;
 
   while((c = file1.read(buf, sizeof(buf))) > 0) {
-    for (int j=0; j<c; j++) {
-      app_file_loader_send_byte(cnt, buf[j]);
-      cnt++;
-      c1++;
-      if (c1 == 16384) {
-        c1 = 0;
-        zxosd.loadingPopup(cnt, file_size);
-        zxosd.update();
-      }
+    // bursts if the core supports them; classic frames for whatever they did not send
+    size_t done = link_burst_write(CMD_FILEDATA, cnt, buf, c);
+    for (int j=done; j<c; j++) {
+      app_file_loader_send_byte(cnt + j, buf[j], j == (int) done);
+    }
+    cnt += c;
+    c1 += c;
+    if (c1 >= 16384) {
+      c1 = 0;
+      zxosd.loadingPopup(cnt, file_size);
+      zxosd.update();
     }
   }
   zxosd.loadingPopup(file_size, file_size);
@@ -386,9 +388,9 @@ void app_file_loader_on_keyboard()
       }
 }
 
-void app_file_loader_send_byte(uint32_t addr, uint8_t data) {
-  // send file bank address every 256 bytes
-  if ((addr & 0x000000FF) == 0) {
+void app_file_loader_send_byte(uint32_t addr, uint8_t data, bool force_bank) {
+  // send file bank address every 256 bytes (and when resuming in the middle of a bank)
+  if (force_bank || (addr & 0x000000FF) == 0) {
     uint8_t filebank3 = (uint8_t)((addr & 0xFF000000) >> 24);
     uint8_t filebank2 = (uint8_t)((addr & 0x00FF0000) >> 16);
     uint8_t filebank1 = (uint8_t)((addr & 0x0000FF00) >> 8);

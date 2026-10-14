@@ -16,7 +16,7 @@ FT812 ft(PIN_MCU_FT_CS);
 void board_init_pins() {
   // unused MCU-FPGA pins (yet)
   pinMode(PIN_MCU_SPI_IO0, INPUT);
-  pinMode(PIN_MCU_SPI_IO1, INPUT);
+  pinMode(PIN_MCU_SPI_IO1, INPUT_PULLDOWN); // burst READY from the fpga (undriven reads as not ready)
   pinMode(PIN_MCU_SPI_IO4, INPUT);
 #if HW_ID == HW_ID_MINIG
   pinMode(PIN_MCU_SPI_IO5, INPUT);
