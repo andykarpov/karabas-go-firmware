@@ -39,7 +39,7 @@ void __time_critical_func(pio_spi_read8_blocking)(const pio_spi_inst_t *spi, uin
     io_rw_8 *rxfifo = (io_rw_8 *) &spi->pio->rxf[spi->sm];
     while (tx_remain || rx_remain) {
         if (tx_remain && !pio_sm_is_tx_fifo_full(spi->pio, spi->sm)) {
-            *txfifo = 0;
+            *txfifo = 0xFF; // karabas: SD cards expect MOSI high while sending data (was 0)
             --tx_remain;
         }
         if (rx_remain && !pio_sm_is_rx_fifo_empty(spi->pio, spi->sm)) {
