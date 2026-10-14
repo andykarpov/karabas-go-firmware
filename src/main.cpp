@@ -42,6 +42,16 @@ ESP8266 wifi(esp_serial);
 
 static ElapsedTimer led_timer;
 
+#ifdef __FREERTOS
+// Under FreeRTOS the core puts its cycle counter (ccount) on the first free PIO state machine
+// in main(), before setup(). Reserve pio0 sm0 for the PIO-USB transmitter already in a static
+// constructor (runs before main), so the usb host gets the same PIO layout as without FreeRTOS.
+// usb_host_setup() releases it right before PIO-USB claims it.
+static struct UsbPioReserve {
+  UsbPioReserve() { pio_sm_claim(pio0, 0); }
+} usb_pio_reserve;
+#endif
+
 // RTOS_PROBE (env *_rtos_probe): boot step by step and report every step to USB serial,
 // to find where the RTOS build stops on real hardware.
 // 1 = full boot, 2 = usb host task only (core0 keeps reporting if core1 hangs)
@@ -181,6 +191,9 @@ static void usb_host_setup() {
   // PIO-USB hard-claims its state machines (default pio0 sm0, pio1 sm0/sm1) and panics if
   // one is taken. Under FreeRTOS the core already uses a PIO SM (usually pio0 sm0) as cycle
   // counter, so pick free ones. Without FreeRTOS this yields the same defaults.
+#ifdef __FREERTOS
+  pio_sm_unclaim(pio0, 0); // reserved before main(), see usb_pio_reserve
+#endif
   int sm_tx = pio_claim_unused_sm(pio0, false);
   int sm_rx = pio_claim_unused_sm(pio1, false);
   int sm_eop = pio_claim_unused_sm(pio1, false);
@@ -344,6 +357,9 @@ void loop() {
   Serial.printf("PROBE: usb sof frames %lu, root connected %d, line state %d, alarm core %d num %d, irq enabled on core1 %d, timer inte %02lx armed %02lx\r\n",
     (unsigned long) sof, conn, line, acore, anum, probe_sof_irq_enabled_core1,
     (unsigned long) timer_hw->inte, (unsigned long) timer_hw->armed);
+  Serial.printf("PROBE: pio0 claimed sm mask %x, pio1 claimed sm mask %x\r\n",
+    (pio_sm_is_claimed(pio0,0)?1:0)|(pio_sm_is_claimed(pio0,1)?2:0)|(pio_sm_is_claimed(pio0,2)?4:0)|(pio_sm_is_claimed(pio0,3)?8:0),
+    (pio_sm_is_claimed(pio1,0)?1:0)|(pio_sm_is_claimed(pio1,1)?2:0)|(pio_sm_is_claimed(pio1,2)?4:0)|(pio_sm_is_claimed(pio1,3)?8:0));
   Serial.printf("PROBE: usb xfers: setup %lu in %lu out %lu | complete %lu error %lu stalled %lu\r\n",
     (unsigned long) pio_usb_probe_xfer[0], (unsigned long) pio_usb_probe_xfer[1], (unsigned long) pio_usb_probe_xfer[2],
     (unsigned long) pio_usb_probe_xfer[3], (unsigned long) pio_usb_probe_xfer[4], (unsigned long) pio_usb_probe_xfer[5]);
