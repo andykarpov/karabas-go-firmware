@@ -55,7 +55,7 @@ The firmware runs on FreeRTOS only (`main.cpp` stops the build with `#error` oth
 - `board/`: per-board code (see below).
 - `main.h` is an umbrella header that includes every module header. Each module owns its state, and state is `static` unless other modules need it.
 
-**MCU↔FPGA SPI protocol**:
+**MCU↔FPGA SPI protocol**: (full description: `docs/protocol.md` / `docs/protocol.ru.md`; keep them in sync with `config.h` when commands change)
 - Every transfer is a 3-byte frame `cmd, addr, data` (`spi_send`). The FPGA replies with a 3-byte frame in the same transaction. Any non-zero reply cmd is dispatched to the handler registered with `link_on(cmd, fn)`, so the FPGA can only send data when the MCU sends something. Handlers are registered in `setup()` and `matrix_register_handlers()`. Incoming commands are ignored while the FPGA is being configured (`link_set_rx_enabled`).
 - All `CMD_*` opcodes are defined in `src/config.h`, along with comments on the multi-byte sequences for the file mounter (`CMD_IMG_*`) and the file loader (`CMD_IOCTL_*`).
 - A new command needs matching support in the FPGA cores, which live in a separate repo.
