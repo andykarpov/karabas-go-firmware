@@ -6,7 +6,7 @@
 #include "host/usbh.h"
 #include "ps2kbd.h"
 #include "SegaController.h"
-#include "pico/mutex.h"
+#include "hardware/sync.h"
 
 hid_keyboard_report_t usb_keyboard_report;
 hid_mouse_report_t usb_mouse_report;
@@ -14,7 +14,9 @@ uint16_t joyUSB[MAX_USB_JOYSTICKS];
 uint8_t joyUSB_len;
 
 // keyboard report is written by core1 (usb host) and read by core0 (osd, hotkeys)
-auto_init_mutex(kbd_report_mutex);
+// a plain hardware spinlock (irqs off for an 8-byte copy): it never waits through FreeRTOS,
+// unlike pico mutexes, whose wakeups from irq context go through the FreeRTOS timer task
+static spin_lock_t *kbd_report_lock = spin_lock_init(spin_lock_claim_unused(true));
 static hid_keyboard_report_t kbd_report_shared = {0};
 
 void hid_kbd_report_sync()
@@ -24,9 +26,9 @@ void hid_kbd_report_sync()
 
 void hid_kbd_report_get(hid_keyboard_report_t *report)
 {
-  mutex_enter_blocking(&kbd_report_mutex);
+  uint32_t save = spin_lock_blocking(kbd_report_lock);
   *report = kbd_report_shared;
-  mutex_exit(&kbd_report_mutex);
+  spin_unlock(kbd_report_lock, save);
 }
 
 typedef struct {
@@ -213,9 +215,9 @@ static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_
     || (report->keycode[4] ^ prev_report.keycode[4])
     || (report->keycode[5] ^ prev_report.keycode[5]));
   if (change != 0) {
-    mutex_enter_blocking(&kbd_report_mutex);
+    uint32_t save = spin_lock_blocking(kbd_report_lock);
     kbd_report_shared = *report;
-    mutex_exit(&kbd_report_mutex);
+    spin_unlock(kbd_report_lock, save);
     spi_queue(CMD_USB_KBD, 0, report->modifier);
     for(uint8_t i=0; i<6; i++) {
       spi_queue(CMD_USB_KBD, i+1, report->keycode[i]);

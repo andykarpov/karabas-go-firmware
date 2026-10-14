@@ -27,6 +27,7 @@ Each board has its own PlatformIO env, which sets `HW_ID`:
   - Incoming FPGA commands are always handled in `APP`. Frames received by another task are queued and handled by `link_dispatch_pending()`.
   - I2C (RTC, matrix, OLED, the Go extender), SD and the OSD state are used only from `APP`. Keep it that way, or add a lock first.
   - In the plain build the locks are no-ops and everything runs in the main loop as before.
+  - **Lost wakeups.** pico-sdk locks (mutex, queue, semaphore) released from an IRQ wake their waiters through the FreeRTOS timer task (`xEventGroupSetBitsFromISR`). `APP` and `USB` never block, so that task runs at the highest priority (`[rtos]` in `platformio.ini`, asserted in `main.cpp`). Do not lower it. Prefer FreeRTOS primitives or plain spinlocks between tasks.
 - `DIAG_STATS=1` prints a `DIAG` line every 10 s when `debug=1`. It shows the loop rate and worst loop gap per core, the free heap and, under FreeRTOS, the free stack of the tasks.
 - To run the unit tests: `pio test -e native`. To run a single suite: `pio test -e native -f test_kg_format`. The tests cover only `lib/KarabasCommon`.
 - To upload: `pio run -e <env> -t upload` (port `/dev/ttyUSBPico`). Alternatively, copy `.pio/build/<env>/firmware.uf2` to the drive that appears in BOOTSEL mode.

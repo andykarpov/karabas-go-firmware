@@ -33,6 +33,8 @@
 #ifdef __FREERTOS
 #include <FreeRTOS.h>
 #include <task.h>
+// see [rtos] in platformio.ini: wakeups from irq context go through the timer task
+static_assert(configTIMER_TASK_PRIORITY == configMAX_PRIORITIES - 1, "FreeRTOS timer task must run above APP and USB");
 #endif
 
 RTC zxrtc;
