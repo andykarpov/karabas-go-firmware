@@ -187,6 +187,7 @@ static void karabas_loop()
 {
   diag_loop_core0();
   diag_tick();
+  debug_drain();
 
   //rp2040.wdt_reset();
   // read hw buttons to manipulate msc / reboots
@@ -250,6 +251,8 @@ static void usb_host_loop()
 static void app_task(void *param) {
   // incoming fpga commands are handled here, also when another task received them
   link_set_dispatch_task(xTaskGetCurrentTaskHandle());
+  // and only this task writes to the usb serial port
+  debug_set_owner_task(xTaskGetCurrentTaskHandle());
   // let PIO-USB claim its PIO memory, state machines and DMA channel first:
   // the SD card driver (PioSPI) would otherwise take PIO memory that the usb rx programs need
   ElapsedTimer wait;

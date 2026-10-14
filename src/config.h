@@ -282,9 +282,11 @@
 #endif
 
 
+// debug output goes through src/diag/debug_out (single Serial writer, see there)
+#include "diag/debug_out.h"
 #define d_begin(...)   if (hw_setup.debug_enabled) Serial.begin(__VA_ARGS__);
-#define d_print(...)   if (hw_setup.debug_enabled) Serial.print(__VA_ARGS__);
-#define d_printf(...)  if (hw_setup.debug_enabled) Serial.printf(__VA_ARGS__);
-#define d_write(...)   if (hw_setup.debug_enabled) Serial.write(__VA_ARGS__);
-#define d_println(...) if (hw_setup.debug_enabled) Serial.println(__VA_ARGS__);
-#define d_flush(...)   if (hw_setup.debug_enabled)  Serial.flush(__VA_ARGS__);
+#define d_print(...)   if (hw_setup.debug_enabled) debug_out().print(__VA_ARGS__);
+#define d_printf(...)  if (hw_setup.debug_enabled) debug_out().printf(__VA_ARGS__);
+#define d_write(...)   if (hw_setup.debug_enabled) debug_out().write(__VA_ARGS__);
+#define d_println(...) if (hw_setup.debug_enabled) debug_out().println(__VA_ARGS__);
+#define d_flush(...)   if (hw_setup.debug_enabled) debug_flush();
