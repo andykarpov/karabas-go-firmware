@@ -337,7 +337,11 @@ void app_core_browser_on_keyboard() {
             hw_setup.ft_video_mode = 0;
           }
           d_printf("Changing video mode from %d to %d", old_vmode, hw_setup.ft_video_mode); d_println();
-          ft.init(hw_setup.ft_video_mode);
+          if (ft.init(hw_setup.ft_video_mode)) {
+            d_printf("FT81x system clock %lu kHz, attempt %u", (unsigned long) (ft.initClockHz() / 1000), ft.initAttempts()); d_println();
+          } else {
+            d_println("FT81x did not come up in the new video mode");
+          }
           app_core_browser_ft_overlay();
         }
 

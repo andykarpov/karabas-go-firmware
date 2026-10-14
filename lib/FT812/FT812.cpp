@@ -177,26 +177,76 @@ void FT812::reset()
 
 /**************************************************************************************************/
 
+// Hardware reset: PD_N low, then high (the same as a power-on reset, the chip comes up in
+// SLEEP with the internal oscillator selected). Keeps the spi / vga switches as they are.
+void FT812::powerCycle() {
+    if (has_reset) {
+        digitalWrite(pin_reset, LOW);
+        delay(20);
+        digitalWrite(pin_reset, HIGH);
+    } else {
+        // PD_N driven by the FPGA (ctrl register bit 4)
+        ctrl_reg = bitWrite(ctrl_reg, 4, 1);
+        action(CMD_SPI_CONTROL, ADDR_CONTROL_REGISTER, ctrl_reg);
+        delay(20);
+        ctrl_reg = bitWrite(ctrl_reg, 4, 0);
+        action(CMD_SPI_CONTROL, ADDR_CONTROL_REGISTER, ctrl_reg);
+    }
+    delay(50); // internal regulator and oscillator start-up
+}
+
+// Clock setup and wake-up, as in the FT81x programmers guide (host commands at the low SPI clock,
+// SPI below 11 MHz until the system clock runs):
+//   SLEEP (PLL stopped: CLKSEL only works in this state), CLKEXT, CLKSEL, ACTIVE,
+//   then REG_ID = 7Ch and REG_CPURESET = 0.
+bool FT812::powerUp() {
+    slow_spi = true;
+    sendCommand(FT81x_CMD_SLEEP);
+    delay(20);
+    sendCommand(FT81x_CMD_CLKEXT); // may reset the chip when the clock source changes
+    delay(20);
+    sendCommand(FT81x_CMD_CLKSEL + ((mode.f_mul | 0xC0) << 8)); // f_mul
+    delay(20);
+    sendCommand(FT81x_CMD_ACTIVE);
+    delay(50); // PLL lock
+
+    init_timer.reset();
+    while (read8(FT81x_REG_ID) != 0x7C) {
+        if (init_timer.elapsed() > 1000) return false;
+        delay(1);
+    }
+    while (read16(FT81x_REG_CPURESET) != 0x00) {
+        if (init_timer.elapsed() > 1000) return false;
+        delay(1);
+    }
+
+    // the system clock must run: count it over 10 ms (REG_CLOCK counts system clock cycles)
+    uint32_t c0 = read32(FT81x_REG_CLOCK);
+    delay(10);
+    uint32_t c1 = read32(FT81x_REG_CLOCK);
+    clock_hz = (c1 - c0) * 100;
+    if (clock_hz < 10000000) return false; // not running (FT81x system clock is 24..72 MHz)
+
+    slow_spi = false;
+    return true;
+}
+
 bool FT812::init(uint8_t m) {
 
     mode = ft_modes[m];
+    clock_hz = 0;
 
-    sendCommand(FT81x_CMD_PWRDOWN);
-    sendCommand(FT81x_CMD_ACTIVE);
-    sendCommand(FT81x_CMD_SLEEP);
-    sendCommand(FT81x_CMD_CLKEXT);
-    sendCommand(FT81x_CMD_CLKSEL + ((mode.f_mul | 0xC0) << 8)); // f_mul
-    sendCommand(FT81x_CMD_ACTIVE); 
-    sendCommand(FT81x_CMD_RST_PULSE);
-
-    init_timer.reset();
-
-    while (read8(FT81x_REG_ID) != 0x7C) {
-        if (init_timer.elapsed() > 5000) return false;
+    bool up = false;
+    for (init_attempts = 1; init_attempts <= 3 && !up; init_attempts++) {
+        powerCycle();
+        up = powerUp();
     }
-    while (read16(FT81x_REG_CPURESET) != 0x00) {
-        if (init_timer.elapsed() > 5000) return false;
-    }
+    init_attempts--;
+    slow_spi = false;
+    if (!up) return false;
+
+    // after a reset the command fifo starts at 0: follow the chip, not a pointer from before
+    cmdWriteAddress = read16(FT81x_REG_CMD_WRITE);
 
     // configure vga mode
     write16(FT81x_REG_HCYCLE, mode.h_fporch + mode.h_sync + mode.h_bporch + mode.h_visible); // h_visible + h_fporch + h_sync + h_bporch
@@ -628,7 +678,7 @@ void FT812::writeGRAM(const uint32_t offset, const uint32_t size, const uint8_t 
     uint32_t cmd = (FT81x_RAM_G + offset) | WRITE;
 
     ft812_bus_lock();
-    SPI.beginTransaction(FT81x_SPI_SETTINGS);
+    SPI.beginTransaction(spiSettings());
     digitalWrite(pin_cs, LOW);
 
     SPI.transfer((cmd >> 16) & 0xFF);
@@ -654,7 +704,7 @@ void FT812::startCmd(const uint32_t cmd) {
     uint32_t addr = (FT81x_RAM_CMD + cmdWriteAddress) | WRITE;
 
     ft812_bus_lock();
-    SPI.beginTransaction(FT81x_SPI_SETTINGS);
+    SPI.beginTransaction(spiSettings());
     digitalWrite(pin_cs, LOW);
 
     SPI.transfer(addr >> 16);
@@ -712,7 +762,7 @@ void FT812::sendCommand(const uint32_t cmd) {
 uint8_t FT812::read8(const uint32_t address) {
     uint32_t cmd = address | READ;
     ft812_bus_lock();
-    SPI.beginTransaction(FT81x_SPI_SETTINGS);
+    SPI.beginTransaction(spiSettings());
     digitalWrite(pin_cs, LOW);
     SPI.transfer(cmd >> 16);
     SPI.transfer(cmd >> 8);
@@ -728,7 +778,7 @@ uint8_t FT812::read8(const uint32_t address) {
 uint16_t FT812::read16(const uint32_t address) {
     uint32_t cmd = address | READ;
     ft812_bus_lock();
-    SPI.beginTransaction(FT81x_SPI_SETTINGS);
+    SPI.beginTransaction(spiSettings());
     digitalWrite(pin_cs, LOW);
     SPI.transfer(cmd >> 16);
     SPI.transfer(cmd >> 8);
@@ -745,7 +795,7 @@ uint16_t FT812::read16(const uint32_t address) {
 uint32_t FT812::read32(const uint32_t address) {
     uint32_t cmd = address | READ;
     ft812_bus_lock();
-    SPI.beginTransaction(FT81x_SPI_SETTINGS);
+    SPI.beginTransaction(spiSettings());
     digitalWrite(pin_cs, LOW);
     SPI.transfer(cmd >> 16);
     SPI.transfer(cmd >> 8);
@@ -764,7 +814,7 @@ uint32_t FT812::read32(const uint32_t address) {
 void FT812::write8(const uint32_t address, const uint8_t data) {
     uint32_t cmd = address | WRITE;
     ft812_bus_lock();
-    SPI.beginTransaction(FT81x_SPI_SETTINGS);
+    SPI.beginTransaction(spiSettings());
     digitalWrite(pin_cs, LOW);
     SPI.transfer(cmd >> 16);
     SPI.transfer(cmd >> 8);
@@ -778,7 +828,7 @@ void FT812::write8(const uint32_t address, const uint8_t data) {
 void FT812::write16(const uint32_t address, const uint16_t data) {
     uint32_t cmd = address | WRITE;
     ft812_bus_lock();
-    SPI.beginTransaction(FT81x_SPI_SETTINGS);
+    SPI.beginTransaction(spiSettings());
     digitalWrite(pin_cs, LOW);
     SPI.transfer(cmd >> 16);
     SPI.transfer(cmd >> 8);
@@ -793,7 +843,7 @@ void FT812::write16(const uint32_t address, const uint16_t data) {
 void FT812::write32(const uint32_t address, const uint32_t data) {
     uint32_t cmd = address | WRITE;
     ft812_bus_lock();
-    SPI.beginTransaction(FT81x_SPI_SETTINGS);
+    SPI.beginTransaction(spiSettings());
     digitalWrite(pin_cs, LOW);
     SPI.transfer(cmd >> 16);
     SPI.transfer(cmd >> 8);

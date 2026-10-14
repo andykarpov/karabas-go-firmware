@@ -286,10 +286,11 @@ void read_core(const char* filename) {
         ft.spi(true);
         has_ft = ft.init(hw_setup.ft_video_mode);
         if (has_ft) {
-          d_println("Found FT81x IC, switching to FT OSD");
+          d_printf("Found FT81x IC (system clock %lu kHz, attempt %u), switching to FT OSD",
+            (unsigned long) (ft.initClockHz() / 1000), ft.initAttempts()); d_println();
           ft.vga(true);
         } else {
-          d_println("FT81x IC did not found");
+          d_printf("FT81x IC did not found (%u attempts)", ft.initAttempts()); d_println();
           ft.vga(false);
           ft.spi(false);
         }
