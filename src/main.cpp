@@ -238,7 +238,7 @@ static void usb_host_loop()
 
 #ifdef __FREERTOS
 
-// FreeRTOS build (env *_rtos): the firmware and the usb host run in their own pinned tasks.
+// FreeRTOS build (envs go / mini / minig): the firmware and the usb host run in their own pinned tasks.
 // The framework's CORE0 task (4 KB stack) only creates them; setup1/loop1 are not defined,
 // so the framework does not start its own CORE1 task.
 
