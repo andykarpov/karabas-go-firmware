@@ -6,6 +6,18 @@
 #include "host/usbh.h"
 #include "ps2kbd.h"
 #include "SegaController.h"
+#include "pico/mutex.h"
+
+// keyboard report is written by core1 (usb host) and read by core0 (osd, hotkeys)
+auto_init_mutex(kbd_report_mutex);
+static hid_keyboard_report_t kbd_report_shared = {0};
+
+void hid_kbd_report_sync()
+{
+  mutex_enter_blocking(&kbd_report_mutex);
+  usb_keyboard_report = kbd_report_shared;
+  mutex_exit(&kbd_report_mutex);
+}
 
 typedef struct {
   tusb_desc_device_t desc_device;
@@ -191,7 +203,9 @@ static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_
     || (report->keycode[4] ^ prev_report.keycode[4])
     || (report->keycode[5] ^ prev_report.keycode[5]));
   if (change != 0) {
-    usb_keyboard_report = *report;
+    mutex_enter_blocking(&kbd_report_mutex);
+    kbd_report_shared = *report;
+    mutex_exit(&kbd_report_mutex);
     spi_queue(CMD_USB_KBD, 0, report->modifier);
     for(uint8_t i=0; i<6; i++) {
       spi_queue(CMD_USB_KBD, i+1, report->keycode[i]);

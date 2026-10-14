@@ -494,6 +494,7 @@ void loop()
 	while (queue_try_remove(&spi_event_queue, &packet)) {
     // skip keyboard transmission when osd is active
     if (packet.cmd == CMD_USB_KBD) {
+      hid_kbd_report_sync();
 #if HW_ID==HW_ID_GO
       if (has_extender) extender.digitalWrite(PIN_EXT_LED2, !(usb_keyboard_report.modifier != 0 || usb_keyboard_report.keycode[0] != 0));
 #elif HW_ID==HW_ID_MINI || HW_ID==HW_ID_MINIG
@@ -753,6 +754,8 @@ bool on_global_hotkeys() {
 }
 
 void on_keyboard() {
+
+  hid_kbd_report_sync();
 
   need_redraw = on_global_hotkeys();
 
@@ -1368,6 +1371,7 @@ void read_core(const char* filename) {
   if (core.type == CORE_TYPE_BOOT && is_osd) {
     if (hw_setup.ft_enabled) {
       // space skip ft osd
+      hid_kbd_report_sync();
       if (usb_keyboard_report.keycode[0] == KEY_SPACE) {
         d_println("Space pressed: skip FT81x detection, fallback to classic OSD");
       } else {

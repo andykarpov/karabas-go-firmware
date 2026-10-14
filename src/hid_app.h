@@ -13,6 +13,9 @@ extern hid_mouse_report_t usb_mouse_report;
 extern uint16_t joyUSB[MAX_USB_JOYSTICKS];
 extern uint8_t joyUSB_len;
 
+// copy the latest keyboard report received by core1 into usb_keyboard_report (call from core0 only)
+void hid_kbd_report_sync();
+
 typedef struct
 {
   uint16_t btn; // button id (sega)
