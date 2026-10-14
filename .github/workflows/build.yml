@@ -24,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        env: [go, mini, minig, go_plain, mini_plain, minig_plain]
+        env: [go, mini, minig]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

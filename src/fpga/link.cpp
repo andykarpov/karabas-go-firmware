@@ -1,19 +1,15 @@
 #include "main.h"
 
-#ifdef __FREERTOS
 #include <FreeRTOS.h>
 #include <task.h>
 #include <semphr.h>
-#endif
 
 // MCU <-> FPGA link over SPI0: 3-byte frames (cmd, addr, data). The FPGA answers
 // with its own frame in the same transfer; non-zero answers go to registered handlers.
 //
-// FreeRTOS build: SPI0 is shared by several tasks (and the FT812 library), so every transfer
-// holds the recursive spi bus lock. Incoming commands are always handled in the dispatch task
-// (APP): frames received by other tasks are queued and handled by link_dispatch_pending().
-// Without FreeRTOS everything runs in the main loop, the lock is a no-op and frames are
-// handled immediately.
+// SPI0 is shared by several tasks (and the FT812 library), so every transfer holds the
+// recursive spi bus lock. Incoming commands are always handled in the dispatch task (APP):
+// frames received by other tasks are queued and handled by link_dispatch_pending().
 
 static SPISettings settingsA(SD_SCK_MHZ(16), MSBFIRST, SPI_MODE0); // default MCU SPI settings
 static uint8_t link_freq = 0; // core spi frequency in MHz, 0 or 255 = default
@@ -35,11 +31,9 @@ static volatile uint32_t link_tx_frames = 0; // frames sent by any task, for lin
 static uint16_t debug_address = 0;
 static uint16_t debug_data = 0;
 
-#ifdef __FREERTOS
 static SemaphoreHandle_t spi_bus_mutex = nullptr;
 static TaskHandle_t dispatch_task = nullptr;
 static TaskHandle_t event_task = nullptr;
-#endif
 
 void link_queue_init() {
   queue_init(&spi_event_queue, sizeof(queue_spi_t), SPI_EVENT_QUEUE_SIZE);
@@ -47,21 +41,15 @@ void link_queue_init() {
 }
 
 void link_os_init() {
-#ifdef __FREERTOS
   spi_bus_mutex = xSemaphoreCreateRecursiveMutex();
-#endif
 }
 
 void spi_bus_lock() {
-#ifdef __FREERTOS
   if (spi_bus_mutex) xSemaphoreTakeRecursive(spi_bus_mutex, portMAX_DELAY);
-#endif
 }
 
 void spi_bus_unlock() {
-#ifdef __FREERTOS
   if (spi_bus_mutex) xSemaphoreGiveRecursive(spi_bus_mutex);
-#endif
 }
 
 // hooks called by lib/FT812 around its own SPI0 transactions
@@ -69,23 +57,15 @@ extern "C" void ft812_bus_lock(void) { spi_bus_lock(); }
 extern "C" void ft812_bus_unlock(void) { spi_bus_unlock(); }
 
 void link_set_dispatch_task(void *task) {
-#ifdef __FREERTOS
   dispatch_task = (TaskHandle_t) task;
-#endif
 }
 
 void link_set_event_task(void *task) {
-#ifdef __FREERTOS
   event_task = (TaskHandle_t) task;
-#endif
 }
 
 static inline bool in_dispatch_context() {
-#ifdef __FREERTOS
   return dispatch_task == nullptr || xTaskGetCurrentTaskHandle() == dispatch_task;
-#else
-  return true;
-#endif
 }
 
 // The fpga can only answer inside a transfer started by the MCU. Called once per main loop
@@ -156,7 +136,6 @@ void spi_queue(uint8_t cmd, uint8_t addr, uint8_t data) {
     spi_queue_dropped++;
     return;
   }
-#ifdef __FREERTOS
   // wake the input task (called from core1 tasks, core0 tasks and the ps/2 repeat alarm irq)
   if (event_task) {
     if (portCHECK_IF_IN_ISR()) {
@@ -167,7 +146,6 @@ void spi_queue(uint8_t cmd, uint8_t addr, uint8_t data) {
       xTaskNotifyGive(event_task);
     }
   }
-#endif
 }
 
 bool link_queue_pop(queue_spi_t *packet) {

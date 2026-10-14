@@ -1,8 +1,7 @@
 #pragma once
 
 // Runtime diagnostics (build with -D DIAG_STATS=1, printed with debug=1 in karabas.ini):
-// loop rate and worst loop gap per core, free heap and, under FreeRTOS, task stack headroom.
-// Used to compare the plain and the FreeRTOS builds on real hardware.
+// loop rate and worst loop gap per core, free heap and task stack headroom.
 
 #include <Arduino.h>
 

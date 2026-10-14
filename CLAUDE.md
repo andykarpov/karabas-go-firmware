@@ -12,16 +12,16 @@ Each board has its own PlatformIO env, which sets `HW_ID`:
 
 | Env | HW_ID | Board | Core file ext | Release script |
 |---|---|---|---|---|
-| `go` / `go_plain` | 1 | Karabas Go | `.kg1` | `build.sh` |
-| `mini` / `mini_plain` | 2 | Karabas Mini | `.kg2` | `build_mini.sh` |
-| `minig` / `minig_plain` | 3 | Karabas Mini G | `.kg3` | `build_minig.sh` |
+| `go` | 1 | Karabas Go | `.kg1` | `build.sh` |
+| `mini` | 2 | Karabas Mini | `.kg2` | `build_mini.sh` |
+| `minig` | 3 | Karabas Mini G | `.kg3` | `build_minig.sh` |
 
-`go` / `mini` / `minig` are the FreeRTOS builds and the release builds. They were verified on Mini G hardware only; Go and Mini were switched without a hardware check, so if something is wrong there, compare with the `*_plain` envs. Those build the same firmware without FreeRTOS, as a fallback (no release script).
+The firmware runs on FreeRTOS only (`main.cpp` stops the build with `#error` otherwise). It was verified on Mini G hardware; Go and Mini have not been checked on hardware with FreeRTOS. The last commit with the plain (non-FreeRTOS) build is `72d6f36` on master, if a comparison is ever needed.
 
-- To build one board: `pio run -e go`. A plain `pio run` builds `minig` (`default_envs`).
-- To build all boards: `pio run -e go -e mini -e minig`. A change must keep all six envs compiling (plain ones too). CI (`.github/workflows/build.yml`) builds all six and runs the tests.
-- The FreeRTOS flags are in the `[rtos]` section (`-D PIO_FRAMEWORK_ARDUINO_ENABLE_FREERTOS -D DIAG_STATS=1`, timer task settings). It is the same firmware as the plain build, but `karabas_setup`/`karabas_loop` run in the `APP` task pinned to core 0, and the USB host runs in the `USB` task pinned to core 1 at high priority. Code that must differ under FreeRTOS checks `__FREERTOS`.
-- **Tasks and shared resources in the FreeRTOS build:**
+- To build one board: `pio run -e go`. `pio run` without `-e` builds `minig` (`default_envs`).
+- To build all boards: `pio run -e go -e mini -e minig`. A change must keep all three compiling. CI (`.github/workflows/build.yml`) builds all three and runs the tests.
+- The FreeRTOS flags are in the `[rp2040]` section (`-D PIO_FRAMEWORK_ARDUINO_ENABLE_FREERTOS -D DIAG_STATS=1`, timer task settings). `karabas_setup`/`karabas_loop` run in the `APP` task pinned to core 0, and the USB host runs in the `USB` task pinned to core 1 at high priority. The Arduino `setup()` only creates the tasks; `setup1`/`loop1` are not used.
+- **Tasks and shared resources:**
   - `APP` (core 0) runs the firmware loop.
   - `INPUT` (core 0, priority above `APP`) forwards usb, ps2 and joystick events to the FPGA as soon as they arrive. It hands anything that needs the UI to `APP` and waits for `APP` on a hotkey.
   - `USB` (core 1) runs the USB host.
@@ -30,10 +30,9 @@ Each board has its own PlatformIO env, which sets `HW_ID`:
   - `MATRIX` (core 0, above `APP`, exact 20 ms period) and `OLED` (core 0, `APP` priority, time-sliced with it) run the display frames. Each task is created only if its device was found. Matrix animation timing is counted in frames, not timers, so it stays even. While a core loads, the matrix is in `MATRIX_MODE_LOADING` and only the loader draws its progress bar. A full OLED frame is about 12 ms of busy-polled I2C. The bus runs at 400 kHz, set in `karabas_setup`. The SSD1306 is constructed so that it does not drop the clock back to 100 kHz after a frame.
   - I2C is shared by `MATRIX`, `OLED` and `APP` (RTC/EEPROM through hooks in `lib/RTC`, matrix commands from the FPGA, the Go extender). Hold an `I2cGuard` around every I2C access. **Lock order:** taking the I2C lock while holding the SPI lock is fine, but never call `spi_send()` while holding the I2C lock. FPGA command handlers run after the SPI lock is released.
   - SD and the OSD state are used only from `APP`. Keep it that way, or add a lock first.
-  - In the plain (`*_plain`) build the locks are no-ops and everything runs in the main loop.
-  - **Debug output.** Only one context writes to the USB CDC `Serial`: the core 0 main loop in the plain build, `APP` under FreeRTOS. Adafruit's CDC write has no lock, and concurrent writers make the host reset the port. Use the `d_print*` macros (`src/diag/debug_out`), which buffer output from other tasks, core 1 and IRQs. Do not call `Serial.print` directly outside `APP`.
-  - **Lost wakeups.** pico-sdk locks (mutex, queue, semaphore) released from an IRQ wake their waiters through the FreeRTOS timer task (`xEventGroupSetBitsFromISR`). `APP` and `USB` never block, so that task runs at the highest priority (`[rtos]` in `platformio.ini`, asserted in `main.cpp`). Do not lower it. Prefer FreeRTOS primitives or plain spinlocks between tasks.
-- `DIAG_STATS=1` prints a `DIAG` line every 10 s when `debug=1`. It shows the loop rate and worst loop gap per core, the free heap and, under FreeRTOS, the free stack of the tasks.
+  - **Debug output.** Only `APP` writes to the USB CDC `Serial`. Adafruit's CDC write has no lock, and concurrent writers make the host reset the port. Use the `d_print*` macros (`src/diag/debug_out`), which buffer output from other tasks, core 1 and IRQs. Do not call `Serial.print` directly outside `APP`.
+  - **Lost wakeups.** pico-sdk locks (mutex, queue, semaphore) released from an IRQ wake their waiters through the FreeRTOS timer task (`xEventGroupSetBitsFromISR`). `APP` and `USB` never block, so that task runs at the highest priority (`[rp2040]` in `platformio.ini`, asserted in `main.cpp`). Do not lower it. Prefer FreeRTOS primitives or plain spinlocks between tasks.
+- `DIAG_STATS=1` prints a `DIAG` line every 10 s when `debug=1`. It shows the loop rate and worst loop gap per core, the free heap and the free stack of the tasks.
 - To run the unit tests: `pio test -e native`. To run a single suite: `pio test -e native -f test_kg_format`. The tests cover only `lib/KarabasCommon`.
 - To upload: `pio run -e <env> -t upload` (port `/dev/ttyUSBPico`). Alternatively, copy `.pio/build/<env>/firmware.uf2` to the drive that appears in BOOTSEL mode.
 - `BUILD_VER` comes from `PLATFORMIO_BUILD_FLAGS="-DBUILD_VER=..."`. The `build*.sh` scripts set it to a date stamp, then copy `firmware.uf2` and `src/karabas.ini` into sibling repos (`../karabas-go/...`, `../../karabas-mini/...`). They are release scripts, not dev loops.
@@ -44,8 +43,8 @@ Each board has its own PlatformIO env, which sets `HW_ID`:
 ## Architecture
 
 **Dual-core split**:
-- Core 0 (`setup`/`loop`) runs everything else. `src/main.cpp` only does init and calls the module ticks in order: MSC, RTC, UI timers, buttons, joysticks, OSD redraw, input event queue, serial bridge, ESP, matrix, OLED. The order matters, so keep it when adding a tick.
-- Core 1 (`setup1`/`loop1`) only runs the TinyUSB host stack on PIO-USB (`tuh_task`). HID callbacks in `hid_app.cpp` push events with `spi_queue()`, and core 0 drains them in `input_drain_events()`. The keyboard report crosses cores only through `hid_kbd_report_sync()`.
+- Core 0: the `APP` task runs everything else. `karabas_loop()` in `src/main.cpp` calls the module ticks in order: MSC, RTC, UI timers, buttons, UI events from `INPUT`, key repeat, OSD redraw, FPGA command dispatch, serial bridge, ESP, link poll. The order matters, so keep it when adding a tick. `INPUT`, `MATRIX` and `OLED` also run on core 0 (see the task list above).
+- Core 1: the `USB` task only runs the TinyUSB host stack on PIO-USB (`tuh_task`). HID callbacks in `hid_app.cpp` push events with `spi_queue()`, which wakes `INPUT`. The keyboard report crosses cores only through `hid_kbd_report_sync()`.
 
 **Modules** (`src/`):
 - `fpga/`: `link` (SPI protocol), `bitstream` (FPGA configuration), `core_loader` (core file header, OSD items, ROMs, `do_configure`).
@@ -75,7 +74,7 @@ Each board has its own PlatformIO env, which sets `HW_ID`:
 - `read_core()` parses the header into the global `core` (`core_item_t` in `types.h`), including the OSD item definitions.
 - `fpga_send()` (`fpga/bitstream.cpp`) streams the bitstream through the `PIN_CONF_*` pins with the `fpga_serial.pio` program fed by DMA. CCLK is `FPGA_CCLK_HZ`, 20 MHz by default. If no PIO state machine or DMA channel is free, it falls back to bit-banging.
 - PIO-USB on core 1 hard-claims DMA channel 0 and PIO memory at init. Firmware code must take DMA channels from the top and claim PIO resources only after `usb_host_ready` is set.
-- **PIO budget.** The PIO-USB receiver needs all 32 words of pio1 instruction memory. Under FreeRTOS, arduino-pico allocates its cycle counter (`ccount`) on a PIO in `main()`, and unless something stops it, it lands on pio1 and breaks USB silently. The `usb_pio_reserve` static constructor in `main.cpp` prevents that and must stay. Nothing else may load programs into pio1. `pio_usb_host_programs_loaded()` logs an error when the PIO-USB programs do not fit.
+- **PIO budget.** The PIO-USB receiver needs all 32 words of pio1 instruction memory. With FreeRTOS, arduino-pico allocates its cycle counter (`ccount`) on a PIO in `main()`, and unless something stops it, it lands on pio1 and breaks USB silently. The `usb_pio_reserve` static constructor in `main.cpp` prevents that and must stay. Nothing else may load programs into pio1. `pio_usb_host_programs_loaded()` logs an error when the PIO-USB programs do not fit.
 - `fpga_serial.pio.h` is generated by pioasm and committed, so edit the `.pio` file and regenerate it (the command is in the `.pio` file).
 - Core types: BOOT (the core browser), OSD (a normal core with an overlay menu), FILELOADER, and HIDDEN.
 

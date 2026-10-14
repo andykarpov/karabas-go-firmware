@@ -11,7 +11,6 @@
 static Adafruit_SSD1306 oled(128, 32, &Wire, -1, 400000UL, 400000UL);
 static bool has_oled = false;
 static int oled_scrollpos = -128;
-static ElapsedTimer oled_timer;
 
 void oled_begin() {
   I2cGuard i2c;
@@ -42,12 +41,4 @@ void oled_frame() {
   oled.clearDisplay();
   oled.drawBitmap(oled_scrollpos, 0, logoBw, 112, 32, WHITE); // karabas go logo 112x32 bw
   oled.display(); // show default adafruit buffer
-}
-
-// plain build: called from the main loop
-void oled_tick() {
-  if (has_oled && oled_timer.elapsed() >= 20) {
-    oled_timer.reset();
-    oled_frame();
-  }
 }
