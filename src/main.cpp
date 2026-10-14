@@ -28,6 +28,12 @@
 #include "pio_usb.h"
 #include "ps2kbd.h"
 #include "app_core_browser.h"
+#include "diag/diag.h"
+
+#ifdef __FREERTOS
+#include <FreeRTOS.h>
+#include <task.h>
+#endif
 
 RTC zxrtc;
 volatile bool usb_host_ready = false;
@@ -36,7 +42,8 @@ ESP8266 wifi(esp_serial);
 
 static ElapsedTimer led_timer;
 
-void setup()
+// firmware init, runs on core0
+static void karabas_setup()
 {
   link_queue_init();
 
@@ -135,7 +142,8 @@ void setup()
   }
 }
 
-void setup1() {
+// usb host init, runs on core1
+static void usb_host_setup() {
   pio_usb_configuration_t pio_cfg = PIO_USB_DEFAULT_CONFIG;
   pio_cfg.pin_dp = HOST_PIN_DP;
   pio_cfg.pinout = (PIO_USB_PINOUT) board_usb_pinout();
@@ -144,8 +152,12 @@ void setup1() {
   usb_host_ready = true;
 }
 
-void loop()
+// firmware main loop, runs on core0
+static void karabas_loop()
 {
+  diag_loop_core0();
+  diag_tick();
+
   //rp2040.wdt_reset();
   // read hw buttons to manipulate msc / reboots
   bool btn1 = btn_read(0);
@@ -182,10 +194,64 @@ void loop()
   oled_tick();
 }
 
-void loop1()
+// usb host loop, runs on core1
+static void usb_host_loop()
 {
+  diag_loop_core1();
   tuh_task();
 }
+
+#ifdef __FREERTOS
+
+// FreeRTOS build (env *_rtos): the firmware and the usb host run in their own pinned tasks.
+// The framework's CORE0 task (4 KB stack) only creates them; setup1/loop1 are not defined,
+// so the framework does not start its own CORE1 task.
+
+#ifndef APP_TASK_STACK
+#define APP_TASK_STACK 4096 // words
+#endif
+#ifndef USB_TASK_STACK
+#define USB_TASK_STACK 2048 // words
+#endif
+#define APP_TASK_PRIORITY (configMAX_PRIORITIES / 2)
+#define USB_TASK_PRIORITY (configMAX_PRIORITIES - 2) // above everything but the framework's flash idle tasks
+
+static void app_task(void *param) {
+  karabas_setup();
+  // no yield here: every scheduler call takes the SMP kernel lock with interrupts off,
+  // which could delay the PIO-USB SOF interrupt on core1
+  for (;;) {
+    karabas_loop();
+  }
+}
+
+static void usb_task(void *param) {
+  usb_host_setup();
+  for (;;) {
+    usb_host_loop();
+  }
+}
+
+void setup() {
+  TaskHandle_t usb, app;
+  xTaskCreate(usb_task, "USB", USB_TASK_STACK, nullptr, USB_TASK_PRIORITY, &usb);
+  vTaskCoreAffinitySet(usb, 1 << 1);
+  xTaskCreate(app_task, "APP", APP_TASK_STACK, nullptr, APP_TASK_PRIORITY, &app);
+  vTaskCoreAffinitySet(app, 1 << 0);
+}
+
+void loop() {
+  vTaskDelay(portMAX_DELAY);
+}
+
+#else
+
+void setup() { karabas_setup(); }
+void loop() { karabas_loop(); }
+void setup1() { usb_host_setup(); }
+void loop1() { usb_host_loop(); }
+
+#endif
 
 void halt(const char* msg) {
   d_println(msg);

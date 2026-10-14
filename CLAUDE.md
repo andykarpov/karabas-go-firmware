@@ -18,6 +18,8 @@ Each board has its own PlatformIO env, which sets `HW_ID`:
 
 - To build one board: `pio run -e go`. A plain `pio run` builds `minig` (`default_envs`).
 - To build all boards: `pio run -e go -e mini -e minig`. A change must keep all three compiling. CI (`.github/workflows/build.yml`) builds all three and runs the tests.
+- The FreeRTOS prototype is built by the `go_rtos`, `mini_rtos` and `minig_rtos` envs (`-D PIO_FRAMEWORK_ARDUINO_ENABLE_FREERTOS -D DIAG_STATS=1`). It is the same firmware, but `karabas_setup`/`karabas_loop` run in the `APP` task pinned to core 0, and the USB host runs in the `USB` task pinned to core 1 at high priority. Code that must differ under FreeRTOS checks `__FREERTOS`.
+- `DIAG_STATS=1` prints a `DIAG` line every 10 s when `debug=1`. It shows the loop rate and worst loop gap per core, the free heap and, under FreeRTOS, the free stack of the tasks.
 - To run the unit tests: `pio test -e native`. To run a single suite: `pio test -e native -f test_kg_format`. The tests cover only `lib/KarabasCommon`.
 - To upload: `pio run -e <env> -t upload` (port `/dev/ttyUSBPico`). Alternatively, copy `.pio/build/<env>/firmware.uf2` to the drive that appears in BOOTSEL mode.
 - `BUILD_VER` comes from `PLATFORMIO_BUILD_FLAGS="-DBUILD_VER=..."`. The `build*.sh` scripts set it to a date stamp, then copy `firmware.uf2` and `src/karabas.ini` into sibling repos (`../karabas-go/...`, `../../karabas-mini/...`). They are release scripts, not dev loops.
