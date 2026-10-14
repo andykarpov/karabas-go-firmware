@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include "crc32.h"
 #include "config.h"
 #include "types.h"
 #include "main.h"
@@ -294,8 +295,10 @@ void app_file_loader_send_file(uint16_t file_id) {
   
 uint32_t cnt = 0;
 uint32_t c1 = 0;
+  uint32_t crc = KG_CRC32_INIT; // debug: compare with the crc32 of the file on a pc
 
   while((c = file1.read(buf, sizeof(buf))) > 0) {
+    if (hw_setup.debug_enabled) crc = kg_crc32_update(crc, buf, c);
     // bursts if the core supports them; classic frames for whatever they did not send
     size_t done = link_burst_write(CMD_FILEDATA, cnt, buf, c);
     for (int j=done; j<c; j++) {
@@ -317,7 +320,7 @@ uint32_t c1 = 0;
   spi_bus_unlock();
 
   file1.close();
-  d_printf("Sent %u bytes", cnt); d_println();
+  d_printf("Sent %u bytes, crc32 %08x", cnt, kg_crc32_final(crc)); d_println();
   delay(100);
 
   // reload menu
