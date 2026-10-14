@@ -37,7 +37,7 @@ The plain envs are still the release builds. The `*_rtos` envs (FreeRTOS) build 
 - To run the unit tests: `pio test -e native`. To run a single suite: `pio test -e native -f test_kg_format`. The tests cover only `lib/KarabasCommon`.
 - To upload: `pio run -e <env> -t upload` (port `/dev/ttyUSBPico`). Alternatively, copy `.pio/build/<env>/firmware.uf2` to the drive that appears in BOOTSEL mode.
 - `BUILD_VER` comes from `PLATFORMIO_BUILD_FLAGS="-DBUILD_VER=..."`. The `build*.sh` scripts set it to a date stamp, then copy `firmware.uf2` and `src/karabas.ini` into sibling repos (`../karabas-go/...`, `../../karabas-mini/...`). They are release scripts, not dev loops.
-- Library versions in `lib_deps` are pinned on purpose. GyverMenu 1.1.0 breaks `app_setup.cpp`.
+- Versions are pinned on purpose. The platform is pinned to a git commit, which fixes arduino-pico at 5.5.1; the patches and the PIO / FreeRTOS workarounds are written against that version. Library versions in `lib_deps` are pinned too (GyverMenu 1.1.0 breaks `app_setup.cpp`). Only bump them deliberately and re-check.
 - The pre-build script `apply_patches.py` patches Adafruit TinyUSB (`Adafruit_USBH_Host.cpp`) and the SdFat Adafruit fork (`SdFatConfig.h`) using `patches/`. It runs once per env and leaves a `.patching-done` marker beside each patched file. If a patch does not apply, the build fails. When bumping one of these libraries, regenerate its patch.
 - To debug, set `debug=1` in `karabas.ini`, which enables the `d_print*` macros, or uncomment `-D WAIT_SERIAL=1` in `platformio.ini`.
 
