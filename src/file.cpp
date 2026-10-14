@@ -52,13 +52,11 @@ uint32_t file_read32(uint32_t pos) {
 }
 
 void file_get_name(char *buf, size_t len) {
-  file1.getName(buf, sizeof(buf));
+  file1.getName(buf, len);
 }
 
 void file_write16(uint32_t pos, uint16_t val) {
   file_seek(pos);
-  file_seek(pos);
-  file1.write((uint8_t) val >> 8);
-  file_seek(pos+1);
+  file1.write((uint8_t) (val >> 8));
   file1.write((uint8_t) val);
 }
