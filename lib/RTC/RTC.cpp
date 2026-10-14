@@ -71,16 +71,17 @@ void RTC::handle()
 
     DateTime now;
     { I2cHold i2c; now = rtc_clock.now(); }
-    if (now.isValid())
+    // keep the last good time if the rtc read failed
+    if (now.isValid()) {
+      rtc_year = get_year(now.year());
+      rtc_month = now.month();
+      rtc_day = now.day();
+      rtc_week = now.dayOfTheWeek();
 
-    rtc_year = get_year(now.year());
-    rtc_month = now.month();
-    rtc_day = now.day();
-    rtc_week = now.dayOfTheWeek();
-
-    rtc_hours = now.hour();
-    rtc_minutes = now.minute();
-    rtc_seconds = now.second();
+      rtc_hours = now.hour();
+      rtc_minutes = now.minute();
+      rtc_seconds = now.second();
+    }
 
     sendTime();
 
