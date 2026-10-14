@@ -291,7 +291,7 @@ void app_file_loader_send_file(uint16_t file_id) {
 uint32_t cnt = 0;
 uint32_t c1 = 0;
 
-  while(c = file1.read(buf, sizeof(buf))) {
+  while((c = file1.read(buf, sizeof(buf))) > 0) {
     for (int j=0; j<c; j++) {
       app_file_loader_send_byte(cnt, buf[j]);
       cnt++;

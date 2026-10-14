@@ -620,16 +620,20 @@ void app_core_on_select_file() {
       spi_send(CMD_IOCTL_EXT, i, ext.charAt(i));
     }
 
-    for(uint64_t i = 0; i < fsize; i++) {
-      if (i % 8192 == 0) {
-        zxosd.loadingPopup(i, fsize);
-        zxosd.update();
+    uint8_t buf[512];
+    uint64_t i = 0;
+    int c;
+    while (i < fsize && (c = file.read(buf, sizeof(buf))) > 0) {
+      for (int j = 0; j < c; j++, i++) {
+        if (i % 8192 == 0) {
+          zxosd.loadingPopup(i, fsize);
+          zxosd.update();
+        }
+        if (i % 256 == 0) {
+          spi_send24(CMD_IOCTL_BANK, i >> 8);
+        }
+        spi_send(CMD_IOCTL_DATA, (uint8_t)((i & 0x00000000000000FF)), buf[j]);
       }
-      if (i % 256 == 0) {
-        spi_send24(CMD_IOCTL_BANK, i >> 8);
-      }
-      uint8_t data = file.read();
-      spi_send(CMD_IOCTL_DATA, (uint8_t)((i & 0x00000000000000FF)), data);
     }
     file.close();
     spi_send(CMD_IOCTL_STATE, 0, 0); // finish

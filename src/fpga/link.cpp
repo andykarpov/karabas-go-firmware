@@ -81,14 +81,15 @@ void spi_send(uint8_t cmd, uint8_t addr, uint8_t data) {
   // use default (16 MHz) or custom spi freq from the core config
   SPISettings spi_settings = (link_freq == 0 || link_freq == 255) ? settingsA : SPISettings(SD_SCK_MHZ(link_freq), MSBFIRST, SPI_MODE0);
   SPI.beginTransaction(spi_settings);
+  // one 3-byte transfer keeps the SPI FIFO busy instead of 3 separate blocking calls
+  const uint8_t tx[3] = {cmd, addr, data};
+  uint8_t rx[3];
   gpio_put(PIN_MCU_SPI_CS, LOW);
-  uint8_t rx_cmd = SPI.transfer(cmd);
-  uint8_t rx_addr = SPI.transfer(addr);
-  uint8_t rx_data = SPI.transfer(data);
+  SPI.transfer(tx, rx, sizeof(tx));
   gpio_put(PIN_MCU_SPI_CS, HIGH);
   SPI.endTransaction();
-  if ((rx_cmd > 0) && link_rx_enabled) {
-    process_in_cmd(rx_cmd, rx_addr, rx_data);
+  if ((rx[0] > 0) && link_rx_enabled) {
+    process_in_cmd(rx[0], rx[1], rx[2]);
   }
 }
 
