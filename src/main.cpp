@@ -28,13 +28,14 @@
 #include <SPI.h>
 #include <Wire.h>
 #include <PioSPI.h>
-#include <SparkFun_PCA9536_Arduino_Library.h>
 #include "SdFat.h"
 #include <ElapsedTimer.h>
 #include <RTC.h>
 #include <OSD.h>
 #include <FT812.h>
 #include <SegaController.h>
+#include "board/board.h"
+#include "kg_format.h"
 #include "hid_app.h"
 #include "main.h"
 #include "usb_hid_keys.h"
@@ -65,7 +66,6 @@ PioSPI spiSD(PIN_SD_SPI_TX, PIN_SD_SPI_RX, PIN_SD_SPI_SCK, SD_CS_PIN, SPI_MODE0,
 SPISettings settingsA(SD_SCK_MHZ(16), MSBFIRST, SPI_MODE0); // MCU SPI settings
 Adafruit_USBD_MSC usb_msc;
 
-PCA9536 extender;
 ElapsedTimer my_timer, my_timer2;
 ElapsedTimer hide_timer;
 ElapsedTimer popup_timer;
@@ -86,15 +86,6 @@ uint16_t file_pages = 1;
 uint16_t file_page = 1;
 file_list_item_t cached_names[MAX_CORES_PER_PAGE];
 uint16_t cached_file_from, cached_file_to;
-
-#if HW_ID == HW_ID_GO
-SegaController sega;
-FT812 ft(PIN_MCU_FT_CS, PIN_FT_RESET);
-#elif HW_ID == HW_ID_MINI
-FT812 ft(PIN_MCU_FT_CS);
-#elif HW_ID == HW_ID_MINIG
-FT812 ft(PIN_MCU_FT_CS, PIN_FT_RESET);
-#endif
 
 // events from core1 (usb hid, ps/2) to core0. sized to survive a core load (a few seconds) without drops
 #define SPI_EVENT_QUEUE_SIZE 512
@@ -119,7 +110,6 @@ uint8_t osd_prev_state = state_main;
 hid_joy_config_t joy_drivers[MAX_JOY_DRIVERS];
 uint8_t joy_drivers_len;
 
-bool has_extender = false;
 bool has_sd = false;
 bool has_fs = false;
 bool has_ft = false;
@@ -214,21 +204,8 @@ void setup()
   pinMode(PIN_MCU_SD2_CS, OUTPUT); digitalWrite(PIN_MCU_SD2_CS, HIGH);
   pinMode(PIN_MCU_FT_CS, OUTPUT); digitalWrite(PIN_MCU_FT_CS, HIGH);
 
-  // unused MCU-FPGA pins (yet)
-  pinMode(PIN_MCU_SPI_IO0, INPUT);
-  pinMode(PIN_MCU_SPI_IO1, INPUT);
-  #if HW_ID==HW_ID_MINI
-  pinMode(PIN_MCU_SPI_IO4, INPUT);
-  #elif HW_ID==HW_ID_MINIG
-  pinMode(PIN_MCU_SPI_IO4, INPUT);
-  pinMode(PIN_MCU_SPI_IO5, INPUT);
-  pinMode(PIN_FT_RESET, OUTPUT);
-  pinMode(PIN_ESP_RESET, OUTPUT);
-  pinMode(PIN_MIDI_RESET, OUTPUT);
-  digitalWrite(PIN_FT_RESET, HIGH);
-  digitalWrite(PIN_ESP_RESET, HIGH);
-  digitalWrite(PIN_MIDI_RESET, HIGH);
-  #endif
+  // unused MCU-FPGA pins, peripheral reset lines
+  board_init_pins();
 
   // I2C
   Wire.setSDA(PIN_I2C_SDA);
@@ -243,33 +220,8 @@ void setup()
   Serial.begin(serial_speed);
   d_println("Karabas Go RP2040 firmware");
 
-#if HW_ID == HW_ID_GO
-  if (extender.begin() == false) {
-    has_extender = false;
-    d_println("PCA9536 unavailable. Please check soldering.");
-  } else {
-    d_println("I2C PCA9536 extender detected");
-    has_extender = true;
-  }
-
-  if (has_extender) {
-    extender.pinMode(PIN_EXT_BTN1, INPUT_PULLUP);
-    extender.pinMode(PIN_EXT_BTN2, INPUT_PULLUP);
-    extender.pinMode(PIN_EXT_LED1, OUTPUT);
-    extender.pinMode(PIN_EXT_LED2, OUTPUT);
-    extender.digitalWrite(PIN_EXT_LED1, HIGH);
-    extender.digitalWrite(PIN_EXT_LED2, HIGH);
-  }
-
-  sega.begin(PIN_JOY_SCK, PIN_JOY_LOAD, PIN_JOY_DATA, PIN_JOY_P7);
-
-#elif HW_ID == HW_ID_MINI || HW_ID == HW_ID_MINIG
-  has_extender = false;
-  pinMode(PIN_BTN1, INPUT_PULLUP);
-  pinMode(PIN_BTN2, INPUT_PULLUP);
-  pinMode(PIN_LED1, OUTPUT); digitalWrite(PIN_LED1, HIGH);
-  pinMode(PIN_LED2, OUTPUT); digitalWrite(PIN_LED2, HIGH);
-#endif
+  // buttons, leds, joysticks
+  board_init_io();
 
   has_matrix = matrix.begin();
   if (has_matrix) {
@@ -355,12 +307,7 @@ void setup()
 void setup1() {
   pio_usb_configuration_t pio_cfg = PIO_USB_DEFAULT_CONFIG;
   pio_cfg.pin_dp = HOST_PIN_DP;
-
-  #if HW_ID == HW_ID_GO
-  pio_cfg.pinout = PIO_USB_PINOUT_DMDP;
-#elif HW_ID == HW_ID_MINI || HW_ID == HW_ID_MINIG
-  pio_cfg.pinout = PIO_USB_PINOUT_DPDM;
-#endif
+  pio_cfg.pinout = (PIO_USB_PINOUT) board_usb_pinout();
   tuh_configure(1, TUH_CFGID_RPI_PIO_USB_CONFIGURATION, &pio_cfg);
   tuh_init(1);
 }
@@ -451,13 +398,7 @@ void loop()
   }*/
 
   // joy reading
-#if HW_ID == HW_ID_GO
-  joyL = sega.getState(true);
-  joyR = sega.getState(false);
-#elif HW_ID == HW_ID_MINI || HW_ID == HW_ID_MINIG
-  joyL = 0;
-  joyR = 0;
-#endif
+  board_joy_read(joyL, joyR);
   static uint16_t prevJoyL = 0;
   static uint16_t prevJoyR = 0;
 
@@ -503,11 +444,7 @@ void loop()
     // skip keyboard transmission when osd is active
     if (packet.cmd == CMD_USB_KBD) {
       hid_kbd_report_sync();
-#if HW_ID==HW_ID_GO
-      if (has_extender) extender.digitalWrite(PIN_EXT_LED2, !(usb_keyboard_report.modifier != 0 || usb_keyboard_report.keycode[0] != 0));
-#elif HW_ID==HW_ID_MINI || HW_ID==HW_ID_MINIG
-      digitalWrite(PIN_LED2, !(usb_keyboard_report.modifier != 0 || usb_keyboard_report.keycode[0] != 0));
-#endif
+      led_write(1, usb_keyboard_report.modifier != 0 || usb_keyboard_report.keycode[0] != 0);
       if (packet.addr == 1 && packet.data != 0) {
           on_keyboard();
       }
@@ -818,14 +755,8 @@ void core_trigger(uint8_t pos)
   if (memcmp(core.osd[pos].name, "Rese", 4) == 0) {
     d_println("Reset FT812");
     ft.reset();
-// reset ESP and MIDI ot soft reset for mini revG
-#if HW_ID==HW_ID_MINIG
-    digitalWrite(PIN_MIDI_RESET, LOW);
-    digitalWrite(PIN_ESP_RESET, LOW);
-    delay(50);
-    digitalWrite(PIN_MIDI_RESET, HIGH);
-    digitalWrite(PIN_ESP_RESET, HIGH);
-#endif
+    // reset ESP and MIDI on soft reset (mini revG)
+    board_reset_peripherals();
     delay(100);
   }
 
@@ -1367,14 +1298,8 @@ void read_core(const char* filename) {
     ft.reset();
   }
 
-  // reset ESP and MIDI on mini revG
-#if HW_ID==HW_ID_MINIG
-  digitalWrite(PIN_MIDI_RESET, LOW);
-  digitalWrite(PIN_ESP_RESET, LOW);
-  delay(50);
-  digitalWrite(PIN_MIDI_RESET, HIGH);
-  digitalWrite(PIN_ESP_RESET, HIGH);
-#endif
+  // reset ESP and MIDI (mini revG)
+  board_reset_peripherals();
 
   // boot core tries to use FT812 as osd handler
   if (core.type == CORE_TYPE_BOOT && is_osd) {
@@ -1478,14 +1403,18 @@ void read_roms(const char* filename) {
   uint32_t rom_idx = 0;
   while (roms_len > 0) {
     uint32_t rom_pos = FILE_POS_BITSTREAM_START + bitstream_length + offset;
-    uint32_t rom_len = file_read32(rom_pos);
-    bool rom_is_external = bitRead(rom_len, 31);
-    rom_len = bitClear(rom_len, 31);
-    uint32_t rom_addr = file_read32(rom_pos + 4);
+    uint8_t rom_hdr[KG_ROM_BLOCK_HEADER_SIZE] = {0};
+    file_seek(rom_pos);
+    file_read_bytes((char*) rom_hdr, sizeof(rom_hdr));
+    kg_rom_block_t rom;
+    bool rom_valid = kg_rom_block_parse(rom_hdr, roms_len, &rom);
+    uint32_t rom_len = rom.len;
+    bool rom_is_external = rom.external;
+    uint32_t rom_addr = rom.addr;
     d_print("ROM #"); d_print(rom_idx); d_print(": addr="); d_print(rom_addr); d_print(", len="); d_println(rom_len);
 
     // sanity check to not run away on a broken core file
-    if (rom_len + 8 > roms_len) {
+    if (!rom_valid) {
       d_println("ROM block is out of bounds, skipping the rest");
       break;
     }
@@ -1495,7 +1424,7 @@ void read_roms(const char* filename) {
       // external rom block contains a rom filename (rom_len bytes) instead of a rom data
       char rom_filename[256];
       size_t name_len = (rom_len < sizeof(rom_filename)) ? rom_len : sizeof(rom_filename) - 1;
-      file_seek(rom_pos + 8);
+      file_seek(rom_pos + KG_ROM_BLOCK_HEADER_SIZE);
       name_len = file_read_bytes(rom_filename, name_len);
       rom_filename[name_len] = '\0';
       d_print("External ROM "); d_println(rom_filename);
@@ -1517,7 +1446,7 @@ void read_roms(const char* filename) {
         zxosd.update();
       }
     } else {
-      file_seek(rom_pos + 8);
+      file_seek(rom_pos + KG_ROM_BLOCK_HEADER_SIZE);
       uint32_t sent = 0;
       while (sent < rom_len) {
         size_t chunk = (rom_len - sent < sizeof(buf)) ? rom_len - sent : sizeof(buf);
@@ -1528,8 +1457,8 @@ void read_roms(const char* filename) {
         rom_progress(rom_idx, sent);
       }
     }
-    offset = offset + rom_len + 8;
-    roms_len = roms_len - rom_len - 8;
+    offset = offset + rom_len + KG_ROM_BLOCK_HEADER_SIZE;
+    roms_len = roms_len - rom_len - KG_ROM_BLOCK_HEADER_SIZE;
     rom_idx++;
     if (roms_len > 0) {
       // next rom
@@ -1571,38 +1500,6 @@ void osd_handle(bool force) {
       }
     }
   }
-}
-
-bool btn_read(uint8_t num) {
-#if HW_ID == HW_ID_GO
-  if (num == 0) {
-    return !(has_extender ? extender.digitalRead(PIN_EXT_BTN1) : HIGH);
-  } else {
-    return !(has_extender ? extender.digitalRead(PIN_EXT_BTN2) : HIGH);
-  }
-#elif HW_ID == HW_ID_MINI || HW_ID == HW_ID_MINIG
-  if (num == 0) { 
-    return !digitalRead(PIN_BTN1);
-  } else {
-    return !digitalRead(PIN_BTN2);
-  }
-#endif
-}
-
-void led_write(uint8_t num, bool on) {
-#if HW_ID == HW_ID_GO
-  if (num == 0) {
-    extender.digitalWrite(PIN_EXT_LED1, !on);
-  } else {
-    extender.digitalWrite(PIN_EXT_LED2, !on);
-  }
-#elif HW_ID == HW_ID_MINI || HW_ID == HW_ID_MINIG
-  if (num == 0) { 
-    digitalWrite(PIN_LED1, !on);
-  } else {
-    digitalWrite(PIN_LED2, !on);
-  }
-#endif
 }
 
 void load_setup() {

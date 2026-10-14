@@ -400,19 +400,7 @@ static uint8_t get_joy_num(uint8_t dev_addr, uint8_t instance)
 static void process_driver_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
 {
   //d_println("Driver report processing");
-  uint16_t res = SC_CTL_ON;
-  for(uint8_t i=0; i<12; i++) {
-    hid_joy_button_config_t cfg = hid_info[instance].joy_config.buttons[i];
-    if (cfg.isAvail) {
-      if (cfg.isBit) {
-        res += ((bitRead(report[cfg.pos], cfg.val)) ? cfg.btn : 0);
-        //d_printf("USB Joy button %d = %d", cfg.btn, bitRead(report[cfg.pos], cfg.val)); d_println();
-      } else {
-        res += ((cfg.val == report[cfg.pos]) ? cfg.btn : 0);
-        //d_printf("USB Joy button %d = %d", cfg.btn, (cfg.val == report[cfg.pos])); d_println();
-      }
-    }
-  }
+  uint16_t res = hid_joy_map_report(&hid_info[instance].joy_config, report, len, SC_CTL_ON);
   joyUSB[get_joy_num(dev_addr, instance)] = res;
 }
 

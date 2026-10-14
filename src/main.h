@@ -14,6 +14,7 @@
 #include "EspSerial.h"
 #include "ESP8266AT.h"
 #include "MultiMatrixDisplay.h"
+#include "board/board.h"
 
 #define SD2_CONFIG SdSpiConfig(PIN_MCU_SD2_CS, SHARED_SPI, SD_SCK_MHZ(16)) // SD2 SPI Settings
 
@@ -88,8 +89,6 @@ void print_time();
 void on_time();
 void on_keyboard();
 
-bool btn_read(uint8_t num);
-void led_write(uint8_t num, bool on);
 
 void load_setup();
 

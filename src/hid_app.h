@@ -16,21 +16,7 @@ extern uint8_t joyUSB_len;
 // copy the latest keyboard report received by core1 into usb_keyboard_report (call from core0 only)
 void hid_kbd_report_sync();
 
-typedef struct
-{
-  uint16_t btn; // button id (sega)
-  uint8_t pos; // byte position in the hid report
-  bool isBit; // is value is bit num or absolute value
-  bool isAvail; // is button configured
-  uint8_t val; // value (absolute or bit position)
-} hid_joy_button_config_t;
-
-typedef struct
-{
-  uint16_t vid;
-  uint16_t pid;
-  hid_joy_button_config_t buttons[12];
-} hid_joy_config_t;
+#include "hid_joy_map.h"
 
 // Each HID instance can has multiple reports
 static struct

@@ -3,6 +3,7 @@
 #include "types.h"
 #include "file.h"
 #include "main.h"
+#include "kg_format.h"
 
 void file_seek(uint32_t pos) {
     file1.seek(pos);
@@ -26,29 +27,23 @@ int file_write_buf(char *buf, size_t len) {
 
 uint16_t file_read16(uint32_t pos) {
   file_seek(pos);
-  uint16_t res = 0;
   uint8_t buf[2] = {0};
   file1.readBytes(buf, sizeof(buf));
-  res = buf[1] + buf[0]*256;  
-  return res;
+  return kg_be16(buf);
 }
 
 uint32_t file_read24(uint32_t pos) {
   file_seek(pos);
-  uint32_t res = 0;
   uint8_t buf[3] = {0};
   file1.readBytes(buf, sizeof(buf));
-  res = buf[2] + buf[1]*256 + buf[0]*256*256;
-  return res;
+  return kg_be24(buf);
 }
 
 uint32_t file_read32(uint32_t pos) {
   file_seek(pos);
-  uint32_t res = 0;
   uint8_t buf[4] = {0};
   file1.readBytes(buf, sizeof(buf));
-  res = buf[3] + buf[2]*256 + buf[1]*256*256 + buf[0]*256*256*256;
-  return res;
+  return kg_be32(buf);
 }
 
 void file_get_name(char *buf, size_t len) {

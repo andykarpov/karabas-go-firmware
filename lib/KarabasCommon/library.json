@@ -1,0 +1,7 @@
+{
+  "name": "KarabasCommon",
+  "version": "1.0.0",
+  "description": "Hardware independent Karabas firmware logic (no Arduino deps), unit-tested on the native platform",
+  "frameworks": "*",
+  "platforms": "*"
+}
