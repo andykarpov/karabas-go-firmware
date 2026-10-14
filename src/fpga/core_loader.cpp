@@ -378,6 +378,9 @@ void read_roms(const char* filename) {
   if (roms_len > 0) {
     spi_send(CMD_ROMLOADER, 0, 1);
   }
+  ElapsedTimer rom_timer;
+  rom_timer.reset();
+  uint32_t rom_bytes = 0;
   uint32_t offset = 0;
   uint32_t rom_idx = 0;
   while (roms_len > 0) {
@@ -415,6 +418,7 @@ void read_roms(const char* filename) {
         while ((c = file2.read(buf, sizeof(buf))) > 0) {
           rom_send(rom_addr + sent, buf, c);
           sent += c;
+          rom_bytes += c;
           rom_progress(rom_idx, sent);
         }
         file2.close();
@@ -433,6 +437,7 @@ void read_roms(const char* filename) {
         if (c == 0) break;
         rom_send(rom_addr + sent, buf, c);
         sent += c;
+        rom_bytes += c;
         rom_progress(rom_idx, sent);
       }
     }
@@ -448,6 +453,12 @@ void read_roms(const char* filename) {
   }
   //delay(100);
   spi_send(CMD_ROMLOADER, 0, 0);
+
+  if (rom_bytes > 0) {
+    d_printf("ROMs: %lu bytes in %lu ms (%s)", (unsigned long) rom_bytes, (unsigned long) rom_timer.elapsed(),
+      link_burst_available() ? "burst" : "classic");
+    d_println();
+  }
 
   file1.close();
 }
