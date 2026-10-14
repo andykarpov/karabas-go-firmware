@@ -6,6 +6,30 @@
 #include "host/usbh.h"
 #include "ps2kbd.h"
 #include "SegaController.h"
+#include "hardware/sync.h"
+
+hid_keyboard_report_t usb_keyboard_report;
+hid_mouse_report_t usb_mouse_report;
+uint16_t joyUSB[MAX_USB_JOYSTICKS];
+uint8_t joyUSB_len;
+
+// keyboard report is written by core1 (usb host) and read by core0 (osd, hotkeys)
+// a plain hardware spinlock (irqs off for an 8-byte copy): it never waits through FreeRTOS,
+// unlike pico mutexes, whose wakeups from irq context go through the FreeRTOS timer task
+static spin_lock_t *kbd_report_lock = spin_lock_init(spin_lock_claim_unused(true));
+static hid_keyboard_report_t kbd_report_shared = {0};
+
+void hid_kbd_report_sync()
+{
+  hid_kbd_report_get(&usb_keyboard_report);
+}
+
+void hid_kbd_report_get(hid_keyboard_report_t *report)
+{
+  uint32_t save = spin_lock_blocking(kbd_report_lock);
+  *report = kbd_report_shared;
+  spin_unlock(kbd_report_lock, save);
+}
 
 typedef struct {
   tusb_desc_device_t desc_device;
@@ -191,7 +215,9 @@ static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_
     || (report->keycode[4] ^ prev_report.keycode[4])
     || (report->keycode[5] ^ prev_report.keycode[5]));
   if (change != 0) {
-    usb_keyboard_report = *report;
+    uint32_t save = spin_lock_blocking(kbd_report_lock);
+    kbd_report_shared = *report;
+    spin_unlock(kbd_report_lock, save);
     spi_queue(CMD_USB_KBD, 0, report->modifier);
     for(uint8_t i=0; i<6; i++) {
       spi_queue(CMD_USB_KBD, i+1, report->keycode[i]);
@@ -386,19 +412,7 @@ static uint8_t get_joy_num(uint8_t dev_addr, uint8_t instance)
 static void process_driver_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
 {
   //d_println("Driver report processing");
-  uint16_t res = SC_CTL_ON;
-  for(uint8_t i=0; i<12; i++) {
-    hid_joy_button_config_t cfg = hid_info[instance].joy_config.buttons[i];
-    if (cfg.isAvail) {
-      if (cfg.isBit) {
-        res += ((bitRead(report[cfg.pos], cfg.val)) ? cfg.btn : 0);
-        //d_printf("USB Joy button %d = %d", cfg.btn, bitRead(report[cfg.pos], cfg.val)); d_println();
-      } else {
-        res += ((cfg.val == report[cfg.pos]) ? cfg.btn : 0);
-        //d_printf("USB Joy button %d = %d", cfg.btn, (cfg.val == report[cfg.pos])); d_println();
-      }
-    }
-  }
+  uint16_t res = hid_joy_map_report(&hid_info[instance].joy_config, report, len, SC_CTL_ON);
   joyUSB[get_joy_num(dev_addr, instance)] = res;
 }
 

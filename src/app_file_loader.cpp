@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include "crc32.h"
 #include "config.h"
 #include "types.h"
 #include "main.h"
@@ -58,9 +59,8 @@ void app_file_loader_read_list(bool forceIndex = false) {
     root1.rewind();
 
     d_println("Read file list");
-    files_len = 0;
+    files_clear();
     file_sel = 0;
-    memset(files, 0, sizeof(files));
     String exts = String(core.file_extensions);
     exts.toLowerCase(); exts.trim();
     char e[33];
@@ -68,11 +68,13 @@ void app_file_loader_read_list(bool forceIndex = false) {
     while (file1.openNext(&root1, O_RDONLY)) {
       char filename[14]; file1.getSFN(filename, sizeof(filename));
       uint8_t len = strlen(filename);
-      if (!file1.isDirectory() && files_len < SORT_FILES_MAX) {
+      if (!file1.isDirectory()) {
         if (exts.length() == 0 || exts.indexOf(strlwr(filename + (len - 4))) != -1) {
-          memcpy(files[files_len].hash, filename, SORT_HASH_LEN);
-          files[files_len].file_id = file1.dirIndex();
-          files_len++;
+          file_list_sort_item_t *item = files_append();
+          if (item) {
+            memcpy(item->hash, filename, SORT_HASH_LEN);
+            item->file_id = file1.dirIndex();
+          }
         }
       }
       file1.close();
@@ -279,6 +281,9 @@ void app_file_loader_send_file(uint16_t file_id) {
   uint8_t buf[512];
   int c;
 
+  // keep the whole file transfer together on the fpga link
+  spi_bus_lock();
+
   // trigger reset
   spi_send(CMD_FILELOADER, 0, 3); // 11 - active = 1, reset = 1
   spi_send(CMD_FILELOADER, 0, 2); // 10 - active = 1, reset = 0
@@ -290,17 +295,23 @@ void app_file_loader_send_file(uint16_t file_id) {
   
 uint32_t cnt = 0;
 uint32_t c1 = 0;
+  ElapsedTimer send_timer;
+  send_timer.reset();
+  uint32_t crc = KG_CRC32_INIT; // debug: compare with the crc32 of the file on a pc
 
-  while(c = file1.read(buf, sizeof(buf))) {
-    for (int j=0; j<c; j++) {
-      app_file_loader_send_byte(cnt, buf[j]);
-      cnt++;
-      c1++;
-      if (c1 == 16384) {
-        c1 = 0;
-        zxosd.loadingPopup(cnt, file_size);
-        zxosd.update();
-      }
+  while((c = file1.read(buf, sizeof(buf))) > 0) {
+    if (hw_setup.debug_enabled) crc = kg_crc32_update(crc, buf, c);
+    // bursts if the core supports them; classic frames for whatever they did not send
+    size_t done = link_burst_write(CMD_FILEDATA, cnt, buf, c);
+    for (int j=done; j<c; j++) {
+      app_file_loader_send_byte(cnt + j, buf[j], j == (int) done);
+    }
+    cnt += c;
+    c1 += c;
+    if (c1 >= 16384) {
+      c1 = 0;
+      zxosd.loadingPopup(cnt, file_size);
+      zxosd.update();
     }
   }
   zxosd.loadingPopup(file_size, file_size);
@@ -308,9 +319,11 @@ uint32_t c1 = 0;
   
   // 00 - active = 0, reset = 0
   spi_send(CMD_FILELOADER, 0, 0);
+  spi_bus_unlock();
 
   file1.close();
-  d_printf("Sent %u bytes", cnt); d_println();
+  d_printf("Sent %u bytes in %lu ms (%s), crc32 %08x", cnt, (unsigned long) send_timer.elapsed(),
+    link_burst_available() ? "burst" : "classic", kg_crc32_final(crc)); d_println();
   delay(100);
 
   // reload menu
@@ -381,9 +394,9 @@ void app_file_loader_on_keyboard()
       }
 }
 
-void app_file_loader_send_byte(uint32_t addr, uint8_t data) {
-  // send file bank address every 256 bytes
-  if ((addr & 0x000000FF) == 0) {
+void app_file_loader_send_byte(uint32_t addr, uint8_t data, bool force_bank) {
+  // send file bank address every 256 bytes (and when resuming in the middle of a bank)
+  if (force_bank || (addr & 0x000000FF) == 0) {
     uint8_t filebank3 = (uint8_t)((addr & 0xFF000000) >> 24);
     uint8_t filebank2 = (uint8_t)((addr & 0x00FF0000) >> 16);
     uint8_t filebank1 = (uint8_t)((addr & 0x0000FF00) >> 8);

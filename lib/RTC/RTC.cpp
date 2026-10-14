@@ -12,6 +12,16 @@
 #include <Arduino.h>
 #include <Wire.h>
 
+// karabas: the I2C bus is shared between tasks; the firmware provides a recursive lock
+// (src/periph/i2c_bus.cpp). It is held only around the I2C calls, never around action()
+// (spi to the fpga) or event() callbacks.
+extern "C" void i2c_bus_lock(void);
+extern "C" void i2c_bus_unlock(void);
+struct I2cHold {
+  I2cHold() { i2c_bus_lock(); }
+  ~I2cHold() { i2c_bus_unlock(); }
+};
+
 /****************************************************************************/
 
 RTC::RTC(void)
@@ -23,6 +33,8 @@ RTC::RTC(void)
 void RTC::begin(spi_cb act, osd_cb evt)
 {
   delay(100);
+
+  I2cHold i2c;
 
   // init eeprom
   eeprom.setMemoryType(8);
@@ -57,17 +69,19 @@ void RTC::handle()
   // read time from rtc
   if (n - tr >= 500) {
 
-    DateTime now = rtc_clock.now();
-    if (now.isValid())
+    DateTime now;
+    { I2cHold i2c; now = rtc_clock.now(); }
+    // keep the last good time if the rtc read failed
+    if (now.isValid()) {
+      rtc_year = get_year(now.year());
+      rtc_month = now.month();
+      rtc_day = now.day();
+      rtc_week = now.dayOfTheWeek();
 
-    rtc_year = get_year(now.year());
-    rtc_month = now.month();
-    rtc_day = now.day();
-    rtc_week = now.dayOfTheWeek();
-
-    rtc_hours = now.hour();
-    rtc_minutes = now.minute();
-    rtc_seconds = now.second();
+      rtc_hours = now.hour();
+      rtc_minutes = now.minute();
+      rtc_seconds = now.second();
+    }
 
     sendTime();
 
@@ -84,6 +98,7 @@ void RTC::handle()
 }
 
 void RTC::save() {
+  I2cHold i2c;
   rtc_clock.adjust(DateTime(2000 + rtc_year, rtc_month, rtc_day, rtc_hours, rtc_minutes, rtc_seconds));
   // todo: set dow
 }
@@ -193,6 +208,7 @@ void RTC::setData(uint8_t addr, uint8_t data) {
 
           if (addr <= 6) {
               DateTime now = DateTime(2000 + rtc_year, rtc_month, rtc_day, rtc_hours, rtc_minutes, rtc_seconds); 
+              I2cHold i2c;
               rtc_clock.adjust(now);
           }
       }
@@ -245,6 +261,7 @@ void RTC::setData(uint8_t addr, uint8_t data) {
 
       if (addr <= 9) {
           DateTime now = DateTime(2000 + rtc_year, rtc_month, rtc_day, rtc_hours, rtc_minutes, rtc_seconds); 
+          I2cHold i2c;
           rtc_clock.adjust(now);
       }
   }
@@ -252,7 +269,8 @@ void RTC::setData(uint8_t addr, uint8_t data) {
 
 void RTC::readAll() {
 
-  DateTime now = rtc_clock.now();
+  DateTime now;
+  { I2cHold i2c; now = rtc_clock.now(); }
 
   rtc_year = get_year(now.year());
   rtc_month = now.month();
@@ -340,7 +358,8 @@ void RTC::setRtcType(uint8_t val) {
 uint8_t RTC::getEepromReg(uint8_t reg) {
   if (has_eeprom && eeprom_bank < 4) {
     uint32_t addr = (uint32_t)eeprom_bank*256 + reg;
-    uint8_t data = eeprom.read(addr);
+    uint8_t data;
+    { I2cHold i2c; data = eeprom.read(addr); }
     //Serial.printf("<== eeprom %08x = %02x", addr, data); Serial.println();
     return data;
   } else if (eeprom_bank >=4 && eeprom_bank < 255) {
@@ -355,7 +374,7 @@ void RTC::setEepromReg(uint8_t reg, uint8_t val) {
   if (has_eeprom && eeprom_bank < 4) {
     uint32_t addr = (uint32_t)eeprom_bank*256 + reg;
     //Serial.printf("==> eeprom %08x = %02x", addr, val); Serial.println();
-    eeprom.write(addr, val);
+    { I2cHold i2c; eeprom.write(addr, val); }
   } else if (eeprom_bank >= 4 && eeprom_bank < 255) {
     core_eeprom_set(reg, val);
   } else {

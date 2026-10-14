@@ -28,7 +28,7 @@ class EspSerial : public arduino::HardwareSerial {
         virtual void flush() override;
         virtual size_t write(uint8_t c) override;
         bool overflow();
-        void handle();
+        bool handle(); // send one queued byte to the fpga; false if there was nothing to send
         using Print::write;
         operator bool() override;
 

@@ -3,6 +3,7 @@
 #include "types.h"
 #include "file.h"
 #include "main.h"
+#include "kg_format.h"
 
 void file_seek(uint32_t pos) {
     file1.seek(pos);
@@ -13,7 +14,10 @@ uint8_t file_read() {
 }
 
 size_t file_read_bytes(char *buf, size_t len) {
-    return file1.readBytes(buf, len);
+    // not Stream::readBytes(): SdFat does not override it, so it reads byte by byte with a
+    // timeout check per byte (~2 ms per 256 bytes)
+    int n = file1.read(buf, len);
+    return (n > 0) ? (size_t) n : 0;
 }
 
 int file_read_buf(char *buf, size_t len) {
@@ -26,39 +30,31 @@ int file_write_buf(char *buf, size_t len) {
 
 uint16_t file_read16(uint32_t pos) {
   file_seek(pos);
-  uint16_t res = 0;
   uint8_t buf[2] = {0};
   file1.readBytes(buf, sizeof(buf));
-  res = buf[1] + buf[0]*256;  
-  return res;
+  return kg_be16(buf);
 }
 
 uint32_t file_read24(uint32_t pos) {
   file_seek(pos);
-  uint32_t res = 0;
   uint8_t buf[3] = {0};
   file1.readBytes(buf, sizeof(buf));
-  res = buf[2] + buf[1]*256 + buf[0]*256*256;
-  return res;
+  return kg_be24(buf);
 }
 
 uint32_t file_read32(uint32_t pos) {
   file_seek(pos);
-  uint32_t res = 0;
   uint8_t buf[4] = {0};
   file1.readBytes(buf, sizeof(buf));
-  res = buf[3] + buf[2]*256 + buf[1]*256*256 + buf[0]*256*256*256;
-  return res;
+  return kg_be32(buf);
 }
 
 void file_get_name(char *buf, size_t len) {
-  file1.getName(buf, sizeof(buf));
+  file1.getName(buf, len);
 }
 
 void file_write16(uint32_t pos, uint16_t val) {
   file_seek(pos);
-  file_seek(pos);
-  file1.write((uint8_t) val >> 8);
-  file_seek(pos+1);
+  file1.write((uint8_t) (val >> 8));
   file1.write((uint8_t) val);
 }

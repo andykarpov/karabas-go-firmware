@@ -6,6 +6,9 @@
 #include <SegaController.h>
 #include "IniFile.h"
 
+hid_joy_config_t joy_drivers[MAX_JOY_DRIVERS];
+uint8_t joy_drivers_len;
+
 hid_joy_config_t hid_driver_load(char* filename)
 {
   hid_joy_config_t cfg = {0};
@@ -26,33 +29,16 @@ hid_joy_config_t hid_driver_load(char* filename)
     cfg.vid = (ini.getValue("info", "vid", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : 0;
     cfg.pid = (ini.getValue("info", "pid", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : 0;
 
-    String keys[12] = {"up", "down", "left", "right", "a", "b", "c", "x", "y", "z", "start", "mode"};
-    uint16_t btns[12] = {SC_BTN_UP, SC_BTN_DOWN, SC_BTN_LEFT, SC_BTN_RIGHT, SC_BTN_A, SC_BTN_B, SC_BTN_C, SC_BTN_X, SC_BTN_Y, SC_BTN_Z, SC_BTN_START, SC_BTN_MODE};
+    const char* keys[HID_JOY_BUTTONS] = {"up", "down", "left", "right", "a", "b", "c", "x", "y", "z", "start", "mode"};
+    uint16_t btns[HID_JOY_BUTTONS] = {SC_BTN_UP, SC_BTN_DOWN, SC_BTN_LEFT, SC_BTN_RIGHT, SC_BTN_A, SC_BTN_B, SC_BTN_C, SC_BTN_X, SC_BTN_Y, SC_BTN_Z, SC_BTN_START, SC_BTN_MODE};
 
-    char key[10];
-    for(uint8_t i=0; i<12; i++) {
-      keys[i].toCharArray(key, sizeof(key));
+    for(uint8_t i=0; i<HID_JOY_BUTTONS; i++) {
       cfg.buttons[i].btn = btns[i];
       cfg.buttons[i].isAvail = false;
-      //d_printf("Loading %s", key); d_println();
-      if (ini.getValue("buttons", key, buffer, bufferLen)) {
-        //d_printf("Parsed %d = %s", i, buffer); d_println();
-         cfg.buttons[i].isAvail = true;
-        // parse comma separated values
-        char *ptr = NULL;
-        char *strings[4];
-        uint8_t idx = 0;
-         ptr = strtok(buffer, ",");  // delimiter
-         while (ptr != NULL)
-         {
-           strings[idx] = ptr;
-           idx++;
-           ptr = strtok(NULL, ",");
-         }
-        // split strings buffer into values
-         cfg.buttons[i].pos = atoi(strings[0]);
-         cfg.buttons[i].isBit = (idx > 0 && atoi(strings[1]) == 1);
-         cfg.buttons[i].val = (idx > 1) ? atoi(strings[2]) : 0;
+      if (ini.getValue("buttons", keys[i], buffer, bufferLen)) {
+        if (!hid_joy_button_parse(buffer, &cfg.buttons[i])) {
+          d_printf("%s: invalid mapping for %s: %s", filename, keys[i], buffer); d_println();
+        }
       }
     }
 
@@ -73,7 +59,7 @@ void hid_drivers_load()
       while (file1.openNext(&root1, O_RDONLY)) {
         char filename[32]; file1.getName(filename, sizeof(filename));
         uint8_t len = strlen(filename);
-        if (strstr(strlwr(filename + (len - 4)), ".ini")) {
+        if (len > 4 && joy_drivers_len < MAX_JOY_DRIVERS && strstr(strlwr(filename + (len - 4)), ".ini")) {
           joy_drivers[joy_drivers_len] = hid_driver_load(filename);
           joy_drivers_len++;
         }

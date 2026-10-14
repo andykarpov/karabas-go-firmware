@@ -1,0 +1,31 @@
+; Xilinx slave serial configuration: DIN is shifted out MSB first,
+; latched by the FPGA on the CCLK rising edge.
+; Feed it with 8-bit writes to the TX FIFO (autopull, threshold 8, shift left).
+; When the FIFO runs dry the SM stalls on "out" with CCLK low.
+; Regenerate fpga_serial.pio.h with:
+;   ~/.platformio/packages/tool-pioasm-rp2040-earlephilhower/pioasm src/fpga/fpga_serial.pio src/fpga/fpga_serial.pio.h
+
+.program fpga_serial
+.side_set 1
+
+.wrap_target
+    out pins, 1     side 0  ; set DIN, CCLK low
+    nop             side 1  ; CCLK rising edge latches DIN
+.wrap
+
+% c-sdk {
+static inline void fpga_serial_program_init(PIO pio, uint sm, uint offset, uint pin_din, uint pin_cclk, float clkdiv) {
+    pio_sm_set_pins_with_mask(pio, sm, 0, (1u << pin_din) | (1u << pin_cclk));
+    pio_sm_set_pindirs_with_mask(pio, sm, (1u << pin_din) | (1u << pin_cclk), (1u << pin_din) | (1u << pin_cclk));
+    pio_gpio_init(pio, pin_din);
+    pio_gpio_init(pio, pin_cclk);
+
+    pio_sm_config c = fpga_serial_program_get_default_config(offset);
+    sm_config_set_out_pins(&c, pin_din, 1);
+    sm_config_set_sideset_pins(&c, pin_cclk);
+    sm_config_set_out_shift(&c, false, true, 8); // shift left (MSB first), autopull every 8 bits
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_TX);
+    sm_config_set_clkdiv(&c, clkdiv);
+    pio_sm_init(pio, sm, offset, &c);
+}
+%}

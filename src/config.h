@@ -4,8 +4,9 @@
 #define HW_ID_MINI 2
 #define HW_ID_MINIG 3
 
+// HW_ID is set per board env in platformio.ini (pio run -e go|mini|minig)
 #ifndef HW_ID
-#define HW_ID 3
+#error "HW_ID is not defined, build with pio run -e go|mini|minig"
 #endif
 
 #ifndef ENABLE_MSC
@@ -139,6 +140,14 @@
 
 #endif // HW_ID
 
+// burst transfers (docs/burst_protocol.md). Same RP2040 pins on all boards; on Go the FPGA
+// port index is swapped (IO0 = MCU_SPI_IO[1], IO1 = MCU_SPI_IO[0]).
+// MCU_IO4 (GPIO18 on Mini / Mini G) must stay an input: it carries the FT812 clock after the
+// revF clock mod and is disconnected on Rev.G.
+#define PIN_BURST_CS PIN_MCU_SPI_IO0
+#define PIN_BURST_READY PIN_MCU_SPI_IO1
+#define BURST_MAX_LEN 512
+
 #define CMD_USB_KBD 0x01
 #define CMD_USB_MOUSE 0x02
 #define CMD_JOYSTICK 0x03
@@ -205,6 +214,7 @@
 #define CMD_AUDIO_PEAKS_L 0x70
 #define CMD_AUDIO_PEAKS_R 0x71
 
+#define CMD_CAPS 0xF7 // core capability query / answer, see docs/burst_protocol.md
 #define CMD_ESP_UART 0xF8
 #define CMD_HW_SETUP 0xF9
 #define CMD_RTC 0xFA
@@ -280,13 +290,12 @@
 #define WAIT_SERIAL 0
 #endif
 
-#define MATRIX_MODE_SCROLL 0
-#define MATRIX_MODE_DRAW 1
-#define MATRIX_MODE_AUDIO 2
 
+// debug output goes through src/diag/debug_out (single Serial writer, see there)
+#include "diag/debug_out.h"
 #define d_begin(...)   if (hw_setup.debug_enabled) Serial.begin(__VA_ARGS__);
-#define d_print(...)   if (hw_setup.debug_enabled) Serial.print(__VA_ARGS__);
-#define d_printf(...)  if (hw_setup.debug_enabled) Serial.printf(__VA_ARGS__);
-#define d_write(...)   if (hw_setup.debug_enabled) Serial.write(__VA_ARGS__);
-#define d_println(...) if (hw_setup.debug_enabled) Serial.println(__VA_ARGS__);
-#define d_flush(...)   if (hw_setup.debug_enabled)  Serial.flush(__VA_ARGS__);
+#define d_print(...)   if (hw_setup.debug_enabled) debug_out().print(__VA_ARGS__);
+#define d_printf(...)  if (hw_setup.debug_enabled) debug_out().printf(__VA_ARGS__);
+#define d_write(...)   if (hw_setup.debug_enabled) debug_out().write(__VA_ARGS__);
+#define d_println(...) if (hw_setup.debug_enabled) debug_out().println(__VA_ARGS__);
+#define d_flush(...)   if (hw_setup.debug_enabled) debug_flush();

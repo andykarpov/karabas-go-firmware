@@ -290,6 +290,13 @@ static void port_pin_drive_setting(const root_port_t *port) {
   gpio_set_drive_strength(port->pin_dm, GPIO_DRIVE_STRENGTH_12MA);
 }
 
+// karabas: pio_add_program returns a negative error code (stored in the unsigned offsets)
+// when there is no instruction memory left; check it after init instead of failing silently
+bool pio_usb_host_programs_loaded(void) {
+  pio_port_t *pp = PIO_USB_PIO_PORT(0);
+  return (int) pp->offset_tx >= 0 && (int) pp->offset_rx >= 0 && (int) pp->offset_eop >= 0;
+}
+
 void pio_usb_bus_init(pio_port_t *pp, const pio_usb_configuration_t *c,
                       root_port_t *root) {
   memset(root, 0, sizeof(root_port_t));

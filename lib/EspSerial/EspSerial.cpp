@@ -115,17 +115,17 @@ int EspSerial::tx_queue_pull() {
     return -1;
 }
 
-void EspSerial::handle() {
+bool EspSerial::handle() {
   int esp_tx = tx_queue_pull();
   if (esp_tx >= 0) {
     _action(CMD_ESP_UART, 0, esp_tx);
-  } else {
-    _action(CMD_NOP, 0, 0);
+    return true;
   }
+  // polling the fpga with NOPs is done by the link itself (link_poll)
+  return false;
 }
 
 void EspSerial::tx_all() {
-    while (tx_fifo.available() > 0) {
-        handle();
+    while (tx_fifo.available() > 0 && handle()) {
     }
 }

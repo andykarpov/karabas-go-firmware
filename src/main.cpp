@@ -22,168 +22,52 @@
 -- EU, 2024, 2025, 2026
 ------------------------------------------------------------------------------------------------------------------*/
 
-#include <Arduino.h>
-#include "config.h"
-#include "types.h"
-#include <SPI.h>
-#include <Wire.h>
-#include <PioSPI.h>
-#include <SparkFun_PCA9536_Arduino_Library.h>
-#include "SdFat.h"
-#include <ElapsedTimer.h>
-#include <RTC.h>
-#include <OSD.h>
-#include <FT812.h>
-#include <SegaController.h>
-#include "hid_app.h"
 #include "main.h"
-#include "usb_hid_keys.h"
-#include "bitmaps.h"
-#include "osd_font.h"
-#include "app_core_browser.h"
-#include "app_file_loader.h"
-#include "app_setup.h"
-#include "app_about.h"
-#include "app_core.h"
-#include "file.h"
-#include <IniFile.h>
 #include "hid_driver.h"
 #include "tusb.h"
 #include "pio_usb.h"
-#include "Adafruit_TinyUSB.h"
 #include "ps2kbd.h"
-#include "EspSerial.h"
-#include "ESP8266AT.h"
-#include <Adafruit_GFX.h>
-#include "Adafruit_LEDBackpack.h"
-#define SSD1306_NO_SPLASH
-#include "Adafruit_SSD1306.h"
-#include "MultiMatrixDisplay.h"
+#include "app_core_browser.h"
+#include "diag/diag.h"
 
-PioSPI spiSD(PIN_SD_SPI_TX, PIN_SD_SPI_RX, PIN_SD_SPI_SCK, SD_CS_PIN, SPI_MODE0, SD_SCK_MHZ(16)); // dedicated SD1 SPI
-#define SD_CONFIG  SdSpiConfig(SD_CS_PIN, DEDICATED_SPI, SD_SCK_MHZ(16), &spiSD) // SD1 SPI Settings
-SPISettings settingsA(SD_SCK_MHZ(16), MSBFIRST, SPI_MODE0); // MCU SPI settings
-Adafruit_USBD_MSC usb_msc;
-
-PCA9536 extender;
-ElapsedTimer my_timer, my_timer2;
-ElapsedTimer hide_timer;
-ElapsedTimer popup_timer;
-RTC zxrtc;
-SdFat32 sd1;
-File32 file1, file2;
-File32 root1;
-OSD zxosd;
-EspSerial esp_serial;
-ESP8266 wifi(esp_serial);
-MultiMatrixDisplay matrix = MultiMatrixDisplay();
-
-file_list_sort_item_t files[SORT_FILES_MAX];
-uint16_t files_len = 0;
-uint16_t file_sel = 0;
-uint16_t file_page_size = MAX_CORES_PER_PAGE;
-uint16_t file_pages = 1;
-uint16_t file_page = 1;
-file_list_item_t cached_names[MAX_CORES_PER_PAGE];
-uint16_t cached_file_from, cached_file_to;
-
-#if HW_ID == HW_ID_GO
-SegaController sega;
-FT812 ft(PIN_MCU_FT_CS, PIN_FT_RESET);
-#elif HW_ID == HW_ID_MINI
-FT812 ft(PIN_MCU_FT_CS);
-#elif HW_ID == HW_ID_MINIG
-FT812 ft(PIN_MCU_FT_CS, PIN_FT_RESET);
+#ifdef __FREERTOS
+#include <FreeRTOS.h>
+#include <task.h>
+// see [rtos] in platformio.ini: wakeups from irq context go through the timer task
+static_assert(configTIMER_TASK_PRIORITY == configMAX_PRIORITIES - 1, "FreeRTOS timer task must run above APP and USB");
 #endif
 
-static queue_t spi_event_queue;
-volatile bool queue_locked = false;
+RTC zxrtc;
+volatile bool usb_host_ready = false;
+EspSerial esp_serial;
+ESP8266 wifi(esp_serial);
 
-hid_keyboard_report_t usb_keyboard_report;
-hid_mouse_report_t usb_mouse_report;
+static ElapsedTimer led_timer;
 
-bool is_osd = false;
-bool is_osd_hiding = false; 
-bool is_popup_hiding = false;
-bool need_redraw = false;
-
-core_item_t core;
-core_file_slot_t file_slots[MAX_FILE_SLOTS];
-
-uint8_t osd_state;
-uint8_t osd_return_state;
-uint8_t osd_prev_state = state_main;
-
-hid_joy_config_t joy_drivers[MAX_JOY_DRIVERS];
-uint8_t joy_drivers_len;
-
-bool has_extender = false;
-bool has_sd = false;
-bool has_fs = false;
-bool has_ft = false;
-bool has_matrix = false;
-bool has_oled = false;
-bool is_flashboot = false;
-bool is_configuring = false;
-bool expose_msc = false;
-bool ejected = false;
-bool msc_blink = false;
-
-uint16_t joyL;
-uint16_t joyR;
-uint16_t joyUSB[MAX_USB_JOYSTICKS];
-uint8_t joyUSB_len;
-
-uint8_t uart_idx = 0;
-uint8_t evo_rs232_dll = 0;
-uint8_t evo_rs232_dlm = 0;
-uint32_t serial_speed = 115200;
-unsigned long uart_rx_last = 0;
-
-uint16_t debug_address = 0;
-uint16_t prev_debug_address = 0;
-uint16_t debug_data = 0;
-uint16_t prev_debug_data = 0;
-
-bool prev_kb_repeat_state = false;
-
-setup_t hw_setup;
-
-const String matrix_msg = "KARABAS GO ";
-const int matrix_msg_width = matrix_msg.length() * 6; // 6 pixels per character width
-int matrix_msg_scrollpos = 16;
-ElapsedTimer matrix_timer, matrix_scroll_timer, matrix_poll_timer, oled_timer;
-uint8_t matrix_mode = MATRIX_MODE_SCROLL;
-uint8_t matrix_btns, matrix_prev_btns;
-uint16_t audio_l, audio_r;
-Adafruit_SSD1306 oled(128, 32, &Wire, -1);
-int oled_scrollpos = -128;
-
-void matrix_init()
-{
-  if (has_matrix) {
-    // todo: get from global config ?
-    matrix.setTextWrap(false);
-    matrix.setTextSize(1);
-    matrix.setTextColor(LED_YELLOW);
-    matrix.setBrightness(4); // safe enough
+#ifdef __FREERTOS
+// Under FreeRTOS SysTick belongs to the scheduler, so the core runs its cycle counter (ccount,
+// 2 instructions) on a PIO state machine, allocated in main() before setup(). It lands on pio1,
+// whose whole 32-word instruction memory the PIO-USB receiver needs (decoder 15 + edge
+// detector 17): the edge detector then fails to load and the host never sees a handshake.
+// Reserve pio1 and pio0 sm0 (PIO-USB tx) in a static constructor, which runs before main(),
+// so ccount goes to pio0 sm1. usb_host_setup() releases them right before PIO-USB init,
+// which gives the usb host the same PIO layout as without FreeRTOS.
+static struct UsbPioReserve {
+  UsbPioReserve() {
+    pio_sm_claim(pio0, 0);
+    pio_claim_sm_mask(pio1, 0xf);
   }
-}
+} usb_pio_reserve;
+#endif
 
-
-void setup()
+// firmware init, runs on core0
+static void karabas_setup()
 {
-  queue_init(&spi_event_queue, sizeof(queue_spi_t), 64);
+  link_queue_init();
 
   hw_setup.debug_enabled = true;
 
-#if ENABLE_MSC
-  usb_msc.setID(0, "Karabas", "SD Card", "1.0");
-  usb_msc.setReadWriteCallback(0, msc_read_cb_sd, msc_write_cb_sd, msc_flush_cb_sd);
-  usb_msc.setStartStopCallback(0, msc_start_stop_cb_sd);
-  usb_msc.setUnitReady(0, false);
-  usb_msc.begin();
-#endif
+  msc_init();
 
   //rp2040.wdt_begin(5000);
 
@@ -193,12 +77,14 @@ void setup()
 
   for (uint8_t i=0; i<MAX_FILE_SLOTS; i++) { file_slots[i] = {0}; }
 
-  // SPI0 to FPGA
-  SPI.setSCK(PIN_MCU_SPI_SCK);
-  SPI.setRX(PIN_MCU_SPI_RX);
-  SPI.setTX(PIN_MCU_SPI_TX);
-  //SPI.setCS(PIN_MCU_SPI_CS);
-  SPI.begin(false);
+  // SPI0 to FPGA, incoming fpga commands
+  link_begin();
+  link_on(CMD_FLASHBOOT, [](uint8_t addr, uint8_t data) { flashboot(data); });
+  link_on(CMD_UART, serial_data);
+  link_on(CMD_ESP_UART, [](uint8_t addr, uint8_t data) { esp_serial.rx_queue_push(data); });
+  link_on(CMD_RTC, [](uint8_t addr, uint8_t data) { zxrtc.setData(addr, data); });
+  link_on(CMD_PS2_SCANCODE, ps2_command_receive);
+  matrix_register_handlers();
 
   // FPGA bitstream loader
   pinMode(PIN_CONF_INIT_B, INPUT_PULLUP);
@@ -212,98 +98,33 @@ void setup()
   pinMode(PIN_MCU_SD2_CS, OUTPUT); digitalWrite(PIN_MCU_SD2_CS, HIGH);
   pinMode(PIN_MCU_FT_CS, OUTPUT); digitalWrite(PIN_MCU_FT_CS, HIGH);
 
-  // unused MCU-FPGA pins (yet)
-  pinMode(PIN_MCU_SPI_IO0, INPUT);
-  pinMode(PIN_MCU_SPI_IO1, INPUT);
-  #if HW_ID==HW_ID_MINI
-  pinMode(PIN_MCU_SPI_IO4, INPUT);
-  #elif HW_ID==HW_ID_MINIG
-  pinMode(PIN_MCU_SPI_IO4, INPUT);
-  pinMode(PIN_MCU_SPI_IO5, INPUT);
-  pinMode(PIN_FT_RESET, OUTPUT);
-  pinMode(PIN_ESP_RESET, OUTPUT);
-  pinMode(PIN_MIDI_RESET, OUTPUT);
-  digitalWrite(PIN_FT_RESET, HIGH);
-  digitalWrite(PIN_ESP_RESET, HIGH);
-  digitalWrite(PIN_MIDI_RESET, HIGH);
-  #endif
+  // unused MCU-FPGA pins, peripheral reset lines
+  board_init_pins();
 
   // I2C
   Wire.setSDA(PIN_I2C_SDA);
   Wire.setSCL(PIN_I2C_SCL);
-  Wire.setClock(100000);
+  Wire.setClock(400000); // all devices on the bus are fast-mode (SSD1306, HT16K33, DS3231, 24xx EEPROM, PCA9536)
   Wire.begin();
 
 #if WAIT_SERIAL
   while ( !Serial ) yield();   // wait for native usb
 #endif
 
-  Serial.begin(serial_speed);
+  serial_bridge_begin();
   d_println("Karabas Go RP2040 firmware");
 
-#if HW_ID == HW_ID_GO
-  if (extender.begin() == false) {
-    has_extender = false;
-    d_println("PCA9536 unavailable. Please check soldering.");
-  } else {
-    d_println("I2C PCA9536 extender detected");
-    has_extender = true;
-  }
+  // buttons, leds, joysticks
+  board_init_io();
 
-  if (has_extender) {
-    extender.pinMode(PIN_EXT_BTN1, INPUT_PULLUP);
-    extender.pinMode(PIN_EXT_BTN2, INPUT_PULLUP);
-    extender.pinMode(PIN_EXT_LED1, OUTPUT);
-    extender.pinMode(PIN_EXT_LED2, OUTPUT);
-    extender.digitalWrite(PIN_EXT_LED1, HIGH);
-    extender.digitalWrite(PIN_EXT_LED2, HIGH);
-  }
-
-  sega.begin(PIN_JOY_SCK, PIN_JOY_LOAD, PIN_JOY_DATA, PIN_JOY_P7);
-
-#elif HW_ID == HW_ID_MINI || HW_ID == HW_ID_MINIG
-  has_extender = false;
-  pinMode(PIN_BTN1, INPUT_PULLUP);
-  pinMode(PIN_BTN2, INPUT_PULLUP);
-  pinMode(PIN_LED1, OUTPUT); digitalWrite(PIN_LED1, HIGH);
-  pinMode(PIN_LED2, OUTPUT); digitalWrite(PIN_LED2, HIGH);
-#endif
-
-  has_matrix = matrix.begin();
-  if (has_matrix) {
-    d_println("Found a matrix display");
-  } else {
-    d_println("Matrix display was not found");
-  }
-
-  matrix_init();
-
-  has_oled = oled.begin(SSD1306_SWITCHCAPVCC, 0x3C);
-  if (has_oled) {
-    d_println("Found SSD1306 OLED display");
-    oled.clearDisplay();
-    oled.drawBitmap(8, 0, logoBw, 112, 32, WHITE); // karabas go logo 112x32 bw
-    oled.display(); // show default adafruit buffer
-  } else {
-    d_println("SSD1306 OLED display was not found");
-  }
+  matrix_begin();
+  oled_begin();
 
   zxrtc.begin(spi_send, on_time);
   zxosd.begin(spi_send);
   ft.begin(spi_send);
 
-  has_fs = false;
-
-  // SD
-  d_print("Mounting SD card... ");
-  if (!sd1.begin(SD_CONFIG)) {
-    has_sd = false;
-    d_println("Failed");
-    sd1.initErrorPrint(&Serial);
-  } else {
-    has_sd = true;
-    d_println("Done");
-  }
+  storage_begin();
 
   // load usb joy drivers
   d_println("Loading usb hid joystick drivers");
@@ -311,22 +132,11 @@ void setup()
   hid_drivers_dump();
 
   // if btn2 pressed on boot - espose msc
-#if ENABLE_MSC
-  if (btn_read(1)) {
-    if (has_sd) {
-      expose_msc = true;
-      ejected = false;
-      uint32_t block_count = sd1.card()->sectorCount();
-      usb_msc.setCapacity(0, block_count, 512);
-      usb_msc.setUnitReady(0, true);
-      my_timer.reset();
-    }
-  }
-#endif
+  msc_check_boot();
 
   osd_state = state_main;
 
-  if (!expose_msc) {
+  if (!msc_active()) {
     // load setup
     load_setup();
 
@@ -350,487 +160,152 @@ void setup()
   }
 }
 
-void setup1() {
+// usb host init, runs on core1
+static void usb_host_setup() {
   pio_usb_configuration_t pio_cfg = PIO_USB_DEFAULT_CONFIG;
   pio_cfg.pin_dp = HOST_PIN_DP;
+  pio_cfg.pinout = (PIO_USB_PINOUT) board_usb_pinout();
 
-  #if HW_ID == HW_ID_GO
-  pio_cfg.pinout = PIO_USB_PINOUT_DMDP;
-#elif HW_ID == HW_ID_MINI || HW_ID == HW_ID_MINIG
-  pio_cfg.pinout = PIO_USB_PINOUT_DPDM;
+#ifdef __FREERTOS
+  // PIO-USB claims its default state machines (pio0 sm0, pio1 sm0/sm1) and pio1 memory:
+  // release what usb_pio_reserve held for it since before main()
+  pio_sm_unclaim(pio0, 0);
+  for (uint i=0; i<4; i++) pio_sm_unclaim(pio1, i);
 #endif
+
   tuh_configure(1, TUH_CFGID_RPI_PIO_USB_CONFIGURATION, &pio_cfg);
   tuh_init(1);
+  if (!pio_usb_host_programs_loaded()) {
+    // pio_add_program failed: no PIO instruction memory left for the usb host programs
+    d_println("USB host: PIO programs did not load, usb devices will not work");
+  }
+  usb_host_ready = true;
 }
 
-void loop()
+// firmware main loop, runs on core0
+static void karabas_loop()
 {
+  diag_loop_core0();
+  diag_tick();
+  debug_drain();
+
   //rp2040.wdt_reset();
   // read hw buttons to manipulate msc / reboots
-  static bool prev_btn1 = false;
-  static bool prev_btn2 = false;
   bool btn1 = btn_read(0);
   bool btn2 = btn_read(1);
 
-  // if eject event registered - reboot rp2040
-  if (ejected) {
-    ejected = false;
-    rp2040.reboot();
-  }
-
-#if ENABLE_MSC
-  // if msc mounted but btn1 pressed - also reboot rp2040
-  if (expose_msc) {
-
-    if (my_timer2.elapsed() >= 200) {
-          msc_blink = !msc_blink;
-        led_write(1, msc_blink);
-        my_timer2.reset();
-    }
-
-    if (btn1 && my_timer.elapsed() > 10000) {
-      // wait for btn1 to release
-      while(btn1) { btn1 = btn_read(0); delay(100); }
-      expose_msc = false;
-      rp2040.reboot();
-    }
-
-    // do not process other loop things until exit from msc mode
-    return;
-  }
-#endif
+  // in msc mode nothing else runs until eject or btn1 long press
+  if (msc_tick(btn1)) return;
 
   zxrtc.handle();
 
-  // set is_osd off after 200ms of real switching off 
-  // to avoid esc keypress passes to the host
-  if (is_osd_hiding && hide_timer.elapsed() >= 200) {
-    is_osd = false;
-    is_osd_hiding = false;
-  }
+  // osd hide / popup timers
+  ui_tick();
 
-  // hide popup after 500 ms
-  if (is_popup_hiding && popup_timer.elapsed() >= 500) {
-    is_popup_hiding = false;
-    zxosd.hidePopup();
-    osd_handle(true); // reinit osd
-  }
-
-  if (my_timer.elapsed() >= 100) {
+  if (led_timer.elapsed() >= 100) {
       led_write(0, true);
-      my_timer.reset();
+      led_timer.reset();
   }
 
-  if (prev_btn1 != btn1) {
-    d_print("Button 1: "); d_println((btn1) ? "on" : "off");
-    prev_btn1 = btn1;
-    spi_send(CMD_BTN, 0, btn1);
-  }
-
-  if (prev_btn2 != btn2) {
-    d_print("Button 2: "); d_println((btn2) ? "on" : "off");
-    prev_btn2 = btn2;
-    spi_send(CMD_BTN, 1, btn2);
-  }
-
-  // debug features
-  // TODO: remove from production / refactor
-  /*if (btn1) {
-    // wait until released
-    while (btn1) { btn1 = btn_read(0); delay(100); }
-    d_println("Reboot");
-    d_flush();
-    rp2040.reboot();
-  }*/
-  /*if (btn2) {
-      d_println("Reboot to bootloader");
-      d_flush();
-      rp2040.rebootToBootloader();
-  }*/
-
-  // joy reading
-#if HW_ID == HW_ID_GO
-  joyL = sega.getState(true);
-  joyR = sega.getState(false);
-#elif HW_ID == HW_ID_MINI || HW_ID == HW_ID_MINIG
-  joyL = 0;
-  joyR = 0;
-#endif
-  static uint16_t prevJoyL = 0;
-  static uint16_t prevJoyR = 0;
-
-  // merge 
-  if (joyUSB_len > 0) {
-    joyL = joyL | joyUSB[0];
-  }
-  if (joyUSB_len > 1) {
-    joyR = joyR | joyUSB[1];
-  }
-
-  if (joyL != prevJoyL) {
-    d_printf("SEGA L: %u", joyL); d_println();
-    on_keyboard();
-    prevJoyL = joyL;
-    spi_send(CMD_JOYSTICK, 0, lowByte(joyL));
-    spi_send(CMD_JOYSTICK, 1, highByte(joyL));
-  }
-  if (joyR != prevJoyR) {
-    d_printf("SEGA R: %u", joyR); d_println();
-    on_keyboard();
-    prevJoyR = joyR;
-    spi_send(CMD_JOYSTICK, 2, lowByte(joyR));
-    spi_send(CMD_JOYSTICK, 3, highByte(joyR));
-  }
-
-  // use repeat state to fire on_keyboard event for osd repeating navigation
-  if (is_osd && kb_repeat_key && kb_repeat_state && !prev_kb_repeat_state) {
-    on_keyboard();
-  }
-  prev_kb_repeat_state = kb_repeat_state;
+  input_tick_buttons(btn1, btn2);
+  input_tick_joysticks();
+  input_tick_repeat();
 
   osd_handle(false);
 
-  queue_spi_t packet;
-	while (queue_try_remove(&spi_event_queue, &packet)) {
-    // skip keyboard transmission when osd is active
-    if (packet.cmd == CMD_USB_KBD) {
-#if HW_ID==HW_ID_GO
-      if (has_extender) extender.digitalWrite(PIN_EXT_LED2, !(usb_keyboard_report.modifier != 0 || usb_keyboard_report.keycode[0] != 0));
-#elif HW_ID==HW_ID_MINI || HW_ID==HW_ID_MINIG
-      digitalWrite(PIN_LED2, !(usb_keyboard_report.modifier != 0 || usb_keyboard_report.keycode[0] != 0));
-#endif
-      if (packet.addr == 1 && packet.data != 0) {
-          on_keyboard();
-      }
-      if (!is_osd) {
-        spi_send(packet.cmd, packet.addr, packet.data);
-      }
-    // skip ps/2 scancode transmission when osd is active
-    } else if (packet.cmd == CMD_PS2_SCANCODE) {
-      if (!is_osd) {
-        spi_send(packet.cmd, packet.addr, packet.data);
-      }
-    // skip joystick transmission when osd is active
-    } else if (packet.cmd == CMD_JOYSTICK) {
-      if (!is_osd) {
-        spi_send(packet.cmd, packet.addr, packet.data);
-      }
-    }
-    else {
-      spi_send(packet.cmd, packet.addr, packet.data);
-    }
-  }
+  link_report_drops();
+  link_dispatch_pending();
+  input_drain_events();
 
-  if (Serial.available() > 0) {
-    // receive at least on the serial_speed
-    unsigned long uart_rx_delay = 30 * 1e6 / serial_speed;
-    if (micros() - uart_rx_last >= uart_rx_delay) {
-      uart_idx++;
-      uart_rx_last = micros();
-      int uart_rx = Serial.read();
-      if (uart_rx != -1) {
-        spi_send(CMD_UART, uart_idx, (uint8_t) uart_rx);
-      }
-    }
-  }
+  serial_bridge_tick();
 
   // send byte from esp tx fifo
   esp_serial.handle();
 
-  // test
-  //if (esp_serial.available()) {
-  //  Serial.write(esp_serial.read());
-  //}
+  // let the fpga talk even when nothing else was sent
+  link_poll();
 
-  if (core.type == CORE_TYPE_BOOT && has_ft == true && is_osd == true) {
-    // todo: playSound
-    // todo: timer
-  }
-
-  if (has_matrix && matrix_timer.elapsed() >= 20) {
-    matrix_timer.reset();
-
-    switch (matrix_mode) {
-      case MATRIX_MODE_AUDIO:
-        matrix_draw_audio();
-        break;
-      case MATRIX_MODE_SCROLL:
-        if (matrix_scroll_timer.elapsed() >= 100) {
-          matrix_scroll_timer.reset();
-          matrix_scroll_text();
-        }
-        break;
-    }
-
-    static bool prev_matrix_btn1 = false;
-    static bool prev_matrix_btn2 = false;
-    static bool prev_matrix_btn3 = false;
-    static bool prev_matrix_btn4 = false;
-
-    // poll HT16k33 for buttons
-    if (matrix_poll_timer.elapsed() >= 100) {
-      matrix_poll_timer.reset();
-      uint8_t matrix_btns = matrix.readKeys();
-      bool matrix_btn1 = bitRead(matrix_btns, 0);
-      bool matrix_btn2 = bitRead(matrix_btns, 1);
-      bool matrix_btn3 = bitRead(matrix_btns, 2);
-      bool matrix_btn4 = bitRead(matrix_btns, 3);
-      if (prev_matrix_btn1 != matrix_btn1) {
-        d_print("Matrix Button 1: "); d_println((matrix_btn1) ? "on" : "off");
-        prev_matrix_btn1 = matrix_btn1;
-        spi_send(CMD_MATRIX_BTN, 0, matrix_btn1);
-      }
-      if (prev_matrix_btn2 != matrix_btn2) {
-        d_print("Matrix Button 2: "); d_println((matrix_btn2) ? "on" : "off");
-        prev_matrix_btn2 = matrix_btn2;
-        spi_send(CMD_MATRIX_BTN, 1, matrix_btn2);
-      }
-      if (prev_matrix_btn3 != matrix_btn3) {
-        d_print("Matrix Button 3: "); d_println((matrix_btn3) ? "on" : "off");
-        prev_matrix_btn3 = matrix_btn3;
-        spi_send(CMD_MATRIX_BTN, 2, matrix_btn3);
-      }
-      if (prev_matrix_btn4 != matrix_btn4) {
-        d_print("Matrix Button 4: "); d_println((matrix_btn4) ? "on" : "off");
-        prev_matrix_btn4 = matrix_btn4;
-        spi_send(CMD_MATRIX_BTN, 3, matrix_btn4);
-      }
-    }
-  }
-
-  if (has_oled && oled_timer.elapsed() >= 20) {
-    oled_timer.reset();
-    if (oled_scrollpos >= -112) {
-      oled_scrollpos--;
-    } else {
-      oled_scrollpos = 128;
-    }
-    oled.clearDisplay();
-    oled.drawBitmap(oled_scrollpos, 0, logoBw, 112, 32, WHITE); // karabas go logo 112x32 bw
-    oled.display(); // show default adafruit buffer
-  }
-
+  // LED matrix, OLED (own task under FreeRTOS)
+  periph_tick();
 }
 
-void loop1()
+// usb host loop, runs on core1
+static void usb_host_loop()
 {
+  diag_loop_core1();
   tuh_task();
 }
 
-void do_configure(const char* filename) {
-  matrix_mode = MATRIX_MODE_AUDIO;
-  if (has_matrix) {
-    matrix.clear();
-    matrix.writeDisplay();
-  }
-  is_configuring = true;
-  ft.vga(false); // FT off
-  ft.spi(false);
-  kb_reset(); // reset to ps/2 defaults
+#ifdef __FREERTOS
 
-  fpga_send(filename);
-  spi_send(CMD_INIT_START, 0, 0);
-  spi_send(CMD_HW_SETUP, 0, HW_ID); // hw id
-  spi_send(CMD_HW_SETUP, 1, hw_setup.dvi_only); // dvi only flag
-  // trigger font loader reset
-  zxosd.fontReset();
-  // send font data
-  for (int i=0; i<OSD_FONT_SIZE; i++) {
-    zxosd.fontSend(osd_font[i]);
-  }
-  read_core(filename);
-  if (!is_osd) {
-    zxosd.clear();
-    zxosd.logo(0,0, HW_ID);
-    zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-    zxosd.setPos(0,5);
-    zxosd.print("ROM ");
-    zxosd.update();
-    zxosd.showPopup();
-  }
-  read_roms(filename);
-  if (!is_osd) {
-    zxosd.hidePopup();
-    osd_handle(true); // reinit osd
-  }
-  for (uint8_t i=0; i<6; i++) { // cleanup kbd
-    spi_queue(CMD_USB_KBD, i, 0);
-  }
-  spi_send(CMD_INIT_DONE, 0, 0);
-  queue_locked = false;
-  is_flashboot = false;
-  is_configuring = false;
+// FreeRTOS build (envs go / mini / minig): the firmware and the usb host run in their own pinned tasks.
+// The framework's CORE0 task (4 KB stack) only creates them; setup1/loop1 are not defined,
+// so the framework does not start its own CORE1 task.
 
-  // reinit matrix
-  if (has_matrix) {
-    matrix_init();
-    matrix.clear();
-    matrix.writeDisplay();
-    matrix_mode = (core.type == CORE_TYPE_BOOT) ? MATRIX_MODE_SCROLL : MATRIX_MODE_AUDIO;
-    audio_l = 32000;
-    audio_r = 32000;
-  }
-}
-
-bool on_global_hotkeys() {
-  
-  // menu+esc (joy start+c) to toggle osd only for osd supported cores
-  if (core.type != CORE_TYPE_BOOT && core.type != CORE_TYPE_HIDDEN && 
-      ((((usb_keyboard_report.modifier & KEY_MOD_LMETA) || (usb_keyboard_report.modifier & KEY_MOD_RMETA)) && usb_keyboard_report.keycode[0] == KEY_ESC) ||
-       ((joyL & SC_BTN_START) && (joyL & SC_BTN_C)) ||
-       ((joyR & SC_BTN_START) && (joyR & SC_BTN_C))
-      )
-    ) {
-    if (!is_osd) {
-      is_osd = true;
-      zxosd.showMenu();
-    } else if (!is_osd_hiding) {
-      is_osd_hiding = true;
-      hide_timer.reset();
-      zxosd.hideMenu();
-    }
-    return true;
-  }
-
-  // ctrl+alt+backspace (joy start+x) to global reset rp2040
-  if (
-      (((usb_keyboard_report.modifier & KEY_MOD_LCTRL) || (usb_keyboard_report.modifier & KEY_MOD_RCTRL)) && 
-      ((usb_keyboard_report.modifier & KEY_MOD_LALT) || (usb_keyboard_report.modifier & KEY_MOD_RALT)) && 
-        usb_keyboard_report.keycode[0] == KEY_BACKSPACE) || 
-        (((joyL & SC_BTN_START) && (joyL & SC_BTN_X))) ||
-        (((joyR & SC_BTN_START) && (joyR & SC_BTN_X)))
-        ) {
-     rp2040.reboot();
-     return true;
-  }
-
-  // osd hotkey
-  for (uint8_t i=0; i<core.osd_len; i++) {
-    if (core.osd[i].keys[0] != 0 && (usb_keyboard_report.modifier & core.osd[i].keys[0]) || (core.osd[i].keys[0] == 0)) {
-      if (core.osd[i].keys[1] != 0 && (usb_keyboard_report.keycode[0] == core.osd[i].keys[1])) {
-        if (core.osd[i].type == CORE_OSD_TYPE_SWITCH || core.osd[i].type == CORE_OSD_TYPE_NSWITCH) {
-          if (core.osd[i].options_len > 0) {
-            curr_osd_item = i;
-            core.osd[i].val++; 
-            if (core.osd[i].val > core.osd[i].options_len-1) {
-              core.osd[i].val = 0;
-            }
-            core_send(i);
-            if (!is_osd) {
-              zxosd.clear();
-              zxosd.logo(0, 0, HW_ID);
-              zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-              zxosd.setPos(0, 5);
-              zxosd.print(core.osd[i].name);
-              zxosd.setPos(0,6);
-              zxosd.print(core.osd[i].options[core.osd[i].val].name);
-              zxosd.update();
-              is_popup_hiding = true;
-              popup_timer.reset();
-              zxosd.showPopup(i);
-            }
-            if (core.osd[i].type == CORE_OSD_TYPE_SWITCH) {
-              core.osd_need_save = true;
-            }
-          }
-        } else if (core.osd[i].type == CORE_OSD_TYPE_TRIGGER) {
-            core_trigger(i);
-        } else if (core.osd[i].type == CORE_OSD_TYPE_FILELOADER || core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER) {
-          is_osd = true;
-          curr_osd_item = i;
-          zxosd.showMenu();
-        }
-        return true;
-      }
-    }
-  }
-
-  if (core.osd_need_save) {
-    app_core_save(curr_osd_item);
-  }
-
-  return false;
-}
-
-void on_keyboard() {
-
-  need_redraw = on_global_hotkeys();
-
-  // in-osd keyboard handle
-  if (is_osd) {
-    switch (osd_state) {
-      case state_core_browser: app_core_browser_on_keyboard(); break;
-      case state_main: app_core_on_keyboard(); break;
-      case state_file_loader: app_file_loader_on_keyboard(); break;
-      case state_setup: app_setup_on_keyboard(); break;
-      case state_about: app_about_on_keyboard(); break;
-    }
-  }
-}
-
-void core_send(uint8_t pos)
-{
-  if (core.osd[pos].type == CORE_OSD_TYPE_FILEMOUNTER) {
-      // todo
-      //spi_send(CMD_SWITCHES, pos, (file_slots[core.osd[pos].slot_id].is_mounted) ? 1 : 0);
-      //d_printf("File mounter: %s %d", core.osd[pos].name, file_slots[core.osd[pos].slot_id].is_mounted);
-  } else if (core.osd[pos].type == CORE_OSD_TYPE_FILELOADER) {
-    // do nothing
-  } else {
-    spi_send(CMD_SWITCHES, pos, core.osd[pos].val);
-    d_printf("Switch: %s %d", core.osd[pos].name, core.osd[pos].val);
-  }
-  d_println();
-}
-
-void core_send_all() 
-{
-  for (uint8_t i=0; i<core.osd_len; i++) {
-    if (core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER) {
-      // todo
-      //spi_send(CMD_SWITCHES, i, (file_slots[core.osd[i].slot_id].is_mounted) ? 1 : 0);
-    } else if (core.osd[i].type == CORE_OSD_TYPE_FILELOADER) {
-      // do nothing
-    } else {
-      spi_send(CMD_SWITCHES, i, core.osd[i].val);
-    }
-  }
-}
-
-void core_trigger(uint8_t pos)
-{
-  d_printf("Trigger: %s", core.osd[pos].name);
-  d_println();
-
-  // reset FT812 on soft reset
-  // todo: replace hardcode with something else
-  if (memcmp(core.osd[pos].name, "Rese", 4) == 0) {
-    d_println("Reset FT812");
-    ft.reset();
-// reset ESP and MIDI ot soft reset for mini revG
-#if HW_ID==HW_ID_MINIG
-    digitalWrite(PIN_MIDI_RESET, LOW);
-    digitalWrite(PIN_ESP_RESET, LOW);
-    delay(50);
-    digitalWrite(PIN_MIDI_RESET, HIGH);
-    digitalWrite(PIN_ESP_RESET, HIGH);
+#ifndef APP_TASK_STACK
+#define APP_TASK_STACK 4096 // words
 #endif
-    delay(100);
+#ifndef USB_TASK_STACK
+#define USB_TASK_STACK 2048 // words
+#endif
+#define APP_TASK_PRIORITY (configMAX_PRIORITIES / 2)
+#define USB_TASK_PRIORITY (configMAX_PRIORITIES - 2) // above everything but the framework's flash idle tasks
+
+static void app_task(void *param) {
+  // incoming fpga commands are handled here, also when another task received them
+  link_set_dispatch_task(xTaskGetCurrentTaskHandle());
+  // and only this task writes to the usb serial port
+  debug_set_owner_task(xTaskGetCurrentTaskHandle());
+  // let PIO-USB claim its PIO memory, state machines and DMA channel first:
+  // the SD card driver (PioSPI) would otherwise take PIO memory that the usb rx programs need
+  ElapsedTimer wait;
+  while (!usb_host_ready && wait.elapsed() < 2000) { delay(1); }
+  karabas_setup();
+  // usb / ps2 / joystick events are forwarded by their own task from now on
+  input_task_start();
+  // LED matrix and OLED too
+  periph_task_start();
+  // no yield here: every scheduler call takes the SMP kernel lock with interrupts off,
+  // which could delay the PIO-USB SOF interrupt on core1
+  for (;;) {
+    karabas_loop();
   }
-
-  spi_send(CMD_SWITCHES, pos, 1);
-  delay(100);
-  spi_send(CMD_SWITCHES, pos, 0);
 }
 
-uint8_t core_eeprom_get(uint8_t pos) {
-  return core.eeprom[pos].val;
+static void usb_task(void *param) {
+  usb_host_setup();
+  for (;;) {
+    usb_host_loop();
+  }
 }
 
-void core_eeprom_set(uint8_t pos, uint8_t val) {
-  core.eeprom[pos].val = val;
-  core.eeprom_need_save = true;
+void setup() {
+  link_os_init();
+  i2c_bus_init();
+  // tasks must be created already pinned: the USB task has a higher priority than the
+  // framework's CORE0 task running this code, so it starts immediately on creation.
+  // Unpinned, it could start on core0 and starve CORE0 forever (it never blocks),
+  // and PIO-USB would set up its SOF timer on the wrong core.
+  if (xTaskCreateAffinitySet(usb_task, "USB", USB_TASK_STACK, nullptr, USB_TASK_PRIORITY, 1 << 1, nullptr) != pdPASS) {
+    panic("Unable to create USB task");
+  }
+  if (xTaskCreateAffinitySet(app_task, "APP", APP_TASK_STACK, nullptr, APP_TASK_PRIORITY, 1 << 0, nullptr) != pdPASS) {
+    panic("Unable to create APP task");
+  }
 }
+
+void loop() {
+  vTaskDelay(portMAX_DELAY);
+}
+
+#else
+
+void setup() { karabas_setup(); }
+void loop() { karabas_loop(); }
+void setup1() { usb_host_setup(); }
+void loop1() { usb_host_loop(); }
+
+#endif
 
 void halt(const char* msg) {
   d_println(msg);
@@ -844,905 +319,3 @@ void halt(const char* msg) {
   }
   rp2040.reboot();
 }
-
-uint32_t fpga_send(const char* filename) {
-
-  d_print("Configuring FPGA by "); d_println(filename);
-
-  sd1.chvol();
-  if (!file1.open(filename, FILE_READ)) {
-    halt("Unable to open bitstream file to read");
-  }
-
-  // get bitstream size
-  uint32_t length = file_read32(FILE_POS_BITSTREAM_LEN);
-  d_print("Bitstream size: "); d_println(length, DEC);
-
-  // seek to bitstream start
-  file_seek(FILE_POS_BITSTREAM_START);
-
-  pinMode(PIN_CONF_CLK, OUTPUT);
-  pinMode(PIN_CONF_IO1, OUTPUT);
-
-  pinMode(PIN_CONF_CLK, OUTPUT);
-  pinMode(PIN_CONF_IO1, OUTPUT);
-
-  // pulse PROG_B
-  digitalWrite(PIN_CONF_PRG_B, HIGH);
-  digitalWrite(PIN_CONF_PRG_B, LOW);
-  digitalWrite(PIN_CONF_PRG_B, HIGH);
-
-  // wait for INIT_B = 0
-  delay(10);
-
-  my_timer.reset();
-
-  int i = 0;
-  bool blink = false;
-  char line[128];
-  uint8_t n;
-
-  digitalWrite(PIN_CONF_CLK, LOW);
-
-  while ((n = file_read_buf(line, (sizeof(line) < length ? sizeof(line) : length) ))) {
-    i += n;
-    length -=n;
-
-    for (uint8_t s=0; s<n; s++) {
-      uint8_t c = line[s];
-      for (uint8_t j=0; j<8; ++j) {
-        // Set bit of data
-        gpio_put(PIN_CONF_IO1, (c & (1<<(7-j))) ? HIGH : LOW);
-        // Latch bit of data by CCLK impulse
-        gpio_put(PIN_CONF_CLK, HIGH);
-        gpio_put(PIN_CONF_CLK, LOW);
-      }
-    }
-
-    if ((i % 8192 == 0) || (i == length-1)) {
-      blink = !blink;
-      led_write(0, blink);
-      led_write(1, blink);
-      if (has_matrix) {
-        matrix.drawLine(0, 0, map(i, 0, length, 0, 15), 0, LED_GREEN);
-        matrix.drawLine(0, 1, map(i, 0, length, 0, 15), 1, LED_GREEN);
-        matrix.writeDisplay();
-      }
-    }
-  }
-  file1.close();
-
-  pinMode(PIN_CONF_CLK, INPUT);
-  pinMode(PIN_CONF_IO1, INPUT);
-
-  pinMode(PIN_CONF_CLK, INPUT);
-  pinMode(PIN_CONF_IO1, INPUT);
-
-  d_print(i, DEC); d_println(" bytes done");
-  d_print("Elapsed time: "); d_print(my_timer.elapsed(), DEC); d_println(" ms");
-  d_flush();
-
-  d_print("Waiting for CONF_DONE... ");
-  while(digitalRead(PIN_CONF_DONE) == LOW) {
-    delay(10);
-  }
-  d_println("Done");
-
-  return length;
-}
-
-void spi_queue(uint8_t cmd, uint8_t addr, uint8_t data) {
-  queue_spi_t packet;
-  packet.cmd = cmd;
-  packet.addr = addr;
-  packet.data = data;
-  if (!queue_locked)
-    queue_try_add(&spi_event_queue, &packet);
-}
-
-void spi_send(uint8_t cmd, uint8_t addr, uint8_t data) {
-  // use default (16 MHz) or custom spi freq from the core config
-  SPISettings spi_settings = (core.spi_freq == 0 || core.spi_freq == 255) ? settingsA : SPISettings(SD_SCK_MHZ(core.spi_freq), MSBFIRST, SPI_MODE0);
-  SPI.beginTransaction(spi_settings);
-  gpio_put(PIN_MCU_SPI_CS, LOW);
-  uint8_t rx_cmd = SPI.transfer(cmd);
-  uint8_t rx_addr = SPI.transfer(addr);
-  uint8_t rx_data = SPI.transfer(data);
-  gpio_put(PIN_MCU_SPI_CS, HIGH);
-  SPI.endTransaction();
-  if ((rx_cmd > 0) && !is_configuring) {
-    process_in_cmd(rx_cmd, rx_addr, rx_data);
-  }
-}
-
-void spi_send16(uint8_t cmd, uint16_t data) {
-  uint8_t byte2 = (uint8_t)((data & 0xFF00) >> 8);
-  uint8_t byte1 = (uint8_t)((data & 0x00FF));
-  spi_send(cmd, 0, byte1);
-  spi_send(cmd, 1, byte2);
-}
-
-void spi_send24(uint8_t cmd, uint32_t data) {
-  uint8_t byte3 = (uint8_t)((data & 0x00FF0000) >> 16);
-  uint8_t byte2 = (uint8_t)((data & 0x0000FF00) >> 8);
-  uint8_t byte1 = (uint8_t)((data & 0x000000FF));
-  spi_send(cmd, 0, byte1);
-  spi_send(cmd, 1, byte2);
-  spi_send(cmd, 2, byte3);
-}
-
-void spi_send32(uint8_t cmd, uint32_t data) {
-  uint8_t byte4 = (uint8_t)((data & 0xFF000000) >> 24);
-  uint8_t byte3 = (uint8_t)((data & 0x00FF0000) >> 16);
-  uint8_t byte2 = (uint8_t)((data & 0x0000FF00) >> 8);
-  uint8_t byte1 = (uint8_t)((data & 0x000000FF));
-  spi_send(cmd, 0, byte1);
-  spi_send(cmd, 1, byte2);
-  spi_send(cmd, 2, byte3);
-  spi_send(cmd, 3, byte4);
-}
-
-void spi_send64(uint8_t cmd, uint64_t data) {
-  uint8_t byte8 = (uint8_t)((data & 0xFF00000000000000) >> 56);
-  uint8_t byte7 = (uint8_t)((data & 0x00FF000000000000) >> 48);
-  uint8_t byte6 = (uint8_t)((data & 0x0000FF0000000000) >> 40);
-  uint8_t byte5 = (uint8_t)((data & 0x000000FF00000000) >> 32);
-  uint8_t byte4 = (uint8_t)((data & 0x00000000FF000000) >> 24);
-  uint8_t byte3 = (uint8_t)((data & 0x0000000000FF0000) >> 16);
-  uint8_t byte2 = (uint8_t)((data & 0x000000000000FF00) >> 8);
-  uint8_t byte1 = (uint8_t)((data & 0x00000000000000FF));
-  spi_send(cmd, 0, byte1);
-  spi_send(cmd, 1, byte2);
-  spi_send(cmd, 2, byte3);
-  spi_send(cmd, 3, byte4);
-  spi_send(cmd, 4, byte5);
-  spi_send(cmd, 5, byte6);
-  spi_send(cmd, 6, byte7);
-  spi_send(cmd, 7, byte8);
-}
-
-void flashboot (uint8_t data) {
-  if (is_flashboot) return; // skip already in flashboot mode
-  uint8_t flashboot_coreid = data;
-  d_printf("Flashboot core id: %02x", data); d_println();
-  d_flush(); delay(100);
-  // todo: add flashboot_id to the core structure, search for desired id and boot it
-  // now it's implemented as hack: reload the same core (required for zx next hard reset)
-  // d_printf("Core id %s", core.id); d_println();
-  // d_printf("Core filename %s", core.filename); d_println();
-  //String f = String(core.filename); f.trim(); 
-  //d_printf("Loading core %s", f); d_println();
-  //char buf[33]; f.toCharArray(buf, sizeof(buf));
-  String id = String(core.id); id.trim();
-  if (id.compareTo("zxnext") == 0) { // allow flashboot only for zxnext core
-    is_flashboot = true;
-    do_configure(core.filename);
-  }
-}
-
-void serial_set_speed(uint8_t dll, uint8_t dlm) {
-  uint32_t speed = 0;
-  if (dll == 0 && dlm == 0) {
-    speed = 256000; // zx evo special case
-  } else if (bitRead(dlm, 7) == 1) {
-    // native atmega mode
-    dlm = bitClear(dlm, 7);
-    // (uint16)((DLM&0x7F)*256+DLL) = (691200/<скорость в бодах>)-1 
-    speed = 691200 / ((dlm*256) + dll + 1);
-  } else {
-    // standard mode
-    speed = 115200 / ((dlm*256) + dll);
-  }
-  // switch serial spseed
-  if (serial_speed != speed) {
-    serial_speed = speed;
-    Serial.end();
-    Serial.begin(speed);
-  }
-}
-
-void serial_data(uint8_t addr, uint8_t data) {
-    if (addr == 0) {
-      // ts zifi 115200
-      if (serial_speed != 115200) {
-        serial_speed = 115200;
-        Serial.end();
-        Serial.begin(serial_speed);
-      }
-      Serial.write(data);
-    } else if (addr == 1) {
-      // evo rs232 dll
-      evo_rs232_dll = data;
-      serial_set_speed(evo_rs232_dll, evo_rs232_dlm);
-    } else if (addr == 2) {
-      // evo rs232 set dlm
-      evo_rs232_dlm = data;
-      serial_set_speed(evo_rs232_dll, evo_rs232_dlm);
-    } else if (addr == 3) {
-      // evo rs232 data
-      Serial.write(data);
-    }
-}
-
-void matrix_ctl_data(uint8_t addr, uint8_t data) {
-  if (has_matrix) {
-    if (bitRead(data, 0)) matrix.clear(); 
-    if (bitRead(data, 1)) matrix.writeDisplay();
-    if (bitRead(data, 2)) matrix.setBrightness(data >> 4);
-    if (bitRead(data, 3) && matrix_mode == MATRIX_MODE_DRAW) {
-      matrix_mode = MATRIX_MODE_AUDIO;
-      matrix.clear();
-      matrix.writeDisplay();
-    }
-    if (!bitRead(data, 3) && matrix_mode == MATRIX_MODE_AUDIO) {
-      matrix_mode = MATRIX_MODE_DRAW;
-      matrix.clear();
-      matrix.writeDisplay();
-    }
-  }
-}
-
-void matrix_pixel_data(uint8_t x, uint8_t y, uint8_t color) {
-  if (has_matrix) {
-    matrix.drawPixel(x, y, color);
-  }
-}
-
-void matrix_bitplan_data(uint8_t addr, uint8_t data) {
-  if (has_matrix) {
-    // todo:
-    // addr 0-7:   matrix1, red
-    // addr 8-15:  matrix1, green
-    // addr 16-23: matrix2, red
-    // addr 24-31: matrix2, green
-    //matrix.drawBitmap()
-  }
-}
-
-uint8_t led_bar(uint16_t val) {
-  uint16_t values[16] = {20000, 16000, 10000, 8000, 6500, 5000, 3500, 3000, 2000, 1500, 1000, 750, 600, 500, 350, 200};
-  for (uint8_t i=0; i<=15; i++) {
-    if (val >= values[i]) 
-      return constrain(16-i, 1, 16);
-  }
-  return 0;
-}
-
-void matrix_draw_bar(uint8_t y, uint8_t val) {
-  if (val > 0) {
-    for (uint8_t x=0; x<=15; x++) {
-      if (val >= x) {
-          matrix.drawPixel(x, y, (x > 14) ? LED_RED : (x > 12) ? LED_YELLOW : LED_GREEN);
-      }
-    }
-  }
-}
-
-void matrix_draw_audio() {
-  matrix.clear();
-  uint8_t l = led_bar(audio_l);
-  uint8_t r = led_bar(audio_r);
-  matrix_draw_bar(1, l);
-  matrix_draw_bar(2, l);
-  matrix_draw_bar(5, r);
-  matrix_draw_bar(6, r);
-  matrix.writeDisplay();
-  
-  // decay
-  uint16_t decay_l = audio_l >> 4;
-  uint16_t decay_r = audio_r >> 4;
-  audio_l = (audio_l > decay_l) ? audio_l - decay_l : 0;
-  audio_r = (audio_r > decay_r) ? audio_r - decay_r : 0;
-}
-
-void matrix_scroll_text()
-{
-  matrix.clear();
-  matrix.setCursor(matrix_msg_scrollpos, 0);
-  matrix.print(matrix_msg);
-  matrix.writeDisplay();
-  if (matrix_msg_scrollpos >= -matrix_msg_width) {
-    matrix_msg_scrollpos--;
-  } else {
-    matrix_msg_scrollpos = 16;
-  }
-}
-
-void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data) {
-
-  uint16_t new_audio = 0;
-
-  switch(cmd) {
-    case CMD_FLASHBOOT: flashboot(data); break;
-    case CMD_UART: serial_data(addr, data); break;
-    case CMD_ESP_UART: esp_serial.rx_queue_push(data); break;
-    case CMD_RTC: zxrtc.setData(addr, data); break;
-    case CMD_PS2_SCANCODE: ps2_command_receive(addr, data); break;
-    case CMD_DEBUG_ADDRESS: debug_address = addr*256+data; break;
-    case CMD_DEBUG_DATA: debug_data = addr*256+data; break;
-    case CMD_MATRIX_CTL: matrix_ctl_data(addr, data); break;
-    case CMD_MATRIX_PIXEL: matrix_mode = MATRIX_MODE_DRAW; matrix_pixel_data(addr & 0x0F, addr >> 4, data & 0x03); break;
-    case CMD_MATRIX_BITPLAN: matrix_mode = MATRIX_MODE_DRAW; matrix_bitplan_data(addr & 0x1F, data); break;
-    case CMD_AUDIO_PEAKS_L: new_audio = ((uint16_t)(addr) << 8) | (uint16_t)data; if (new_audio > audio_l) audio_l = new_audio; break;
-    case CMD_AUDIO_PEAKS_R: new_audio = ((uint16_t)(addr) << 8) | (uint16_t)data; if (new_audio > audio_r) audio_r = new_audio; break;
-    case CMD_NOP: break;
-  }
-
-  if (prev_debug_address != debug_address) {
-    prev_debug_address = debug_address;
-    d_printf("Debug Address: %04x", debug_address); d_println();
-  }
-  if (prev_debug_data != debug_data) {
-    prev_debug_data = debug_data;
-    d_printf("Debug Data: %04x", debug_data); d_println();
-  }
-}
-
-void print_time() {
-  zxosd.setPos(24, 0);
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  static bool dots_blink = !dots_blink;
-  String dots = String(dots_blink ? ':' : ' ');
-  uint8_t h = zxrtc.getHour();
-  uint8_t m = zxrtc.getMinute();
-  uint8_t s = zxrtc.getSecond();
-  if (h < 10) zxosd.print(0); zxosd.print(h);
-  if (dots_blink) zxosd.print(":"); else zxosd.print(" ");
-  if (m < 10) zxosd.print(0); zxosd.print(m);
-  if (dots_blink) zxosd.print(":"); else zxosd.print(" ");
-  if (s < 10) zxosd.print(0); zxosd.print(s);
-
-  zxosd.setPos(24, 1);
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  uint8_t d = zxrtc.getDay();
-  uint8_t mo = zxrtc.getMonth();
-  uint8_t y = zxrtc.getYear();
-  if (d < 10) zxosd.print(0); zxosd.print(d); zxosd.print("/");
-  if (mo < 10) zxosd.print(0); zxosd.print(mo); zxosd.print("/");
-  if (y < 10) zxosd.print(0); zxosd.print(y);
-}
-
-void on_time() {
-  print_time();
-  zxosd.update();
-
-  // on time callback
-  app_core_browser_on_time();
-  app_setup_on_time();
-
-  if (core.type == CORE_TYPE_BOOT && has_ft == true && is_osd == true) {
-    // redraw core browser
-    app_core_browser_ft_menu(0);
-  }
-}
-
-void read_core(const char* filename) {
-
-  sd1.chvol();
-  if (!file1.open(filename, FILE_READ)) {
-    halt("Unable to open bitstream file to read");
-  }
-
-  core.flash = false;
-  file1.getName(core.filename, sizeof(core.filename));
-  core.filename[32] = '\0';
-  file_seek(FILE_POS_CORE_NAME); file_read_bytes(core.name, 32); core.name[32] = '\0';
-  uint8_t visible; file_seek(FILE_POS_CORE_VISIBLE); visible = file_read(); core.visible = (visible > 0);
-  file_seek(FILE_POS_CORE_ORDER); core.order = file_read();
-  file_seek(FILE_POS_CORE_TYPE); core.type = file_read();
-  // show OSD on boot (only for boot and fileloader cores)
-  is_osd = false;
-  switch (core.type) {
-    case CORE_TYPE_BOOT: is_osd = true; break;
-    case CORE_TYPE_OSD: is_osd = false; break;
-    case CORE_TYPE_FILELOADER: is_osd = true; break;
-    default: is_osd = false;
-  }  
-  d_print("Core type: ");
-  switch (core.type) {
-    case CORE_TYPE_BOOT: d_println("Boot"); break;
-    case CORE_TYPE_OSD: d_println("Normal"); break;
-    case CORE_TYPE_FILELOADER: d_println("Fileloader"); break;
-    case CORE_TYPE_HIDDEN: d_println("Hidden"); break;
-    default: d_println("Reserved");
-  }
-  core.bitstream_length = file_read32(FILE_POS_BITSTREAM_LEN);
-  file_seek(FILE_POS_CORE_ID); file_read_bytes(core.id, 32); core.id[32] = '\0';
-  file_seek(FILE_POS_CORE_BUILD); file_read_bytes(core.build, 8); core.build[8] = '\0';
-  file_seek(FILE_POS_CORE_EEPROM_BANK); core.eeprom_bank = file_read();
-  file_seek(FILE_POS_RTC_TYPE); core.rtc_type = file_read();
-  file_seek(FILE_POS_FILELOADER_DIR); file_read_bytes(core.dir, 32); core.dir[32] = '\0';
-  file_seek(FILE_POS_FILELOADER_FILE); core.last_file_id = file_read16(FILE_POS_FILELOADER_FILE);
-  file_seek(FILE_POS_FILELOADER_EXTENSIONS); file_read_bytes(core.file_extensions, 32); core.file_extensions[32] = '\0';
-  file_seek(FILE_POS_SPI_FREQ); core.spi_freq = file_read();
-  uint32_t roms_len = file_read32(FILE_POS_ROM_LEN);
-  uint32_t offset = FILE_POS_BITSTREAM_START + core.bitstream_length + roms_len;
-  //d_print("OSD section: "); d_println(offset);
-  file_seek(offset); core.osd_len = file_read();
-  //d_print("OSD len: "); d_println(core.osd_len);
-
-  d_print("Core SPI Frequency: "); if (core.spi_freq > 0 && core.spi_freq < 255) { d_print(core.spi_freq); d_println(" MHz"); } else d_println("default");
-  
-  for (uint8_t i=0; i<MAX_FILE_SLOTS; i++) { file_slots[i].is_mounted = false; }
-
-  for (uint8_t i=0; i<core.osd_len; i++) {
-    core.osd[i].type = file_read();
-    file_read();
-    file_read_bytes(core.osd[i].name, 16); core.osd[i].name[16] = '\0';
-    core.osd[i].def = file_read();
-    core.osd[i].val = core.osd[i].def;
-    core.osd[i].prev_val = core.osd[i].def;
-
-    // filemounter osd type:
-    // loading initial dir, filename, extensions and trying to mount file, if any
-    if (core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[i].type == CORE_OSD_TYPE_FILELOADER) {
-      core.osd[i].options_len = 0;
-      core.osd[i].slot_id = file_read();
-      file_slots[core.osd[i].slot_id].is_autoload = bitRead(core.osd[i].slot_id, 7);
-      core.osd[i].slot_id = bitClear(core.osd[i].slot_id, 7);
-      file_slots[core.osd[i].slot_id].is_mounted = false;
-      file_read_bytes(file_slots[core.osd[i].slot_id].ext, 256); file_slots[core.osd[i].slot_id].ext[255] = '\0';
-      file_slots[core.osd[i].slot_id].offset_dir = file1.curPosition();
-      file_read_bytes(file_slots[core.osd[i].slot_id].dir, 256); file_slots[core.osd[i].slot_id].dir[255] = '\0';
-      String dir = String(file_slots[core.osd[i].slot_id].dir);
-      if (dir == "") { dir = "/"; }
-      if (dir.charAt(0) != '/') { dir = '/' + dir; }
-      dir.toCharArray(file_slots[core.osd[i].slot_id].dir, sizeof(file_slots[core.osd[i].slot_id].dir));
-      file_slots[core.osd[i].slot_id].offset_filename = file1.curPosition();
-      file_read_bytes(file_slots[core.osd[i].slot_id].filename, 256); file_slots[core.osd[i].slot_id].filename[255] = '\0';
-      String sfilename = String( file_slots[core.osd[i].slot_id].filename); sfilename.trim();
-      String sfullname = dir + "/" + sfilename; sfullname.trim();
-      if (sfilename.length() > 0 && sd1.exists(sfullname)) {
-        file_slots[core.osd[i].slot_id].is_mounted = true; //file_slots[core.osd[i].slot_id].file = sd1.open(sfullname, O_READ);
-        if (file_slots[core.osd[i].slot_id].is_autoload) {
-          // todo: autoload (spi commands to the host)
-          // todo: depends on type
-        }
-      }
-    }
-      // otherwise - reading options structure
-      else {
-      core.osd[i].options_len = file_read();
-      if (core.osd[i].options_len > 8) {
-        core.osd[i].options_len = 8; // something goes wrong
-      } 
-      for (uint8_t j=0; j<core.osd[i].options_len; j++) {
-        file_read_bytes(core.osd[i].options[j].name, 16); core.osd[i].options[j].name[16] = '\0';
-      }
-    }
-    file_read_bytes(core.osd[i].hotkey, 16); core.osd[i].hotkey[16] = '\0';
-    core.osd[i].keys[0] = file_read();
-    core.osd[i].keys[1] = file_read();
-    file_read(); // reserved
-    file_read(); 
-    file_read();
-  }
-
-  // read eeprom data from file (in case rombank = 4 and up)
-  // 255 means no eeprom allowed by core
-  if (core.eeprom_bank >= MAX_EEPROM_BANKS && core.eeprom_bank != NO_EEPROM_BANK) {
-    for (uint8_t i=0; i<255; i++) {
-      file_seek(FILE_POS_EEPROM_DATA + i);
-      core.eeprom[i].val = file_read();
-      core.eeprom[i].prev_val = core.eeprom[i].val;
-    }
-  }
-  zxrtc.setEepromBank(core.eeprom_bank);
-  zxrtc.setRtcType(core.rtc_type);
-  zxrtc.sendAll();
-
-  // read saved switches
-  for(uint8_t i=0; i<core.osd_len; i++) {
-    file_seek(FILE_POS_SWITCHES_DATA + i);
-    core.osd[i].val = file_read();
-    if (core.osd[i].val > core.osd[i].options_len-1) {
-      core.osd[i].val = core.osd[i].def;
-    }
-    core.osd[i].prev_val = core.osd[i].val;
-  }
-  core_send_all();
-
-  // re-send rtc registers
-  zxrtc.sendAll();
-
-  has_ft = false;
-
-  // hw ft reset for other cores types
-  if (core.type != CORE_TYPE_BOOT) {
-    ft.reset();
-  }
-
-  // reset ESP and MIDI on mini revG
-#if HW_ID==HW_ID_MINIG
-  digitalWrite(PIN_MIDI_RESET, LOW);
-  digitalWrite(PIN_ESP_RESET, LOW);
-  delay(50);
-  digitalWrite(PIN_MIDI_RESET, HIGH);
-  digitalWrite(PIN_ESP_RESET, HIGH);
-#endif
-
-  // boot core tries to use FT812 as osd handler
-  if (core.type == CORE_TYPE_BOOT && is_osd) {
-    if (hw_setup.ft_enabled) {
-      // space skip ft osd
-      if (usb_keyboard_report.keycode[0] == KEY_SPACE) {
-        d_println("Space pressed: skip FT81x detection, fallback to classic OSD");
-      } else {
-        ft.spi(true);
-        has_ft = ft.init(hw_setup.ft_video_mode);
-        if (has_ft) {
-          d_println("Found FT81x IC, switching to FT OSD");
-          ft.vga(true);
-        } else {
-          d_println("FT81x IC did not found");
-          ft.vga(false);
-          ft.spi(false);
-        }
-      }
-    }
-  }
-
-  // dump parsed OSD items
-  for(uint8_t i=0; i<core.osd_len; i++) {
-    d_printf("OSD %d: type: %d name: %s def: %d len: %d keys: [%d %d %d]", i, core.osd[i].type, core.osd[i].name, core.osd[i].def, core.osd[i].options_len, core.osd[i].keys[0], core.osd[i].keys[1], core.osd[i].keys[2]); 
-    d_println();
-    for (uint8_t j=0; j<core.osd[i].options_len; j++) {
-      d_print(core.osd[i].options[j].name); d_print(", "); 
-    } 
-    d_println();
-    d_print(core.osd[i].hotkey); d_println();
-  }
-
-  file1.close();
-
-  // mount slots
-  for(uint8_t i=0; i<core.osd_len; i++) {
-    if (core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER) {
-      String dir = String(file_slots[core.osd[i].slot_id].dir);
-      if (dir == "") { dir = "/"; }
-      if (dir.charAt(0) != '/') { dir = '/' + dir; }
-      dir.toCharArray(file_slots[core.osd[i].slot_id].dir, sizeof(file_slots[core.osd[i].slot_id].dir));
-      String sfilename = String( file_slots[core.osd[i].slot_id].filename);
-      String sfullname = dir + "/" + sfilename;
-      if (sfilename.length() > 0 && sd1.exists(sfullname)) {
-        // todo
-        //file_slots[core.osd[i].slot_id].is_mounted = file_slots[core.osd[i].slot_id].file = sd1.open(sfullname, O_READ);
-      }
-      core_send(i);
-    }
-  }
-
-  zxosd.hidePopup();
-  if (is_osd) {
-    zxosd.showMenu();
-  } else {
-    zxosd.hideMenu();
-  }
-
-  osd_handle(true);
-}
-
-void read_roms(const char* filename) {
-
-  sd1.chvol();
-  if (!file1.open(filename, FILE_READ)) {
-    halt("Unable to open bitstream file to read");
-  }
-
-  uint32_t bitstream_length = file_read32(FILE_POS_BITSTREAM_LEN);
-  uint32_t roms_len = file_read32(FILE_POS_ROM_LEN);
-  d_print("ROMS len "); d_println(roms_len);
-  if (roms_len > 0) {
-    spi_send(CMD_ROMLOADER, 0, 1);
-  }
-  uint32_t offset = 0;
-  uint32_t rom_idx = 0;
-  while (roms_len > 0) {
-    uint32_t rom_len = file_read32(FILE_POS_BITSTREAM_START + bitstream_length + offset);
-    bool rom_is_external = bitRead(rom_len, 31);
-    rom_len = bitClear(rom_len, 31);
-    uint32_t rom_addr = file_read32(FILE_POS_BITSTREAM_START + bitstream_length + offset + 4);
-    d_print("ROM #"); d_print(rom_idx); d_print(": addr="); d_print(rom_addr); d_print(", len="); d_println(rom_len);
-    if (rom_is_external) {
-      char rom_filename[256];
-      d_print("External ROM "); d_println(rom_filename);
-
-      // todo: read and send external rom from sd1
-      if (sd1.exists(rom_filename)) {
-        file2 = sd1.open(rom_filename, FILE_READ);
-        char buf[256];
-        int i=0;
-        while (int c = file2.read(buf, sizeof(buf))) {
-          for (int j=0; j<256; j++) {
-
-            uint32_t addr = rom_addr + i*256 + j;
-            uint8_t data = buf[j];
-
-            // send rombank address every 256 bytes
-              if (addr % 256 == 0) {
-                uint8_t rombank3 = (uint8_t)((addr & 0xFF000000) >> 24);
-                uint8_t rombank2 = (uint8_t)((addr & 0x00FF0000) >> 16);
-                uint8_t rombank1 = (uint8_t)((addr & 0x0000FF00) >> 8);
-                //d_printf("ROM bank %d %d %d", rombank1, rombank2, rombank3); d_println();
-                spi_send(CMD_ROMBANK, 0, rombank1);
-                spi_send(CMD_ROMBANK, 1, rombank2);
-                spi_send(CMD_ROMBANK, 2, rombank3);
-              }
-              // send lower 256 bytes
-              uint8_t romaddr = (uint8_t)((addr & 0x000000FF));
-              spi_send(CMD_ROMDATA, romaddr, data);
-
-          }
-          if (rom_len > 0) {
-            zxosd.setPos(4,5+rom_idx);
-            //uint8_t perc = ceil((float) i*256 * (100.0 / rom_len));
-            zxosd.print(rom_idx+1); zxosd.print(": ");
-            char b[40];
-            sprintf(b, "%05d", (i+1)*256); zxosd.print(b); zxosd.print(" ");
-            zxosd.update();
-          }
-          i++;
-        }
-        file2.close();
-      } else {
-        zxosd.setPos(4,5+rom_idx);
-        zxosd.print(rom_idx+1); zxosd.print(": ");
-        zxosd.print(" NO FILE");
-        zxosd.update();
-      }
-    } else {
-      for (uint32_t i=0; i<rom_len/256; i++) {
-        char buf[256];
-        int c = file_read_bytes(buf, sizeof(buf));
-        for (int j=0; j<256; j++) {
-
-          uint32_t addr = rom_addr + i*256 + j;
-          uint8_t data = buf[j];
-
-          // send rombank address every 256 bytes
-            if (addr % 256 == 0) {
-              uint8_t rombank3 = (uint8_t)((addr & 0xFF000000) >> 24);
-              uint8_t rombank2 = (uint8_t)((addr & 0x00FF0000) >> 16);
-              uint8_t rombank1 = (uint8_t)((addr & 0x0000FF00) >> 8);
-              //d_printf("ROM bank %d %d %d", rombank1, rombank2, rombank3); d_println();
-              spi_send(CMD_ROMBANK, 0, rombank1);
-              spi_send(CMD_ROMBANK, 1, rombank2);
-              spi_send(CMD_ROMBANK, 2, rombank3);
-            }
-            // send lower 256 bytes
-            uint8_t romaddr = (uint8_t)((addr & 0x000000FF));
-            spi_send(CMD_ROMDATA, romaddr, data);
-
-        }
-        if (rom_len > 0) {
-          zxosd.setPos(4,5+rom_idx);
-          //uint8_t perc = ceil((float) i*256 * (100.0 / rom_len));
-          zxosd.print(rom_idx+1); zxosd.print(": ");
-          char b[40];
-          sprintf(b, "%05d", (i+1)*256); zxosd.print(b); zxosd.print(" ");
-          zxosd.update();
-        }
-      }
-    }
-    offset = offset + rom_len + 8;
-    roms_len = roms_len - rom_len - 8;
-    rom_idx++;
-    if (roms_len > 0) {
-      // next rom
-      zxosd.setPos(0, 5+rom_idx);
-      zxosd.print("ROM ");
-      zxosd.update();
-    }
-  }
-  //delay(100);
-  spi_send(CMD_ROMLOADER, 0, 0);
-
-  file1.close();
-}
-
-void osd_handle(bool force) {
-  if (is_osd || force) {
-    if ((osd_prev_state != osd_state) || force) {
-      osd_prev_state = osd_state;
-      switch(osd_state) {
-        case state_core_browser:
-          if (hw_setup.ft_enabled && has_ft == true) {
-            app_core_browser_ft_overlay();
-          } else {
-            app_core_browser_overlay();
-          }
-        break;
-        case state_main:
-          app_core_overlay(true);
-        break;
-        case state_file_loader:
-          app_file_loader_overlay(true, false);
-        break;
-        case state_setup:
-          app_setup_overlay();
-        break;
-        case state_about:
-          app_about_overlay();
-        break;
-      }
-    }
-  }
-}
-
-bool btn_read(uint8_t num) {
-#if HW_ID == HW_ID_GO
-  if (num == 0) {
-    return !(has_extender ? extender.digitalRead(PIN_EXT_BTN1) : HIGH);
-  } else {
-    return !(has_extender ? extender.digitalRead(PIN_EXT_BTN2) : HIGH);
-  }
-#elif HW_ID == HW_ID_MINI || HW_ID == HW_ID_MINIG
-  if (num == 0) { 
-    return !digitalRead(PIN_BTN1);
-  } else {
-    return !digitalRead(PIN_BTN2);
-  }
-#endif
-}
-
-void led_write(uint8_t num, bool on) {
-#if HW_ID == HW_ID_GO
-  if (num == 0) {
-    extender.digitalWrite(PIN_EXT_LED1, !on);
-  } else {
-    extender.digitalWrite(PIN_EXT_LED2, !on);
-  }
-#elif HW_ID == HW_ID_MINI || HW_ID == HW_ID_MINIG
-  if (num == 0) { 
-    digitalWrite(PIN_LED1, !on);
-  } else {
-    digitalWrite(PIN_LED2, !on);
-  }
-#endif
-}
-
-void load_setup() {
-
-  const size_t bufferLen = 80;
-  char buffer[bufferLen];
-  IniFile ini("karabas.ini");
-  
-  // defaults
-  hw_setup.debug_enabled = false;
-  hw_setup.debug_hid = false;
-  hw_setup.ft_enabled = true;
-  hw_setup.ft_video_mode = 0;
-  hw_setup.ft_sound = 1;
-  hw_setup.ft_click = true;
-  hw_setup.ft_time = true;
-  hw_setup.ft_date = true;
-  hw_setup.ft_char = true;
-  hw_setup.ft_3d_buttons = false;
-
-  hw_setup.autoload_enabled = false;
-  hw_setup.autoload_timeout = 15;
-
-  hw_setup.color_bg = 0x00010101;
-  hw_setup.color_gradient = 0x000000c8;
-  hw_setup.color_button = 0x00202026;
-  hw_setup.color_active = 0x000000c8;
-  hw_setup.color_text = 0x00ffffff;
-  hw_setup.color_text_active = 0x00ffffff;
-  hw_setup.color_copyright = 0x00787878;  
-
-  hw_setup.dvi_only = false;
-
-  if (!has_sd) return;
-  sd1.chvol();
-
-  if (ini.open()) {
-    // validate file
-    if (!ini.validate(buffer, bufferLen)) {
-      ini.close();
-      return;
-    }
-
-    ini.getValue("setup", "debug", buffer, bufferLen, hw_setup.debug_enabled);
-    ini.getValue("setup", "debug_hid", buffer, bufferLen, hw_setup.debug_hid);
-    ini.getValue("setup", "dvi_only", buffer, bufferLen, hw_setup.dvi_only);
-
-    
-    ini.getValue("ft812", "enabled", buffer, bufferLen, hw_setup.ft_enabled);
-    hw_setup.ft_video_mode = (ini.getValue("ft812", "video_mode", buffer, bufferLen)) ? strtoul(buffer, 0, 10) : 0;
-    if (hw_setup.ft_video_mode > 15) hw_setup.ft_video_mode = 0;
-    hw_setup.ft_sound = (ini.getValue("ft812", "sound", buffer, bufferLen)) ? strtoul(buffer, 0, 10) : 0;
-    if (hw_setup.ft_sound > 4) hw_setup.ft_sound = 1;
-    ini.getValue("ft812", "click", buffer, bufferLen, hw_setup.ft_click);
-    ini.getValue("ft812", "time", buffer, bufferLen, hw_setup.ft_time);
-    ini.getValue("ft812", "date", buffer, bufferLen, hw_setup.ft_date);
-    ini.getValue("ft812", "char", buffer, bufferLen, hw_setup.ft_char);
-    ini.getValue("ft812", "3d_buttons", buffer, bufferLen, hw_setup.ft_3d_buttons);
-    hw_setup.color_bg = (ini.getValue("ft812", "color_bg", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_bg;
-    hw_setup.color_gradient = (ini.getValue("ft812", "color_gradient", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_gradient;
-    hw_setup.color_button = (ini.getValue("ft812", "color_button", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_button;
-    hw_setup.color_active = (ini.getValue("ft812", "color_active", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_active;
-    hw_setup.color_text = (ini.getValue("ft812", "color_text", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_text;
-    hw_setup.color_text_active = (ini.getValue("ft812", "color_text_active", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_text_active;
-    hw_setup.color_copyright = (ini.getValue("ft812", "color_copyright", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_copyright;
-
-    ini.getValue("autoload", "enabled", buffer, bufferLen, hw_setup.autoload_enabled);
-    hw_setup.autoload_timeout = (ini.getValue("autoload", "timeout", buffer, bufferLen)) ? strtoul(buffer, 0, 10) : 0;
-    if (ini.getValue("autoload", "core", buffer, bufferLen)) {
-          strcpy(hw_setup.autoload_core, buffer);
-    }
-
-    d_println("Setup:");
-    d_print("Debug enabled: "); d_println(hw_setup.debug_enabled ? "yes" : "no"); 
-    d_print("Debug HID enabled: "); d_println(hw_setup.debug_hid ? "yes" : "no"); 
-    d_print("DVI only: "); d_println(hw_setup.dvi_only ? "yes" : "no"); 
-    d_print("FT812 enabled: "); d_println(hw_setup.ft_enabled ? "yes" : "no"); 
-    d_print("FT812 video mode: "); d_println(hw_setup.ft_video_mode);
-    d_print("FT812 sound: "); d_println(hw_setup.ft_sound); 
-    d_print("FT812 keypress click enabled: "); d_println(hw_setup.ft_click ? "yes" : "no"); 
-    d_print("FT812 show time: "); d_println(hw_setup.ft_time ? "yes" : "no"); 
-    d_print("FT812 show date: "); d_println(hw_setup.ft_date ? "yes" : "no"); 
-    d_print("FT812 show character: "); d_println(hw_setup.ft_char ? "yes" : "no"); 
-    d_print("FT812 use 3d buttons: "); d_println(hw_setup.ft_3d_buttons ? "yes" : "no"); 
-    d_print("Autoload enabled: "); d_println(hw_setup.autoload_enabled ? "yes" : "no"); 
-    d_print("Autoload timeout: "); d_println(hw_setup.autoload_timeout); 
-    d_print("Autoload core: "); d_println(hw_setup.autoload_core); 
-
-    ini.close();
-    return;
-  }
-}
-
-#if ENABLE_MSC
-// Callback invoked when received READ10 command.
-// Copy disk's data to buffer (up to bufsize) and
-// return number of copied bytes (must be multiple of block size)
-int32_t msc_read_cb_sd (uint32_t lba, void* buffer, uint32_t bufsize)
-{
-  bool rc;
-  rc = sd1.card()->readSectors(lba, (uint8_t*) buffer, bufsize/512);
-  return rc ? bufsize : -1;
-}
-
-// Callback invoked when received WRITE10 command.
-// Process data in buffer to disk's storage and 
-// return number of written bytes (must be multiple of block size)
-int32_t msc_write_cb_sd (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
-{
-  bool rc;
-  rc = sd1.card()->writeSectors(lba, buffer, bufsize/512);
-  return rc ? bufsize : -1;
-}
-
-// Callback invoked when WRITE10 command is completed (status received and accepted by host).
-// used to flush any pending cache.
-void msc_flush_cb_sd (void)
-{
-  sd1.card()->syncDevice();
-  //sd1.cacheClear();
-}
-
-bool msc_start_stop_cb_sd(uint8_t power_condition, bool start, bool load_eject) {
-  //d_printf("Start stop msc %d %d %d", power_condition, start, load_eject);
-  //d_println(); d_flush();
-  (void) power_condition;
-
-  if ( load_eject )
-  {
-    if (start)
-    {
-      // load disk storage
-    }else
-    {
-      // unload disk storage
-      if (expose_msc) {
-        expose_msc = false;
-        ejected = true;
-      }
-    }
-  }
-
-  return true;
-}
-#endif
-
-/////////

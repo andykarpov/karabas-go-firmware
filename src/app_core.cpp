@@ -459,40 +459,37 @@ int app_core_init_filebrowser() {
 
   d_println("Read file list");
   root1.rewind();
-  files_len = 0;
+  files_clear();
   file_sel = 0;
-  memset(files, 0, sizeof(files));
   memset(cached_names, 0, sizeof(cached_names));
   cached_file_from = 0;
   cached_file_to = 0;
 
   // add root entry
-  files[files_len].file_id = 0;
-  String s = String("."); s.toCharArray(files[files_len].hash, sizeof(files[files_len].hash));
-  files_len++;
+  file_list_sort_item_t *item = files_append();
+  if (item) strcpy(item->hash, "."); // file_id 0
 
   // add parent dir entry
   if (dir.length() > 1) {
-    files[files_len].file_id = 0;
-    String s = String(".."); s.toCharArray(files[files_len].hash, sizeof(files[files_len].hash));
-    files_len++;
+    item = files_append();
+    if (item) strcpy(item->hash, ".."); // file_id 0
   }
 
   uint16_t presel_id = 0;
   while (file1.openNext(&root1, O_RDONLY)) {
     char filename[14]; file1.getSFN(filename, sizeof(filename));
     uint8_t len = strlen(filename);  
-    if (files_len < SORT_FILES_MAX) {
-      memcpy(files[files_len].hash, filename, SORT_HASH_LEN);
-      files[files_len].file_id = file1.dirIndex();
+    item = files_append();
+    if (item) {
+      memcpy(item->hash, filename, SORT_HASH_LEN);
+      item->file_id = file1.dirIndex();
       String core_f = String(file_slots[core.osd[curr_osd_item].slot_id].filename);
       String f = String(filename);
       core_f.toLowerCase();
       f.toLowerCase();
       if (core_f.length() > 0 && core_f.indexOf(f) == 0) {
-        presel_id = files[files_len].file_id;
+        presel_id = item->file_id;
       }
-      files_len++;
     }
     file1.close();
   }
@@ -605,6 +602,7 @@ void app_core_on_select_file() {
     zxosd.update();
 
     // send ioctl slot id, file data for file loader type
+    SpiBusGuard bus; // keep the whole ioctl transfer together on the fpga link
     spi_send(CMD_IOCTL_STATE, 0, 1); // start
     spi_send(CMD_IOCTL_SLOT, 0, core.osd[curr_osd_item].slot_id);
 
@@ -620,19 +618,31 @@ void app_core_on_select_file() {
       spi_send(CMD_IOCTL_EXT, i, ext.charAt(i));
     }
 
-    for(uint64_t i = 0; i < fsize; i++) {
+    uint8_t buf[512];
+    uint64_t i = 0;
+    int c;
+    ElapsedTimer send_timer;
+    send_timer.reset();
+    while (i < fsize && (c = file.read(buf, sizeof(buf))) > 0) {
       if (i % 8192 == 0) {
         zxosd.loadingPopup(i, fsize);
         zxosd.update();
       }
-      if (i % 256 == 0) {
-        spi_send24(CMD_IOCTL_BANK, i >> 8);
+      // bursts if the core supports them; classic frames for whatever they did not send
+      int done = link_burst_write(CMD_IOCTL_DATA, (uint32_t) i, buf, c);
+      i += done;
+      for (int j = done; j < c; j++, i++) {
+        if (j == done || i % 256 == 0) {
+          spi_send24(CMD_IOCTL_BANK, i >> 8);
+        }
+        spi_send(CMD_IOCTL_DATA, (uint8_t)((i & 0x00000000000000FF)), buf[j]);
       }
-      uint8_t data = file.read();
-      spi_send(CMD_IOCTL_DATA, (uint8_t)((i & 0x00000000000000FF)), data);
     }
     file.close();
     spi_send(CMD_IOCTL_STATE, 0, 0); // finish
+    d_printf("Ioctl: %lu bytes in %lu ms (%s)", (unsigned long) i, (unsigned long) send_timer.elapsed(),
+      link_burst_available() ? "burst" : "classic");
+    d_println();
 
     zxosd.loadingPopup(fsize, fsize);
     zxosd.update();
