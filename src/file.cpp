@@ -14,7 +14,10 @@ uint8_t file_read() {
 }
 
 size_t file_read_bytes(char *buf, size_t len) {
-    return file1.readBytes(buf, len);
+    // not Stream::readBytes(): SdFat does not override it, so it reads byte by byte with a
+    // timeout check per byte (~2 ms per 256 bytes)
+    int n = file1.read(buf, len);
+    return (n > 0) ? (size_t) n : 0;
 }
 
 int file_read_buf(char *buf, size_t len) {

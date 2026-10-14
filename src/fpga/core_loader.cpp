@@ -365,6 +365,10 @@ void rom_progress(uint32_t rom_idx, uint32_t sent) {
   zxosd.update();
 }
 
+#define ROM_CHUNK 4096           // SD read size per rom_send (bursts split it into 512-byte bursts)
+#define ROM_PROGRESS_STEP 8192   // OSD progress update interval, bytes
+static uint8_t rom_buf[ROM_CHUNK];
+
 void read_roms(const char* filename) {
 
   sd1.chvol();
@@ -401,7 +405,8 @@ void read_roms(const char* filename) {
       break;
     }
 
-    uint8_t buf[256];
+    uint8_t *buf = rom_buf;
+    uint32_t next_progress = ROM_PROGRESS_STEP;
     if (rom_is_external) {
       // external rom block contains a rom filename (rom_len bytes) instead of a rom data
       char rom_filename[256];
@@ -415,12 +420,16 @@ void read_roms(const char* filename) {
         file2 = sd1.open(rom_filename, FILE_READ);
         uint32_t sent = 0;
         int c;
-        while ((c = file2.read(buf, sizeof(buf))) > 0) {
+        while ((c = file2.read(buf, ROM_CHUNK)) > 0) {
           rom_send(rom_addr + sent, buf, c);
           sent += c;
           rom_bytes += c;
-          rom_progress(rom_idx, sent);
+          if (sent >= next_progress) {
+            rom_progress(rom_idx, sent);
+            next_progress = sent + ROM_PROGRESS_STEP;
+          }
         }
+        rom_progress(rom_idx, sent);
         file2.close();
       } else {
         zxosd.setPos(4,5+rom_idx);
@@ -432,13 +441,16 @@ void read_roms(const char* filename) {
       file_seek(rom_pos + KG_ROM_BLOCK_HEADER_SIZE);
       uint32_t sent = 0;
       while (sent < rom_len) {
-        size_t chunk = (rom_len - sent < sizeof(buf)) ? rom_len - sent : sizeof(buf);
+        size_t chunk = (rom_len - sent < ROM_CHUNK) ? rom_len - sent : ROM_CHUNK;
         size_t c = file_read_bytes((char*) buf, chunk);
         if (c == 0) break;
         rom_send(rom_addr + sent, buf, c);
         sent += c;
         rom_bytes += c;
-        rom_progress(rom_idx, sent);
+        if (sent >= next_progress || sent == rom_len) {
+          rom_progress(rom_idx, sent);
+          next_progress = sent + ROM_PROGRESS_STEP;
+        }
       }
     }
     offset = offset + rom_len + KG_ROM_BLOCK_HEADER_SIZE;

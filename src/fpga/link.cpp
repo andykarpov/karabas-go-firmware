@@ -292,7 +292,12 @@ static bool burst_wait_ready() {
 size_t link_burst_write(uint8_t type, uint32_t addr, const uint8_t *data, size_t len) {
   if (!link_burst_available()) return 0;
   SpiBusGuard bus;
-  SPISettings settings = burst_mhz ? SPISettings(burst_mhz * 1000000UL, MSBFIRST, SPI_MODE0) : link_settings();
+  // Begin with the classic link settings and switch only the baud rate: a different SPISettings
+  // clock makes arduino-pico deinit/init the SPI block, twice per burst when classic frames
+  // (OSD progress etc.) come in between.
+  SPISettings settings = link_settings();
+  SPI.beginTransaction(settings);
+  if (burst_mhz) spi_set_baudrate(spi0, burst_mhz * 1000000UL);
   size_t sent = 0;
   while (sent < len) {
     size_t n = len - sent;
@@ -303,14 +308,14 @@ size_t link_burst_write(uint8_t type, uint32_t addr, const uint8_t *data, size_t
     }
     uint32_t a = addr + sent;
     const uint8_t hdr[5] = { type, (uint8_t)(a >> 24), (uint8_t)(a >> 16), (uint8_t)(a >> 8), (uint8_t) a };
-    SPI.beginTransaction(settings);
     gpio_put(PIN_BURST_CS, LOW);
     SPI.transfer(hdr, nullptr, sizeof(hdr));
     SPI.transfer(data + sent, nullptr, n);
     gpio_put(PIN_BURST_CS, HIGH);
-    SPI.endTransaction();
     link_tx_frames++;
     sent += n;
   }
+  if (burst_mhz) spi_set_baudrate(spi0, settings.getClockFreq());
+  SPI.endTransaction();
   return sent;
 }
