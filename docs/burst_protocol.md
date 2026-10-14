@@ -38,7 +38,8 @@ During every core load the MCU asks the core what it supports, using the classic
 2. MCU then sends up to 8 `CMD_NOP` frames. A core that supports bursts answers in the **reply bytes** of any of these transfers (the bytes the FPGA shifts out on MISO), with the frame `{0xF7, caps, max_mhz}`:
    - `caps` bit 0: burst write supported.
    - `caps` bit 1: `BURST_READY` is driven by the core. If 0, the MCU does not look at it.
-   - `caps` bits 7..2: reserved, 0.
+   - `caps` bit 2: burst read supported (see "Burst read" below; requires bit 1).
+   - `caps` bits 7..3: reserved, 0.
    - `max_mhz`: the highest SCK frequency during bursts, in MHz. 0 means the normal link clock (16 MHz, or the core's `spi_freq`). Boards before Mini Rev.G do not have MCU_SCK on a global clock pin, so a core there that samples SCK with its system clock must report a frequency it can oversample safely.
 3. No answer means classic transfers only. Old cores ignore the unknown command 0xF7.
 
@@ -66,9 +67,30 @@ MOSI           TYPE  A31..24  A23..16  A15..8  A7..0  D0  D1 ... Dn-1
 | `0x0D` (`CMD_FILEDATA`) | `CMD_FILEBANK` + `CMD_FILEDATA` | File loader data |
 | `0x53` (`CMD_IOCTL_DATA`) | `CMD_IOCTL_BANK` + `CMD_IOCTL_DATA` | Ioctl (OSD file loader) data |
 
-`TYPE` bit 7 is reserved for future FPGA → MCU reads (e.g. file mounter sectors). A core must ignore a burst with an unknown `TYPE`, discarding bytes until `BURST_CS_N` goes high.
+`TYPE` bit 7 = 1 marks a read request (see "Burst read" below). A core must ignore a burst with an unknown `TYPE`, discarding bytes until `BURST_CS_N` goes high.
 
 Everything around the data stays classic and unchanged: `CMD_ROMLOADER` start/stop, `CMD_FILELOADER` reset/active, and `CMD_IOCTL_STATE` / `SLOT` / `SIZE` / `EXT`. Bursts replace only the bank + data frames between them.
+
+## Burst read (FPGA → MCU), planned
+
+Status: specified, not implemented yet on either side. It is meant for data the FPGA produces, e.g. disk sectors written by the core for the file mounter. Requires caps bits 1 and 2.
+
+The FPGA usually needs time to fetch the data (from SDRAM, a sector buffer, ...), so a read takes two chip-select phases with `BURST_READY` as the handshake:
+
+```
+1. request:  BURST_CS_N low:  TYPE|0x80, A31..24, A23..16, A15..8, A7..0, LEN15..8, LEN7..0   BURST_CS_N high
+             FPGA: BURST_READY -> 0, starts fetching LEN bytes from ADDR into its output buffer
+2. wait:     MCU waits for BURST_READY = 1 (data is ready), with the same 100 ms timeout
+3. data:     BURST_CS_N low:  MCU clocks out 1 + LEN bytes (MOSI = 0x00)
+             MISO: 1 turnaround byte (ignored by the MCU), then D0 .. DLEN-1
+             BURST_CS_N high
+```
+
+- `LEN` is 1..512, big-endian.
+- The turnaround byte gives the FPGA one byte time after `BURST_CS_N` falls to put D0 into its MISO shift register, so it does not need D0's first bit before the first SCK edge.
+- During the data phase, and only then, the FPGA drives MISO from the burst logic: `MCU_MISO <= spi_miso when MCU_SS = '0' else burst_miso when BURST_CS_N = '0' and read pending else ...`. During the request phase and during write bursts it does not drive MISO.
+- After the data phase the read is finished. Any other burst, or a new request, starts from the header again. If the MCU times out waiting for `BURST_READY`, it raises `BURST_CS_N` without a data phase; the core drops the pending read at the next request header.
+- MCU side (planned): `link_burst_read(type, addr, buf, len)`, used only when caps bit 2 is set.
 
 ## Firmware side
 
