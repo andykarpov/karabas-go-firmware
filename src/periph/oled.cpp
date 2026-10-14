@@ -2,6 +2,7 @@
 #define SSD1306_NO_SPLASH
 #include "Adafruit_SSD1306.h"
 #include "bitmaps.h"
+#include "i2c_bus.h"
 
 // Optional SSD1306 128x32 I2C OLED with a scrolling logo
 
@@ -11,6 +12,7 @@ static int oled_scrollpos = -128;
 static ElapsedTimer oled_timer;
 
 void oled_begin() {
+  I2cGuard i2c;
   has_oled = oled.begin(SSD1306_SWITCHCAPVCC, 0x3C);
   if (has_oled) {
     d_println("Found SSD1306 OLED display");
@@ -25,6 +27,7 @@ void oled_begin() {
 void oled_tick() {
   if (has_oled && oled_timer.elapsed() >= 20) {
     oled_timer.reset();
+    I2cGuard i2c;
     if (oled_scrollpos >= -112) {
       oled_scrollpos--;
     } else {

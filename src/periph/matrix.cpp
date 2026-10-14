@@ -1,6 +1,10 @@
 #include "main.h"
+#include "i2c_bus.h"
 
 // Optional dot matrix addon (2x HT16K33 bi-color 8x8), see MATRIX.md
+//
+// The display buffer and the mode are shared by the fpga command handlers (APP) and
+// matrix_tick() (PERIPH task under FreeRTOS): every access to `matrix` holds the I2C lock.
 
 #define MATRIX_MODE_SCROLL 0
 #define MATRIX_MODE_DRAW 1
@@ -8,8 +12,8 @@
 
 static MultiMatrixDisplay matrix = MultiMatrixDisplay();
 static bool has_matrix = false;
-static uint8_t matrix_mode = MATRIX_MODE_SCROLL;
-static uint16_t audio_l, audio_r;
+static volatile uint8_t matrix_mode = MATRIX_MODE_SCROLL;
+static volatile uint16_t audio_l, audio_r; // peak meters: raised by APP, decayed by matrix_tick
 static const String matrix_msg = "KARABAS GO ";
 static const int matrix_msg_width = matrix_msg.length() * 6; // 6 pixels per character width
 static int matrix_msg_scrollpos = 16;
@@ -28,6 +32,7 @@ void matrix_init()
 
 void matrix_ctl_data(uint8_t addr, uint8_t data) {
   if (has_matrix) {
+    I2cGuard i2c;
     if (bitRead(data, 0)) matrix.clear(); 
     if (bitRead(data, 1)) matrix.writeDisplay();
     if (bitRead(data, 2)) matrix.setBrightness(data >> 4);
@@ -46,6 +51,7 @@ void matrix_ctl_data(uint8_t addr, uint8_t data) {
 
 void matrix_pixel_data(uint8_t x, uint8_t y, uint8_t color) {
   if (has_matrix) {
+    I2cGuard i2c;
     matrix.drawPixel(x, y, color);
   }
 }
@@ -111,6 +117,7 @@ void matrix_scroll_text()
 }
 
 void matrix_begin() {
+  I2cGuard i2c;
   has_matrix = matrix.begin();
   if (has_matrix) {
     d_println("Found a matrix display");
@@ -131,6 +138,7 @@ void matrix_register_handlers() {
 
 void matrix_progress(uint32_t val, uint32_t max) {
   if (has_matrix) {
+    I2cGuard i2c;
     matrix.drawLine(0, 0, map(val, 0, max, 0, 15), 0, LED_GREEN);
     matrix.drawLine(0, 1, map(val, 0, max, 0, 15), 1, LED_GREEN);
     matrix.writeDisplay();
@@ -140,6 +148,7 @@ void matrix_progress(uint32_t val, uint32_t max) {
 void matrix_on_configure_start() {
   matrix_mode = MATRIX_MODE_AUDIO;
   if (has_matrix) {
+    I2cGuard i2c;
     matrix.clear();
     matrix.writeDisplay();
   }
@@ -147,6 +156,7 @@ void matrix_on_configure_start() {
 
 void matrix_on_configure_done(uint8_t core_type) {
   if (has_matrix) {
+    I2cGuard i2c;
     matrix_init();
     matrix.clear();
     matrix.writeDisplay();
@@ -157,9 +167,13 @@ void matrix_on_configure_done(uint8_t core_type) {
 }
 
 void matrix_tick() {
-  if (has_matrix && matrix_timer.elapsed() >= 20) {
-    matrix_timer.reset();
+  if (!has_matrix || matrix_timer.elapsed() < 20) return;
+  matrix_timer.reset();
 
+  static uint8_t prev_btns = 0;
+  uint8_t btns = prev_btns;
+  {
+    I2cGuard i2c;
     switch (matrix_mode) {
       case MATRIX_MODE_AUDIO:
         matrix_draw_audio();
@@ -172,39 +186,20 @@ void matrix_tick() {
         break;
     }
 
-    static bool prev_matrix_btn1 = false;
-    static bool prev_matrix_btn2 = false;
-    static bool prev_matrix_btn3 = false;
-    static bool prev_matrix_btn4 = false;
-
     // poll HT16k33 for buttons
     if (matrix_poll_timer.elapsed() >= 100) {
       matrix_poll_timer.reset();
-      uint8_t matrix_btns = matrix.readKeys();
-      bool matrix_btn1 = bitRead(matrix_btns, 0);
-      bool matrix_btn2 = bitRead(matrix_btns, 1);
-      bool matrix_btn3 = bitRead(matrix_btns, 2);
-      bool matrix_btn4 = bitRead(matrix_btns, 3);
-      if (prev_matrix_btn1 != matrix_btn1) {
-        d_print("Matrix Button 1: "); d_println((matrix_btn1) ? "on" : "off");
-        prev_matrix_btn1 = matrix_btn1;
-        spi_send(CMD_MATRIX_BTN, 0, matrix_btn1);
-      }
-      if (prev_matrix_btn2 != matrix_btn2) {
-        d_print("Matrix Button 2: "); d_println((matrix_btn2) ? "on" : "off");
-        prev_matrix_btn2 = matrix_btn2;
-        spi_send(CMD_MATRIX_BTN, 1, matrix_btn2);
-      }
-      if (prev_matrix_btn3 != matrix_btn3) {
-        d_print("Matrix Button 3: "); d_println((matrix_btn3) ? "on" : "off");
-        prev_matrix_btn3 = matrix_btn3;
-        spi_send(CMD_MATRIX_BTN, 2, matrix_btn3);
-      }
-      if (prev_matrix_btn4 != matrix_btn4) {
-        d_print("Matrix Button 4: "); d_println((matrix_btn4) ? "on" : "off");
-        prev_matrix_btn4 = matrix_btn4;
-        spi_send(CMD_MATRIX_BTN, 3, matrix_btn4);
-      }
+      btns = matrix.readKeys() & 0x0F;
     }
   }
+
+  // report changed buttons outside the I2C lock (lock order: never I2C -> SPI)
+  for (uint8_t i=0; i<4; i++) {
+    bool btn = bitRead(btns, i);
+    if (btn != bitRead(prev_btns, i)) {
+      d_print("Matrix Button "); d_print(i+1); d_print(": "); d_println(btn ? "on" : "off");
+      spi_send(CMD_MATRIX_BTN, i, btn);
+    }
+  }
+  prev_btns = btns;
 }

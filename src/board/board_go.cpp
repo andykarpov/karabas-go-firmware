@@ -8,6 +8,7 @@
 #include "pio_usb.h"
 #include "board.h"
 #include "main.h"
+#include "periph/i2c_bus.h"
 
 FT812 ft(PIN_MCU_FT_CS, PIN_FT_RESET);
 
@@ -22,6 +23,7 @@ void board_init_pins() {
 }
 
 void board_init_io() {
+  I2cGuard i2c;
   if (extender.begin() == false) {
     has_extender = false;
     d_println("PCA9536 unavailable. Please check soldering.");
@@ -56,11 +58,13 @@ void board_reset_peripherals() {
 
 bool btn_read(uint8_t num) {
   if (!has_extender) return false;
+  I2cGuard i2c;
   return !extender.digitalRead(num == 0 ? PIN_EXT_BTN1 : PIN_EXT_BTN2);
 }
 
 void led_write(uint8_t num, bool on) {
   if (!has_extender) return;
+  I2cGuard i2c;
   extender.digitalWrite(num == 0 ? PIN_EXT_LED1 : PIN_EXT_LED2, !on);
 }
 

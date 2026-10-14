@@ -28,6 +28,8 @@
 #include "periph/matrix.h"
 #include "periph/oled.h"
 #include "periph/serial_bridge.h"
+#include "periph/periph.h"
+#include "periph/i2c_bus.h"
 #include "storage/storage.h"
 #include "storage/settings.h"
 #include "storage/msc.h"

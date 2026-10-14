@@ -222,8 +222,8 @@ static void karabas_loop()
   // send byte from esp tx fifo
   esp_serial.handle();
 
-  matrix_tick();
-  oled_tick();
+  // LED matrix, OLED (own task under FreeRTOS)
+  periph_tick();
 }
 
 // usb host loop, runs on core1
@@ -260,6 +260,8 @@ static void app_task(void *param) {
   karabas_setup();
   // usb / ps2 / joystick events are forwarded by their own task from now on
   input_task_start();
+  // LED matrix and OLED too
+  periph_task_start();
   // no yield here: every scheduler call takes the SMP kernel lock with interrupts off,
   // which could delay the PIO-USB SOF interrupt on core1
   for (;;) {
@@ -276,6 +278,7 @@ static void usb_task(void *param) {
 
 void setup() {
   link_os_init();
+  i2c_bus_init();
   // tasks must be created already pinned: the USB task has a higher priority than the
   // framework's CORE0 task running this code, so it starts immediately on creation.
   // Unpinned, it could start on core0 and starve CORE0 forever (it never blocks),

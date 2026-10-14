@@ -25,7 +25,9 @@ Each board has its own PlatformIO env, which sets `HW_ID`:
   - `USB` (core 1) runs the USB host.
   - SPI0 (the FPGA link and FT812) is shared. Every transfer holds the recursive `spi_bus_lock`. Hold a `SpiBusGuard` around multi-frame sequences that must not interleave, such as core load, ROM and file transfers.
   - Incoming FPGA commands are always handled in `APP`. Frames received by another task are queued and handled by `link_dispatch_pending()`.
-  - I2C (RTC, matrix, OLED, the Go extender), SD and the OSD state are used only from `APP`. Keep it that way, or add a lock first.
+  - `PERIPH` (core 0, same priority as `APP`, time-sliced with it) runs the LED matrix and OLED ticks. A full OLED frame is about 46 ms of busy-polled I2C at 100 kHz.
+  - I2C is shared by `PERIPH` and `APP` (RTC/EEPROM through hooks in `lib/RTC`, matrix commands from the FPGA, the Go extender). Hold an `I2cGuard` around every I2C access. **Lock order:** taking the I2C lock while holding the SPI lock is fine, but never call `spi_send()` while holding the I2C lock. FPGA command handlers run after the SPI lock is released.
+  - SD and the OSD state are used only from `APP`. Keep it that way, or add a lock first.
   - In the plain build the locks are no-ops and everything runs in the main loop as before.
   - **Debug output.** Only one context writes to the USB CDC `Serial`: the core 0 main loop in the plain build, `APP` under FreeRTOS. Adafruit's CDC write has no lock, and concurrent writers make the host reset the port. Use the `d_print*` macros (`src/diag/debug_out`), which buffer output from other tasks, core 1 and IRQs. Do not call `Serial.print` directly outside `APP`.
   - **Lost wakeups.** pico-sdk locks (mutex, queue, semaphore) released from an IRQ wake their waiters through the FreeRTOS timer task (`xEventGroupSetBitsFromISR`). `APP` and `USB` never block, so that task runs at the highest priority (`[rtos]` in `platformio.ini`, asserted in `main.cpp`). Do not lower it. Prefer FreeRTOS primitives or plain spinlocks between tasks.

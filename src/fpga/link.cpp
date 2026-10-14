@@ -186,6 +186,9 @@ void spi_send(uint8_t cmd, uint8_t addr, uint8_t data) {
   SPI.transfer(tx, rx, sizeof(tx));
   gpio_put(PIN_MCU_SPI_CS, HIGH);
   SPI.endTransaction();
+  spi_bus_unlock();
+  // handlers run outside the bus lock (unless a caller holds an outer SpiBusGuard), so a
+  // handler waiting for another bus (I2C) does not hold up the other spi users
   if ((rx[0] > 0) && link_rx_enabled) {
     if (in_dispatch_context()) {
       process_in_cmd(rx[0], rx[1], rx[2]);
@@ -194,7 +197,6 @@ void spi_send(uint8_t cmd, uint8_t addr, uint8_t data) {
       if (!queue_try_add(&link_rx_queue, &packet)) link_rx_dropped++;
     }
   }
-  spi_bus_unlock();
 }
 
 // multi-byte values are sent as consecutive addr 0..n-1, least significant byte first

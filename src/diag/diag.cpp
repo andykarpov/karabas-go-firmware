@@ -50,10 +50,12 @@ void diag_tick() {
   TaskHandle_t app = xTaskGetHandle("APP");
   TaskHandle_t usb = xTaskGetHandle("USB");
   TaskHandle_t input = xTaskGetHandle("INPUT");
-  d_printf(" | stack free APP %lu USB %lu INPUT %lu words",
+  TaskHandle_t periph = xTaskGetHandle("PERIPH");
+  d_printf(" | stack free APP %lu USB %lu INPUT %lu PERIPH %lu words",
     (unsigned long) (app ? uxTaskGetStackHighWaterMark(app) : 0),
     (unsigned long) (usb ? uxTaskGetStackHighWaterMark(usb) : 0),
-    (unsigned long) (input ? uxTaskGetStackHighWaterMark(input) : 0));
+    (unsigned long) (input ? uxTaskGetStackHighWaterMark(input) : 0),
+    (unsigned long) (periph ? uxTaskGetStackHighWaterMark(periph) : 0));
 #endif
   d_println();
 }
