@@ -121,17 +121,6 @@ void __no_inline_not_in_flash_func(pio_usb_bus_start_receive)(const pio_port_t *
   pp->pio_usb_rx->irq = IRQ_RX_ALL_MASK;
 }
 
-#ifdef PIO_USB_PROBE_COUNTERS
-extern volatile int32_t pio_usb_probe_hs[4]; // karabas: RTOS boot probe, defined below
-#endif
-
-// karabas: pio_add_program returns a negative error code (stored in the unsigned offsets)
-// when there is no instruction memory left; check it after init instead of failing silently
-bool pio_usb_host_programs_loaded(void) {
-  pio_port_t *pp = PIO_USB_PIO_PORT(0);
-  return (int) pp->offset_tx >= 0 && (int) pp->offset_rx >= 0 && (int) pp->offset_eop >= 0;
-}
-
 uint8_t __no_inline_not_in_flash_func(pio_usb_bus_wait_handshake)(pio_port_t* pp) {
   int16_t t = 240;
   int16_t idx = 0;
@@ -151,13 +140,6 @@ uint8_t __no_inline_not_in_flash_func(pio_usb_bus_wait_handshake)(pio_port_t* pp
       continue;
     }
   }
-
-#ifdef PIO_USB_PROBE_COUNTERS
-  pio_usb_probe_hs[0] = t;
-  pio_usb_probe_hs[1] = pp->usb_rx_buffer[0];
-  pio_usb_probe_hs[2] = pp->usb_rx_buffer[1];
-  pio_usb_probe_hs[3] = pio_sm_get_rx_fifo_level(pp->pio_usb_rx, pp->sm_rx);
-#endif
 
   pio_sm_set_enabled(pp->pio_usb_rx, pp->sm_rx, false);
 
@@ -308,26 +290,24 @@ static void port_pin_drive_setting(const root_port_t *port) {
   gpio_set_drive_strength(port->pin_dm, GPIO_DRIVE_STRENGTH_12MA);
 }
 
-// karabas: boot probe hook for the FreeRTOS build (defined in main.cpp only with RTOS_PROBE)
-extern void pio_usb_probe(const char *msg) __attribute__((weak));
-#define PIO_USB_PROBE(msg) do { if (pio_usb_probe) pio_usb_probe(msg); } while (0)
+// karabas: pio_add_program returns a negative error code (stored in the unsigned offsets)
+// when there is no instruction memory left; check it after init instead of failing silently
+bool pio_usb_host_programs_loaded(void) {
+  pio_port_t *pp = PIO_USB_PIO_PORT(0);
+  return (int) pp->offset_tx >= 0 && (int) pp->offset_rx >= 0 && (int) pp->offset_eop >= 0;
+}
 
 void pio_usb_bus_init(pio_port_t *pp, const pio_usb_configuration_t *c,
                       root_port_t *root) {
   memset(root, 0, sizeof(root_port_t));
 
   pp->pio_usb_tx = c->pio_tx_num == 0 ? pio0 : pio1;
-  PIO_USB_PROBE("pio-usb: claiming dma");
   dma_claim_mask(1<<c->tx_ch);
   configure_tx_channel(c->tx_ch, pp->pio_usb_tx, c->sm_tx);
 
-  PIO_USB_PROBE("pio-usb: apply_config");
   apply_config(pp, c, root);
-  PIO_USB_PROBE("pio-usb: initialize_host_programs");
   initialize_host_programs(pp, c, root);
-  PIO_USB_PROBE("pio-usb: port_pin_drive_setting");
   port_pin_drive_setting(root);
-  PIO_USB_PROBE("pio-usb: bus_init done");
   root->initialized = true;
   root->dev_addr = 0;
 }
@@ -446,28 +426,10 @@ bool __no_inline_not_in_flash_func(pio_usb_ll_transfer_continue)(
   }
 }
 
-#ifdef PIO_USB_PROBE_COUNTERS
-// karabas: RTOS boot probe transfer counters: setup, in, out, complete, error, stalled
-volatile uint32_t pio_usb_probe_xfer[6];
-// last handshake wait: loops left (0 = timeout), first two bytes received, rx fifo level after
-volatile int32_t pio_usb_probe_hs[4];
-
-void pio_usb_probe_port(uint32_t out[6]) {
-  pio_port_t *pp = PIO_USB_PIO_PORT(0);
-  out[0] = pp->sm_tx; out[1] = pp->sm_rx; out[2] = pp->sm_eop;
-  out[3] = pp->offset_tx; out[4] = pp->offset_rx; out[5] = pp->offset_eop;
-}
-#endif
-
 void __no_inline_not_in_flash_func(pio_usb_ll_transfer_complete)(
     endpoint_t *ep, uint32_t flag) {
   root_port_t *rport = PIO_USB_ROOT_PORT(ep->root_idx);
   uint32_t const ep_mask = (1u << (ep - pio_usb_ep_pool));
-#ifdef PIO_USB_PROBE_COUNTERS
-  if (flag == PIO_USB_INTS_ENDPOINT_COMPLETE_BITS) pio_usb_probe_xfer[3]++;
-  else if (flag == PIO_USB_INTS_ENDPOINT_ERROR_BITS) pio_usb_probe_xfer[4]++;
-  else if (flag == PIO_USB_INTS_ENDPOINT_STALLED_BITS) pio_usb_probe_xfer[5]++;
-#endif
 
   rport->ints |= flag;
 
