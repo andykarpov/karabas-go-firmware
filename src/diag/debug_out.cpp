@@ -2,11 +2,9 @@
 #include "debug_out.h"
 #include "hardware/sync.h"
 
-#ifdef __FREERTOS
 #include <FreeRTOS.h>
 #include <task.h>
 static TaskHandle_t owner_task = nullptr;
-#endif
 
 #define DEBUG_BUF_SIZE 2048 // bytes kept for non-owner writers between two drains
 
@@ -17,16 +15,12 @@ static volatile uint32_t debug_dropped = 0;
 static spin_lock_t *debug_lock = spin_lock_init(spin_lock_claim_unused(true));
 
 void debug_set_owner_task(void *task) {
-#ifdef __FREERTOS
   owner_task = (TaskHandle_t) task;
-#endif
 }
 
 static bool is_owner() {
   if (__get_current_exception() != 0) return false; // never write to Serial from an irq
-#ifdef __FREERTOS
   if (owner_task != nullptr) return xTaskGetCurrentTaskHandle() == owner_task;
-#endif
   return get_core_num() == 0;
 }
 

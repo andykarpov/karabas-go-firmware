@@ -1,11 +1,11 @@
 #pragma once
 
-// I2C bus lock (recursive), no-op without FreeRTOS. The bus is shared by the MATRIX and OLED tasks
+// I2C bus lock (recursive). The bus is shared by the MATRIX and OLED tasks
 // (LED matrix, OLED) and APP (RTC + EEPROM, matrix commands from the fpga, Go io extender).
 // Lock order: the SPI bus lock may be held when taking this one, never the other way round:
 // release the I2C lock before calling spi_send().
 
-void i2c_bus_init();                    // FreeRTOS: create the lock (before the tasks start)
+void i2c_bus_init();                    // create the lock (before the tasks start)
 extern "C" void i2c_bus_lock(void);     // also used by lib/RTC
 extern "C" void i2c_bus_unlock(void);
 

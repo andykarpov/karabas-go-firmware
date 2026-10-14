@@ -3,10 +3,8 @@
 
 #if DIAG_STATS
 
-#ifdef __FREERTOS
 #include <FreeRTOS.h>
 #include <task.h>
-#endif
 
 #define DIAG_PERIOD_MS 10000
 
@@ -46,7 +44,6 @@ void diag_tick() {
     (unsigned long) (loops0 * 1000ULL / elapsed), (unsigned long) gap0,
     (unsigned long) (loops1 * 1000ULL / elapsed), (unsigned long) gap1,
     rp2040.getFreeHeap());
-#ifdef __FREERTOS
   TaskHandle_t app = xTaskGetHandle("APP");
   TaskHandle_t usb = xTaskGetHandle("USB");
   TaskHandle_t input = xTaskGetHandle("INPUT");
@@ -58,7 +55,6 @@ void diag_tick() {
     (unsigned long) (input ? uxTaskGetStackHighWaterMark(input) : 0),
     (unsigned long) (matrix ? uxTaskGetStackHighWaterMark(matrix) : 0),
     (unsigned long) (oled ? uxTaskGetStackHighWaterMark(oled) : 0));
-#endif
   d_println();
 }
 

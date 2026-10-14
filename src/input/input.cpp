@@ -3,16 +3,13 @@
 #include "usb_hid_keys.h"
 #include "app_core.h"
 
-#ifdef __FREERTOS
 #include <FreeRTOS.h>
 #include <task.h>
-#endif
 
 // Input routing: on-board buttons, joysticks, usb/ps2 events from core1, global hotkeys.
 //
-// Without FreeRTOS all of it runs in the main loop. With FreeRTOS the INPUT task (core0, above
-// APP) forwards usb/ps2/joystick events to the fpga as soon as they arrive, so they are not held
-// back while APP is busy (OSD drawing, I2C, SD). Everything that needs the UI (hotkeys, OSD
+// The INPUT task (core0, above APP) forwards usb/ps2/joystick events to the fpga as soon as they
+// arrive, so they are not held back while APP is busy (OSD drawing, I2C, SD). Everything that needs the UI (hotkeys, OSD
 // navigation) is handed to APP, which runs on_keyboard(). For a hotkey INPUT waits until APP has
 // handled it before forwarding further keys, so e.g. Menu+Esc still opens the OSD without the
 // Esc reaching the core.
@@ -140,35 +137,6 @@ void input_tick_repeat() {
   prev_kb_repeat_state = kb_repeat_state;
 }
 
-#ifndef __FREERTOS
-
-void input_tick_joysticks() {
-  bool changedL, changedR;
-  joy_poll(changedL, changedR);
-  if (changedL) on_keyboard();
-  if (changedR) on_keyboard();
-  joy_send(changedL, changedR);
-}
-
-
-// forward events queued by core1 (and core0) to the fpga
-void input_drain_events() {
-  queue_spi_t packet;
-  while (link_queue_pop(&packet)) {
-    if (packet.cmd == CMD_USB_KBD) {
-      hid_kbd_report_sync();
-      led_write(1, usb_keyboard_report.modifier != 0 || usb_keyboard_report.keycode[0] != 0);
-      if (packet.addr == 1 && packet.data != 0) {
-          on_keyboard();
-      }
-    }
-    event_forward(packet);
-  }
-}
-
-void input_task_start() {}
-
-#else // __FREERTOS
 
 static TaskHandle_t input_task_handle = nullptr;
 static volatile uint32_t ui_posted = 0;   // events handed to APP (written by INPUT)
@@ -234,7 +202,7 @@ void input_task_start() {
 }
 
 // APP side: run on_keyboard() for the events INPUT handed over, keep the keyboard led
-void input_tick_joysticks() {
+void input_tick_ui() {
   while (ui_done != ui_posted) {
     on_keyboard();
     ui_done++;
@@ -252,10 +220,6 @@ void input_tick_joysticks() {
   }
 }
 
-// events are forwarded by the INPUT task
-void input_drain_events() {}
-
-#endif // __FREERTOS
 
 bool on_global_hotkeys() {
 

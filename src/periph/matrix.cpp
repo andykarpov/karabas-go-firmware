@@ -4,7 +4,7 @@
 // Optional dot matrix addon (2x HT16K33 bi-color 8x8), see MATRIX.md
 //
 // The display buffer and the mode are shared by the fpga command handlers (APP) and
-// matrix_frame() (MATRIX task under FreeRTOS): every access to `matrix` holds the I2C lock.
+// matrix_frame() (MATRIX task): every access to `matrix` holds the I2C lock.
 
 #define MATRIX_MODE_SCROLL 0
 #define MATRIX_MODE_DRAW 1
@@ -18,11 +18,10 @@
 static MultiMatrixDisplay matrix = MultiMatrixDisplay();
 static bool has_matrix = false;
 static volatile uint8_t matrix_mode = MATRIX_MODE_SCROLL;
-static volatile uint16_t audio_l, audio_r; // peak meters: raised by APP, decayed by matrix_tick
+static volatile uint16_t audio_l, audio_r; // peak meters: raised by APP, decayed by matrix_frame
 static const String matrix_msg = "KARABAS GO ";
 static const int matrix_msg_width = matrix_msg.length() * 6; // 6 pixels per character width
 static int matrix_msg_scrollpos = 16;
-static ElapsedTimer matrix_timer;
 
 void matrix_init()
 {
@@ -212,12 +211,4 @@ void matrix_frame() {
     }
   }
   prev_btns = btns;
-}
-
-// plain build: called from the main loop
-void matrix_tick() {
-  if (has_matrix && matrix_timer.elapsed() >= MATRIX_FRAME_MS) {
-    matrix_timer.reset();
-    matrix_frame();
-  }
 }

@@ -30,12 +30,13 @@
 #include "app_core_browser.h"
 #include "diag/diag.h"
 
-#ifdef __FREERTOS
+#ifndef __FREERTOS
+#error "The firmware runs on FreeRTOS: build it with -D PIO_FRAMEWORK_ARDUINO_ENABLE_FREERTOS (see platformio.ini)"
+#endif
 #include <FreeRTOS.h>
 #include <task.h>
-// see [rtos] in platformio.ini: wakeups from irq context go through the timer task
+// see [rp2040] in platformio.ini: wakeups from irq context go through the timer task
 static_assert(configTIMER_TASK_PRIORITY == configMAX_PRIORITIES - 1, "FreeRTOS timer task must run above APP and USB");
-#endif
 
 RTC zxrtc;
 volatile bool usb_host_ready = false;
@@ -44,21 +45,19 @@ ESP8266 wifi(esp_serial);
 
 static ElapsedTimer led_timer;
 
-#ifdef __FREERTOS
 // Under FreeRTOS SysTick belongs to the scheduler, so the core runs its cycle counter (ccount,
 // 2 instructions) on a PIO state machine, allocated in main() before setup(). It lands on pio1,
 // whose whole 32-word instruction memory the PIO-USB receiver needs (decoder 15 + edge
 // detector 17): the edge detector then fails to load and the host never sees a handshake.
 // Reserve pio1 and pio0 sm0 (PIO-USB tx) in a static constructor, which runs before main(),
 // so ccount goes to pio0 sm1. usb_host_setup() releases them right before PIO-USB init,
-// which gives the usb host the same PIO layout as without FreeRTOS.
+// which gives the usb host the PIO layout it expects.
 static struct UsbPioReserve {
   UsbPioReserve() {
     pio_sm_claim(pio0, 0);
     pio_claim_sm_mask(pio1, 0xf);
   }
 } usb_pio_reserve;
-#endif
 
 // firmware init, runs on core0
 static void karabas_setup()
@@ -166,12 +165,10 @@ static void usb_host_setup() {
   pio_cfg.pin_dp = HOST_PIN_DP;
   pio_cfg.pinout = (PIO_USB_PINOUT) board_usb_pinout();
 
-#ifdef __FREERTOS
   // PIO-USB claims its default state machines (pio0 sm0, pio1 sm0/sm1) and pio1 memory:
   // release what usb_pio_reserve held for it since before main()
   pio_sm_unclaim(pio0, 0);
   for (uint i=0; i<4; i++) pio_sm_unclaim(pio1, i);
-#endif
 
   tuh_configure(1, TUH_CFGID_RPI_PIO_USB_CONFIGURATION, &pio_cfg);
   tuh_init(1);
@@ -208,14 +205,13 @@ static void karabas_loop()
   }
 
   input_tick_buttons(btn1, btn2);
-  input_tick_joysticks();
+  input_tick_ui();
   input_tick_repeat();
 
   osd_handle(false);
 
   link_report_drops();
   link_dispatch_pending();
-  input_drain_events();
 
   serial_bridge_tick();
 
@@ -224,9 +220,6 @@ static void karabas_loop()
 
   // let the fpga talk even when nothing else was sent
   link_poll();
-
-  // LED matrix, OLED (own task under FreeRTOS)
-  periph_tick();
 }
 
 // usb host loop, runs on core1
@@ -236,9 +229,7 @@ static void usb_host_loop()
   tuh_task();
 }
 
-#ifdef __FREERTOS
-
-// FreeRTOS build (envs go / mini / minig): the firmware and the usb host run in their own pinned tasks.
+// The firmware and the usb host run in their own pinned tasks.
 // The framework's CORE0 task (4 KB stack) only creates them; setup1/loop1 are not defined,
 // so the framework does not start its own CORE1 task.
 
@@ -297,15 +288,6 @@ void setup() {
 void loop() {
   vTaskDelay(portMAX_DELAY);
 }
-
-#else
-
-void setup() { karabas_setup(); }
-void loop() { karabas_loop(); }
-void setup1() { usb_host_setup(); }
-void loop1() { usb_host_loop(); }
-
-#endif
 
 void halt(const char* msg) {
   d_println(msg);

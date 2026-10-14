@@ -1,17 +1,6 @@
 #include "main.h"
 #include "periph.h"
 
-#ifndef __FREERTOS
-
-void periph_tick() {
-  matrix_tick();
-  oled_tick();
-}
-
-void periph_task_start() {}
-
-#else
-
 #include <FreeRTOS.h>
 #include <task.h>
 
@@ -42,8 +31,6 @@ static void oled_task(void *param) {
   }
 }
 
-void periph_tick() {}
-
 void periph_task_start() {
   if (matrix_present() &&
       xTaskCreateAffinitySet(matrix_task, "MATRIX", MATRIX_TASK_STACK, nullptr, MATRIX_TASK_PRIORITY, 1 << 0, nullptr) != pdPASS) {
@@ -55,4 +42,3 @@ void periph_task_start() {
   }
 }
 
-#endif

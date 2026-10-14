@@ -7,13 +7,13 @@
 typedef void (*link_handler_t)(uint8_t addr, uint8_t data);
 
 void link_queue_init();
-void link_os_init();                      // FreeRTOS: create the bus lock (before the tasks start)
+void link_os_init();                      // create the bus lock (before the tasks start)
 void link_begin();
 void link_on(uint8_t cmd, link_handler_t handler);
 void link_set_freq(uint8_t mhz);          // core spi frequency, 0 or 255 = default 16 MHz
 void link_set_rx_enabled(bool enabled);   // ignore incoming commands while the fpga is being configured
 
-// SPI0 bus lock (recursive), no-op without FreeRTOS. Hold it around multi-frame sequences
+// SPI0 bus lock (recursive). Hold it around multi-frame sequences
 // that must not interleave with other tasks (core config, rom / file transfers).
 void spi_bus_lock();
 void spi_bus_unlock();
