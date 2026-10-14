@@ -222,6 +222,9 @@ static void karabas_loop()
   // send byte from esp tx fifo
   esp_serial.handle();
 
+  // let the fpga talk even when nothing else was sent
+  link_poll();
+
   // LED matrix, OLED (own task under FreeRTOS)
   periph_tick();
 }

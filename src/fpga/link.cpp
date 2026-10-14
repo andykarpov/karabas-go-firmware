@@ -30,6 +30,8 @@ static volatile uint32_t spi_queue_dropped = 0;
 static queue_t link_rx_queue;
 static volatile uint32_t link_rx_dropped = 0;
 
+static volatile uint32_t link_tx_frames = 0; // frames sent by any task, for link_poll
+
 static uint16_t debug_address = 0;
 static uint16_t debug_data = 0;
 
@@ -84,6 +86,17 @@ static inline bool in_dispatch_context() {
 #else
   return true;
 #endif
+}
+
+// The fpga can only answer inside a transfer started by the MCU. Called once per main loop
+// iteration: if nothing at all was sent since the previous call, send a NOP so the fpga gets
+// a chance to deliver its commands (uart, rtc, matrix, flashboot, ...).
+void link_poll() {
+  static uint32_t seen = 0;
+  if (link_tx_frames == seen) {
+    spi_send(CMD_NOP, 0, 0);
+  }
+  seen = link_tx_frames;
 }
 
 // handle frames received by other tasks, called by the dispatch task
@@ -186,6 +199,7 @@ void spi_send(uint8_t cmd, uint8_t addr, uint8_t data) {
   SPI.transfer(tx, rx, sizeof(tx));
   gpio_put(PIN_MCU_SPI_CS, HIGH);
   SPI.endTransaction();
+  link_tx_frames++;
   spi_bus_unlock();
   // handlers run outside the bus lock (unless a caller holds an outer SpiBusGuard), so a
   // handler waiting for another bus (I2C) does not hold up the other spi users

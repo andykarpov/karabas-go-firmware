@@ -27,6 +27,7 @@ struct SpiBusGuard {
 void link_set_dispatch_task(void *task);  // task that runs the incoming command handlers (APP)
 void link_set_event_task(void *task);     // task woken by spi_queue (INPUT)
 void link_dispatch_pending();             // handle frames received by other tasks
+void link_poll();                         // once per main loop: NOP to the fpga if the link was idle
 
 void spi_queue(uint8_t cmd, uint8_t addr, uint8_t data); // enqueue from any core / irq, sent by the input handler
 bool link_queue_pop(queue_spi_t *packet);
