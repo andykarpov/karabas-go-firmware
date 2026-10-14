@@ -65,6 +65,8 @@ The plain envs are still the release builds. The `*_rtos` envs (FreeRTOS) build 
   - They are used only if the core answered the `CMD_CAPS` query that `do_configure()` sends. Otherwise everything stays on classic frames, so old cores are unaffected.
   - ROMs, the file loader and ioctl data try `link_burst_write()` first and send the rest with classic frames.
   - **MCU_IO4 (GPIO18) must stay an input:** on modded Mini boards it is the FT812 clock from the FPGA.
+  - `PIN_BURST_CS` is pulled up while the MCU does not drive it, and the cores pull it up too. A floating chip select lets a core's burst receiver take classic traffic for a burst.
+  - `burst=0` in `karabas.ini` skips the `CMD_CAPS` query, so everything stays on classic frames (A/B testing a core). With `debug=1` the log shows the ROM, file loader and ioctl transfer times with the link mode. The file loader also logs the CRC-32 of the sent file, which can be compared with the file on a PC.
 
 **Core files (`.kg1/.kg2/.kg3`)**:
 - Each file has a fixed binary header followed by the FPGA bitstream. Field offsets are the `FILE_POS_*` constants in `config.h`. The bitstream starts at 1024. EEPROM and switches data live at 256 and 512.
