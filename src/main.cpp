@@ -1422,6 +1422,29 @@ void read_core(const char* filename) {
   osd_handle(true);
 }
 
+// send a chunk of rom data to the fpga, starting at the given rom address
+void rom_send(uint32_t addr, const uint8_t* buf, size_t len) {
+  for (size_t j=0; j<len; j++) {
+    uint32_t a = addr + j;
+    // send rombank address every 256 bytes (and on the first byte of an unaligned chunk)
+    if (j == 0 || a % 256 == 0) {
+      spi_send(CMD_ROMBANK, 0, (uint8_t)((a & 0x0000FF00) >> 8));
+      spi_send(CMD_ROMBANK, 1, (uint8_t)((a & 0x00FF0000) >> 16));
+      spi_send(CMD_ROMBANK, 2, (uint8_t)((a & 0xFF000000) >> 24));
+    }
+    // send lower 256 bytes
+    spi_send(CMD_ROMDATA, (uint8_t)(a & 0x000000FF), buf[j]);
+  }
+}
+
+void rom_progress(uint32_t rom_idx, uint32_t sent) {
+  zxosd.setPos(4,5+rom_idx);
+  zxosd.print(rom_idx+1); zxosd.print(": ");
+  char b[40];
+  sprintf(b, "%05lu", (unsigned long) sent); zxosd.print(b); zxosd.print(" ");
+  zxosd.update();
+}
+
 void read_roms(const char* filename) {
 
   sd1.chvol();
@@ -1438,50 +1461,37 @@ void read_roms(const char* filename) {
   uint32_t offset = 0;
   uint32_t rom_idx = 0;
   while (roms_len > 0) {
-    uint32_t rom_len = file_read32(FILE_POS_BITSTREAM_START + bitstream_length + offset);
+    uint32_t rom_pos = FILE_POS_BITSTREAM_START + bitstream_length + offset;
+    uint32_t rom_len = file_read32(rom_pos);
     bool rom_is_external = bitRead(rom_len, 31);
     rom_len = bitClear(rom_len, 31);
-    uint32_t rom_addr = file_read32(FILE_POS_BITSTREAM_START + bitstream_length + offset + 4);
+    uint32_t rom_addr = file_read32(rom_pos + 4);
     d_print("ROM #"); d_print(rom_idx); d_print(": addr="); d_print(rom_addr); d_print(", len="); d_println(rom_len);
+
+    // sanity check to not run away on a broken core file
+    if (rom_len + 8 > roms_len) {
+      d_println("ROM block is out of bounds, skipping the rest");
+      break;
+    }
+
+    uint8_t buf[256];
     if (rom_is_external) {
+      // external rom block contains a rom filename (rom_len bytes) instead of a rom data
       char rom_filename[256];
+      size_t name_len = (rom_len < sizeof(rom_filename)) ? rom_len : sizeof(rom_filename) - 1;
+      file_seek(rom_pos + 8);
+      name_len = file_read_bytes(rom_filename, name_len);
+      rom_filename[name_len] = '\0';
       d_print("External ROM "); d_println(rom_filename);
 
-      // todo: read and send external rom from sd1
       if (sd1.exists(rom_filename)) {
         file2 = sd1.open(rom_filename, FILE_READ);
-        char buf[256];
-        int i=0;
-        while (int c = file2.read(buf, sizeof(buf))) {
-          for (int j=0; j<256; j++) {
-
-            uint32_t addr = rom_addr + i*256 + j;
-            uint8_t data = buf[j];
-
-            // send rombank address every 256 bytes
-              if (addr % 256 == 0) {
-                uint8_t rombank3 = (uint8_t)((addr & 0xFF000000) >> 24);
-                uint8_t rombank2 = (uint8_t)((addr & 0x00FF0000) >> 16);
-                uint8_t rombank1 = (uint8_t)((addr & 0x0000FF00) >> 8);
-                //d_printf("ROM bank %d %d %d", rombank1, rombank2, rombank3); d_println();
-                spi_send(CMD_ROMBANK, 0, rombank1);
-                spi_send(CMD_ROMBANK, 1, rombank2);
-                spi_send(CMD_ROMBANK, 2, rombank3);
-              }
-              // send lower 256 bytes
-              uint8_t romaddr = (uint8_t)((addr & 0x000000FF));
-              spi_send(CMD_ROMDATA, romaddr, data);
-
-          }
-          if (rom_len > 0) {
-            zxosd.setPos(4,5+rom_idx);
-            //uint8_t perc = ceil((float) i*256 * (100.0 / rom_len));
-            zxosd.print(rom_idx+1); zxosd.print(": ");
-            char b[40];
-            sprintf(b, "%05d", (i+1)*256); zxosd.print(b); zxosd.print(" ");
-            zxosd.update();
-          }
-          i++;
+        uint32_t sent = 0;
+        int c;
+        while ((c = file2.read(buf, sizeof(buf))) > 0) {
+          rom_send(rom_addr + sent, buf, c);
+          sent += c;
+          rom_progress(rom_idx, sent);
         }
         file2.close();
       } else {
@@ -1491,37 +1501,15 @@ void read_roms(const char* filename) {
         zxosd.update();
       }
     } else {
-      for (uint32_t i=0; i<rom_len/256; i++) {
-        char buf[256];
-        int c = file_read_bytes(buf, sizeof(buf));
-        for (int j=0; j<256; j++) {
-
-          uint32_t addr = rom_addr + i*256 + j;
-          uint8_t data = buf[j];
-
-          // send rombank address every 256 bytes
-            if (addr % 256 == 0) {
-              uint8_t rombank3 = (uint8_t)((addr & 0xFF000000) >> 24);
-              uint8_t rombank2 = (uint8_t)((addr & 0x00FF0000) >> 16);
-              uint8_t rombank1 = (uint8_t)((addr & 0x0000FF00) >> 8);
-              //d_printf("ROM bank %d %d %d", rombank1, rombank2, rombank3); d_println();
-              spi_send(CMD_ROMBANK, 0, rombank1);
-              spi_send(CMD_ROMBANK, 1, rombank2);
-              spi_send(CMD_ROMBANK, 2, rombank3);
-            }
-            // send lower 256 bytes
-            uint8_t romaddr = (uint8_t)((addr & 0x000000FF));
-            spi_send(CMD_ROMDATA, romaddr, data);
-
-        }
-        if (rom_len > 0) {
-          zxosd.setPos(4,5+rom_idx);
-          //uint8_t perc = ceil((float) i*256 * (100.0 / rom_len));
-          zxosd.print(rom_idx+1); zxosd.print(": ");
-          char b[40];
-          sprintf(b, "%05d", (i+1)*256); zxosd.print(b); zxosd.print(" ");
-          zxosd.update();
-        }
+      file_seek(rom_pos + 8);
+      uint32_t sent = 0;
+      while (sent < rom_len) {
+        size_t chunk = (rom_len - sent < sizeof(buf)) ? rom_len - sent : sizeof(buf);
+        size_t c = file_read_bytes((char*) buf, chunk);
+        if (c == 0) break;
+        rom_send(rom_addr + sent, buf, c);
+        sent += c;
+        rom_progress(rom_idx, sent);
       }
     }
     offset = offset + rom_len + 8;
