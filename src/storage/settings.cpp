@@ -41,8 +41,13 @@ void load_setup() {
   sd1.chvol();
 
   if (ini.open()) {
-    // validate file
+    // validate file (every line, comments included, must fit into the buffer)
     if (!ini.validate(buffer, bufferLen)) {
+      // always report it: the defaults are used and debug= is not read either
+      hw_setup.debug_enabled = true;
+      d_printf("karabas.ini is invalid (error %d, lines are limited to %u chars), using the defaults",
+        (int) ini.getError(), (unsigned) (bufferLen - 1)); d_println();
+      hw_setup.debug_enabled = false;
       ini.close();
       return;
     }

@@ -87,6 +87,6 @@ The firmware runs on FreeRTOS only (`main.cpp` stops the build with `#error` oth
 
 **`lib/KarabasCommon`**: hardware-independent logic with no Arduino includes, unit-tested on the native platform. It contains `kg_format` (core file and ROM block parsing) and `hid_joy_map` (`drivers/*.ini` mapping). New pure logic that is worth testing goes here.
 
-**Runtime config**: on the SD card, `karabas.ini` is read by `load_setup()` (see `src/karabas.ini` for the keys). USB joystick mappings are `*.ini` files in `drivers/`, described in `drivers/example_ini.txt`.
+**Runtime config**: on the SD card, `karabas.ini` is read by `load_setup()` (see `src/karabas.ini` for the keys). Every line, comments included, must fit into the 80-byte read buffer (79 chars). A longer line makes `ini.validate()` reject the whole file, and the firmware silently falls back to the defaults (it logs `karabas.ini is invalid`). Keep `src/karabas.ini` free of long comments: it is shipped to users as is. USB joystick mappings are `*.ini` files in `drivers/`, described in `drivers/example_ini.txt`.
 
 **Optional peripherals** are detected at boot and tracked by flags (`has_ft`, `has_matrix`, `has_oled`, `has_extender`, ...). Code should check the relevant flag before touching the device. The dot-matrix add-on and its ZX-side register interface are documented in `MATRIX.md`.
