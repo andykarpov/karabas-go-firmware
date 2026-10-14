@@ -1,9 +1,9 @@
 #pragma once
 
 // Slow I2C peripherals (LED matrix, OLED). Plain build: periph_tick() from the main loop.
-// FreeRTOS: a PERIPH task at APP's priority runs them, so the scheduler time-slices the
-// busy-polled I2C transfers (a full 512-byte OLED frame is ~12 ms at 400 kHz) with the APP loop
-// instead of stalling it.
+// FreeRTOS: a MATRIX task (above APP, exact 20 ms period) and an OLED task (APP's priority,
+// time-sliced with it: a full OLED frame is ~12 ms of busy-polled I2C), created only for the
+// devices that were found.
 
 void periph_tick();        // plain build: call from the main loop (no-op under FreeRTOS)
-void periph_task_start();  // FreeRTOS: start the PERIPH task (after matrix/oled are set up)
+void periph_task_start();  // FreeRTOS: start the MATRIX / OLED tasks (after matrix/oled are set up)

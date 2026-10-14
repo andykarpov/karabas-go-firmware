@@ -26,17 +26,28 @@ void oled_begin() {
   }
 }
 
+bool oled_present() {
+  return has_oled;
+}
+
+// one 20 ms frame of the scrolling logo
+void oled_frame() {
+  if (!has_oled) return;
+  I2cGuard i2c;
+  if (oled_scrollpos >= -112) {
+    oled_scrollpos--;
+  } else {
+    oled_scrollpos = 128;
+  }
+  oled.clearDisplay();
+  oled.drawBitmap(oled_scrollpos, 0, logoBw, 112, 32, WHITE); // karabas go logo 112x32 bw
+  oled.display(); // show default adafruit buffer
+}
+
+// plain build: called from the main loop
 void oled_tick() {
   if (has_oled && oled_timer.elapsed() >= 20) {
     oled_timer.reset();
-    I2cGuard i2c;
-    if (oled_scrollpos >= -112) {
-      oled_scrollpos--;
-    } else {
-      oled_scrollpos = 128;
-    }
-    oled.clearDisplay();
-    oled.drawBitmap(oled_scrollpos, 0, logoBw, 112, 32, WHITE); // karabas go logo 112x32 bw
-    oled.display(); // show default adafruit buffer
+    oled_frame();
   }
 }

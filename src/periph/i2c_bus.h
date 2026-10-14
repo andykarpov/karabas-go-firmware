@@ -1,6 +1,6 @@
 #pragma once
 
-// I2C bus lock (recursive), no-op without FreeRTOS. The bus is shared by the PERIPH task
+// I2C bus lock (recursive), no-op without FreeRTOS. The bus is shared by the MATRIX and OLED tasks
 // (LED matrix, OLED) and APP (RTC + EEPROM, matrix commands from the fpga, Go io extender).
 // Lock order: the SPI bus lock may be held when taking this one, never the other way round:
 // release the I2C lock before calling spi_send().

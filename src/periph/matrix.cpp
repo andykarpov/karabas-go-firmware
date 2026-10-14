@@ -4,11 +4,16 @@
 // Optional dot matrix addon (2x HT16K33 bi-color 8x8), see MATRIX.md
 //
 // The display buffer and the mode are shared by the fpga command handlers (APP) and
-// matrix_tick() (PERIPH task under FreeRTOS): every access to `matrix` holds the I2C lock.
+// matrix_frame() (MATRIX task under FreeRTOS): every access to `matrix` holds the I2C lock.
 
 #define MATRIX_MODE_SCROLL 0
 #define MATRIX_MODE_DRAW 1
 #define MATRIX_MODE_AUDIO 2
+#define MATRIX_MODE_LOADING 3 // core load in progress: the loader draws its progress bar
+
+#define MATRIX_FRAME_MS 20      // frame period
+#define MATRIX_SCROLL_FRAMES 5  // scroll text one pixel every 5 frames (100 ms)
+#define MATRIX_POLL_FRAMES 5    // poll the buttons every 5 frames (100 ms)
 
 static MultiMatrixDisplay matrix = MultiMatrixDisplay();
 static bool has_matrix = false;
@@ -17,7 +22,7 @@ static volatile uint16_t audio_l, audio_r; // peak meters: raised by APP, decaye
 static const String matrix_msg = "KARABAS GO ";
 static const int matrix_msg_width = matrix_msg.length() * 6; // 6 pixels per character width
 static int matrix_msg_scrollpos = 16;
-static ElapsedTimer matrix_timer, matrix_scroll_timer, matrix_poll_timer;
+static ElapsedTimer matrix_timer;
 
 void matrix_init()
 {
@@ -146,7 +151,7 @@ void matrix_progress(uint32_t val, uint32_t max) {
 }
 
 void matrix_on_configure_start() {
-  matrix_mode = MATRIX_MODE_AUDIO;
+  matrix_mode = MATRIX_MODE_LOADING;
   if (has_matrix) {
     I2cGuard i2c;
     matrix.clear();
@@ -166,9 +171,16 @@ void matrix_on_configure_done(uint8_t core_type) {
   }
 }
 
-void matrix_tick() {
-  if (!has_matrix || matrix_timer.elapsed() < 20) return;
-  matrix_timer.reset();
+bool matrix_present() {
+  return has_matrix;
+}
+
+// one display frame, called every MATRIX_FRAME_MS (scroll and button poll are counted in
+// frames, so they stay evenly spaced however the frames are scheduled)
+void matrix_frame() {
+  if (!has_matrix) return;
+  static uint32_t frame = 0;
+  frame++;
 
   static uint8_t prev_btns = 0;
   uint8_t btns = prev_btns;
@@ -179,16 +191,14 @@ void matrix_tick() {
         matrix_draw_audio();
         break;
       case MATRIX_MODE_SCROLL:
-        if (matrix_scroll_timer.elapsed() >= 100) {
-          matrix_scroll_timer.reset();
+        if (frame % MATRIX_SCROLL_FRAMES == 0) {
           matrix_scroll_text();
         }
         break;
     }
 
     // poll HT16k33 for buttons
-    if (matrix_poll_timer.elapsed() >= 100) {
-      matrix_poll_timer.reset();
+    if (frame % MATRIX_POLL_FRAMES == 0) {
       btns = matrix.readKeys() & 0x0F;
     }
   }
@@ -202,4 +212,12 @@ void matrix_tick() {
     }
   }
   prev_btns = btns;
+}
+
+// plain build: called from the main loop
+void matrix_tick() {
+  if (has_matrix && matrix_timer.elapsed() >= MATRIX_FRAME_MS) {
+    matrix_timer.reset();
+    matrix_frame();
+  }
 }
