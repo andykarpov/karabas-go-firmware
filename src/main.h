@@ -39,6 +39,7 @@
 extern RTC zxrtc;
 extern EspSerial esp_serial;
 extern ESP8266 wifi;
+extern volatile bool usb_host_ready; // set by core1 once PIO-USB has claimed its PIO/DMA resources
 void halt(const char* msg);
 
 // hid_app.cpp / hid_driver.cpp

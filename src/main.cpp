@@ -30,6 +30,7 @@
 #include "app_core_browser.h"
 
 RTC zxrtc;
+volatile bool usb_host_ready = false;
 EspSerial esp_serial;
 ESP8266 wifi(esp_serial);
 
@@ -140,6 +141,7 @@ void setup1() {
   pio_cfg.pinout = (PIO_USB_PINOUT) board_usb_pinout();
   tuh_configure(1, TUH_CFGID_RPI_PIO_USB_CONFIGURATION, &pio_cfg);
   tuh_init(1);
+  usb_host_ready = true;
 }
 
 void loop()
