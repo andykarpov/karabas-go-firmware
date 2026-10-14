@@ -8,21 +8,22 @@ This is the RP2040 (Raspberry Pi Pico) MCU firmware for the Karabas Go family of
 
 ## Build / upload
 
-PlatformIO has a single env, `pico`. The target board is chosen at compile time with `HW_ID`:
+Each board has its own PlatformIO env, which sets `HW_ID`:
 
-| HW_ID | Board | Core file ext | Build script |
-|---|---|---|---|
-| 1 | Karabas Go | `.kg1` | `build.sh` |
-| 2 | Karabas Mini | `.kg2` | `build_mini.sh` |
-| 3 | Karabas Mini G | `.kg3` | `build_minig.sh` |
+| Env | HW_ID | Board | Core file ext | Release script |
+|---|---|---|---|---|
+| `go` | 1 | Karabas Go | `.kg1` | `build.sh` |
+| `mini` | 2 | Karabas Mini | `.kg2` | `build_mini.sh` |
+| `minig` | 3 | Karabas Mini G | `.kg3` | `build_minig.sh` |
 
-- `src/config.h` defaults `HW_ID` to **3** when the flag is not set. A plain `pio run` therefore builds the Mini G firmware, not the Go firmware.
-- To build for a specific board: `PLATFORMIO_BUILD_FLAGS="-DHW_ID=1 -DBUILD_VER=dev" pio run`
-- To upload: `pio run -t upload` (port `/dev/ttyUSBPico`). Alternatively, copy `.pio/build/pico/firmware.uf2` to the drive that appears in BOOTSEL mode.
-- The `build*.sh` scripts clean, build with a date-stamped `BUILD_VER`, then copy `firmware.uf2` and `src/karabas.ini` into sibling repos (`../karabas-go/...`, `../../karabas-mini/...`). They are release scripts, not dev loops.
-- `lib_extra_dirs = ../lib/` also pulls in libraries from the parent directory, in addition to the local `lib/`.
-- The pre-build script `apply_patches.py` patches Adafruit TinyUSB (`Adafruit_USBH_Host.cpp`) and the SdFat Adafruit fork (`SdFatConfig.h`) using `patches/`. It runs once and leaves a `.patching-done` marker beside each patched file. If those packages are reinstalled, the marker disappears and the patch is re-applied.
-- There are no unit tests (`test/` is the PlatformIO placeholder). To debug, set `debug=1` in `karabas.ini`, which enables the `d_print*` macros, or uncomment `-D WAIT_SERIAL=1` in `platformio.ini`.
+- To build one board: `pio run -e go`. A plain `pio run` builds `minig` (`default_envs`).
+- To build all boards: `pio run -e go -e mini -e minig`. A change must keep all three compiling. CI (`.github/workflows/build.yml`) builds all three and runs the tests.
+- To run the unit tests: `pio test -e native`. To run a single suite: `pio test -e native -f test_kg_format`. The tests cover only `lib/KarabasCommon`.
+- To upload: `pio run -e <env> -t upload` (port `/dev/ttyUSBPico`). Alternatively, copy `.pio/build/<env>/firmware.uf2` to the drive that appears in BOOTSEL mode.
+- `BUILD_VER` comes from `PLATFORMIO_BUILD_FLAGS="-DBUILD_VER=..."`. The `build*.sh` scripts set it to a date stamp, then copy `firmware.uf2` and `src/karabas.ini` into sibling repos (`../karabas-go/...`, `../../karabas-mini/...`). They are release scripts, not dev loops.
+- Library versions in `lib_deps` are pinned on purpose. GyverMenu 1.1.0 breaks `app_setup.cpp`.
+- The pre-build script `apply_patches.py` patches Adafruit TinyUSB (`Adafruit_USBH_Host.cpp`) and the SdFat Adafruit fork (`SdFatConfig.h`) using `patches/`. It runs once per env and leaves a `.patching-done` marker beside each patched file. If a patch does not apply, the build fails. When bumping one of these libraries, regenerate its patch.
+- To debug, set `debug=1` in `karabas.ini`, which enables the `d_print*` macros, or uncomment `-D WAIT_SERIAL=1` in `platformio.ini`.
 
 ## Architecture
 
@@ -38,6 +39,7 @@ PlatformIO has a single env, `pico`. The target board is chosen at compile time 
 
 **Core files (`.kg1/.kg2/.kg3`)**:
 - Each file has a fixed binary header followed by the FPGA bitstream. Field offsets are the `FILE_POS_*` constants in `config.h`. The bitstream starts at 1024. EEPROM and switches data live at 256 and 512.
+- After the bitstream comes a ROM section made of blocks. Each block has a big-endian `len` (bit 31 means external), then `addr`, then `len` bytes of payload: ROM data, or the filename of an external ROM. The writer is `make_core` in the sibling `karabas-go-tools` repo.
 - Some fields are written back into the core file itself, such as the file loader dir and filename and the saved OSD switches.
 - `read_core()` parses the header into the global `core` (`core_item_t` in `types.h`), including the OSD item definitions. `do_configure()`/`fpga_send()` then bit-bang the bitstream through the `PIN_CONF_*` pins.
 - Core types: BOOT (the core browser), OSD (a normal core with an overlay menu), FILELOADER, and HIDDEN.
@@ -47,7 +49,9 @@ PlatformIO has a single env, `pico`. The target board is chosen at compile time 
 - `osd_handle()` redraws the overlay whenever the state changes.
 - The core browser has two renderers: a text one through the FPGA OSD (`lib/OSD`) and a graphical one through the FT812 (`lib/FT812`), used when it's present and enabled.
 
-**Per-board code**: pin maps and board-specific behaviour are wrapped in `#if HW_ID == ...` blocks across `config.h` and `main.cpp`. For example, Sega joysticks and the I/O extender exist only on the Go, and the ESP, MIDI and FT reset pins only on the Mini G. A change to one board must keep the other `HW_ID` builds compiling.
+**Per-board code**: pin maps are in `config.h`. Board behaviour lives behind the `src/board/board.h` API, implemented by `board_go.cpp` (I2C extender, Sega joysticks) and `board_mini.cpp` (Mini and Mini G, including the Mini G ESP, MIDI and FT reset lines). Outside `config.h`, `bitmaps.h` (logo selection) and `src/board/`, code must not use `#if HW_ID`. Add a `board_*` function instead.
+
+**`lib/KarabasCommon`**: hardware-independent logic with no Arduino includes, unit-tested on the native platform. It contains `kg_format` (core file and ROM block parsing) and `hid_joy_map` (`drivers/*.ini` mapping). New pure logic that is worth testing goes here.
 
 **Runtime config**: on the SD card, `karabas.ini` is read by `load_setup()` (see `src/karabas.ini` for the keys). USB joystick mappings are `*.ini` files in `drivers/`, described in `drivers/example_ini.txt`.
 
