@@ -864,9 +864,6 @@ uint32_t fpga_send(const char* filename) {
   pinMode(PIN_CONF_CLK, OUTPUT);
   pinMode(PIN_CONF_IO1, OUTPUT);
 
-  pinMode(PIN_CONF_CLK, OUTPUT);
-  pinMode(PIN_CONF_IO1, OUTPUT);
-
   // pulse PROG_B
   digitalWrite(PIN_CONF_PRG_B, HIGH);
   digitalWrite(PIN_CONF_PRG_B, LOW);
@@ -877,18 +874,19 @@ uint32_t fpga_send(const char* filename) {
 
   my_timer.reset();
 
-  int i = 0;
+  uint32_t total = length;
+  uint32_t i = 0;
   bool blink = false;
   char line[128];
-  uint8_t n;
+  int n;
 
   digitalWrite(PIN_CONF_CLK, LOW);
 
-  while ((n = file_read_buf(line, (sizeof(line) < length ? sizeof(line) : length) ))) {
+  while (length > 0 && (n = file_read_buf(line, (sizeof(line) < length ? sizeof(line) : length) )) > 0) {
     i += n;
     length -=n;
 
-    for (uint8_t s=0; s<n; s++) {
+    for (int s=0; s<n; s++) {
       uint8_t c = line[s];
       for (uint8_t j=0; j<8; ++j) {
         // Set bit of data
@@ -899,13 +897,13 @@ uint32_t fpga_send(const char* filename) {
       }
     }
 
-    if ((i % 8192 == 0) || (i == length-1)) {
+    if ((i % 8192 == 0) || (length == 0)) {
       blink = !blink;
       led_write(0, blink);
       led_write(1, blink);
       if (has_matrix) {
-        matrix.drawLine(0, 0, map(i, 0, length, 0, 15), 0, LED_GREEN);
-        matrix.drawLine(0, 1, map(i, 0, length, 0, 15), 1, LED_GREEN);
+        matrix.drawLine(0, 0, map(i, 0, total, 0, 15), 0, LED_GREEN);
+        matrix.drawLine(0, 1, map(i, 0, total, 0, 15), 1, LED_GREEN);
         matrix.writeDisplay();
       }
     }
@@ -915,20 +913,25 @@ uint32_t fpga_send(const char* filename) {
   pinMode(PIN_CONF_CLK, INPUT);
   pinMode(PIN_CONF_IO1, INPUT);
 
-  pinMode(PIN_CONF_CLK, INPUT);
-  pinMode(PIN_CONF_IO1, INPUT);
-
   d_print(i, DEC); d_println(" bytes done");
   d_print("Elapsed time: "); d_print(my_timer.elapsed(), DEC); d_println(" ms");
   d_flush();
 
+  if (i < total) {
+    d_print("Bitstream is truncated, expected "); d_print(total, DEC); d_println(" bytes");
+  }
+
   d_print("Waiting for CONF_DONE... ");
+  my_timer.reset();
   while(digitalRead(PIN_CONF_DONE) == LOW) {
+    if (my_timer.elapsed() >= 1000) {
+      halt("FPGA configuration failed: CONF_DONE timeout");
+    }
     delay(10);
   }
   d_println("Done");
 
-  return length;
+  return i;
 }
 
 void spi_queue(uint8_t cmd, uint8_t addr, uint8_t data) {
