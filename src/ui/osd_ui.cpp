@@ -8,8 +8,8 @@
 // OSD state and the app screens (one per osd_state)
 
 OSD zxosd;
-bool is_osd = false;
-bool is_osd_hiding = false;
+volatile bool is_osd = false;       // also read by the input task
+volatile bool is_osd_hiding = false;
 bool need_redraw = false;
 bool has_ft = false;
 ElapsedTimer hide_timer;

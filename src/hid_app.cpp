@@ -19,8 +19,13 @@ static hid_keyboard_report_t kbd_report_shared = {0};
 
 void hid_kbd_report_sync()
 {
+  hid_kbd_report_get(&usb_keyboard_report);
+}
+
+void hid_kbd_report_get(hid_keyboard_report_t *report)
+{
   mutex_enter_blocking(&kbd_report_mutex);
-  usb_keyboard_report = kbd_report_shared;
+  *report = kbd_report_shared;
   mutex_exit(&kbd_report_mutex);
 }
 

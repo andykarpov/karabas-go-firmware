@@ -279,6 +279,9 @@ void app_file_loader_send_file(uint16_t file_id) {
   uint8_t buf[512];
   int c;
 
+  // keep the whole file transfer together on the fpga link
+  spi_bus_lock();
+
   // trigger reset
   spi_send(CMD_FILELOADER, 0, 3); // 11 - active = 1, reset = 1
   spi_send(CMD_FILELOADER, 0, 2); // 10 - active = 1, reset = 0
@@ -308,6 +311,7 @@ uint32_t c1 = 0;
   
   // 00 - active = 0, reset = 0
   spi_send(CMD_FILELOADER, 0, 0);
+  spi_bus_unlock();
 
   file1.close();
   d_printf("Sent %u bytes", cnt); d_println();

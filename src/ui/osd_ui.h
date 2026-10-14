@@ -5,8 +5,8 @@
 #include "ElapsedTimer.h"
 
 extern OSD zxosd;
-extern bool is_osd;
-extern bool is_osd_hiding;
+extern volatile bool is_osd;
+extern volatile bool is_osd_hiding;
 extern bool need_redraw;
 extern bool has_ft;
 extern ElapsedTimer hide_timer;

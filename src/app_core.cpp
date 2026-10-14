@@ -605,6 +605,7 @@ void app_core_on_select_file() {
     zxosd.update();
 
     // send ioctl slot id, file data for file loader type
+    SpiBusGuard bus; // keep the whole ioctl transfer together on the fpga link
     spi_send(CMD_IOCTL_STATE, 0, 1); // start
     spi_send(CMD_IOCTL_SLOT, 0, core.osd[curr_osd_item].slot_id);
 

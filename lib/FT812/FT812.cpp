@@ -28,6 +28,11 @@
 #include <SPI.h>
 #include <FT812.h>
 #include <Arduino.h>
+
+// karabas: SPI0 is shared with the FPGA link; the firmware serializes bus access with these
+// (recursive) hooks around every FT81x transaction (src/fpga/link.cpp)
+extern "C" void ft812_bus_lock(void);
+extern "C" void ft812_bus_unlock(void);
 #include <ElapsedTimer.h>
 
 /****************************************************************************/
@@ -622,6 +627,7 @@ uint8_t FT812::initBitmapHandleForFont(uint8_t font) {
 void FT812::writeGRAM(const uint32_t offset, const uint32_t size, const uint8_t *data, const bool useProgmem) {
     uint32_t cmd = (FT81x_RAM_G + offset) | WRITE;
 
+    ft812_bus_lock();
     SPI.beginTransaction(FT81x_SPI_SETTINGS);
     digitalWrite(pin_cs, LOW);
 
@@ -641,11 +647,13 @@ void FT812::writeGRAM(const uint32_t offset, const uint32_t size, const uint8_t 
 
     digitalWrite(pin_cs, HIGH);
     SPI.endTransaction();
+    ft812_bus_unlock();
 }
 
 void FT812::startCmd(const uint32_t cmd) {
     uint32_t addr = (FT81x_RAM_CMD + cmdWriteAddress) | WRITE;
 
+    ft812_bus_lock();
     SPI.beginTransaction(FT81x_SPI_SETTINGS);
     digitalWrite(pin_cs, LOW);
 
@@ -679,6 +687,7 @@ void FT812::endCmd(const uint32_t cmd) {
 
     digitalWrite(pin_cs, HIGH);
     SPI.endTransaction();
+    ft812_bus_unlock();
 
     increaseCmdWriteAddress(4);
 
@@ -687,6 +696,7 @@ void FT812::endCmd(const uint32_t cmd) {
 
 void FT812::sendCommand(const uint32_t cmd) {
 
+    ft812_bus_lock();
     SPI.beginTransaction(FT81x_SPI_LOW_SETTINGS);
     digitalWrite(pin_cs, LOW);
     SPI.transfer(cmd >> 16);
@@ -694,12 +704,14 @@ void FT812::sendCommand(const uint32_t cmd) {
     uint8_t res = SPI.transfer(cmd);
     digitalWrite(pin_cs, HIGH);
     SPI.endTransaction();
+    ft812_bus_unlock();
     //delay(200);
     //Serial.printf("Command %d result %d", cmd, res); Serial.println();
 }
 
 uint8_t FT812::read8(const uint32_t address) {
     uint32_t cmd = address | READ;
+    ft812_bus_lock();
     SPI.beginTransaction(FT81x_SPI_SETTINGS);
     digitalWrite(pin_cs, LOW);
     SPI.transfer(cmd >> 16);
@@ -709,11 +721,13 @@ uint8_t FT812::read8(const uint32_t address) {
     uint8_t result = SPI.transfer(0x00);
     digitalWrite(pin_cs, HIGH);
     SPI.endTransaction();
+    ft812_bus_unlock();
     return result;
 }
 
 uint16_t FT812::read16(const uint32_t address) {
     uint32_t cmd = address | READ;
+    ft812_bus_lock();
     SPI.beginTransaction(FT81x_SPI_SETTINGS);
     digitalWrite(pin_cs, LOW);
     SPI.transfer(cmd >> 16);
@@ -724,11 +738,13 @@ uint16_t FT812::read16(const uint32_t address) {
     result |= (SPI.transfer(0x00) << 8);
     digitalWrite(pin_cs, HIGH);
     SPI.endTransaction();
+    ft812_bus_unlock();
     return result;
 }
 
 uint32_t FT812::read32(const uint32_t address) {
     uint32_t cmd = address | READ;
+    ft812_bus_lock();
     SPI.beginTransaction(FT81x_SPI_SETTINGS);
     digitalWrite(pin_cs, LOW);
     SPI.transfer(cmd >> 16);
@@ -741,11 +757,13 @@ uint32_t FT812::read32(const uint32_t address) {
     result |= ((uint32_t)SPI.transfer(0x00) << 24);
     digitalWrite(pin_cs, HIGH);
     SPI.endTransaction();
+    ft812_bus_unlock();
     return result;
 }
 
 void FT812::write8(const uint32_t address, const uint8_t data) {
     uint32_t cmd = address | WRITE;
+    ft812_bus_lock();
     SPI.beginTransaction(FT81x_SPI_SETTINGS);
     digitalWrite(pin_cs, LOW);
     SPI.transfer(cmd >> 16);
@@ -754,10 +772,12 @@ void FT812::write8(const uint32_t address, const uint8_t data) {
     SPI.transfer(data);
     digitalWrite(pin_cs, HIGH);
     SPI.endTransaction();
+    ft812_bus_unlock();
 }
 
 void FT812::write16(const uint32_t address, const uint16_t data) {
     uint32_t cmd = address | WRITE;
+    ft812_bus_lock();
     SPI.beginTransaction(FT81x_SPI_SETTINGS);
     digitalWrite(pin_cs, LOW);
     SPI.transfer(cmd >> 16);
@@ -767,10 +787,12 @@ void FT812::write16(const uint32_t address, const uint16_t data) {
     SPI.transfer(data >> 8);
     digitalWrite(pin_cs, HIGH);
     SPI.endTransaction();
+    ft812_bus_unlock();
 }
 
 void FT812::write32(const uint32_t address, const uint32_t data) {
     uint32_t cmd = address | WRITE;
+    ft812_bus_lock();
     SPI.beginTransaction(FT81x_SPI_SETTINGS);
     digitalWrite(pin_cs, LOW);
     SPI.transfer(cmd >> 16);
@@ -782,4 +804,5 @@ void FT812::write32(const uint32_t address, const uint32_t data) {
     SPI.transfer(data >> 24);
     digitalWrite(pin_cs, HIGH);
     SPI.endTransaction();
+    ft812_bus_unlock();
 }

@@ -15,6 +15,8 @@ extern uint8_t joyUSB_len;
 
 // copy the latest keyboard report received by core1 into usb_keyboard_report (call from core0 only)
 void hid_kbd_report_sync();
+// copy the latest keyboard report received by core1 (any task, does not touch usb_keyboard_report)
+void hid_kbd_report_get(hid_keyboard_report_t *report);
 
 #include "hid_joy_map.h"
 

@@ -19,6 +19,14 @@ Each board has its own PlatformIO env, which sets `HW_ID`:
 - To build one board: `pio run -e go`. A plain `pio run` builds `minig` (`default_envs`).
 - To build all boards: `pio run -e go -e mini -e minig`. A change must keep all three compiling. CI (`.github/workflows/build.yml`) builds all three and runs the tests.
 - The FreeRTOS prototype is built by the `go_rtos`, `mini_rtos` and `minig_rtos` envs (`-D PIO_FRAMEWORK_ARDUINO_ENABLE_FREERTOS -D DIAG_STATS=1`). It is the same firmware, but `karabas_setup`/`karabas_loop` run in the `APP` task pinned to core 0, and the USB host runs in the `USB` task pinned to core 1 at high priority. Code that must differ under FreeRTOS checks `__FREERTOS`.
+- **Tasks and shared resources in the FreeRTOS build:**
+  - `APP` (core 0) runs the firmware loop.
+  - `INPUT` (core 0, priority above `APP`) forwards usb, ps2 and joystick events to the FPGA as soon as they arrive. It hands anything that needs the UI to `APP` and waits for `APP` on a hotkey.
+  - `USB` (core 1) runs the USB host.
+  - SPI0 (the FPGA link and FT812) is shared. Every transfer holds the recursive `spi_bus_lock`. Hold a `SpiBusGuard` around multi-frame sequences that must not interleave, such as core load, ROM and file transfers.
+  - Incoming FPGA commands are always handled in `APP`. Frames received by another task are queued and handled by `link_dispatch_pending()`.
+  - I2C (RTC, matrix, OLED, the Go extender), SD and the OSD state are used only from `APP`. Keep it that way, or add a lock first.
+  - In the plain build the locks are no-ops and everything runs in the main loop as before.
 - `DIAG_STATS=1` prints a `DIAG` line every 10 s when `debug=1`. It shows the loop rate and worst loop gap per core, the free heap and, under FreeRTOS, the free stack of the tasks.
 - To run the unit tests: `pio test -e native`. To run a single suite: `pio test -e native -f test_kg_format`. The tests cover only `lib/KarabasCommon`.
 - To upload: `pio run -e <env> -t upload` (port `/dev/ttyUSBPico`). Alternatively, copy `.pio/build/<env>/firmware.uf2` to the drive that appears in BOOTSEL mode.

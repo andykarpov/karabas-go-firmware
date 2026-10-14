@@ -211,6 +211,7 @@ static void karabas_loop()
   osd_handle(false);
 
   link_report_drops();
+  link_dispatch_pending();
   input_drain_events();
 
   serial_bridge_tick();
@@ -245,11 +246,15 @@ static void usb_host_loop()
 #define USB_TASK_PRIORITY (configMAX_PRIORITIES - 2) // above everything but the framework's flash idle tasks
 
 static void app_task(void *param) {
+  // incoming fpga commands are handled here, also when another task received them
+  link_set_dispatch_task(xTaskGetCurrentTaskHandle());
   // let PIO-USB claim its PIO memory, state machines and DMA channel first:
   // the SD card driver (PioSPI) would otherwise take PIO memory that the usb rx programs need
   ElapsedTimer wait;
   while (!usb_host_ready && wait.elapsed() < 2000) { delay(1); }
   karabas_setup();
+  // usb / ps2 / joystick events are forwarded by their own task from now on
+  input_task_start();
   // no yield here: every scheduler call takes the SMP kernel lock with interrupts off,
   // which could delay the PIO-USB SOF interrupt on core1
   for (;;) {
@@ -265,6 +270,7 @@ static void usb_task(void *param) {
 }
 
 void setup() {
+  link_os_init();
   // tasks must be created already pinned: the USB task has a higher priority than the
   // framework's CORE0 task running this code, so it starts immediately on creation.
   // Unpinned, it could start on core0 and starve CORE0 forever (it never blocks),

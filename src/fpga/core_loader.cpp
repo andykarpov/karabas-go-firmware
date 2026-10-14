@@ -88,6 +88,8 @@ void flashboot (uint8_t data) {
 }
 
 void do_configure(const char* filename) {
+  // the whole core load (bitstream, setup, roms) is one sequence on the fpga link
+  SpiBusGuard bus;
   matrix_on_configure_start();
   link_set_rx_enabled(false);
   ft.vga(false); // FT off
