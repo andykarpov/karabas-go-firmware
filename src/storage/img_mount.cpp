@@ -133,6 +133,26 @@ void img_register_handlers() {
     prev_pops = pops;
     prev_sent = sent;
   });
+  // debug: falls of the chip select the core saw (spikes too), frames it saw cut short, reply
+  // words it took during a burst (differences since the last report)
+  link_on(0x35, [](uint8_t addr, uint8_t data) {
+    static uint16_t prev = 0;
+    uint16_t v = (addr << 8) | data;
+    d_printf("Image: link check: core saw +%u chip select falls", (uint16_t) (v - prev)); d_println();
+    prev = v;
+  });
+  link_on(0x36, [](uint8_t addr, uint8_t data) {
+    static uint16_t prev = 0;
+    uint16_t v = (addr << 8) | data;
+    d_printf("Image: link check: core saw +%u frames cut short", (uint16_t) (v - prev)); d_println();
+    prev = v;
+  });
+  link_on(0x37, [](uint8_t addr, uint8_t data) {
+    static uint16_t prev = 0;
+    uint16_t v = (addr << 8) | data;
+    d_printf("Image: link check: core took +%u reply words during bursts", (uint16_t) (v - prev)); d_println();
+    prev = v;
+  });
 }
 
 void img_close_all() {
