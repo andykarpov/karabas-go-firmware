@@ -94,9 +94,12 @@ Commands that the core does not know must be ignored.
 | `0D` | `CMD_FILEDATA` | address bits 7..0 | file byte | |
 | `0E` | `CMD_FILELOADER` | 0 | bit 0 reset, bit 1 active | `3` then `2` before the file, `0` after it. |
 | `20` | `CMD_OSD` | register | value | OSD overlay, see section 6. |
-| `40` | `CMD_IMG_SLOT` | 0 | slot | File mounter. **Work in progress:** only `SLOT` and `SIZE` are sent yet. |
-| `41` | `CMD_IMG_SIZE` | byte index 0..7 | image size (LE) | First 0, then the real size. |
-| `42`–`45` | `CMD_IMG_LBA`, `_SEC`, `_BUF_BANK`, `_BUF_DATA` | | | Reserved for sector transfers. |
+| `40` | `CMD_IMG_SLOT` | 0 | slot | File mounter (`F` OSD items), see section 6. |
+| `41` | `CMD_IMG_SIZE` | byte index 0..7 | image size (LE) | First 0 (eject), then the real size. The core takes the image at byte 7. |
+| `42` | `CMD_IMG_LBA` | 0 / 1 | sum bits 7..0 / 15..8 | 16-bit sum of the sector read, after its data. |
+| `43` | `CMD_IMG_SEC` | slot | 1 = done, 2 = error | End of a sector request. |
+| `44` | `CMD_IMG_BUF_BANK` | 0 | sector offset bits 8..15 | Sector data of a read request (classic frames). |
+| `45` | `CMD_IMG_BUF_DATA` | offset bits 7..0 | byte | Same; also the burst type of the sector data, address = offset. |
 | `50` | `CMD_IOCTL_SLOT` | 0 | slot | Ioctl file loader (`FL` OSD items), see section 6. |
 | `51` | `CMD_IOCTL_SIZE` | byte index 0..7 | file size (LE) | |
 | `52` | `CMD_IOCTL_BANK` | byte index 0..2 | file address bits 15..8 / 23..16 / 31..24 | |
@@ -124,6 +127,10 @@ These are sent in the reply bytes of any transfer.
 | `0B` | `CMD_PS2_SCANCODE` | PS/2 command | argument | Keyboard commands from the core: `ED` = LEDs, `F0` = scancode set. |
 | `30` | `CMD_DEBUG_ADDRESS` | high byte | low byte | 16-bit value printed to the debug log. |
 | `31` | `CMD_DEBUG_DATA` | high byte | low byte | Same. |
+| `42` | `CMD_IMG_LBA` | byte index 0..3 | sector number (LE) | File mounter sector request, before `CMD_IMG_SEC`. |
+| `43` | `CMD_IMG_SEC` | slot | 1 = read, 2 = write | The request. The firmware serves it from its main loop, see section 6. |
+| `44` / `45` | `CMD_IMG_BUF_BANK` / `_DATA` | 0 / offset bits 7..0 | offset bits 8..15 / byte | Sector data of a write request, after the request. |
+| `44` | `CMD_IMG_BUF_BANK` | `10` / `11` | sum bits 7..0 / 15..8 | 16-bit sum of the sector written, after its data. |
 | `60` | `CMD_MATRIX_CTL` | 0 | bit 0 clear, bit 1 update, bit 2 set brightness (bits 7..4), bit 3 audio meter mode | LED matrix ([MATRIX.md](../MATRIX.md)). |
 | `61` | `CMD_MATRIX_PIXEL` | Y (bits 7..4), X (bits 3..0) | color: 0 black, 1 red, 2 green, 3 yellow | |
 | `62` | `CMD_MATRIX_BITPLAN` | byte 0..31 | bitmap byte | |
@@ -167,6 +174,47 @@ The core writes each byte to `address + offset`. Cores detect a write from a new
 52 i bank_i  (i = 0..2) / 53 a7..0 byte     bank + data
 55 00 00                        end
 ```
+
+### File mounter (`F` OSD items)
+
+The image file of a slot stays open (read-write if possible) while the core runs. Sectors are 512 bytes, numbered from the start of the file.
+
+Mount: at core start for every `F` item with a saved file, and when a file is selected in the OSD.
+
+```
+40 00 slot
+41 i 00      (i = 0..7)         size 0: eject
+41 i size_i  (i = 0..7)         the image; not sent without a file
+```
+
+Read request (the core sends its frames in the reply bytes):
+
+```
+FPGA: 42 i lba_i (i = 0..3), 43 slot 01
+MCU:  sector data: classic frames 44 00 offset_hi / 45 offset_lo byte
+      (or a burst of type 45, address = offset 0..511)
+MCU:  42 00 sum_lo, 42 01 sum_hi
+MCU:  43 slot 01 (done) or 43 slot 02 (error: no file, past its end, or an incomplete request)
+```
+
+Write request:
+
+```
+FPGA: 42 i lba_i (i = 0..3), 43 slot 02,
+      then 512 bytes: 44 00 offset_hi / 45 offset_lo byte, then 44 10 sum_lo, 44 11 sum_hi
+MCU:  polls with NOPs until the 512 bytes and the sum are in, writes the sector
+MCU:  43 slot 01 (done) or 43 slot 02 (error: data lost, no file)
+```
+
+One request at a time: the core waits for `43 slot status` before the next one.
+
+A frame used to get lost on the link now and then (on Mini G: chip select spikes and a reply queue that took two words in one frame, both fixed in the core). Requests are still checked end to end:
+
+- the firmware takes a request only with all four `42` bytes since `42 00`, and answers `43 slot 02` otherwise;
+- the core takes a read only with 512 bytes and the same sum; the firmware writes a sector only with all 512 bytes and the same sum;
+- the core sends a request again after an error answer, or after no answer in 200 ms (a lost `43`).
+
+The firmware sends the sector data of a read as one burst when the core has burst caps, as classic frames otherwise (and for whatever a burst did not send). The core checks the sum either way and passes a sector on only when it is complete and right. The data of a write request does not fit the reply queue of `mcu.vhd` (512 entries) together with the request, so the core queues it while the queue has room. A short last sector of a read is padded with zeros.
 
 ### OSD overlay (`CMD_OSD`)
 

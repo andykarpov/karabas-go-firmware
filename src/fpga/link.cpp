@@ -191,6 +191,9 @@ void spi_send(uint8_t cmd, uint8_t addr, uint8_t data) {
   // handler waiting for another bus (I2C) does not hold up the other spi users
   if ((rx[0] > 0) && link_rx_enabled) {
     if (in_dispatch_context()) {
+      // frames other tasks received earlier come first: transfers are serialized by the bus lock,
+      // so this keeps the order of the fpga's frames (a sector request is several frames)
+      link_dispatch_pending();
       process_in_cmd(rx[0], rx[1], rx[2]);
     } else {
       queue_spi_t packet = { rx[0], rx[1], rx[2] };

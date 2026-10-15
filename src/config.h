@@ -170,12 +170,11 @@
 #define CMD_DEBUG_ADDRESS 0x30
 #define CMD_DEBUG_DATA 0x31
 
-// filemounter files will be initiated (when core start or when new file is selected) in the following order:
-// send SLOT num  - 1 byte
-// send STATUS reg - 1 byte (with bits BUSY=1, DONE=0) - todo
-// send file SIZE - 4 bytes (value=0 when no file is mounted)
-// send MOUNTED - 1 byte (0, then 1 to trigger the latch on fpga side)
-// send STATUS reg - 1 byte (BUSY=0, DONE=1) - todo
+// file mounter (F OSD items), see docs/protocol.md section 6 and storage/img_mount.cpp:
+// mount: SLOT, SIZE 0 (eject), SIZE (the image, 8 bytes LE)
+// sector request from the fpga: LBA (4 bytes LE), SEC (addr = slot, data = 1 read / 2 write);
+// sector data: BUF_BANK + BUF_DATA (or a burst of type BUF_DATA); result to the fpga: SEC
+// (addr = slot, data = 1 done / 2 error)
 
 #define CMD_IMG_SLOT 0x40
 #define CMD_IMG_SIZE 0x41
@@ -183,8 +182,6 @@
 #define CMD_IMG_SEC 0x43
 #define CMD_IMG_BUF_BANK 0x44
 #define CMD_IMG_BUF_DATA 0x45
-
-// todo: other IMG commands here
 
 // fileloader files will be transferred in the following order:
 // 1. send SLOT num  - 1 byte

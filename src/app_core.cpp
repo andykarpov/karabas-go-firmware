@@ -648,14 +648,7 @@ void app_core_on_select_file() {
     zxosd.update();
 
   } else if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER) {
-    // send img slot id, size for file mounter type
-    spi_send(CMD_IMG_SLOT, 0, core.osd[curr_osd_item].slot_id);
-    uint64_t fsize = 0;
-    spi_send64(CMD_IMG_SIZE, fsize);
-    String fname = String(file_slots[core.osd[curr_osd_item].slot_id].dir) + "/" + String(file_slots[core.osd[curr_osd_item].slot_id].filename);
-    File32 file = sd1.open(fname);
-    fsize = file.size();
-    spi_send64(CMD_IMG_SIZE, fsize);
-    file.close();
+    // open the image and send its size (eject first)
+    img_mount(core.osd[curr_osd_item].slot_id);
   }
 }
