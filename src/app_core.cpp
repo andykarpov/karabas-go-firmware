@@ -16,6 +16,34 @@ bool is_filebrowser = false;
 int filebrowser_slot = -1;
 int prev_filebrowser_slot = -1;
 bool prev_is_filebrowser = false;
+// the dir of the slot when the file browser was opened: browsing changes the dir of the slot,
+// esc puts it back, so it stays the dir of the mounted image
+static char filebrowser_dir[256];
+
+// hash of the eject entry of the file browser: '*' is not in FAT names and sorts before "."
+#define FILEBROWSER_EJECT "*"
+
+static bool is_eject_entry(uint16_t i) {
+  return files[i].file_id == 0 && files[i].hash[0] == '*';
+}
+
+static void filebrowser_open() {
+  core_file_slot_t &fs = file_slots[core.osd[curr_osd_item].slot_id];
+  memcpy(filebrowser_dir, fs.dir, sizeof(filebrowser_dir));
+  is_filebrowser = true;
+}
+
+// eject the image of a file mounter item: the core gets size 0, the core file forgets the image
+static void app_core_eject(uint8_t pos) {
+  if (core.osd[pos].type != CORE_OSD_TYPE_FILEMOUNTER) return;
+  core_file_slot_t &fs = file_slots[core.osd[pos].slot_id];
+  d_printf("Eject slot %d", core.osd[pos].slot_id); d_println();
+  fs.filename[0] = '\0';
+  fs.is_mounted = false;
+  img_mount(core.osd[pos].slot_id);
+  filebrowser_slot = -1; // the file list has no eject entry now
+  core.osd_need_save = true;
+}
 
 uint8_t find_first_item() {
   if (core.osd_len > 0) {
@@ -108,6 +136,15 @@ void app_core_overlay(bool force)
     zxosd.print(" ");
     zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_FLASH); zxosd.print("A");
     zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK); zxosd.print("bout");
+    // file mounter items: delete ejects the image
+    for (uint8_t i=0; i<core.osd_len; i++) {
+      if (core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER) {
+        zxosd.print(" ");
+        zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_FLASH); zxosd.print("Del");
+        zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK); zxosd.print(" eject");
+        break;
+      }
+    }
   }
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK); 
   zxosd.line(24);
@@ -254,17 +291,19 @@ void app_core_on_keyboard() {
         }
         String hash = String(files[file_sel].hash);
         hash.trim();
+        // eject
+        if (is_eject_entry(file_sel)) {
+          app_core_eject(curr_osd_item);
+          is_filebrowser = false;
+        }
         // goto root (.)
-        if (files[file_sel].file_id == 0 && hash == ".") {
+        else if (files[file_sel].file_id == 0 && hash == ".") {
           String dir = "/";
-          String f = "";
           dir.toCharArray(file_slots[core.osd[curr_osd_item].slot_id].dir, sizeof(file_slots[core.osd[curr_osd_item].slot_id].dir));
-          f.toCharArray(file_slots[core.osd[curr_osd_item].slot_id].filename, sizeof(file_slots[core.osd[curr_osd_item].slot_id].filename));
-          // re-read files from root
+          // re-read files from root (the image stays mounted until a file is selected)
           file_sel = 0;
           cached_file_from = 0;
           cached_file_to = 0;
-          file_slots[core.osd[curr_osd_item].slot_id].is_mounted = false;
           app_core_init_filebrowser();
           app_core_filebrowser(APP_COREBROWSER_MENU_OFFSET);
           return;
@@ -272,8 +311,6 @@ void app_core_on_keyboard() {
         // goto parent (..)
         else if (files[file_sel].file_id == 0 && hash == "..") {
           String dir = String(file_slots[core.osd[curr_osd_item].slot_id].dir);
-          String f = "";
-          f.toCharArray(file_slots[core.osd[curr_osd_item].slot_id].filename, sizeof(file_slots[core.osd[curr_osd_item].slot_id].filename));
           dir = dir.substring(0, dir.lastIndexOf("/"));
           dir.replace("//", "/");
           d_print("Enter directory "); d_print(dir); d_println();
@@ -282,7 +319,6 @@ void app_core_on_keyboard() {
           file_sel = 0;
           cached_file_from = 0;
           cached_file_to = 0;
-          file_slots[core.osd[curr_osd_item].slot_id].is_mounted = false;
           app_core_init_filebrowser();
           app_core_filebrowser(APP_COREBROWSER_MENU_OFFSET);
           return;
@@ -295,14 +331,11 @@ void app_core_on_keyboard() {
             file1.getName(dirname, sizeof(dirname));
             String dir = String(file_slots[core.osd[curr_osd_item].slot_id].dir) + "/" + String(dirname);
             dir.replace("//", "/");
-            String f = "";
             dir.toCharArray(file_slots[core.osd[curr_osd_item].slot_id].dir, sizeof(file_slots[core.osd[curr_osd_item].slot_id].dir));
-            f.toCharArray(file_slots[core.osd[curr_osd_item].slot_id].filename, sizeof(file_slots[core.osd[curr_osd_item].slot_id].filename));
             file_sel = 0;
             cached_file_from = 0;
             cached_file_to = 0;
             file1.close();
-            file_slots[core.osd[curr_osd_item].slot_id].is_mounted = false;
             app_core_init_filebrowser();
             app_core_filebrowser(APP_COREBROWSER_MENU_OFFSET);
             return;
@@ -324,9 +357,9 @@ void app_core_on_keyboard() {
               file_slots[core.osd[curr_osd_item].slot_id].is_mounted = true;
               app_core_on_select_file();
               is_filebrowser = false; // exit from file browser mode
+              filebrowser_slot = -1; // the file list gets the eject entry
             } else {
               d_println("File extension does not match");
-              file_slots[core.osd[curr_osd_item].slot_id].is_mounted = false;
             }
           }
           file1.close();
@@ -337,8 +370,13 @@ void app_core_on_keyboard() {
       need_redraw = true;
     }
 
-    // esc
+    // esc: back to the dir of the mounted image
     if (usb_keyboard_report.keycode[0] == KEY_ESC || (joyL & SC_BTN_A) || (joyR & SC_BTN_A) ) {
+      core_file_slot_t &fs = file_slots[core.osd[curr_osd_item].slot_id];
+      if (strcmp(fs.dir, filebrowser_dir) != 0) {
+        memcpy(fs.dir, filebrowser_dir, sizeof(filebrowser_dir));
+        filebrowser_slot = -1;
+      }
       is_filebrowser = false;
       need_redraw = true;
     }
@@ -360,7 +398,7 @@ void app_core_on_keyboard() {
         // right, enter
         if (usb_keyboard_report.keycode[0] == KEY_RIGHT || usb_keyboard_report.keycode[0] == KEY_ENTER  || (joyL & SC_BTN_A) || (joyR & SC_BTN_A) || (joyL & SC_BTN_B) || (joyR & SC_BTN_B) || (joyL & SC_BTN_RIGHT) || (joyR & SC_BTN_RIGHT) ) {
           if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILELOADER) {
-            is_filebrowser = true;
+            filebrowser_open();
           } else {
             core.osd[curr_osd_item].val++; 
             if (core.osd[curr_osd_item].val > core.osd[curr_osd_item].options_len-1) {
@@ -377,7 +415,7 @@ void app_core_on_keyboard() {
         // left
         if (usb_keyboard_report.keycode[0] == KEY_LEFT || (joyL & SC_BTN_LEFT) || (joyR & SC_BTN_LEFT)) {
           if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILELOADER) {
-            is_filebrowser = true;
+            filebrowser_open();
           } else {
             if (core.osd[curr_osd_item].val > 0) {
               core.osd[curr_osd_item].val--;
@@ -390,6 +428,14 @@ void app_core_on_keyboard() {
             }
           }
           need_redraw = true;
+        }
+
+        // delete, backspace: eject the image of a file mounter item
+        if (usb_keyboard_report.keycode[0] == KEY_DELETE || usb_keyboard_report.keycode[0] == KEY_BACKSPACE) {
+          if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER && file_slots[core.osd[curr_osd_item].slot_id].is_mounted) {
+            app_core_eject(curr_osd_item);
+            need_redraw = true;
+          }
         }
 
         // s
@@ -465,8 +511,16 @@ int app_core_init_filebrowser() {
   cached_file_from = 0;
   cached_file_to = 0;
 
+  // add eject entry (a mounted image of a file mounter)
+  file_list_sort_item_t *item;
+  bool has_eject = false;
+  if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER && file_slots[core.osd[curr_osd_item].slot_id].is_mounted) {
+    item = files_append();
+    if (item) { strcpy(item->hash, FILEBROWSER_EJECT); has_eject = true; } // file_id 0
+  }
+
   // add root entry
-  file_list_sort_item_t *item = files_append();
+  item = files_append();
   if (item) strcpy(item->hash, "."); // file_id 0
 
   // add parent dir entry
@@ -498,9 +552,13 @@ int app_core_init_filebrowser() {
 
   std::sort(files, files + files_len);
 
-  // preselect file in browser after sorting
+  // preselect file in browser after sorting; not the eject entry (it sorts first) if the image
+  // is in another dir: enter must not eject by accident
+  if (has_eject && files_len > 1) {
+    file_sel = 1;
+  }
   for (uint16_t i=0; i<files_len; i++) {
-    if (presel_id == files[i].file_id) {
+    if (presel_id != 0 && presel_id == files[i].file_id) {
       file_sel = i;
     }
   }
@@ -540,7 +598,11 @@ void app_core_filebrowser(uint8_t vpos) {
         memcpy(name, cached_names[j].name, sizeof(name));
       } else {
         String h = String(files[i].hash);
-        if (files[i].file_id == 0 && (h == "." || h == "..")) {
+        if (is_eject_entry(i)) {
+          strcpy(name, "[ Eject ]");
+          strcpy(cached_names[j].name, name);
+        }
+        else if (files[i].file_id == 0 && (h == "." || h == "..")) {
           h.toCharArray(name, sizeof(name));
           h.toCharArray(cached_names[j].name, sizeof(cached_names[j].name));
         }
