@@ -4,58 +4,157 @@
 // The fpga asks for a sector in its reply frames: IMG_LBA (4 bytes), then IMG_SEC (addr = slot,
 // data = read / write). The handlers only take the request; img_tick() serves it from the main
 // loop, so a sector transfer never lands in the middle of another sequence on the link.
+//
+// A frame can get lost on the link now and then, so every request is checked end to end and the
+// core sends it again when the answer is an error:
+// - a request counts only with all 4 IMG_LBA bytes since IMG_LBA 0;
+// - read: the 16-bit sum of the sector follows the data (IMG_LBA 0 / 1, mcu -> fpga);
+// - write: the sum follows the data (IMG_BUF_BANK 10 / 11); the sector is written only with all
+//   512 bytes and the same sum.
 
 static uint32_t req_lba = 0;
 static uint8_t req_slot = 0;
 static uint8_t req_op = 0;
+static uint8_t lba_mask = 0;          // IMG_LBA bytes since IMG_LBA 0
+static bool req_complete = false;     // the request had all 4 IMG_LBA bytes
 static volatile bool req_pending = false;
+static volatile bool req_started = false; // IMG_LBA seen, IMG_SEC not yet
+static uint32_t req_start_us = 0;
 
 // sector data written by the core: IMG_BUF_BANK (offset bits 8..15) + IMG_BUF_DATA (offset
-// bits 0..7, byte), as for the roms
+// bits 0..7, byte), then its sum in IMG_BUF_BANK 10 / 11
 static uint8_t img_buf[IMG_SECTOR_SIZE];
+static uint8_t wr_seen[IMG_SECTOR_SIZE / 8]; // bytes received, one bit each
 static uint16_t wr_bank = 0;
 static uint16_t wr_count = 0;
+static uint16_t wr_sum = 0;
+static uint8_t wr_sum_seen = 0;       // bit 0: low byte, bit 1: high byte
 
-#define IMG_WRITE_POLLS 4000 // NOPs to pull one sector of write data (517 frames with the request)
+// debug: the core answers a read with the sum it got (CMD_DEBUG_DATA), reports its retries
+// (CMD_DEBUG_ADDRESS) and the number of reply frames it queued (CMD_DEBUG_FRAMES)
+static uint16_t img_frames = 0;
+
+// written sectors are flushed to the sd card once the writes stop (a sync per sector takes ~40 ms)
+static bool img_dirty[MAX_FILE_SLOTS];
+static uint32_t img_last_write_ms = 0;
+#define IMG_SYNC_IDLE_MS 500
+
+#define IMG_WRITE_POLLS 4000 // NOPs to pull one sector of write data (519 frames with the request)
+#define IMG_REQ_POLLS 32     // NOPs to pull the rest of a request (5 frames)
+#define IMG_FOLLOW_US 2000   // after a request, poll for the next one (the next sector of a track)
+#define IMG_TICK_MAX_US 20000 // at most this long in one img_tick()
+
+static uint16_t img_sum(const uint8_t *buf) {
+  uint16_t sum = 0;
+  for (int i = 0; i < IMG_SECTOR_SIZE; i++) sum += buf[i];
+  return sum;
+}
 
 void img_register_handlers() {
   link_on(CMD_IMG_LBA, [](uint8_t addr, uint8_t data) {
+    img_frames++;
+    if (addr == 0) {
+      req_started = true;
+      req_start_us = micros();
+      lba_mask = 0;
+    }
     if (addr < 4) {
       req_lba = (req_lba & ~(0xFFUL << (8 * addr))) | ((uint32_t) data << (8 * addr));
+      lba_mask |= 1 << addr;
     }
   });
   link_on(CMD_IMG_SEC, [](uint8_t addr, uint8_t data) {
+    img_frames++;
     req_slot = addr;
     req_op = data;
+    req_complete = (lba_mask == 0x0F);
+    lba_mask = 0;
     req_pending = true;
+    req_started = false;
   });
   link_on(CMD_IMG_BUF_BANK, [](uint8_t addr, uint8_t data) {
-    wr_bank = data;
+    img_frames++;
+    if (addr == 0) {
+      wr_bank = data;
+    } else if (addr == 0x10) {
+      wr_sum = (wr_sum & 0xFF00) | data;
+      wr_sum_seen |= 1;
+    } else if (addr == 0x11) {
+      wr_sum = (wr_sum & 0x00FF) | (data << 8);
+      wr_sum_seen |= 2;
+    }
   });
   link_on(CMD_IMG_BUF_DATA, [](uint8_t addr, uint8_t data) {
+    img_frames++;
     uint16_t pos = (wr_bank << 8) | addr;
     if (pos < IMG_SECTOR_SIZE) {
       img_buf[pos] = data;
-      wr_count++;
+      if (!(wr_seen[pos >> 3] & (1 << (pos & 7)))) {
+        wr_seen[pos >> 3] |= 1 << (pos & 7);
+        wr_count++;
+      }
     }
+  });
+  link_on(CMD_DEBUG_ADDRESS, [](uint8_t addr, uint8_t data) {
+    img_frames++;
+    d_printf("Image: core retries %04x", (addr << 8) | data); d_println();
+  });
+  link_on(CMD_DEBUG_FRAMES, [](uint8_t addr, uint8_t data) {
+    uint16_t v = (addr << 8) | data;
+    d_printf("Image: the core queued %u frames, the mcu got %u%s", v, img_frames,
+      v == img_frames ? "" : " (lost on the link)");
+    d_println();
+    img_frames = v + 1; // resync, this frame included
+  });
+  link_on(CMD_DEBUG_DATA, [](uint8_t addr, uint8_t data) {
+    img_frames++; // the sum the core got, checked by the core itself now
+  });
+  // debug: the frames the spi slave of the core received / the reply words it took, against the
+  // frames the mcu sent (differences since the last report; both count every frame)
+  link_on(0x33, [](uint8_t addr, uint8_t data) {
+    static uint16_t prev_rx = 0;
+    static uint32_t prev_sent = 0;
+    uint16_t rx = (addr << 8) | data;
+    uint32_t sent = link_frames_sent();
+    d_printf("Image: link check: core received +%u frames, mcu sent +%lu", (uint16_t) (rx - prev_rx),
+      (unsigned long) (sent - prev_sent));
+    d_println();
+    prev_rx = rx;
+    prev_sent = sent;
+  });
+  link_on(0x34, [](uint8_t addr, uint8_t data) {
+    static uint16_t prev_pops = 0;
+    static uint32_t prev_sent = 0;
+    uint16_t pops = (addr << 8) | data;
+    uint32_t sent = link_frames_sent();
+    d_printf("Image: link check: core took +%u reply words, mcu sent +%lu", (uint16_t) (pops - prev_pops),
+      (unsigned long) (sent - prev_sent));
+    d_println();
+    prev_pops = pops;
+    prev_sent = sent;
   });
 }
 
 void img_close_all() {
   for (uint8_t i = 0; i < MAX_FILE_SLOTS; i++) {
     if (file_slots[i].file.isOpen()) {
-      file_slots[i].file.close();
+      file_slots[i].file.close(); // close() syncs
     }
+    img_dirty[i] = false;
   }
   req_pending = false;
+  req_started = false;
+  lba_mask = 0;
+  img_frames = 0; // the new core counts from 0 too
 }
 
 void img_mount(uint8_t slot) {
   if (slot >= MAX_FILE_SLOTS) return;
   core_file_slot_t &fs = file_slots[slot];
   if (fs.file.isOpen()) {
-    fs.file.close();
+    fs.file.close(); // close() syncs
   }
+  img_dirty[slot] = false;
   uint64_t fsize = 0;
   if (fs.is_mounted) {
     String dir = String(fs.dir);
@@ -88,51 +187,106 @@ static bool img_read_sector(File32 &f, uint32_t lba) {
 }
 
 static void img_send_sector() {
-  // bursts if the core supports them; classic bank + data frames for the rest
-  size_t done = link_burst_write(CMD_IMG_BUF_DATA, 0, img_buf, IMG_SECTOR_SIZE);
-  for (size_t i = done; i < IMG_SECTOR_SIZE; i++) {
-    if (i == done || (i & 0xFF) == 0) {
+  // classic bank + data frames: with bursts the core stopped taking its reply frames on Mini G
+  // (not understood yet); classic frames take ~5 ms a sector, a real floppy ~18 ms
+  for (size_t i = 0; i < IMG_SECTOR_SIZE; i++) {
+    if ((i & 0xFF) == 0) {
       spi_send(CMD_IMG_BUF_BANK, 0, i >> 8);
     }
     spi_send(CMD_IMG_BUF_DATA, i & 0xFF, img_buf[i]);
   }
+  // the sum, so the core can check what it got
+  uint16_t sum = img_sum(img_buf);
+  spi_send(CMD_IMG_LBA, 0, sum & 0xFF);
+  spi_send(CMD_IMG_LBA, 1, sum >> 8);
 }
 
 static bool img_receive_sector() {
-  // the core queues its write data behind the request: pull it with NOPs
+  // the core queues its write data and the sum behind the request: pull them with NOPs
   wr_bank = 0;
   wr_count = 0;
-  for (int i = 0; i < IMG_WRITE_POLLS && wr_count < IMG_SECTOR_SIZE; i++) {
+  wr_sum_seen = 0;
+  memset(wr_seen, 0, sizeof(wr_seen));
+  for (int i = 0; i < IMG_WRITE_POLLS && (wr_count < IMG_SECTOR_SIZE || wr_sum_seen != 3); i++) {
     spi_send(CMD_NOP, 0, 0);
   }
-  return wr_count >= IMG_SECTOR_SIZE;
+  return wr_count == IMG_SECTOR_SIZE && wr_sum_seen == 3 && wr_sum == img_sum(img_buf);
 }
 
-void img_tick() {
-  if (!req_pending) return;
+// one request; false if none came
+static bool img_serve() {
+  // the fpga answers only in the reply bytes of a transfer: a started request is pulled at once,
+  // not one frame per main loop iteration
+  for (int i = 0; i < IMG_REQ_POLLS && req_started && !req_pending; i++) {
+    spi_send(CMD_NOP, 0, 0);
+  }
+  if (!req_pending) return false;
   req_pending = false;
+  uint32_t serve_us = micros();
   uint8_t slot = req_slot;
   uint32_t lba = req_lba;
   bool ok = false;
+  const char *what = req_op == IMG_REQ_WRITE ? "wr" : "rd";
   SpiBusGuard bus; // the sector and its result stay together on the link
-  if (slot < MAX_FILE_SLOTS) {
+  if (!req_complete) {
+    what = "incomplete request"; // a lost IMG_LBA byte: the core asks again
+  } else if (slot < MAX_FILE_SLOTS) {
     File32 &f = file_slots[slot].file;
     if (req_op == IMG_REQ_READ) {
       ok = img_read_sector(f, lba);
       img_send_sector();
     } else if (req_op == IMG_REQ_WRITE) {
-      ok = img_receive_sector();
-      if (ok) {
+      if (!img_receive_sector()) {
+        what = "wr, data lost";
+      } else {
         ok = f.isOpen() && f.seekSet((uint64_t) lba * IMG_SECTOR_SIZE) &&
              f.write(img_buf, IMG_SECTOR_SIZE) == IMG_SECTOR_SIZE;
-        f.sync();
+        img_dirty[slot] = true;
+        img_last_write_ms = millis();
       }
     }
   }
   spi_send(CMD_IMG_SEC, slot, ok ? IMG_RES_DONE : IMG_RES_ERROR);
-  if (!ok) {
-    d_printf("Image slot %d: %s of sector %lu failed", slot, req_op == IMG_REQ_WRITE ? "write" : "read",
-      (unsigned long) lba);
-    d_println();
+  uint32_t end_us = micros();
+  d_printf("Image slot %d: %s %lu%s, wait %lu us, %lu us", slot, what, (unsigned long) lba, ok ? "" : " FAILED",
+    (unsigned long) (serve_us - req_start_us), (unsigned long) (end_us - serve_us));
+  d_println();
+  return true;
+}
+
+static void img_sync_idle() {
+  if (millis() - img_last_write_ms < IMG_SYNC_IDLE_MS) return;
+  for (uint8_t i = 0; i < MAX_FILE_SLOTS; i++) {
+    if (img_dirty[i]) {
+      img_dirty[i] = false;
+      if (file_slots[i].file.isOpen()) {
+        file_slots[i].file.sync();
+      }
+    }
+  }
+}
+
+void img_tick() {
+  if (!req_pending && !req_started) {
+    img_sync_idle();
+    return;
+  }
+  if (!img_serve()) {
+    // a request that started but never got its IMG_SEC: the core sends it again
+    if (req_started && micros() - req_start_us > 100000) {
+      req_started = false;
+    }
+    return;
+  }
+  // a track is read sector by sector: keep polling for the next request for a while, but give
+  // the main loop its turn now and then
+  uint32_t t = micros();
+  uint32_t start = t;
+  while (micros() - t < IMG_FOLLOW_US && micros() - start < IMG_TICK_MAX_US) {
+    if (req_started || req_pending) {
+      if (img_serve()) t = micros();
+    } else {
+      spi_send(CMD_NOP, 0, 0);
+    }
   }
 }
