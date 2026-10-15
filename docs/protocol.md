@@ -214,7 +214,7 @@ A frame can get lost on the link now and then (seen on Mini G, cause not found),
 - the core takes a read only with 512 bytes and the same sum; the firmware writes a sector only with all 512 bytes and the same sum;
 - the core sends a request again after an error answer, or after no answer in 200 ms (a lost `43`).
 
-The firmware sends the sector data as classic frames: with bursts the NanoMig core on Mini G stopped taking its reply frames. The data of a write request does not fit the reply queue of `mcu.vhd` (512 entries) together with the request, so the core queues it while the queue has room. A short last sector of a read is padded with zeros.
+The firmware sends the sector data of a read as one burst when the core has burst caps, as classic frames otherwise (and for whatever a burst did not send). The core checks the sum either way and passes a sector on only when it is complete and right. The data of a write request does not fit the reply queue of `mcu.vhd` (512 entries) together with the request, so the core queues it while the queue has room. A short last sector of a read is padded with zeros.
 
 ### OSD overlay (`CMD_OSD`)
 

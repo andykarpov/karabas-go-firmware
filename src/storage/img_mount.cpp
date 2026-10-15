@@ -187,10 +187,11 @@ static bool img_read_sector(File32 &f, uint32_t lba) {
 }
 
 static void img_send_sector() {
-  // classic bank + data frames: with bursts the core stopped taking its reply frames on Mini G
-  // (not understood yet); classic frames take ~5 ms a sector, a real floppy ~18 ms
-  for (size_t i = 0; i < IMG_SECTOR_SIZE; i++) {
-    if ((i & 0xFF) == 0) {
+  // a burst if the core supports it (~0.2 ms a sector), classic bank + data frames for the rest
+  // (~5 ms a sector, a real floppy ~18 ms). The core checks the sum either way.
+  size_t done = link_burst_write(CMD_IMG_BUF_DATA, 0, img_buf, IMG_SECTOR_SIZE);
+  for (size_t i = done; i < IMG_SECTOR_SIZE; i++) {
+    if (i == done || (i & 0xFF) == 0) {
       spi_send(CMD_IMG_BUF_BANK, 0, i >> 8);
     }
     spi_send(CMD_IMG_BUF_DATA, i & 0xFF, img_buf[i]);
