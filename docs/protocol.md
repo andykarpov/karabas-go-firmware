@@ -181,6 +181,8 @@ The image file of a slot stays open (read-write if possible) while the core runs
 
 Mount: at core start for every `F` item with a saved file, and when a file is selected in the OSD.
 
+Eject: Del / Backspace on the `F` item in the OSD, or `[ Eject ]` at the top of its file browser. The firmware sends only the size 0 frames and forgets the file in the core settings. Browsing other directories does not change the mounted image.
+
 ```
 40 00 slot
 41 i 00      (i = 0..7)         size 0: eject
