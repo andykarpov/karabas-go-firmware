@@ -208,7 +208,7 @@ MCU:  43 slot 01 (done) or 43 slot 02 (error: data lost, no file)
 
 One request at a time: the core waits for `43 slot status` before the next one.
 
-A frame can get lost on the link now and then (seen on Mini G, cause not found), so requests are checked end to end:
+A frame used to get lost on the link now and then (on Mini G: chip select spikes and a reply queue that took two words in one frame, both fixed in the core). Requests are still checked end to end:
 
 - the firmware takes a request only with all four `42` bytes since `42 00`, and answers `43 slot 02` otherwise;
 - the core takes a read only with 512 bytes and the same sum; the firmware writes a sector only with all 512 bytes and the same sum;
