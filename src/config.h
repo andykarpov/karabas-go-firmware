@@ -169,7 +169,6 @@
 
 #define CMD_DEBUG_ADDRESS 0x30
 #define CMD_DEBUG_DATA 0x31
-#define CMD_DEBUG_FRAMES 0x32 // debug (file mounter): the number of reply frames the core queued
 
 // file mounter (F OSD items), see docs/protocol.md section 6 and storage/img_mount.cpp:
 // mount: SLOT, SIZE 0 (eject), SIZE (the image, 8 bytes LE)

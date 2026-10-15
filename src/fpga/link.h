@@ -47,5 +47,3 @@ void spi_send24(uint8_t cmd, uint32_t data);
 void spi_send32(uint8_t cmd, uint32_t data);
 void spi_send64(uint8_t cmd, uint64_t data);
 void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data);
-void link_report_gaps();
-uint32_t link_frames_sent(); // debug: classic frames and bursts sent // debug: log the gaps between classic frames since the last call

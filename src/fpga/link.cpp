@@ -170,66 +170,15 @@ static SPISettings link_settings() {
   return (link_freq == 0 || link_freq == 255) ? settingsA : SPISettings(SD_SCK_MHZ(link_freq), MSBFIRST, SPI_MODE0);
 }
 
-// debug: the gap between two classic frames (CS high -> CS low), in cpu cycles of the SysTick
-// of the core (each core has its own), split by frames of the same task / of another task
-static uint32_t gap_last_cvr = 0, gap_last_us = 0;
-static void *gap_last_task = nullptr;
-static uint8_t gap_last_core = 0xFF;
-static volatile uint32_t gap_min_same = 0xFFFFFFFF, gap_min_other = 0xFFFFFFFF;
-static volatile uint32_t gap_short_same = 0, gap_short_other = 0, gap_count = 0;
-#define GAP_SHORT_NS 300
-
-static inline void gap_measure_start() {
-  uint32_t cvr = systick_hw->cvr;
-  uint32_t us = time_us_32();
-  uint8_t core = get_core_num();
-  if (core == gap_last_core && us - gap_last_us < 200) {
-    uint32_t reload = systick_hw->rvr + 1;
-    uint32_t cyc = (gap_last_cvr >= cvr) ? gap_last_cvr - cvr : gap_last_cvr + reload - cvr; // counts down
-    bool other = xTaskGetCurrentTaskHandle() != gap_last_task;
-    uint32_t short_cyc = (uint32_t) ((uint64_t) clock_get_hz(clk_sys) * GAP_SHORT_NS / 1000000000ULL);
-    gap_count++;
-    if (other) {
-      if (cyc < gap_min_other) gap_min_other = cyc;
-      if (cyc < short_cyc) gap_short_other++;
-    } else {
-      if (cyc < gap_min_same) gap_min_same = cyc;
-      if (cyc < short_cyc) gap_short_same++;
-    }
-  }
-}
-
-static inline void gap_measure_end() {
-  gap_last_cvr = systick_hw->cvr;
-  gap_last_us = time_us_32();
-  gap_last_task = xTaskGetCurrentTaskHandle();
-  gap_last_core = get_core_num();
-}
-
-uint32_t link_frames_sent() { return link_tx_frames; }
-
-void link_report_gaps() {
-  uint32_t hz = clock_get_hz(clk_sys);
-  auto ns = [hz](uint32_t cyc) -> unsigned long { return cyc == 0xFFFFFFFF ? 0 : (unsigned long) ((uint64_t) cyc * 1000000000ULL / hz); };
-  d_printf("SPI gaps: %lu frames, min %lu ns (same task) / %lu ns (other task), < %d ns: %lu / %lu",
-    (unsigned long) gap_count, ns(gap_min_same), ns(gap_min_other), GAP_SHORT_NS,
-    (unsigned long) gap_short_same, (unsigned long) gap_short_other);
-  d_println();
-  gap_min_same = gap_min_other = 0xFFFFFFFF;
-  gap_short_same = gap_short_other = gap_count = 0;
-}
-
 // one classic frame: send cmd/addr/data, receive the fpga's frame of the same transfer
 static void spi_xfer(uint8_t cmd, uint8_t addr, uint8_t data, uint8_t rx[3]) {
   spi_bus_lock();
   SPI.beginTransaction(link_settings());
   // one 3-byte transfer keeps the SPI FIFO busy instead of 3 separate blocking calls
   const uint8_t tx[3] = {cmd, addr, data};
-  gap_measure_start();
   gpio_put(PIN_MCU_SPI_CS, LOW);
   SPI.transfer(tx, rx, 3);
   gpio_put(PIN_MCU_SPI_CS, HIGH);
-  gap_measure_end();
   SPI.endTransaction();
   link_tx_frames++;
   spi_bus_unlock();

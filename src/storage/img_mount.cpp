@@ -30,10 +30,6 @@ static uint16_t wr_count = 0;
 static uint16_t wr_sum = 0;
 static uint8_t wr_sum_seen = 0;       // bit 0: low byte, bit 1: high byte
 
-// debug: the core answers a read with the sum it got (CMD_DEBUG_DATA), reports its retries
-// (CMD_DEBUG_ADDRESS) and the number of reply frames it queued (CMD_DEBUG_FRAMES)
-static uint16_t img_frames = 0;
-
 // written sectors are flushed to the sd card once the writes stop (a sync per sector takes ~40 ms)
 static bool img_dirty[MAX_FILE_SLOTS];
 static uint32_t img_last_write_ms = 0;
@@ -52,7 +48,6 @@ static uint16_t img_sum(const uint8_t *buf) {
 
 void img_register_handlers() {
   link_on(CMD_IMG_LBA, [](uint8_t addr, uint8_t data) {
-    img_frames++;
     if (addr == 0) {
       req_started = true;
       req_start_us = micros();
@@ -64,7 +59,6 @@ void img_register_handlers() {
     }
   });
   link_on(CMD_IMG_SEC, [](uint8_t addr, uint8_t data) {
-    img_frames++;
     req_slot = addr;
     req_op = data;
     req_complete = (lba_mask == 0x0F);
@@ -73,7 +67,6 @@ void img_register_handlers() {
     req_started = false;
   });
   link_on(CMD_IMG_BUF_BANK, [](uint8_t addr, uint8_t data) {
-    img_frames++;
     if (addr == 0) {
       wr_bank = data;
     } else if (addr == 0x10) {
@@ -85,7 +78,6 @@ void img_register_handlers() {
     }
   });
   link_on(CMD_IMG_BUF_DATA, [](uint8_t addr, uint8_t data) {
-    img_frames++;
     uint16_t pos = (wr_bank << 8) | addr;
     if (pos < IMG_SECTOR_SIZE) {
       img_buf[pos] = data;
@@ -94,64 +86,6 @@ void img_register_handlers() {
         wr_count++;
       }
     }
-  });
-  link_on(CMD_DEBUG_ADDRESS, [](uint8_t addr, uint8_t data) {
-    img_frames++;
-    d_printf("Image: core retries %04x", (addr << 8) | data); d_println();
-  });
-  link_on(CMD_DEBUG_FRAMES, [](uint8_t addr, uint8_t data) {
-    uint16_t v = (addr << 8) | data;
-    d_printf("Image: the core queued %u frames, the mcu got %u%s", v, img_frames,
-      v == img_frames ? "" : " (lost on the link)");
-    d_println();
-    img_frames = v + 1; // resync, this frame included
-  });
-  link_on(CMD_DEBUG_DATA, [](uint8_t addr, uint8_t data) {
-    img_frames++; // the sum the core got, checked by the core itself now
-  });
-  // debug: the frames the spi slave of the core received / the reply words it took, against the
-  // frames the mcu sent (differences since the last report; both count every frame)
-  link_on(0x33, [](uint8_t addr, uint8_t data) {
-    static uint16_t prev_rx = 0;
-    static uint32_t prev_sent = 0;
-    uint16_t rx = (addr << 8) | data;
-    uint32_t sent = link_frames_sent();
-    d_printf("Image: link check: core received +%u frames, mcu sent +%lu", (uint16_t) (rx - prev_rx),
-      (unsigned long) (sent - prev_sent));
-    d_println();
-    prev_rx = rx;
-    prev_sent = sent;
-  });
-  link_on(0x34, [](uint8_t addr, uint8_t data) {
-    static uint16_t prev_pops = 0;
-    static uint32_t prev_sent = 0;
-    uint16_t pops = (addr << 8) | data;
-    uint32_t sent = link_frames_sent();
-    d_printf("Image: link check: core took +%u reply words, mcu sent +%lu", (uint16_t) (pops - prev_pops),
-      (unsigned long) (sent - prev_sent));
-    d_println();
-    prev_pops = pops;
-    prev_sent = sent;
-  });
-  // debug: falls of the chip select the core saw (spikes too), frames it saw cut short, reply
-  // words it took during a burst (differences since the last report)
-  link_on(0x35, [](uint8_t addr, uint8_t data) {
-    static uint16_t prev = 0;
-    uint16_t v = (addr << 8) | data;
-    d_printf("Image: link check: core saw +%u chip select falls", (uint16_t) (v - prev)); d_println();
-    prev = v;
-  });
-  link_on(0x36, [](uint8_t addr, uint8_t data) {
-    static uint16_t prev = 0;
-    uint16_t v = (addr << 8) | data;
-    d_printf("Image: link check: core saw +%u frames cut short", (uint16_t) (v - prev)); d_println();
-    prev = v;
-  });
-  link_on(0x37, [](uint8_t addr, uint8_t data) {
-    static uint16_t prev = 0;
-    uint16_t v = (addr << 8) | data;
-    d_printf("Image: link check: core took +%u reply words during bursts", (uint16_t) (v - prev)); d_println();
-    prev = v;
   });
 }
 
@@ -165,7 +99,6 @@ void img_close_all() {
   req_pending = false;
   req_started = false;
   lba_mask = 0;
-  img_frames = 0; // the new core counts from 0 too
 }
 
 void img_mount(uint8_t slot) {
