@@ -13,9 +13,7 @@ static bool is_flashboot = false;
 void core_send(uint8_t pos)
 {
   if (core.osd[pos].type == CORE_OSD_TYPE_FILEMOUNTER) {
-      // todo
-      //spi_send(CMD_SWITCHES, pos, (file_slots[core.osd[pos].slot_id].is_mounted) ? 1 : 0);
-      //d_printf("File mounter: %s %d", core.osd[pos].name, file_slots[core.osd[pos].slot_id].is_mounted);
+    img_mount(core.osd[pos].slot_id);
   } else if (core.osd[pos].type == CORE_OSD_TYPE_FILELOADER) {
     // do nothing
   } else {
@@ -28,11 +26,8 @@ void core_send(uint8_t pos)
 void core_send_all() 
 {
   for (uint8_t i=0; i<core.osd_len; i++) {
-    if (core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER) {
-      // todo
-      //spi_send(CMD_SWITCHES, i, (file_slots[core.osd[i].slot_id].is_mounted) ? 1 : 0);
-    } else if (core.osd[i].type == CORE_OSD_TYPE_FILELOADER) {
-      // do nothing
+    if (core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[i].type == CORE_OSD_TYPE_FILELOADER) {
+      // images are mounted by read_core(), after the core settings
     } else {
       spi_send(CMD_SWITCHES, i, core.osd[i].val);
     }
@@ -183,6 +178,7 @@ void read_core(const char* filename) {
 
   d_print("Core SPI Frequency: "); if (core.spi_freq > 0 && core.spi_freq < 255) { d_print(core.spi_freq); d_println(" MHz"); } else d_println("default");
   
+  img_close_all(); // the images of the previous core
   for (uint8_t i=0; i<MAX_FILE_SLOTS; i++) { file_slots[i].is_mounted = false; }
 
   for (uint8_t i=0; i<core.osd_len; i++) {
@@ -197,9 +193,9 @@ void read_core(const char* filename) {
     // loading initial dir, filename, extensions and trying to mount file, if any
     if (core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[i].type == CORE_OSD_TYPE_FILELOADER) {
       core.osd[i].options_len = 0;
-      core.osd[i].slot_id = file_read();
-      file_slots[core.osd[i].slot_id].is_autoload = bitRead(core.osd[i].slot_id, 7);
-      core.osd[i].slot_id = bitClear(core.osd[i].slot_id, 7);
+      uint8_t slot_byte = file_read(); // bit 7: autoload
+      core.osd[i].slot_id = bitClear(slot_byte, 7);
+      file_slots[core.osd[i].slot_id].is_autoload = bitRead(slot_byte, 7);
       file_slots[core.osd[i].slot_id].is_mounted = false;
       file_read_bytes(file_slots[core.osd[i].slot_id].ext, 256); file_slots[core.osd[i].slot_id].ext[255] = '\0';
       file_slots[core.osd[i].slot_id].offset_dir = file1.curPosition();
@@ -320,11 +316,8 @@ void read_core(const char* filename) {
       dir.toCharArray(file_slots[core.osd[i].slot_id].dir, sizeof(file_slots[core.osd[i].slot_id].dir));
       String sfilename = String( file_slots[core.osd[i].slot_id].filename);
       String sfullname = dir + "/" + sfilename;
-      if (sfilename.length() > 0 && sd1.exists(sfullname)) {
-        // todo
-        //file_slots[core.osd[i].slot_id].is_mounted = file_slots[core.osd[i].slot_id].file = sd1.open(sfullname, O_READ);
-      }
-      core_send(i);
+      file_slots[core.osd[i].slot_id].is_mounted = sfilename.length() > 0 && sd1.exists(sfullname);
+      core_send(i); // opens the image and sends its size
     }
   }
 

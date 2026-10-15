@@ -84,6 +84,7 @@ static void karabas_setup()
   link_on(CMD_RTC, [](uint8_t addr, uint8_t data) { zxrtc.setData(addr, data); });
   link_on(CMD_PS2_SCANCODE, ps2_command_receive);
   matrix_register_handlers();
+  img_register_handlers();
 
   // FPGA bitstream loader
   pinMode(PIN_CONF_INIT_B, INPUT_PULLUP);
@@ -212,6 +213,9 @@ static void karabas_loop()
 
   link_report_drops();
   link_dispatch_pending();
+
+  // sector requests of the file mounter
+  img_tick();
 
   serial_bridge_tick();
 
