@@ -56,6 +56,7 @@ void diag_tick() {
     (unsigned long) (matrix ? uxTaskGetStackHighWaterMark(matrix) : 0),
     (unsigned long) (oled ? uxTaskGetStackHighWaterMark(oled) : 0));
   d_println();
+  link_report_gaps();
 }
 
 #endif // DIAG_STATS
