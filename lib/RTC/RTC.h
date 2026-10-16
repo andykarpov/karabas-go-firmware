@@ -23,6 +23,12 @@ extern void core_eeprom_set(uint8_t pos, uint8_t val);
 #define RTC_TYPE_DS1307 1
 #define RTC_TYPE_MC146818A 0
 #define RTC_TYPE_ZXEVO 2
+// MSM6242B (Amiga A500 / A501 at $DC0000): registers 0-12 are BCD nibbles S1 S10 MI1 MI10 H1 H10
+// D1 D10 MO1 MO10 Y1 Y10 W, 24 h. The core keeps D, E, F (control) itself.
+#define RTC_TYPE_MSM6242B 3
+#define MSM_TIME_REGS 13
+// the cpu writes the time one nibble at a time: the clock is set once the writes stop
+#define MSM_WRITE_IDLE_MS 100
 
 class RTC
 {
@@ -56,6 +62,11 @@ private:
   volatile int rtc_last_write_reg = 0;
   volatile uint8_t rtc_last_write_data = 0;
 
+  // MSM6242B: the nibbles written by the core, not yet in the clock chip
+  uint8_t msm_regs[MSM_TIME_REGS];
+  bool msm_pending = false;
+  unsigned long msm_write_ms = 0;
+
   bool rtc_is_bcd = false;
   bool rtc_is_24h = true;
 
@@ -69,6 +80,8 @@ protected:
   uint8_t time_to24h(uint8_t val);
   uint8_t time_to12h(uint8_t val);
   uint8_t get_year(int year); 
+  void msm_time_regs(uint8_t *regs);
+  void msm_commit();
 
 public:
 
