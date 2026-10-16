@@ -51,6 +51,8 @@ The firmware runs on FreeRTOS only (`main.cpp` stops the build with `#error` oth
 - `input/`: buttons, joysticks, the core 1 event queue and global hotkeys.
 - `ui/`: OSD state and the app table, plus the shared file list arrays.
 - `storage/`: SD card, `karabas.ini` settings and USB MSC.
+  - `FL` OSD items (ioctl file loader): `core_ioctl_send()` in `fpga/core_loader` sends the file when it is chosen, and at core start if the item has `autoload` and its file exists (the NanoMig Kickstart).
+  - In the OSD, the browser of an `F` slot without an image opens in the dir of the image chosen last for a slot with the same extensions, on the file after it (disk 2 after disk 1). Esc goes back to the slot's own dir.
   - `img_mount` is the file mounter (`F` OSD items). The image of a slot stays open while the core runs. The link handlers only take the sector requests of the core (`CMD_IMG_LBA` / `CMD_IMG_SEC`), and `img_tick()` serves them from the main loop. A read sends the sector as a burst or classic frames; a write pulls the 512 bytes of the core with NOPs. Sequences are in `docs/protocol.md` section 6.
 - `periph/`: the LED matrix, OLED and USB serial bridge.
 - `board/`: per-board code (see below).

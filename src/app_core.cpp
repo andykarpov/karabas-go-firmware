@@ -27,9 +27,35 @@ static bool is_eject_entry(uint16_t i) {
   return files[i].file_id == 0 && files[i].hash[0] == '*';
 }
 
+// the file mounter slot of the image chosen last: a slot without an image opens its browser in
+// that dir (a game on several disks: DF1 starts where the disk of DF0 is)
+static int last_mount_slot = -1;
+// the image of that slot: the browser of the empty slot preselects the file after it (disk 2)
+static char presel_after[256];
+
 static void filebrowser_open() {
-  core_file_slot_t &fs = file_slots[core.osd[curr_osd_item].slot_id];
+  uint8_t slot = core.osd[curr_osd_item].slot_id;
+  core_file_slot_t &fs = file_slots[slot];
   memcpy(filebrowser_dir, fs.dir, sizeof(filebrowser_dir));
+  presel_after[0] = '\0';
+  if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER && !fs.is_mounted) {
+    // the last chosen image of a slot with the same extensions, else any mounted one
+    int from = -1;
+    for (uint8_t i = 0; i < core.osd_len; i++) {
+      if (core.osd[i].type != CORE_OSD_TYPE_FILEMOUNTER) continue;
+      uint8_t s = core.osd[i].slot_id;
+      if (s == slot || !file_slots[s].is_mounted || strcmp(file_slots[s].ext, fs.ext) != 0) continue;
+      if (from == -1 || s == last_mount_slot) from = s;
+    }
+    if (from != -1 && strcmp(file_slots[from].dir, fs.dir) != 0) {
+      memcpy(fs.dir, file_slots[from].dir, sizeof(fs.dir));
+      filebrowser_slot = -1; // read the file list of that dir
+    }
+    if (from != -1) {
+      memcpy(presel_after, file_slots[from].filename, sizeof(presel_after));
+      filebrowser_slot = -1;
+    }
+  }
   is_filebrowser = true;
 }
 
@@ -355,6 +381,9 @@ void app_core_on_keyboard() {
             if (exts.length() == 0 || exts.indexOf(strlwr(filename + (len - 4))) != -1) {
               strcpy(file_slots[core.osd[curr_osd_item].slot_id].filename, filename);
               file_slots[core.osd[curr_osd_item].slot_id].is_mounted = true;
+              if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER) {
+                last_mount_slot = core.osd[curr_osd_item].slot_id;
+              }
               app_core_on_select_file();
               is_filebrowser = false; // exit from file browser mode
               filebrowser_slot = -1; // the file list gets the eject entry
@@ -530,6 +559,9 @@ int app_core_init_filebrowser() {
   }
 
   uint16_t presel_id = 0;
+  uint16_t after_id = 0; // the image of another slot (presel_after): the next file is preselected
+  String after_f = String(presel_after);
+  after_f.toLowerCase();
   while (file1.openNext(&root1, O_RDONLY)) {
     char filename[14]; file1.getSFN(filename, sizeof(filename));
     uint8_t len = strlen(filename);  
@@ -543,6 +575,9 @@ int app_core_init_filebrowser() {
       f.toLowerCase();
       if (core_f.length() > 0 && core_f.indexOf(f) == 0) {
         presel_id = item->file_id;
+      }
+      if (after_f.length() > 0 && after_f == f) {
+        after_id = item->file_id;
       }
     }
     file1.close();
@@ -560,6 +595,9 @@ int app_core_init_filebrowser() {
   for (uint16_t i=0; i<files_len; i++) {
     if (presel_id != 0 && presel_id == files[i].file_id) {
       file_sel = i;
+    }
+    if (presel_id == 0 && after_id != 0 && after_id == files[i].file_id) {
+      file_sel = (i + 1 < files_len) ? i + 1 : i;
     }
   }
 
