@@ -15,6 +15,9 @@ void read_roms(const char* filename);
 void flashboot(uint8_t data);
 
 void core_send(uint8_t pos);
+// send the file of an ioctl slot (FL osd item: dir + filename) to the fpga; with a progress popup
+// when it was chosen in the osd
+void core_ioctl_send(uint8_t slot, bool popup);
 void core_send_all();
 void core_trigger(uint8_t pos);
 uint8_t core_eeprom_get(uint8_t pos);

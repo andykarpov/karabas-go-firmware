@@ -23,6 +23,64 @@ void core_send(uint8_t pos)
   d_println();
 }
 
+void core_ioctl_send(uint8_t slot, bool popup)
+{
+  if (slot >= MAX_FILE_SLOTS) return;
+  if (popup) {
+    zxosd.loadingPopup();
+    zxosd.update();
+  }
+
+  // send ioctl slot id, file data for file loader type
+  SpiBusGuard bus; // keep the whole ioctl transfer together on the fpga link
+  spi_send(CMD_IOCTL_STATE, 0, 1); // start
+  spi_send(CMD_IOCTL_SLOT, 0, slot);
+
+  uint64_t fsize = 0;
+  spi_send64(CMD_IOCTL_SIZE, fsize);
+  String fname = String(file_slots[slot].dir) + "/" + String(file_slots[slot].filename);
+  fname.replace("//", "/");
+  File32 file = sd1.open(fname);
+  fsize = file.size();
+  spi_send64(CMD_IOCTL_SIZE, fsize);
+
+  String ext = fname.substring(fname.lastIndexOf('.')+1);
+  for(uint8_t i = 0; i<ext.length(); i++) {
+    spi_send(CMD_IOCTL_EXT, i, ext.charAt(i));
+  }
+
+  uint8_t buf[512];
+  uint64_t i = 0;
+  int c;
+  ElapsedTimer send_timer;
+  send_timer.reset();
+  while (i < fsize && (c = file.read(buf, sizeof(buf))) > 0) {
+    if (popup && i % 8192 == 0) {
+      zxosd.loadingPopup(i, fsize);
+      zxosd.update();
+    }
+    // bursts if the core supports them; classic frames for whatever they did not send
+    int done = link_burst_write(CMD_IOCTL_DATA, (uint32_t) i, buf, c);
+    i += done;
+    for (int j = done; j < c; j++, i++) {
+      if (j == done || i % 256 == 0) {
+        spi_send24(CMD_IOCTL_BANK, i >> 8);
+      }
+      spi_send(CMD_IOCTL_DATA, (uint8_t)((i & 0x00000000000000FF)), buf[j]);
+    }
+  }
+  file.close();
+  spi_send(CMD_IOCTL_STATE, 0, 0); // finish
+  d_printf("Ioctl slot %d: %s, %lu bytes in %lu ms (%s)", slot, fname.c_str(), (unsigned long) i,
+    (unsigned long) send_timer.elapsed(), link_burst_available() ? "burst" : "classic");
+  d_println();
+
+  if (popup) {
+    zxosd.loadingPopup(fsize, fsize);
+    zxosd.update();
+  }
+}
+
 void core_send_all() 
 {
   for (uint8_t i=0; i<core.osd_len; i++) {
@@ -201,19 +259,18 @@ void read_core(const char* filename) {
       file_slots[core.osd[i].slot_id].offset_dir = file1.curPosition();
       file_read_bytes(file_slots[core.osd[i].slot_id].dir, 256); file_slots[core.osd[i].slot_id].dir[255] = '\0';
       String dir = String(file_slots[core.osd[i].slot_id].dir);
+      dir.trim(); // make_core pads with spaces
       if (dir == "") { dir = "/"; }
       if (dir.charAt(0) != '/') { dir = '/' + dir; }
       dir.toCharArray(file_slots[core.osd[i].slot_id].dir, sizeof(file_slots[core.osd[i].slot_id].dir));
       file_slots[core.osd[i].slot_id].offset_filename = file1.curPosition();
       file_read_bytes(file_slots[core.osd[i].slot_id].filename, 256); file_slots[core.osd[i].slot_id].filename[255] = '\0';
       String sfilename = String( file_slots[core.osd[i].slot_id].filename); sfilename.trim();
+      sfilename.toCharArray(file_slots[core.osd[i].slot_id].filename, sizeof(file_slots[core.osd[i].slot_id].filename));
       String sfullname = dir + "/" + sfilename; sfullname.trim();
       if (sfilename.length() > 0 && sd1.exists(sfullname)) {
         file_slots[core.osd[i].slot_id].is_mounted = true; //file_slots[core.osd[i].slot_id].file = sd1.open(sfullname, O_READ);
-        if (file_slots[core.osd[i].slot_id].is_autoload) {
-          // todo: autoload (spi commands to the host)
-          // todo: depends on type
-        }
+        // autoload: FL items below, after the switches (F items are always mounted)
       }
     }
       // otherwise - reading options structure
@@ -318,6 +375,11 @@ void read_core(const char* filename) {
       String sfullname = dir + "/" + sfilename;
       file_slots[core.osd[i].slot_id].is_mounted = sfilename.length() > 0 && sd1.exists(sfullname);
       core_send(i); // opens the image and sends its size
+    }
+    // FL items with autoload: the file goes to the core before it starts (a Kickstart rom)
+    else if (core.osd[i].type == CORE_OSD_TYPE_FILELOADER && file_slots[core.osd[i].slot_id].is_autoload &&
+             file_slots[core.osd[i].slot_id].is_mounted) {
+      core_ioctl_send(core.osd[i].slot_id, false);
     }
   }
 
