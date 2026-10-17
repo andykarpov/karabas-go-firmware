@@ -257,13 +257,14 @@ void RTC::setData(uint8_t addr, uint8_t data) {
                   setEepromReg(addr, data);
                   break;
           default: setEepromReg(addr, data); // eeprom
+        }
 
-          if (addr <= 6) {
-              DateTime now = DateTime(2000 + rtc_year, rtc_month, rtc_day, rtc_hours, rtc_minutes, rtc_seconds); 
-              I2cHold i2c;
-              rtc_clock.adjust(now);
-          }
-      }
+        // a write to a time register (0-6) sets the clock chip
+        if (addr <= 6) {
+            DateTime now = DateTime(2000 + rtc_year, rtc_month, rtc_day, rtc_hours, rtc_minutes, rtc_seconds);
+            I2cHold i2c;
+            rtc_clock.adjust(now);
+        }
 
   } else {
 
