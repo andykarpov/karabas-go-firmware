@@ -55,6 +55,10 @@ void board_reset_peripherals() {
 #endif
 }
 
+bool board_has_floppy() {
+  return false;
+}
+
 bool btn_read(uint8_t num) {
   return !digitalRead(num == 0 ? PIN_BTN1 : PIN_BTN2);
 }

@@ -53,6 +53,7 @@ typedef struct {
 	uint8_t val;
 	uint8_t prev_val;
 	uint8_t slot_id;
+	uint8_t flags; // CORE_OSD_FLAG_*
 } core_osd_t;
 
 typedef struct {

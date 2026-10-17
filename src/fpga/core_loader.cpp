@@ -3,12 +3,22 @@
 #include "ps2kbd.h"
 #include "usb_hid_keys.h"
 #include "kg_format.h"
+#include "file_name.h"
 
 // Loading a core file: bitstream, header (OSD items, eeprom, switches), ROMs.
 
 core_item_t core;
 core_file_slot_t file_slots[MAX_FILE_SLOTS];
 static bool is_flashboot = false;
+
+bool core_osd_can_phys(uint8_t pos) {
+  return core.osd[pos].type == CORE_OSD_TYPE_FILEMOUNTER && (core.osd[pos].flags & CORE_OSD_FLAG_PHYS) &&
+         board_has_floppy();
+}
+
+bool core_osd_phys(uint8_t pos, const char *filename) {
+  return core_osd_can_phys(pos) && kg_phys_drive(filename) >= 0;
+}
 
 void core_send(uint8_t pos)
 {
@@ -241,7 +251,7 @@ void read_core(const char* filename) {
 
   for (uint8_t i=0; i<core.osd_len; i++) {
     core.osd[i].type = file_read();
-    file_read();
+    core.osd[i].flags = file_read();
     file_read_bytes(core.osd[i].name, 16); core.osd[i].name[16] = '\0';
     core.osd[i].def = file_read();
     core.osd[i].val = core.osd[i].def;
@@ -268,7 +278,7 @@ void read_core(const char* filename) {
       String sfilename = String( file_slots[core.osd[i].slot_id].filename); sfilename.trim();
       sfilename.toCharArray(file_slots[core.osd[i].slot_id].filename, sizeof(file_slots[core.osd[i].slot_id].filename));
       String sfullname = dir + "/" + sfilename; sfullname.trim();
-      if (sfilename.length() > 0 && sd1.exists(sfullname)) {
+      if (sfilename.length() > 0 && (sd1.exists(sfullname) || core_osd_phys(i, sfilename.c_str()))) {
         file_slots[core.osd[i].slot_id].is_mounted = true; //file_slots[core.osd[i].slot_id].file = sd1.open(sfullname, O_READ);
         // autoload: FL items below, after the switches (F items are always mounted)
       }
@@ -373,8 +383,9 @@ void read_core(const char* filename) {
       dir.toCharArray(file_slots[core.osd[i].slot_id].dir, sizeof(file_slots[core.osd[i].slot_id].dir));
       String sfilename = String( file_slots[core.osd[i].slot_id].filename);
       String sfullname = dir + "/" + sfilename;
-      file_slots[core.osd[i].slot_id].is_mounted = sfilename.length() > 0 && sd1.exists(sfullname);
-      core_send(i); // opens the image and sends its size
+      file_slots[core.osd[i].slot_id].is_mounted = sfilename.length() > 0 &&
+        (sd1.exists(sfullname) || core_osd_phys(i, sfilename.c_str()));
+      core_send(i); // opens the image and sends its size (or the physical drive)
     }
     // FL items with autoload: the file goes to the core before it starts (a Kickstart rom)
     else if (core.osd[i].type == CORE_OSD_TYPE_FILELOADER && file_slots[core.osd[i].slot_id].is_autoload &&

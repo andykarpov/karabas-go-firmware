@@ -39,3 +39,13 @@ void kg_short_name(const char *name, char *out, size_t width) {
   memcpy(out + base + 1, name + len - ext_len, ext_len);
   out[width] = '\0';
 }
+
+int kg_phys_drive(const char *name) {
+  if (strncmp(name, ":phys", 5) != 0 || (name[5] != '0' && name[5] != '1') || name[6] != '\0') return -1;
+  return name[5] - '0';
+}
+
+void kg_phys_name(int drive, char *out) {
+  memcpy(out, ":phys0", 7);
+  out[5] = drive ? '1' : '0';
+}

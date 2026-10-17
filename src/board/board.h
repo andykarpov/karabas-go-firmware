@@ -24,5 +24,8 @@ void board_joy_read(uint16_t &left, uint16_t &right);
 // pulse reset of the on-board peripherals that follow the core reset (ESP, MIDI)
 void board_reset_peripherals();
 
+// the board has a floppy connector (Karabas Go): F slots can be a physical drive
+bool board_has_floppy();
+
 bool btn_read(uint8_t num);
 void led_write(uint8_t num, bool on);
