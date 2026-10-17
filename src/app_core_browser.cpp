@@ -13,6 +13,7 @@
 #include "app_core_browser.h"
 #include "app_setup.h"
 #include "sorts.h"
+#include "file_name.h"
 #include <cstdio>
 #include <iostream>
 using namespace std;
@@ -237,8 +238,7 @@ void app_core_browser_read_list() {
     root1.rewind();
     while (file1.openNext(&root1, O_RDONLY)) {
       char filename[32]; file1.getName(filename, sizeof(filename));
-      uint8_t len = strlen(filename);
-      if (strstr(strlwr(filename + (len - 4)), CORE_EXT)) {
+      if (kg_name_has_ext(filename, CORE_EXT)) {
         cores[cores_len] = app_core_browser_get_item();
         cores_len++;
       }

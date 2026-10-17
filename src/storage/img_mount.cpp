@@ -132,7 +132,7 @@ void img_mount(uint8_t slot) {
   }
 }
 
-static bool img_read_sector(File32 &f, uint32_t lba) {
+static bool img_read_sector(FsFile &f, uint32_t lba) {
   memset(img_buf, 0, IMG_SECTOR_SIZE);
   if (!f.isOpen() || !f.seekSet((uint64_t) lba * IMG_SECTOR_SIZE)) return false;
   // a short last sector is padded with zeros
@@ -185,7 +185,7 @@ static bool img_serve() {
   if (!req_complete) {
     what = "incomplete request"; // a lost IMG_LBA byte: the core asks again
   } else if (slot < MAX_FILE_SLOTS) {
-    File32 &f = file_slots[slot].file;
+    FsFile &f = file_slots[slot].file;
     if (req_op == IMG_REQ_READ) {
       ok = img_read_sector(f, lba);
       img_send_sector();
