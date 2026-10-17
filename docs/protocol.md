@@ -100,6 +100,7 @@ Commands that the core does not know must be ignored.
 | `43` | `CMD_IMG_SEC` | slot | 1 = done, 2 = error | End of a sector request. |
 | `44` | `CMD_IMG_BUF_BANK` | 0 | sector offset bits 8..15 | Sector data of a read request (classic frames). |
 | `45` | `CMD_IMG_BUF_DATA` | offset bits 7..0 | byte | Same; also the burst type of the sector data, address = offset. |
+| `46` | `CMD_IMG_PHYS` | slot | 1 = drive DS0, 2 = DS1 | The slot is a physical floppy drive (Karabas Go), after its size 0 frames. |
 | `50` | `CMD_IOCTL_SLOT` | 0 | slot | Ioctl file loader (`FL` OSD items), see section 6. |
 | `51` | `CMD_IOCTL_SIZE` | byte index 0..7 | file size (LE) | |
 | `52` | `CMD_IOCTL_BANK` | byte index 0..2 | file address bits 15..8 / 23..16 / 31..24 | |
@@ -189,6 +190,14 @@ Eject: Del / Backspace on the `F` item in the OSD, or `[ Eject ]` at the top of 
 40 00 slot
 41 i 00      (i = 0..7)         size 0: eject
 41 i size_i  (i = 0..7)         the image; not sent without a file
+```
+
+Physical floppy drive (Karabas Go: `board_has_floppy()`, and an `F` item with the `physical` flag of `core.json`, bit 0 of the byte after the item type). Its file browser has the entries `[ Physical DF0 ]` / `[ Physical DF1 ]` (drive DS0 / DS1 of the floppy connector) after `[ Eject ]`. A drive is in one slot only: choosing it ejects it from another slot. The core settings keep the name `:phys0` / `:phys1` as the file of the slot. Each mount is a disk change for the core; the next size frames of the slot (eject, an image) end it.
+
+```
+40 00 slot
+41 i 00      (i = 0..7)         size 0
+46 slot drive                   1 = DS0, 2 = DS1
 ```
 
 Read request (the core sends its frames in the reply bytes):

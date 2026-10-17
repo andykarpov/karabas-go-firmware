@@ -1,5 +1,6 @@
 #include "main.h"
 #include "img_mount.h"
+#include "file_name.h"
 
 // The fpga asks for a sector in its reply frames: IMG_LBA (4 bytes), then IMG_SEC (addr = slot,
 // data = read / write). The handlers only take the request; img_tick() serves it from the main
@@ -109,6 +110,16 @@ void img_mount(uint8_t slot) {
   }
   img_dirty[slot] = false;
   uint64_t fsize = 0;
+  int phys = fs.is_mounted ? kg_phys_drive(fs.filename) : -1;
+  if (phys >= 0) {
+    // a physical floppy drive: the core gets no image, then the drive
+    d_printf("Mount slot %d: physical drive DS%d", slot, phys); d_println();
+    SpiBusGuard bus;
+    spi_send(CMD_IMG_SLOT, 0, slot);
+    spi_send64(CMD_IMG_SIZE, 0);
+    spi_send(CMD_IMG_PHYS, slot, phys + 1);
+    return;
+  }
   if (fs.is_mounted) {
     String dir = String(fs.dir);
     if (dir == "") { dir = "/"; }

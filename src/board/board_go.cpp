@@ -56,6 +56,10 @@ void board_joy_read(uint16_t &left, uint16_t &right) {
 void board_reset_peripherals() {
 }
 
+bool board_has_floppy() {
+  return true;
+}
+
 bool btn_read(uint8_t num) {
   if (!has_extender) return false;
   I2cGuard i2c;

@@ -182,6 +182,9 @@
 #define CMD_IMG_SEC 0x43
 #define CMD_IMG_BUF_BANK 0x44
 #define CMD_IMG_BUF_DATA 0x45
+// a physical floppy drive for an F slot (Karabas Go), after its size 0 frames: addr = slot,
+// data = 1 drive DS0, 2 drive DS1. The core takes it back at the next size frames of the slot.
+#define CMD_IMG_PHYS 0x46
 
 // fileloader files will be transferred in the following order:
 // 1. send SLOT num  - 1 byte
@@ -233,6 +236,9 @@
 #define CORE_OSD_TYPE_TEXT 0x04          // just a text line (32 characters wide)
 #define CORE_OSD_TYPE_FILEMOUNTER 0x05   // mounts a selected file image as virtual drive (img_*)
 #define CORE_OSD_TYPE_FILELOADER 0x06    // immediately transfer a selected file to the fpga side (ioctl_*)
+
+// osd item flags (the byte after the type in the core file)
+#define CORE_OSD_FLAG_PHYS 0x01          // F item: can be a physical floppy drive (board_has_floppy)
 
 #define MAX_CORES 255
 #define MAX_FILES 255

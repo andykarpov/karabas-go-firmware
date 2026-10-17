@@ -28,6 +28,13 @@ static bool is_eject_entry(uint16_t i) {
   return files[i].file_id == 0 && files[i].hash[0] == '*';
 }
 
+// hash of the physical drive entries ("+0", "+1"; Karabas Go): '+' sorts after '*', before "."
+#define FILEBROWSER_PHYS "+"
+
+static int phys_entry_drive(uint16_t i) {
+  return (files[i].file_id == 0 && files[i].hash[0] == '+') ? files[i].hash[1] - '0' : -1;
+}
+
 // the file mounter slot of the image chosen last: a slot without an image opens its browser in
 // that dir (a game on several disks: DF1 starts where the disk of DF0 is)
 static int last_mount_slot = -1;
@@ -69,6 +76,24 @@ static void app_core_eject(uint8_t pos) {
   fs.is_mounted = false;
   img_mount(core.osd[pos].slot_id);
   filebrowser_slot = -1; // the file list has no eject entry now
+  core.osd_need_save = true;
+}
+
+// make the F item pos the physical floppy drive DS0 / DS1; a drive is in one slot only, so
+// another slot on it is ejected
+static void app_core_select_phys(uint8_t pos, int drive) {
+  for (uint8_t i = 0; i < core.osd_len; i++) {
+    if (i != pos && core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER && file_slots[core.osd[i].slot_id].is_mounted &&
+        kg_phys_drive(file_slots[core.osd[i].slot_id].filename) == drive) {
+      app_core_eject(i);
+    }
+  }
+  core_file_slot_t &fs = file_slots[core.osd[pos].slot_id];
+  d_printf("Slot %d: physical drive DS%d", core.osd[pos].slot_id, drive); d_println();
+  kg_phys_name(drive, fs.filename);
+  fs.is_mounted = true;
+  img_mount(core.osd[pos].slot_id); // also a disk change for the core
+  filebrowser_slot = -1;
   core.osd_need_save = true;
 }
 
@@ -195,7 +220,10 @@ void app_core_menu(uint8_t vpos) {
 
       String option;
       if (core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[i].type == CORE_OSD_TYPE_FILELOADER) {
-        if (file_slots[core.osd[i].slot_id].is_mounted) {
+        int phys = kg_phys_drive(file_slots[core.osd[i].slot_id].filename);
+        if (file_slots[core.osd[i].slot_id].is_mounted && phys >= 0) {
+          option = String(phys ? "Phys DF1" : "Phys DF0");
+        } else if (file_slots[core.osd[i].slot_id].is_mounted) {
           char short_name[11]; // long names: "Princ~.trd"
           kg_short_name(file_slots[core.osd[i].slot_id].filename, short_name, 10);
           option = String(short_name);
@@ -323,6 +351,11 @@ void app_core_on_keyboard() {
         // eject
         if (is_eject_entry(file_sel)) {
           app_core_eject(curr_osd_item);
+          is_filebrowser = false;
+        }
+        // physical floppy drive
+        else if (phys_entry_drive(file_sel) >= 0) {
+          app_core_select_phys(curr_osd_item, phys_entry_drive(file_sel));
           is_filebrowser = false;
         }
         // goto root (.)
@@ -548,6 +581,15 @@ int app_core_init_filebrowser() {
     if (item) { strcpy(item->hash, FILEBROWSER_EJECT); has_eject = true; } // file_id 0
   }
 
+  // add the physical floppy drive entries (an F item of a board with the floppy connector)
+  uint16_t n_special = has_eject ? 1 : 0;
+  if (core_osd_can_phys(curr_osd_item)) {
+    for (uint8_t d = 0; d < 2; d++) {
+      item = files_append();
+      if (item) { strcpy(item->hash, FILEBROWSER_PHYS); item->hash[1] = '0' + d; item->hash[2] = '\0'; n_special++; } // file_id 0
+    }
+  }
+
   // add root entry
   item = files_append();
   if (item) strcpy(item->hash, "."); // file_id 0
@@ -587,12 +629,16 @@ int app_core_init_filebrowser() {
 
   std::sort(files, files + files_len);
 
-  // preselect file in browser after sorting; not the eject entry (it sorts first) if the image
-  // is in another dir: enter must not eject by accident
-  if (has_eject && files_len > 1) {
-    file_sel = 1;
+  // preselect file in browser after sorting; not the eject or physical drive entries (they sort
+  // first) if the image is in another dir: enter must not eject by accident
+  if (n_special > 0 && files_len > n_special) {
+    file_sel = n_special;
   }
+  int presel_phys = kg_phys_drive(file_slots[core.osd[curr_osd_item].slot_id].filename);
   for (uint16_t i=0; i<files_len; i++) {
+    if (presel_phys >= 0 && phys_entry_drive(i) == presel_phys) {
+      file_sel = i;
+    }
     if (presel_id != 0 && presel_id == files[i].file_id) {
       file_sel = i;
     }
@@ -638,6 +684,10 @@ void app_core_filebrowser(uint8_t vpos) {
         String h = String(files[i].hash);
         if (is_eject_entry(i)) {
           strcpy(name, "[ Eject ]");
+          strcpy(cached_names[j].name, name);
+        }
+        else if (phys_entry_drive(i) >= 0) {
+          strcpy(name, phys_entry_drive(i) ? "[ Physical DF1 ]" : "[ Physical DF0 ]");
           strcpy(cached_names[j].name, name);
         }
         else if (files[i].file_id == 0 && (h == "." || h == "..")) {

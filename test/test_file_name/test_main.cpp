@@ -31,9 +31,24 @@ static void test_short_name() {
   TEST_ASSERT_EQUAL_STRING("123456789~", out);
 }
 
+static void test_phys() {
+  char out[8];
+  kg_phys_name(0, out);
+  TEST_ASSERT_EQUAL_STRING(":phys0", out);
+  kg_phys_name(1, out);
+  TEST_ASSERT_EQUAL_STRING(":phys1", out);
+  TEST_ASSERT_EQUAL_INT(0, kg_phys_drive(":phys0"));
+  TEST_ASSERT_EQUAL_INT(1, kg_phys_drive(":phys1"));
+  TEST_ASSERT_EQUAL_INT(-1, kg_phys_drive(":phys2"));
+  TEST_ASSERT_EQUAL_INT(-1, kg_phys_drive(":phys10"));
+  TEST_ASSERT_EQUAL_INT(-1, kg_phys_drive("phys0.adf"));
+  TEST_ASSERT_EQUAL_INT(-1, kg_phys_drive(""));
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_has_ext);
   RUN_TEST(test_short_name);
+  RUN_TEST(test_phys);
   return UNITY_END();
 }
