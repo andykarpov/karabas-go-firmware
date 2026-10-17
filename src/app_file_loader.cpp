@@ -12,6 +12,7 @@
 #include "app_file_loader.h"
 #include <SPI.h>
 #include "sorts.h"
+#include "file_name.h"
 
 void app_file_loader_read_list(bool forceIndex = false) {
 
@@ -66,15 +67,13 @@ void app_file_loader_read_list(bool forceIndex = false) {
     char e[33];
     exts.toCharArray(e, 32);
     while (file1.openNext(&root1, O_RDONLY)) {
-      char filename[14]; file1.getSFN(filename, sizeof(filename));
-      uint8_t len = strlen(filename);
-      if (!file1.isDirectory()) {
-        if (exts.length() == 0 || exts.indexOf(strlwr(filename + (len - 4))) != -1) {
-          file_list_sort_item_t *item = files_append();
-          if (item) {
-            memcpy(item->hash, filename, SORT_HASH_LEN);
-            item->file_id = file1.dirIndex();
-          }
+      char filename[256]; file1.getName(filename, sizeof(filename));
+      uint16_t id;
+      if (!file1.isDirectory() && sd_file_id(file1, id) && kg_name_has_ext(filename, e)) {
+        file_list_sort_item_t *item = files_append();
+        if (item) {
+          memcpy(item->hash, filename, SORT_HASH_LEN);
+          item->file_id = id;
         }
       }
       file1.close();
@@ -112,7 +111,7 @@ void app_file_loader_read_list(bool forceIndex = false) {
       if (core.last_file_id == files[i].file_id) {
           file_sel = i;
           //d_printf("Found %d pos", i); d_println();
-          if (file1.open(&root1, core.last_file_id)) {
+          if (sd_open_id(file1, &root1, core.last_file_id)) {
             app_file_loader_send_file(core.last_file_id);
             file1.close();
           }
@@ -154,7 +153,7 @@ void app_file_loader_menu(uint8_t vpos) {
       // get name from filename and put into cache
       else {
 
-        if (file1.open(&root1, files[i].file_id)) {
+        if (sd_open_id(file1, &root1, files[i].file_id)) {
           char filename[255];
           file1.getName(filename, sizeof(filename));
           String exts = String(core.file_extensions); exts.toLowerCase(); exts.trim();
@@ -271,7 +270,7 @@ void app_file_loader_send_file(uint16_t file_id) {
     file1.close();
   }
 
-  if (!file1.open(&root1, file_id, FILE_READ)) {
+  if (!sd_open_id(file1, &root1, file_id, FILE_READ)) {
     d_printf("Unable to open file %d", file_id); d_println();
     d_flush();
     app_file_loader_overlay(false, false);

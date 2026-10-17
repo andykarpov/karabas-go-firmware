@@ -40,7 +40,7 @@ void core_ioctl_send(uint8_t slot, bool popup)
   spi_send64(CMD_IOCTL_SIZE, fsize);
   String fname = String(file_slots[slot].dir) + "/" + String(file_slots[slot].filename);
   fname.replace("//", "/");
-  File32 file = sd1.open(fname);
+  FsFile file = sd1.open(fname);
   fsize = file.size();
   spi_send64(CMD_IOCTL_SIZE, fsize);
 

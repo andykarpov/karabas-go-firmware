@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <tuple>
 #include "sorts.h"
+#include "file_name.h"
 
 uint8_t curr_osd_item;
 bool is_filebrowser = false;
@@ -195,7 +196,9 @@ void app_core_menu(uint8_t vpos) {
       String option;
       if (core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[i].type == CORE_OSD_TYPE_FILELOADER) {
         if (file_slots[core.osd[i].slot_id].is_mounted) {
-          option = String(file_slots[core.osd[i].slot_id].filename);
+          char short_name[11]; // long names: "Princ~.trd"
+          kg_short_name(file_slots[core.osd[i].slot_id].filename, short_name, 10);
+          option = String(short_name);
         } else {
           option = String("-NO IMAGE-");
         }
@@ -350,7 +353,7 @@ void app_core_on_keyboard() {
           return;
         }
         // open file / dir
-        else if (file1.open(&root1, files[file_sel].file_id)) {
+        else if (sd_open_id(file1, &root1, files[file_sel].file_id)) {
           // goto new dir name
           if (file1.isDir()) {
             char dirname[255];
@@ -369,16 +372,13 @@ void app_core_on_keyboard() {
           // file selection (if ext matches)
           else {
             d_printf("Selecting file id %d", files[file_sel].file_id); d_println();
-            char filename[255];
-            file1.getSFN(filename, sizeof(filename));
+            char filename[256];
+            file1.getName(filename, sizeof(filename));
             d_printf("Filename %s", filename);
             // check file ext match
             String exts = String(file_slots[core.osd[curr_osd_item].slot_id].ext);
-            exts.toLowerCase(); exts.trim();
-            char e[33];
-            exts.toCharArray(e, 32);
-            uint8_t len = strlen(filename);
-            if (exts.length() == 0 || exts.indexOf(strlwr(filename + (len - 4))) != -1) {
+            exts.trim();
+            if (kg_name_has_ext(filename, exts.c_str())) {
               strcpy(file_slots[core.osd[curr_osd_item].slot_id].filename, filename);
               file_slots[core.osd[curr_osd_item].slot_id].is_mounted = true;
               if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER) {
@@ -563,17 +563,17 @@ int app_core_init_filebrowser() {
   String after_f = String(presel_after);
   after_f.toLowerCase();
   while (file1.openNext(&root1, O_RDONLY)) {
-    char filename[14]; file1.getSFN(filename, sizeof(filename));
-    uint8_t len = strlen(filename);  
-    item = files_append();
+    char filename[256]; file1.getName(filename, sizeof(filename));
+    uint16_t id;
+    item = sd_file_id(file1, id) ? files_append() : nullptr;
     if (item) {
       memcpy(item->hash, filename, SORT_HASH_LEN);
-      item->file_id = file1.dirIndex();
+      item->file_id = id;
       String core_f = String(file_slots[core.osd[curr_osd_item].slot_id].filename);
       String f = String(filename);
       core_f.toLowerCase();
       f.toLowerCase();
-      if (core_f.length() > 0 && core_f.indexOf(f) == 0) {
+      if (core_f.length() > 0 && core_f == f) {
         presel_id = item->file_id;
       }
       if (after_f.length() > 0 && after_f == f) {
@@ -644,7 +644,7 @@ void app_core_filebrowser(uint8_t vpos) {
           h.toCharArray(name, sizeof(name));
           h.toCharArray(cached_names[j].name, sizeof(cached_names[j].name));
         }
-        else if (file1.open(&root1, files[i].file_id)) {
+        else if (sd_open_id(file1, &root1, files[i].file_id)) {
           char filename[255];
           file1.getName(filename, sizeof(filename));
           String f(filename);
