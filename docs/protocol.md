@@ -110,7 +110,7 @@ Commands that the core does not know must be ignored.
 | `F7` | `CMD_CAPS` | 0 = query | protocol version (1) | Capability query, section 7. |
 | `F8` | `CMD_ESP_UART` | 0 | byte | Byte to the ESP8266 module behind the FPGA. |
 | `F9` | `CMD_HW_SETUP` | 0 = board, 1 = DVI only | 0: `HW_ID` (1 Go, 2 Mini, 3 Mini G); 1: 0 / 1 | |
-| `FA` | `CMD_RTC` | register | value | RTC register; the register set depends on `rtc_mode` (MC146818A, DS1307, ZX Evolution). |
+| `FA` | `CMD_RTC` | register | value | RTC register; the register set depends on `rtc_mode` (MC146818A, DS1307, ZX Evolution, MSM6242B). |
 | `FC` | `CMD_UART` | running index | byte | Byte from the USB serial port; `ADDR` changes with every byte, so the core can see a new one. |
 | `FD` | `CMD_INIT_START` | 0 | 0 | Core configuration starts (BUSY = 1). |
 | `FE` | `CMD_INIT_DONE` | 0 | 0 | Core configuration done (BUSY = 0). |
@@ -174,6 +174,8 @@ The core writes each byte to `address + offset`. Cores detect a write from a new
 52 i bank_i  (i = 0..2) / 53 a7..0 byte     bank + data
 55 00 00                        end
 ```
+
+The file is sent when it is chosen in the OSD. An `FL` item with `autoload` (bit 7 of its slot byte) and a file that exists (its `dir` / `filename` from `core.json`, or the last chosen one) is also sent at core start, after the switches and before `CMD_INIT_DONE`, e.g. the Kickstart of the NanoMig core.
 
 ### File mounter (`F` OSD items)
 
@@ -240,6 +242,7 @@ At core start the firmware sends all RTC registers; then every 500 ms it sends t
 - **MC146818A:** BCD or binary, selected by register B.
 - **DS1307:** BCD.
 - **ZX Evolution:** MC146818A registers, always BCD.
+- **MSM6242B** (`rtc_mode` 3, the Amiga clock at $DC0000): registers 0-12, one BCD digit each: S1 S10 MI1 MI10 H1 H10 D1 D10 MO1 MO10 Y1 Y10 W (year mod 100, W = 0 for Sunday), 24 h. The control registers D, E, F are in the core. The core sends the digits the CPU writes; the firmware sets the clock chip 100 ms after the last of them (the CPU writes the time a digit at a time) and does not send the time in between.
 
 ## 7. Capabilities and burst transfers
 

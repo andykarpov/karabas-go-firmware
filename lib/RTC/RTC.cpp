@@ -83,12 +83,17 @@ void RTC::handle()
       rtc_seconds = now.second();
     }
 
-    sendTime();
+    // a time written by the core but not yet set: do not send the old one over it
+    if (!msm_pending) sendTime();
 
     // cb rtc
     event();
 
     tr = n;
+  }
+
+  if (msm_pending && n - msm_write_ms >= MSM_WRITE_IDLE_MS) {
+    msm_commit();
   }
 
   /*if (n - to >= 100) {
@@ -110,7 +115,11 @@ void RTC::send(uint8_t reg, uint8_t data) {
 void RTC::sendTime() {
   //d_printf("Time: %02d:%02d:%02d %02d-%02d-%02d", rtc_hours, rtc_minutes, rtc_seconds, rtc_day, rtc_month, rtc_year); d_println();
 
-  if (rtc_type == RTC_TYPE_DS1307) {
+  if (rtc_type == RTC_TYPE_MSM6242B) {
+    uint8_t regs[MSM_TIME_REGS];
+    msm_time_regs(regs);
+    for (uint8_t i = 0; i < MSM_TIME_REGS; i++) send(i, regs[i]);
+  } else if (rtc_type == RTC_TYPE_DS1307) {
     // send ds1307 time registers
     send(0, bin2bcd(rtc_seconds));
     send(1, bin2bcd(rtc_minutes));
@@ -137,7 +146,10 @@ void RTC::sendAll() {
   // actualize time
   readAll();
 
-  if (rtc_type == RTC_TYPE_DS1307) {
+  if (rtc_type == RTC_TYPE_MSM6242B) {
+    // the time only: the control registers are in the core
+    sendTime();
+  } else if (rtc_type == RTC_TYPE_DS1307) {
     // time
     sendTime();
     // control register is always 0 (sqw, prescalers, etc)
@@ -175,9 +187,49 @@ void RTC::sendAll() {
   
 }
 
+void RTC::msm_time_regs(uint8_t *regs) {
+  uint8_t v[6] = { rtc_seconds, rtc_minutes, rtc_hours, rtc_day, rtc_month, rtc_year };
+  for (uint8_t i = 0; i < 6; i++) {
+    regs[2 * i] = v[i] % 10;
+    regs[2 * i + 1] = (v[i] / 10) % 10;
+  }
+  regs[12] = rtc_week % 7; // 0 = sunday, as RTClib
+}
+
+void RTC::msm_commit() {
+  msm_pending = false;
+  uint8_t s = msm_regs[0] + 10 * msm_regs[1];
+  uint8_t mi = msm_regs[2] + 10 * msm_regs[3];
+  uint8_t h = msm_regs[4] + 10 * (msm_regs[5] & 3); // 24 h: bit 2 of H10 is PM in 12 h mode only
+  uint8_t d = msm_regs[6] + 10 * msm_regs[7];
+  uint8_t mo = msm_regs[8] + 10 * msm_regs[9];
+  uint8_t y = msm_regs[10] + 10 * msm_regs[11]; // the Amiga takes 78-99 as 19xx; the chip has 20xx only
+  if (s > 59 || mi > 59 || h > 23 || d < 1 || d > 31 || mo < 1 || mo > 12 || y > 99) {
+    sendTime(); // not a time: the core gets the clock back
+    return;
+  }
+  rtc_seconds = s; rtc_minutes = mi; rtc_hours = h;
+  rtc_day = d; rtc_month = mo; rtc_year = y;
+  {
+    I2cHold i2c;
+    rtc_clock.adjust(DateTime(2000 + rtc_year, rtc_month, rtc_day, rtc_hours, rtc_minutes, rtc_seconds));
+  }
+  readAll(); // the day of the week of the new date
+  sendTime();
+}
+
 void RTC::setData(uint8_t addr, uint8_t data) {
 
-  if (rtc_type == RTC_TYPE_DS1307) {
+  if (rtc_type == RTC_TYPE_MSM6242B) {
+    if (addr >= MSM_TIME_REGS) return;
+    // the first write of a sequence starts from the current time: a program may set a few
+    // registers only
+    if (!msm_pending) msm_time_regs(msm_regs);
+    msm_regs[addr] = data & 0x0F;
+    msm_pending = true;
+    msm_write_ms = millis();
+
+  } else if (rtc_type == RTC_TYPE_DS1307) {
 
     // skip multiple writes for clock registers
     //if (rtc_last_write_reg == addr && rtc_last_write_data == data && addr <= 0x08) return;
