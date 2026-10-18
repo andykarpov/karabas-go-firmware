@@ -15,6 +15,7 @@ To upload the firmware you have 2 standard choices:
 
 ## Documentation
 
+- [USB XInput controllers / 8BitDo M30 2.4G](docs/xinput.md).
 - [MCU ↔ FPGA protocol](docs/protocol.md) ([по-русски](docs/protocol.ru.md)) — SPI frames, all commands, load sequences.
 - [Burst transfers](docs/burst_protocol.md) — the fast ROM / file transfer mode.
 - [LED matrix add-on](MATRIX.md).

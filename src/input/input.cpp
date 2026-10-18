@@ -1,3 +1,4 @@
+#include "xinput_app.h"
 #include "main.h"
 #include "ps2kbd.h"
 #include "usb_hid_keys.h"
@@ -91,6 +92,12 @@ static void joy_poll(bool &changedL, bool &changedR) {
   if (joyUSB_len > 1) {
     r = r | joyUSB[1];
   }
+  // XInput pads use the ports following the existing HID joysticks.
+  uint16_t xinput[2];
+  xinput_joystick_snapshot(xinput);
+  if (joyUSB_len == 0) { l |= xinput[0]; r |= xinput[1]; }
+  else if (joyUSB_len == 1) { r |= xinput[0]; }
+
   joyL = l;
   joyR = r;
 
