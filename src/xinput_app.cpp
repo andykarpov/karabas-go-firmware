@@ -56,8 +56,10 @@ void tuh_xinput_report_received_cb(uint8_t address, uint8_t instance, const xinp
     } else if (itf->new_pad_data) {
       const auto &p = itf->pad;
       set_pad(address, instance,xinput_joy_map(p.wButtons, p.bLeftTrigger, p.bRightTrigger, p.sThumbLX, p.sThumbLY));
-      d_printf("XInput %u:%u buttons=%04x LT=%u RT=%u LX=%d LY=%d\r\n",
-               address, instance, p.wButtons, p.bLeftTrigger, p.bRightTrigger, p.sThumbLX, p.sThumbLY);
+      if (p.wButtons != 0 || p.bLeftTrigger > 30 || p.bRightTrigger > 30) {
+        d_printf("XInput %u:%u buttons=%04x LT=%u RT=%u LX=%d LY=%d\r\n",
+                 address, instance, p.wButtons, p.bLeftTrigger, p.bRightTrigger, p.sThumbLX, p.sThumbLY);
+      }
     }
   }
   tuh_xinput_receive_report(address, instance);
