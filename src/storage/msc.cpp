@@ -1,7 +1,11 @@
 #include "main.h"
 #include "Adafruit_TinyUSB.h"
+#include "hardware/watchdog.h"
 
-// Expose the SD card as USB mass storage (btn2 held on boot)
+// Expose the SD card as USB mass storage (btn2 held on boot, or AT+KARABAS=msc)
+
+// watchdog scratch 0..3 survive a watchdog reboot (the bootrom uses 4..7)
+#define MSC_REQUEST_MAGIC 0x4B47534D // "MSGK"
 
 static Adafruit_USBD_MSC usb_msc;
 static bool expose_msc = false;
@@ -24,10 +28,17 @@ void msc_init() {
 #endif
 }
 
+void msc_reboot_to_msc() {
+  watchdog_hw->scratch[0] = MSC_REQUEST_MAGIC;
+  rp2040.reboot();
+}
+
 void msc_check_boot() {
+  bool requested = (watchdog_hw->scratch[0] == MSC_REQUEST_MAGIC);
+  watchdog_hw->scratch[0] = 0;
   // if btn2 pressed on boot - espose msc
 #if ENABLE_MSC
-  if (btn_read(1)) {
+  if (btn_read(1) || requested) {
     if (has_sd) {
       expose_msc = true;
       ejected = false;

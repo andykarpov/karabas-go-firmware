@@ -57,6 +57,7 @@ The firmware runs on FreeRTOS only (`main.cpp` stops the build with `#error` oth
   - `img_mount` is the file mounter (`F` OSD items). The image of a slot stays open while the core runs. The link handlers only take the sector requests of the core (`CMD_IMG_LBA` / `CMD_IMG_SEC`), and `img_tick()` serves them from the main loop. A read sends the sector as a burst or classic frames; a write pulls the 512 bytes of the core with NOPs. Sequences are in `docs/protocol.md` section 6.
   - Physical floppy drives (Karabas Go, `board_has_floppy()`): the browser of an `F` item with `CORE_OSD_FLAG_PHYS` (the flags byte after the item type, `"physical": 1` in `core.json`) has `[ Physical DF0 ]` / `[ Physical DF1 ]` after `[ Eject ]`. The slot then keeps the file name `:phys0` / `:phys1` (`kg_phys_drive()`), and `img_mount` sends `CMD_IMG_PHYS` after the size 0 frames instead of opening a file. A drive is in one slot only.
 - `periph/`: the LED matrix, OLED and USB serial bridge.
+  - The bridge forwards the host's bytes to the core UART (`CMD_UART`), except `AT+KARABAS=<cmd>` lines, which the firmware answers itself: `list` (the cores on the SD card with their builds), `boot` (reboot into BOOTSEL), `msc` (reboot into USB mass storage, requested through watchdog scratch 0). Bytes that may start such a line are held back until they can't, or for 500 ms.
 - `board/`: per-board code (see below).
 - `main.h` is an umbrella header that includes every module header. Each module owns its state, and state is `static` unless other modules need it.
 
@@ -90,7 +91,7 @@ The firmware runs on FreeRTOS only (`main.cpp` stops the build with `#error` oth
 
 **Per-board code**: pin maps are in `config.h`. Board behaviour lives behind the `src/board/board.h` API, implemented by `board_go.cpp` (I2C extender, Sega joysticks) and `board_mini.cpp` (Mini and Mini G, including the Mini G ESP, MIDI and FT reset lines). Outside `config.h`, `bitmaps.h` (logo selection) and `src/board/`, code must not use `#if HW_ID`. Add a `board_*` function instead.
 
-**`lib/KarabasCommon`**: hardware-independent logic with no Arduino includes, unit-tested on the native platform. It contains `kg_format` (core file and ROM block parsing), `hid_joy_map` (`drivers/*.ini` mapping), `crc32` and `file_name` (extension match and short names of the OSD file lists). New pure logic that is worth testing goes here.
+**`lib/KarabasCommon`**: hardware-independent logic with no Arduino includes, unit-tested on the native platform. It contains `kg_format` (core file and ROM block parsing), `hid_joy_map` (`drivers/*.ini` mapping), `crc32`, `at_cmd` (the `AT+KARABAS=` line parser of the serial bridge) and `file_name` (extension match and short names of the OSD file lists). New pure logic that is worth testing goes here.
 
 **Runtime config**: on the SD card, `karabas.ini` is read by `load_setup()` (see `src/karabas.ini` for the keys). Every line, comments included, must fit into the 80-byte read buffer (79 chars). A longer line makes `ini.validate()` reject the whole file, and the firmware silently falls back to the defaults (it logs `karabas.ini is invalid`). Keep `src/karabas.ini` free of long comments: it is shipped to users as is. USB joystick mappings are `*.ini` files in `drivers/`, described in `drivers/example_ini.txt`.
 
