@@ -30,11 +30,6 @@ void xinput_joystick_snapshot(uint16_t buttons[2]) {
   spin_unlock(joy_lock, save);
 }
 
-extern "C" usbh_class_driver_t const *usbh_app_driver_get_cb(uint8_t *count) {
-  *count = 1;
-  return &usbh_xinput_driver;
-}
-
 void tuh_xinput_mount_cb(uint8_t address, uint8_t instance, const xinputh_interface_t *itf) {
   uint16_t vid = 0, pid = 0;
   tuh_vid_pid_get(address, &vid, &pid);

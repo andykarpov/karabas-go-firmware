@@ -29,6 +29,8 @@
 #include "ps2kbd.h"
 #include "app_core_browser.h"
 #include "diag/diag.h"
+#include "usb/printer_host.h"
+#include "periph/printer_usb.h"
 
 #ifndef __FREERTOS
 #error "The firmware runs on FreeRTOS: build it with -D PIO_FRAMEWORK_ARDUINO_ENABLE_FREERTOS (see platformio.ini)"
@@ -229,6 +231,8 @@ static void usb_host_loop()
 {
   diag_loop_core1();
   tuh_task();
+  printer_host_tick(millis());
+  printer_usb_tick();
 }
 
 // The firmware and the usb host run in their own pinned tasks.
