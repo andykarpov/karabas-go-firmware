@@ -51,7 +51,10 @@ void core_ioctl_send(uint8_t slot, bool popup)
   String fname = String(file_slots[slot].dir) + "/" + String(file_slots[slot].filename);
   fname.replace("//", "/");
   FsFile file = sd1.open(fname);
-  fsize = file.size();
+  if (!file) {
+    d_printf("Ioctl slot %d: unable to open %s", slot, fname.c_str()); d_println();
+  }
+  fsize = file ? file.size() : 0;
   spi_send64(CMD_IOCTL_SIZE, fsize);
 
   String ext = fname.substring(fname.lastIndexOf('.')+1);
@@ -161,11 +164,13 @@ void do_configure(const char* filename) {
   kb_reset(); // reset to ps/2 defaults
 
   fpga_send(filename);
+  // wait for the core to answer before anything else goes to it (frames sent while its link is
+  // still in reset are lost: a Kickstart sent then never arrived); burst transfers for the roms /
+  // files below, if the core supports them
+  link_caps_query();
   spi_send(CMD_INIT_START, 0, 0);
   spi_send(CMD_HW_SETUP, 0, HW_ID); // hw id
   spi_send(CMD_HW_SETUP, 1, hw_setup.dvi_only); // dvi only flag
-  // burst transfers for the roms / files below, if the core supports them
-  link_caps_query();
   // trigger font loader reset
   zxosd.fontReset();
   // send font data
@@ -391,6 +396,10 @@ void read_core(const char* filename) {
     else if (core.osd[i].type == CORE_OSD_TYPE_FILELOADER && file_slots[core.osd[i].slot_id].is_autoload &&
              file_slots[core.osd[i].slot_id].is_mounted) {
       core_ioctl_send(core.osd[i].slot_id, false);
+    }
+    else if (core.osd[i].type == CORE_OSD_TYPE_FILELOADER && file_slots[core.osd[i].slot_id].is_autoload) {
+      d_printf("Ioctl slot %d: no file to autoload (%s/%s)", core.osd[i].slot_id,
+        file_slots[core.osd[i].slot_id].dir, file_slots[core.osd[i].slot_id].filename); d_println();
     }
   }
 
