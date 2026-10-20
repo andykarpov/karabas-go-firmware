@@ -267,8 +267,9 @@ void read_core(const char* filename) {
     if (core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[i].type == CORE_OSD_TYPE_FILELOADER) {
       core.osd[i].options_len = 0;
       uint8_t slot_byte = file_read(); // bit 7: autoload
-      core.osd[i].slot_id = bitClear(slot_byte, 7);
-      file_slots[core.osd[i].slot_id].is_autoload = bitRead(slot_byte, 7);
+      // not bitClear(): it clears the bit in slot_byte too, and the autoload bit read 0
+      core.osd[i].slot_id = slot_byte & 0x7F;
+      file_slots[core.osd[i].slot_id].is_autoload = (slot_byte & 0x80) != 0;
       file_slots[core.osd[i].slot_id].is_mounted = false;
       file_read_bytes(file_slots[core.osd[i].slot_id].ext, 256); file_slots[core.osd[i].slot_id].ext[255] = '\0';
       file_slots[core.osd[i].slot_id].offset_dir = file1.curPosition();
