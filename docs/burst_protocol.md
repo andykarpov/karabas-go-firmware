@@ -32,7 +32,7 @@ The MCU drives `BURST_CS_N` only after the loaded core has announced burst suppo
 
 ## Capability query (`CMD_CAPS = 0xF7`)
 
-During every core load the MCU asks the core what it supports, using the classic link. The query comes after `CMD_INIT_START` and `CMD_HW_SETUP`, before ROMs are sent.
+During every core load the MCU asks the core what it supports, using the classic link. The query is the first frame after CONF_DONE, before `CMD_INIT_START`, `CMD_HW_SETUP` and the ROMs: the answer also tells the MCU that the core is running (its link can still be in reset right after CONF_DONE, for example while a PLL locks).
 
 1. MCU sends the classic frame `{0xF7, 0x00, 0x01}`. `addr = 0x00` means "query", `data = 0x01` is the protocol version.
 2. MCU then sends up to 16 `CMD_NOP` frames. A core that supports bursts answers in the **reply bytes** of any of these transfers (the bytes the FPGA shifts out on MISO), with the frame `{0xF7, caps, max_mhz}`. Cores that send to the MCU through a queue can answer through it: frames already queued ahead of the answer (e.g. the NOPs some cores keep queued) only delay it, and should stay well below 16.
@@ -41,7 +41,8 @@ During every core load the MCU asks the core what it supports, using the classic
    - `caps` bit 2: burst read supported (see "Burst read" below; requires bit 1).
    - `caps` bits 7..3: reserved, 0.
    - `max_mhz`: the highest SCK frequency during bursts, in MHz. 0 means the normal link clock (16 MHz, or the core's `spi_freq`). Boards before Mini Rev.G do not have MCU_SCK on a global clock pin, so a core there that samples SCK with its system clock must report a frequency it can oversample safely.
-3. No answer means classic transfers only. Old cores ignore the unknown command 0xF7.
+3. Without an answer the MCU sends the query and the polls again, until the core answers or 100 ms have passed. The answers to the repeated queries that come later are ignored.
+4. No answer means classic transfers only. Old cores ignore the unknown command 0xF7.
 
 ## Burst write transaction
 

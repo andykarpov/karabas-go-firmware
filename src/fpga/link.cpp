@@ -224,6 +224,7 @@ void spi_send64(uint8_t cmd, uint64_t data) { spi_send_le(cmd, data, 8); }
 #define CAPS_BURST_READY 0x02
 #define CAPS_QUERY_POLLS 16 // queue-based cores keep a few NOPs queued ahead of the answer
 #define BURST_READY_TIMEOUT_US 100000
+#define CAPS_READY_TIMEOUT_MS 100 // how long a core load waits for the answer of the core
 
 static uint8_t burst_caps = 0;
 static uint8_t burst_mhz = 0;
@@ -235,31 +236,41 @@ void link_burst_reset() {
                                        // the burst receiver of a core never sees a floating chip select
 }
 
-void link_caps_query() {
-  if (!hw_setup.burst_enabled) {
-    d_println("FPGA caps: not queried, burst=0 in karabas.ini (classic link)");
-    return;
-  }
+bool link_caps_query() {
   SpiBusGuard bus;
-  uint8_t rx[3];
-  // query (protocol version 1), then poll: the answer comes in the reply bytes of a later transfer
-  spi_xfer(CMD_CAPS, 0x00, 0x01, rx);
-  for (uint8_t i=0; i<CAPS_QUERY_POLLS && rx[0] != CMD_CAPS; i++) {
-    spi_xfer(CMD_NOP, 0, 0, rx);
-  }
-  bool answered = (rx[0] == CMD_CAPS);
+  uint8_t rx[3] = {0, 0, 0};
+  // The answer also tells that the core is running: after CONF_DONE its link may still be in
+  // reset (a pll that has not locked yet, LCK_cycle:NoWait), and the frames sent then are lost.
+  // So the query (protocol version 1) and its polls go again until the core answers; the answer
+  // comes in the reply bytes of a later transfer. Old cores never answer: they cost the timeout.
+  ElapsedTimer timer;
+  timer.reset();
+  uint32_t tries = 0;
+  do {
+    tries++;
+    spi_xfer(CMD_CAPS, 0x00, 0x01, rx);
+    for (uint8_t i=0; i<CAPS_QUERY_POLLS && rx[0] != CMD_CAPS; i++) {
+      spi_xfer(CMD_NOP, 0, 0, rx);
+    }
+  } while (rx[0] != CMD_CAPS && timer.elapsed() < CAPS_READY_TIMEOUT_MS);
 
-  if (answered) {
-    burst_caps = rx[1];
-    burst_mhz = rx[2];
-    d_printf("FPGA caps: %02x, burst max %u MHz", burst_caps, burst_mhz); d_println();
-  } else {
-    d_println("FPGA caps: none (classic link)");
+  if (rx[0] != CMD_CAPS) {
+    d_printf("FPGA caps: no answer in %lu ms (classic link)", (unsigned long) timer.elapsed()); d_println();
+    return false;
   }
+  d_printf("FPGA caps: %02x, burst max %u MHz, core answered after %lu ms (%lu queries)", rx[1], rx[2],
+    (unsigned long) timer.elapsed(), (unsigned long) tries); d_println();
+  if (!hw_setup.burst_enabled) {
+    d_println("FPGA caps: burst=0 in karabas.ini (classic link)");
+    return true;
+  }
+  burst_caps = rx[1];
+  burst_mhz = rx[2];
   if (burst_caps & CAPS_BURST_WRITE) {
     pinMode(PIN_BURST_CS, OUTPUT);
     digitalWrite(PIN_BURST_CS, HIGH);
   }
+  return true;
 }
 
 bool link_burst_available() {

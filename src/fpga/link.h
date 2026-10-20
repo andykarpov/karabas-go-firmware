@@ -31,7 +31,8 @@ void link_poll();                         // once per main loop: NOP to the fpga
 
 // burst transfers, docs/burst_protocol.md
 void link_burst_reset();                  // at a core load: no bursts until the next query
-void link_caps_query();                   // ask the loaded core for its capabilities (CMD_CAPS)
+bool link_caps_query();                   // ask the loaded core for its capabilities (CMD_CAPS),
+                                          // until it answers (true) or a timeout (an old core)
 bool link_burst_available();
 // send data to `type`'s target starting at addr; returns how many bytes went out as bursts
 // (less than len if the fpga stopped being ready: send the rest with classic frames)

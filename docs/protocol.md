@@ -67,9 +67,9 @@ Commands that the core does not know must be ignored.
 `do_configure()` in `src/fpga/core_loader.cpp`, for every core load:
 
 1. The bitstream is sent through the FPGA configuration pins (not this link).
-2. `CMD_INIT_START` — the core shows itself busy.
-3. `CMD_HW_SETUP` `(0, HW_ID)` and `(1, dvi_only)`.
-4. `CMD_CAPS` query, answered only by cores that support bursts. See section 7.
+2. `CMD_CAPS` query, answered only by cores that support bursts. It is repeated until the core answers (up to 100 ms), so nothing else goes to a core whose link is still in reset after CONF_DONE. See section 7.
+3. `CMD_INIT_START` — the core shows itself busy.
+4. `CMD_HW_SETUP` `(0, HW_ID)` and `(1, dvi_only)`.
 5. OSD font: `CMD_OSD` font reset and the font data.
 6. ROMs: `CMD_ROMLOADER` on, the ROM data, `CMD_ROMLOADER` off.
 7. OSD switch values (`CMD_SWITCHES`) and the RTC registers (`CMD_RTC`).
@@ -255,14 +255,14 @@ At core start the firmware sends all RTC registers; then every 500 ms it sends t
 
 ## 7. Capabilities and burst transfers
 
-`CMD_CAPS` (`F7 00 01`) asks the core what it supports. The firmware then polls with up to 16 NOP frames. A core that supports bursts answers `F7 caps max_mhz` in a reply frame:
+`CMD_CAPS` (`F7 00 01`) asks the core what it supports. The firmware then polls with up to 16 NOP frames, and sends the query and the polls again until the core answers or 100 ms have passed. A core that supports bursts answers `F7 caps max_mhz` in a reply frame:
 
 - caps bit 0: burst write;
 - caps bit 1: the core drives `BURST_READY`;
 - caps bit 2: burst read (planned).
 
-Old cores do not answer and stay on classic frames.
+Old cores do not answer and stay on classic frames (their load takes the 100 ms longer).
 
 Bursts use a second chip select. One 5-byte header (type + 32-bit address) is followed by up to 512 data bytes. They replace the bank + data frames of ROMs (`07`), the file loader (`0D`) and ioctl (`53`). The full specification is in [burst_protocol.md](burst_protocol.md).
 
-`burst=0` in `karabas.ini` turns bursts off. With `debug=1` the log shows the caps answer and the transfer times.
+`burst=0` in `karabas.ini` turns bursts off (the query still goes, to wait for the core). With `debug=1` the log shows the caps answer and the transfer times.
