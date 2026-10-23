@@ -1,6 +1,7 @@
 #include "main.h"
 #include "debug_out.h"
 #include "hardware/sync.h"
+#include "tusb.h"
 
 #include <FreeRTOS.h>
 #include <task.h>
@@ -19,6 +20,12 @@ static spin_lock_t *debug_lock = spin_lock_init(spin_lock_claim_unused(true));
 
 void debug_set_owner_task(void *task) {
   owner_task = (TaskHandle_t) task;
+}
+
+// a terminal has the port open. Not Serial's operator bool: it yields when nothing is connected,
+// which would hand the APP loop to the OLED task on every pass
+static bool port_open() {
+  return tud_cdc_connected();
 }
 
 static bool is_owner() {
@@ -42,7 +49,7 @@ static size_t debug_buffer(const uint8_t *data, size_t len) {
 }
 
 void debug_drain() {
-  if (!is_owner() || !Serial) return;
+  if (!is_owner() || !port_open()) return;
   uint8_t chunk[64];
   for (;;) {
     size_t n = 0;
@@ -68,7 +75,7 @@ public:
     return write(&c, 1);
   }
   size_t write(const uint8_t *data, size_t len) override {
-    if (is_owner() && Serial) {
+    if (is_owner() && port_open()) {
       debug_drain(); // keep the order with buffered output
       return Serial.write(data, len);
     }
@@ -83,7 +90,7 @@ Print &debug_out() {
 }
 
 void debug_flush() {
-  if (!is_owner() || !Serial) return;
+  if (!is_owner() || !port_open()) return;
   debug_drain();
   Serial.flush();
 }

@@ -229,7 +229,6 @@ static void usb_host_loop()
 {
   diag_loop_core1();
   tuh_task();
-  usb_host_watchdog();
 }
 
 // The firmware and the usb host run in their own pinned tasks.
