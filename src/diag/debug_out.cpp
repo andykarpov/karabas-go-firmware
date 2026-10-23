@@ -6,7 +6,10 @@
 #include <task.h>
 static TaskHandle_t owner_task = nullptr;
 
-#define DEBUG_BUF_SIZE 2048 // bytes kept for non-owner writers between two drains
+// bytes kept for non-owner writers between two drains, and for everyone until a terminal
+// opens the port: after a reboot the host needs a moment to bring the CDC port back, and the
+// boot log (usb enumeration included) would be lost otherwise
+#define DEBUG_BUF_SIZE 8192
 
 static uint8_t debug_buf[DEBUG_BUF_SIZE];
 static volatile uint32_t debug_head = 0; // write position (producers, under the lock)
@@ -39,7 +42,7 @@ static size_t debug_buffer(const uint8_t *data, size_t len) {
 }
 
 void debug_drain() {
-  if (!is_owner()) return;
+  if (!is_owner() || !Serial) return;
   uint8_t chunk[64];
   for (;;) {
     size_t n = 0;
@@ -65,7 +68,7 @@ public:
     return write(&c, 1);
   }
   size_t write(const uint8_t *data, size_t len) override {
-    if (is_owner()) {
+    if (is_owner() && Serial) {
       debug_drain(); // keep the order with buffered output
       return Serial.write(data, len);
     }
@@ -80,7 +83,7 @@ Print &debug_out() {
 }
 
 void debug_flush() {
-  if (!is_owner()) return;
+  if (!is_owner() || !Serial) return;
   debug_drain();
   Serial.flush();
 }

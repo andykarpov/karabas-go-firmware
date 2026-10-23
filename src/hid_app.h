@@ -17,6 +17,8 @@ extern uint8_t joyUSB_len;
 void hid_kbd_report_sync();
 // copy the latest keyboard report received by core1 (any task, does not touch usb_keyboard_report)
 void hid_kbd_report_get(hid_keyboard_report_t *report);
+// re-enumerate a device that stays unmounted on the root port (usb host task only)
+void usb_host_watchdog();
 
 #include "hid_joy_map.h"
 

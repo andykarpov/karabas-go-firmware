@@ -4,9 +4,14 @@
 #include "hid_app.h"
 #include "main.h"
 #include "host/usbh.h"
+#include "host/hub.h"
 #include "ps2kbd.h"
 #include "SegaController.h"
 #include "hardware/sync.h"
+extern "C" {
+bool usb_root_connected(void); // usb_root.c
+void usb_root_drop(void);
+}
 
 hid_keyboard_report_t usb_keyboard_report;
 hid_mouse_report_t usb_mouse_report;
@@ -103,9 +108,157 @@ void tuh_mount_cb(uint8_t daddr) {
 }
 
 void tuh_umount_cb(uint8_t daddr) {
-  Serial1.printf("Device removed, address = %d\r\n", daddr);
+  d_printf("Device removed, address = %d\r\n", daddr);
   dev_info_t *dev = &dev_info[daddr - 1];
   dev->mounted = false;
+}
+
+// Invoked during enumeration, once the device has an address and sent its device descriptor
+void tuh_enum_descriptor_device_cb(uint8_t daddr, const tusb_desc_device_t *desc_device) {
+  d_printf("Enumerating device %u: ID %04x:%04x, class %02x\r\n", daddr, desc_device->idVendor, desc_device->idProduct, desc_device->bDeviceClass);
+}
+
+// USB host watchdog. TinyUSB gives up on a device after 3 failed enumeration attempts, and
+// the hub driver stops quietly when one of its control requests fails (port power, status
+// polling): the hub stays configured, but a device plugged into it is never seen. PIO-USB
+// reports a new attach only after the lines went SE0, so nothing recovers until a replug.
+// When no device comes up, the root port is dropped as if it was unplugged: PIO-USB sees the
+// device (or the hub of the Mini boards) again on the next frame and TinyUSB starts anew.
+#define USB_WD_PERIOD_MS 1000
+#define USB_WD_CHECKS 4 // suspicious checks in a row before a drop, doubled after each failed drop
+#define USB_WD_HUB_PORTS 4 // ports scanned on a hub (the scan stops at the first one that fails)
+
+static struct {
+  uint8_t hub_addr;     // hub being scanned, 0 = no scan running
+  uint8_t port;         // port whose status is requested
+  bool busy;            // a status request is in flight
+  bool bad;             // a port has a device tinyusb does not know about, or no power
+  bool done;            // the last scan completed
+  uint32_t request_ms;  // when the request in flight was sent
+} usb_hub_scan;
+
+static uint8_t usb_hub_status_buf[4];
+
+static bool usb_hub_scan_request();
+
+static bool usb_hub_has_device(uint8_t hub_addr, uint8_t port) {
+  for (uint8_t daddr = 1; daddr <= CFG_TUH_DEVICE_MAX + CFG_TUH_HUB; daddr++) {
+    if (daddr == hub_addr || !tuh_connected(daddr)) continue;
+    tuh_bus_info_t bus;
+    if (tuh_bus_info_get(daddr, &bus) && bus.hub_addr == hub_addr && bus.hub_port == port) return true;
+  }
+  return false;
+}
+
+static void usb_hub_scan_cb(tuh_xfer_t *xfer) {
+  usb_hub_scan.busy = false;
+  uint8_t port = usb_hub_scan.port;
+  if (xfer->result != XFER_RESULT_SUCCESS) {
+    // no such port (a stall): the scan is over
+    usb_hub_scan.done = true;
+    usb_hub_scan.hub_addr = 0;
+    return;
+  }
+  uint16_t status = usb_hub_status_buf[0] | (usb_hub_status_buf[1] << 8); // wPortStatus
+  bool connected = status & (1u << 0);
+  bool powered = status & (1u << 8);
+  if (!powered || (connected && !usb_hub_has_device(xfer->daddr, port))) usb_hub_scan.bad = true;
+  if (port < USB_WD_HUB_PORTS) {
+    usb_hub_scan.port = port + 1;
+    if (usb_hub_scan_request()) return;
+  }
+  usb_hub_scan.done = true;
+  usb_hub_scan.hub_addr = 0;
+}
+
+// GET_PORT_STATUS with our own buffer: hub_port_get_status() would overwrite the port status
+// that the hub driver keeps between the steps of its own status handling
+static bool usb_hub_scan_request() {
+  tusb_control_request_t const request = {
+    .bmRequestType_bit = {
+      .recipient = TUSB_REQ_RCPT_OTHER,
+      .type      = TUSB_REQ_TYPE_CLASS,
+      .direction = TUSB_DIR_IN
+    },
+    .bRequest = HUB_REQUEST_GET_STATUS,
+    .wValue   = 0,
+    .wIndex   = usb_hub_scan.port,
+    .wLength  = 4
+  };
+  tuh_xfer_t xfer = {
+    .daddr       = usb_hub_scan.hub_addr,
+    .ep_addr     = 0,
+    .setup       = &request,
+    .buffer      = usb_hub_status_buf,
+    .complete_cb = usb_hub_scan_cb,
+    .user_data   = 0
+  };
+  usb_hub_scan.busy = true;
+  usb_hub_scan.request_ms = millis();
+  if (!tuh_control_xfer(&xfer)) {
+    usb_hub_scan.busy = false; // control pipe busy
+    return false;
+  }
+  return true;
+}
+
+// one check: true if the usb host looks stuck. A device counts as working once all its
+// interfaces are configured (tuh_mount_cb): tuh_mounted() turns true right after
+// SET_CONFIGURATION, before the class drivers set up their interfaces.
+static bool usb_host_check() {
+  bool device_pending = false; // has an address but is not mounted
+  for (uint8_t daddr = 1; daddr <= CFG_TUH_DEVICE_MAX; daddr++) {
+    if (dev_info[daddr - 1].mounted) return false;
+    if (tuh_connected(daddr)) device_pending = true;
+  }
+  if (device_pending) return true;
+  uint8_t hub_addr = 0;
+  for (uint8_t daddr = CFG_TUH_DEVICE_MAX + 1; daddr <= CFG_TUH_DEVICE_MAX + CFG_TUH_HUB; daddr++) {
+    if (tuh_mounted(daddr)) hub_addr = daddr;
+  }
+  if (hub_addr == 0) return true; // something on the root port, and nothing works
+  // a hub and nothing behind it: fine if its ports are empty. The result of the last scan
+  // counts, and so does a scan that could not start (control pipe busy) or never completes.
+  bool bad;
+  if (usb_hub_scan.busy) {
+    bad = millis() - usb_hub_scan.request_ms > USB_WD_PERIOD_MS;
+    if (!bad) return false;
+    usb_hub_scan.busy = false; // give up on it, the next check sends a new one
+    return true;
+  }
+  bad = usb_hub_scan.done ? usb_hub_scan.bad : usb_hub_scan.hub_addr != 0;
+  usb_hub_scan.hub_addr = hub_addr;
+  usb_hub_scan.port = 1;
+  usb_hub_scan.bad = false;
+  usb_hub_scan.done = false;
+  usb_hub_scan_request();
+  return bad;
+}
+
+void usb_host_watchdog() {
+  static uint32_t last_ms = 0;
+  static uint8_t suspicious = 0;
+  static uint8_t failed_drops = 0; // drops in a row after which nothing came up
+  uint32_t now = millis();
+  if (now - last_ms < USB_WD_PERIOD_MS) return;
+  last_ms = now;
+  if (!usb_root_connected()) {
+    suspicious = 0;
+    return;
+  }
+  if (!usb_host_check()) {
+    suspicious = 0;
+    for (uint8_t i = 0; i < CFG_TUH_DEVICE_MAX; i++) {
+      if (dev_info[i].mounted) failed_drops = 0;
+    }
+    return;
+  }
+  if (++suspicious < (USB_WD_CHECKS << failed_drops)) return;
+  suspicious = 0;
+  if (failed_drops < 4) failed_drops++;
+  d_println("USB host: no device came up, re-enumerating");
+  usb_hub_scan = {};
+  usb_root_drop();
 }
 
 // Invoked when device is mounted (configured)
