@@ -62,8 +62,6 @@ static struct UsbPioReserve {
 // firmware init, runs on core0
 static void karabas_setup()
 {
-  link_queue_init();
-
   hw_setup.debug_enabled = true;
 
   msc_init();
@@ -276,6 +274,8 @@ static void usb_task(void *param) {
 
 void setup() {
   link_os_init();
+  // before the USB task: its hid callbacks push events into the link queue
+  link_queue_init();
   i2c_bus_init();
   // tasks must be created already pinned: the USB task has a higher priority than the
   // framework's CORE0 task running this code, so it starts immediately on creation.
