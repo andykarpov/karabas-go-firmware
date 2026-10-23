@@ -103,9 +103,14 @@ void tuh_mount_cb(uint8_t daddr) {
 }
 
 void tuh_umount_cb(uint8_t daddr) {
-  Serial1.printf("Device removed, address = %d\r\n", daddr);
+  d_printf("Device removed, address = %d\r\n", daddr);
   dev_info_t *dev = &dev_info[daddr - 1];
   dev->mounted = false;
+}
+
+// Invoked during enumeration, once the device has an address and sent its device descriptor
+void tuh_enum_descriptor_device_cb(uint8_t daddr, const tusb_desc_device_t *desc_device) {
+  d_printf("Enumerating device %u: ID %04x:%04x, class %02x\r\n", daddr, desc_device->idVendor, desc_device->idProduct, desc_device->bDeviceClass);
 }
 
 // Invoked when device is mounted (configured)
