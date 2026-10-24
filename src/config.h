@@ -164,6 +164,9 @@
 
 #define CMD_USB_GAMEPAD 0x11 // deprecated
 #define CMD_USB_JOYSTICK 0x12 // deprecated
+#define CMD_PRINTER_DATA 0x13 // FPGA -> MCU: addr=0, data=raw byte
+#define CMD_PRINTER_STATUS 0x14 // addr=0, status bit7=BUSY; no acknowledgement/reset command
+#define CMD_PRINTER_DIAG 0x15 // tagged read-only FPGA printer counters/CRC snapshot
 
 #define CMD_OSD 0x20
 

@@ -99,7 +99,9 @@ bool transfer_done(uint8_t address, uint8_t ep, xfer_result_t result, uint32_t l
     info.tx_busy = false;
     if (result == XFER_RESULT_SUCCESS && length != tx_length) result = XFER_RESULT_FAILED;
     if (result != XFER_RESULT_SUCCESS) info.fault = true;
-    printer_host_event(PrinterEvent::Write, result, length, nullptr);
+    // The buffer remains owned by this USB task throughout the callback.
+    // Expose successful OUT data for byte-exact diagnostics, not just counts.
+    printer_host_event(PrinterEvent::Write, result, length, tx_buf);
   } else if (ep == info.ep_in) {
     info.rx_busy = false;
     if (result != XFER_RESULT_SUCCESS) info.fault = true;

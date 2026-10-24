@@ -21,7 +21,7 @@ static link_handler_t handlers[256] = { nullptr };
 static queue_t spi_event_queue;
 static volatile uint32_t spi_queue_dropped = 0;
 
-// incoming frames received outside the dispatch task
+// All incoming frames, published in wire order while holding the SPI mutex.
 #define LINK_RX_QUEUE_SIZE 256
 static queue_t link_rx_queue;
 static volatile uint32_t link_rx_dropped = 0;
@@ -185,21 +185,23 @@ static void spi_xfer(uint8_t cmd, uint8_t addr, uint8_t data, uint8_t rx[3]) {
 }
 
 void spi_send(uint8_t cmd, uint8_t addr, uint8_t data) {
-  uint8_t rx[3];
-  spi_xfer(cmd, addr, data, rx);
-  // handlers run outside the bus lock (unless a caller holds an outer SpiBusGuard), so a
-  // handler waiting for another bus (I2C) does not hold up the other spi users
-  if ((rx[0] > 0) && link_rx_enabled) {
-    if (in_dispatch_context()) {
-      // frames other tasks received earlier come first: transfers are serialized by the bus lock,
-      // so this keeps the order of the fpga's frames (a sector request is several frames)
-      link_dispatch_pending();
-      process_in_cmd(rx[0], rx[1], rx[2]);
-    } else {
+  {
+    // The transfer AND publication of its reply are one ordered operation.
+    // Unlocking between them lets another task receive and dispatch frame B
+    // before frame A. For printers this can reorder DATA and status requests;
+    // multi-frame sector commands also depend on wire order.
+    SpiBusGuard bus;
+    uint8_t rx[3];
+    spi_xfer(cmd, addr, data, rx); // recursive lock; outer guard stays held
+    if ((rx[0] > 0) && link_rx_enabled) {
       queue_spi_t packet = { rx[0], rx[1], rx[2] };
       if (!queue_try_add(&link_rx_queue, &packet)) link_rx_dropped++;
     }
   }
+  // APP must use the same FIFO as other tasks: direct dispatch could overtake
+  // earlier replies. Run handlers outside this lock because they may use I2C
+  // or SPI themselves (a caller's explicit outer SpiBusGuard still applies).
+  if (in_dispatch_context()) link_dispatch_pending();
 }
 
 // multi-byte values are sent as consecutive addr 0..n-1, least significant byte first

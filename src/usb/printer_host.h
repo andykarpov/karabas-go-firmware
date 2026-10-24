@@ -33,7 +33,8 @@ bool printer_host_get_status();
 // legacy=true selects the USB Printer 1.0 recipient quirk (0x23).
 bool printer_host_soft_reset(bool legacy = false);
 
-// Optional application hook. Read data is valid only for the duration of callback.
+// Optional application hook. Read data and successful Write data are valid only
+// for the duration of callback. Do not consume Write data on a failed transfer.
 // A successful USB write does not imply physical printing. No automatic retries.
 void printer_host_event(PrinterEvent event, xfer_result_t result,
                         uint32_t transferred, const uint8_t *data);

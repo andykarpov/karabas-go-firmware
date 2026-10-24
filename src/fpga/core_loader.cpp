@@ -4,6 +4,7 @@
 #include "usb_hid_keys.h"
 #include "kg_format.h"
 #include "file_name.h"
+#include "periph/printer_link.h"
 
 // Loading a core file: bitstream, header (OSD items, eeprom, switches), ROMs.
 
@@ -154,6 +155,7 @@ void flashboot (uint8_t data) {
 }
 
 void do_configure(const char* filename) {
+  printer_link_reset();
   // the whole core load (bitstream, setup, roms) is one sequence on the fpga link
   SpiBusGuard bus;
   matrix_on_configure_start();

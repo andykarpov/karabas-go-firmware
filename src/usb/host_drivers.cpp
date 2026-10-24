@@ -6,6 +6,14 @@
 #include "config.h"
 #include "storage/settings.h"
 #include "periph/printer_usb.h"
+#include "periph/printer_trace.h"
+
+namespace {
+void trace_tx(uint32_t offset, const char *hex) {
+  d_printf("Printer TX offset=%lu hex=%s\r\n", (unsigned long)offset, hex);
+}
+PrinterTrace tx_trace(trace_tx); // USB task only, separate from APP's RX trace
+}
 
 extern "C" usbh_class_driver_t const *usbh_app_driver_get_cb(uint8_t *count) {
   static const usbh_class_driver_t drivers[] = { usbh_xinput_driver, usbh_printer_driver };
@@ -19,12 +27,15 @@ extern "C" bool tuh_enum_descriptor_configuration_cb(uint8_t address, uint8_t in
   return true;
 }
 
-void printer_host_event(PrinterEvent event, xfer_result_t result, uint32_t count, const uint8_t *) {
+void printer_host_event(PrinterEvent event, xfer_result_t result, uint32_t count, const uint8_t *data) {
   printer_usb_event(event, result, count);
   static bool status_logged = false;
   static uint8_t last_status = 0;
   const auto &p = printer_host_info();
+  // GET_PORT_STATUS runs once per second and flushes a short final USB block.
+  if (event == PrinterEvent::Status || event == PrinterEvent::Unmounted) tx_trace.flush();
   if (event == PrinterEvent::Mounted) {
+    tx_trace.reset();
     status_logged = false;
     d_printf("Printer mounted %04x:%04x address=%u interface=%u protocol=%u OUT=%02x IN=%02x\r\n",
              p.vid, p.pid, p.address, p.interface_number, p.protocol, p.ep_out, p.ep_in);
@@ -40,7 +51,7 @@ void printer_host_event(PrinterEvent event, xfer_result_t result, uint32_t count
       status_logged = true;
     }
   } else if (event == PrinterEvent::Write && result == XFER_RESULT_SUCCESS) {
-    d_printf("Printer USB write complete: %lu bytes\r\n", (unsigned long)count);
+    tx_trace.append(data, count);
   } else if (result != XFER_RESULT_SUCCESS) {
     if (event == PrinterEvent::Status) status_logged = false;
     d_printf("Printer event=%u result=%u transferred=%lu\r\n",

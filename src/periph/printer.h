@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 
-constexpr size_t PRINTER_QUEUE_SIZE = 256;
+constexpr size_t PRINTER_QUEUE_SIZE = 2048;
 enum class PrinterState { Disconnected, Idle, Sending, Paused, Fault, Resetting };
 
 struct PrinterSnapshot {
@@ -19,8 +19,10 @@ struct PrinterSnapshot {
 };
 
 // Task-safe APP API. No USB calls, waits for buffer space or dynamic allocation.
-// Returns accepted prefix length (0..256). Caller must retain/retry the remainder.
+// Returns accepted prefix length (0..2048). Caller must retain/retry the remainder.
 size_t printer_write(const uint8_t *data, size_t length);
+// Reject data if disconnect/reset changed the session since the producer read it.
+size_t printer_write_if_session(const uint8_t *data, size_t length, uint32_t session);
 PrinterSnapshot printer_snapshot();
 // Explicit destructive recovery: stop accepting data, wait for any in-flight
 // block, discard the queue, then request USB SOFT_RESET. Never replays data.

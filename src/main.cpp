@@ -31,6 +31,7 @@
 #include "diag/diag.h"
 #include "usb/printer_host.h"
 #include "periph/printer_usb.h"
+#include "periph/printer_link.h"
 
 #ifndef __FREERTOS
 #error "The firmware runs on FreeRTOS: build it with -D PIO_FRAMEWORK_ARDUINO_ENABLE_FREERTOS (see platformio.ini)"
@@ -85,6 +86,7 @@ static void karabas_setup()
   link_on(CMD_PS2_SCANCODE, ps2_command_receive);
   matrix_register_handlers();
   img_register_handlers();
+  printer_link_begin();
 
   // FPGA bitstream loader
   pinMode(PIN_CONF_INIT_B, INPUT_PULLUP);
@@ -213,6 +215,7 @@ static void karabas_loop()
 
   link_report_drops();
   link_dispatch_pending();
+  printer_link_tick();
 
   // sector requests of the file mounter
   img_tick();

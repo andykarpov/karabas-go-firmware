@@ -4,7 +4,7 @@
 #include <cstring>
 
 namespace {
-static_assert(PRINTER_QUEUE_SIZE <= PRINTER_TRANSFER_SIZE, "USB buffer must hold a queued block");
+static_assert(PRINTER_QUEUE_SIZE >= PRINTER_TRANSFER_SIZE, "Queue must hold a USB block");
 spin_lock_t *lock = spin_lock_init(spin_lock_claim_unused(true));
 struct Guard {
   uint32_t saved = spin_lock_blocking(lock);
@@ -12,7 +12,7 @@ struct Guard {
 };
 uint8_t queue[PRINTER_QUEUE_SIZE];
 // Staging is USB-task-owned; never hold the spinlock across a USB operation.
-uint8_t staging[PRINTER_QUEUE_SIZE];
+uint8_t staging[PRINTER_TRANSFER_SIZE];
 size_t head = 0, used = 0, in_flight = 0;
 bool connected = false, fault = false, resetting = false, reset_submitted = false;
 bool status_valid = false;
@@ -28,10 +28,11 @@ void discard() {
 }
 } // namespace
 
-size_t printer_write(const uint8_t *data, size_t length) {
+static size_t write_bytes(const uint8_t *data, size_t length, const uint32_t *expected_session) {
   if (!data || !length) return 0;
   Guard guard;
   if (!writable()) return 0;
+  if (expected_session && *expected_session != session) return 0;
   size_t n = PRINTER_QUEUE_SIZE - used;
   if (n > length) n = length;
   const size_t tail = (head + used) % PRINTER_QUEUE_SIZE;
@@ -42,6 +43,14 @@ size_t printer_write(const uint8_t *data, size_t length) {
   used += n;
   accepted += n;
   return n;
+}
+
+size_t printer_write(const uint8_t *data, size_t length) {
+  return write_bytes(data, length, nullptr);
+}
+
+size_t printer_write_if_session(const uint8_t *data, size_t length, uint32_t expected_session) {
+  return write_bytes(data, length, &expected_session);
 }
 
 PrinterSnapshot printer_snapshot() {
@@ -71,11 +80,15 @@ void printer_usb_event(PrinterEvent event, xfer_result_t result, uint32_t count)
   status_valid = info.status_valid;
   port_status = info.port_status;
   if (event == PrinterEvent::Mounted) {
+    // Reconnection starts a new empty job; never replay the interrupted stream.
+    discard();
+    in_flight = 0;
+    fault = resetting = reset_submitted = status_valid = false;
+    port_status = 0;
     connected = true;
     vid = info.vid;
     pid = info.pid;
     ++session;
-    // A previous interrupted job stays faulted until explicit reset.
   } else if (event == PrinterEvent::Unmounted) {
     fault = fault || used != 0;
     uncertain += in_flight;
@@ -119,6 +132,7 @@ void printer_usb_tick() {
     } else {
       if (!writable() || paused() || in_flight || !used) return;
       length = used;
+      if (length > sizeof(staging)) length = sizeof(staging);
       size_t first = PRINTER_QUEUE_SIZE - head;
       if (first > length) first = length;
       memcpy(staging, queue + head, first);
