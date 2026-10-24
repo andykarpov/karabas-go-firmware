@@ -1,7 +1,6 @@
 #include "printer_link.h"
 #include "printer.h"
 #include "printer_trace.h"
-#include "printer_diag.h"
 #include "config.h"
 #include "fpga/link.h"
 #include "storage/settings.h"
@@ -43,7 +42,6 @@ void receive(uint8_t addr, uint8_t data) {
   if (addr != 0) return;
   active = true;
   ++received;
-  printer_diag_received(data);
   rx_trace.append(&data, 1); // exactly what arrived from FPGA, before enqueue
   flush_pending(); // preserve byte order if space appeared since the last tick
   if (pending) {
@@ -68,13 +66,11 @@ void request(uint8_t addr, uint8_t) {
 } // namespace
 
 void printer_link_begin() {
-  printer_diag_begin();
   link_on(CMD_PRINTER_DATA, receive);
   link_on(CMD_PRINTER_STATUS, request);
 }
 
 void printer_link_reset() {
-  printer_diag_reset();
   rx_trace.flush();
   rx_trace.reset();
   active = reply = pending = false;
@@ -109,5 +105,4 @@ void printer_link_tick() {
     last_status_sent = now;
     spi_send(CMD_PRINTER_STATUS, 0, status);
   }
-  printer_diag_tick();
 }
