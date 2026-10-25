@@ -117,7 +117,7 @@ Commands that the core does not know must be ignored.
 | `FE` | `CMD_INIT_DONE` | 0 | 0 | Core configuration done (BUSY = 0). |
 | `FF` | `CMD_NOP` | 0 | 0 | Poll: lets the FPGA send its next frame. |
 
-`11` (`CMD_USB_GAMEPAD`) and `12` (`CMD_USB_JOYSTICK`) are deprecated.
+`11` (`CMD_USB_GAMEPAD`) and `12` (`CMD_USB_JOYSTICK`) are deprecated and no longer sent: USB pads reach the core as `CMD_JOYSTICK`.
 
 ## 5. Commands FPGA → MCU
 

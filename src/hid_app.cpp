@@ -2,6 +2,9 @@
 #include "pio_usb.h"
 #include "Adafruit_TinyUSB.h"
 #include "hid_app.h"
+#include "hid_driver.h"
+#include "hid_joy_map.h"
+#include "input/usb_joy.h"
 #include "main.h"
 #include "host/usbh.h"
 #include "ps2kbd.h"
@@ -10,8 +13,45 @@
 
 hid_keyboard_report_t usb_keyboard_report;
 hid_mouse_report_t usb_mouse_report;
-uint16_t joyUSB[MAX_USB_JOYSTICKS];
-uint8_t joyUSB_len;
+
+#define MAX_REPORT  4 // Max USB reports per instance
+
+// Each HID instance can has multiple reports. Indexed by the TinyUSB HID index, which is unique
+// across devices. Used by core1 only.
+static struct
+{
+  uint8_t report_count;
+  tuh_hid_report_info_t report_info[MAX_REPORT];
+  uint16_t vid;
+  uint16_t pid;
+  bool has_driver;
+  hid_joy_config_t joy_config;
+} hid_info[CFG_TUH_HID];
+
+typedef struct
+{
+  uint8_t id;
+  uint8_t buttons; /**< buttons mask for currently pressed buttons in the mouse. */
+  int16_t  x;       /**< Current delta x movement of the mouse. */
+  int16_t  y;       /**< Current delta y movement on the mouse. */
+  int8_t  wheel;   /**< Current delta wheel movement on the mouse. */
+  int8_t  pan;     // using AC Pan
+} hid_mouse_report_ext_t;
+
+typedef struct
+{
+  uint8_t id;
+  uint8_t mod;
+  uint8_t bits[16];
+} hid_keyboard_report_ext_t;
+
+static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_report_t const* report, uint16_t len);
+static void process_kbd_report_ext(uint8_t dev_addr, uint8_t instance, hid_keyboard_report_ext_t const* report, uint16_t len);
+static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_report_t const* report, uint16_t len);
+static void process_mouse_report_ext(uint8_t dev_addr, uint8_t instance, hid_mouse_report_ext_t const* report, uint16_t len);
+static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len);
+static void process_joy_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len);
+static void dump_hid_report(uint8_t instance, uint8_t const* report, uint16_t len);
 
 // keyboard report is written by core1 (usb host) and read by core0 (osd, hotkeys)
 // a plain hardware spinlock (irqs off for an 8-byte copy): it never waits through FreeRTOS,
@@ -41,31 +81,6 @@ typedef struct {
 
 // CFG_TUH_DEVICE_MAX is defined by tusb_config header
 dev_info_t dev_info[CFG_TUH_DEVICE_MAX] = { 0 };
-
-bool hid_has_driver(uint16_t vid, uint16_t pid)
-{
-  if (joy_drivers_len > 0) {
-    for (uint8_t i = 0; i < joy_drivers_len; i++) {
-      if (joy_drivers[i].vid == vid && joy_drivers[i].pid == pid) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-hid_joy_config_t hid_load_driver(uint16_t vid, uint16_t pid)
-{
-  hid_joy_config_t cfg;
-  if (joy_drivers_len > 0) {
-    for (uint8_t i = 0; i < joy_drivers_len; i++) {
-      if (joy_drivers[i].vid == vid && joy_drivers[i].pid == pid) {
-        return joy_drivers[i];
-      }
-    }
-  }
-  return cfg; 
-}
 
 void print_device_descriptor(tuh_xfer_t *xfer)
 {
@@ -127,7 +142,6 @@ void tuh_hid_mount_cb (uint8_t dev_addr, uint8_t instance, uint8_t const* desc_r
   tuh_vid_pid_get(dev_addr, &vid, &pid);
   hid_info[instance].vid = vid;
   hid_info[instance].pid = pid;
-  hid_info[instance].mounted = true;
   hid_info[instance].has_driver = false;
 
   d_printf("HID VID/PID = %04x/%04x\r\n", vid, pid);
@@ -136,9 +150,10 @@ void tuh_hid_mount_cb (uint8_t dev_addr, uint8_t instance, uint8_t const* desc_r
   {
     hid_info[instance].report_count = tuh_hid_parse_report_descriptor(hid_info[instance].report_info, MAX_REPORT, desc_report, desc_len);
     d_printf("HID has %u reports \r\n", hid_info[instance].report_count);
-    hid_info[instance].has_driver = hid_has_driver(vid, pid);
+    hid_info[instance].has_driver = hid_driver_find(vid, pid, &hid_info[instance].joy_config);
+    // take a joystick port right away, so the ports follow the order the pads were plugged in
     if (hid_info[instance].has_driver) {
-      hid_info[instance].joy_config = hid_load_driver(vid, pid);
+      usb_joy_set(dev_addr, instance, false, SC_CTL_ON);
     }
   }
   // Receive report
@@ -153,14 +168,9 @@ void tuh_hid_set_protocol_complete_cb(uint8_t dev_addr, uint8_t instance, uint8_
 /// Invoked when device is unmounted (bus reset/unplugged)
 void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
 {
-  hid_info[instance].mounted = false;
-  
-  // reset joy data
-  get_joy_num(dev_addr, instance);
-  for (uint8_t i=0; i<MAX_USB_JOYSTICKS; i++) {
-    joyUSB[i] = 0;
-  }
-  
+  hid_info[instance].has_driver = false;
+  usb_joy_remove(dev_addr, instance, false);
+
   d_printf("HID device unmounted, address = %d, instance = %d\r\n", dev_addr, instance);
 }
 
@@ -330,95 +340,17 @@ static void process_mouse_report_ext(uint8_t dev_addr, uint8_t instance, hid_mou
   }
 }
 
-static void process_gamepad_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len) {
-  static hid_gamepad_report_t prev_report = { 0 };
-  const hid_gamepad_report_t* r;
-
-  r = (hid_gamepad_report_t const*) report;
-
-  uint8_t hat_changed = r->hat ^ prev_report.hat;
-  uint32_t buttons_changed = r->buttons ^ prev_report.buttons;
-  int8_t rx_changed = r->rx ^ prev_report.rx;
-  int8_t ry_changed = r->ry ^ prev_report.ry;
-  int8_t rz_changed = r->rz ^ prev_report.rz;
-  int8_t x_changed = r->x ^ prev_report.x;
-  int8_t y_changed = r->y ^ prev_report.y;
-  int8_t z_changed = r->z ^ prev_report.z;
-
-  if ( (hat_changed) || (buttons_changed) || (rx_changed) || (ry_changed) || (rz_changed) || (x_changed) || (y_changed) || (z_changed) ) {
-    spi_queue(CMD_USB_GAMEPAD, 0, r->hat);
-    spi_queue(CMD_USB_GAMEPAD, 1, (uint8_t)r->buttons);
-    d_printf("HID Gamepad Hat: %02x, Buttons: %08x, XYZ %02x %02x %02x, RXRYRZ %02x %02x %02x", r->hat, r->buttons, r->rx, r->ry, r->rz, r->x, r->y, r->z);
-    d_println();
-    // report->hat && GAMEPAD_HAT_CENTERED; // none
-    // report->hat && GAMEPAD_HAT_UP; // up
-    // report->hat && GAMEPAD_HAT_DOWN; // down
-    // report->hat && GAMEPAD_HAT_LEFT; // left
-    // report->hat && GAMEPAD_HAT_RIGHT; // right
-    // report->hat && GAMEPAD_HAT_UP_LEFT; // up + left
-    // report->hat && GAMEPAD_HAT_UP_RIGHT; // up + right
-    // report->hat && GAMEPAD_HAT_DOWN_LEFT; // down + left
-    // report->hat && GAMEPAD_HAT_DOWN_RIGHT; // down + right
-
-    // report->buttons && GAMEPAD_BUTTON_A
-    // report->buttons && GAMEPAD_BUTTON_B
-    // report->buttons && GAMEPAD_BUTTON_C
-    // report->buttons && GAMEPAD_BUTTON_X
-    // report->buttons && GAMEPAD_BUTTON_Y
-    // report->buttons && GAMEPAD_BUTTON_Z
-  }
-
-  prev_report = *r;
-
-}
-
-static void process_joystick_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len) {
-  static hid_joystick_report_t prev_report = { 0 };
-  const hid_joystick_report_t* r;
-  r = (hid_joystick_report_t const*) report;
-
-  bool axis_changed = (r->axis[0] ^ prev_report.axis[0]) || (r->axis[1] ^ prev_report.axis[1]) || (r->axis[2] ^ prev_report.axis[2]) || (r->axis[3] ^ prev_report.axis[3]);
-  bool buttons_changed = (r->buttons[0] ^ prev_report.buttons[0]) || (r->buttons[1] ^ prev_report.buttons[1]) || (r->buttons[2] ^ prev_report.buttons[2]) || (r->buttons[3] ^ prev_report.buttons[3]);
-
-  if ( axis_changed || buttons_changed ) {
-    spi_queue(CMD_USB_JOYSTICK, 0, r->axis[0]);
-    spi_queue(CMD_USB_JOYSTICK, 1, r->axis[1]);
-    spi_queue(CMD_USB_JOYSTICK, 2, r->axis[2]);
-    spi_queue(CMD_USB_JOYSTICK, 3, r->axis[3]);
-    spi_queue(CMD_USB_JOYSTICK, 5, r->buttons[0]);
-    spi_queue(CMD_USB_JOYSTICK, 6, r->buttons[1]);
-    spi_queue(CMD_USB_JOYSTICK, 7, r->buttons[2]);
-    spi_queue(CMD_USB_JOYSTICK, 8, r->buttons[3]);
-
-    d_printf("HID Joystick: %02x %02x %02x %02x Buttons: %02x %02x %02x %02x", r->axis[0], r->axis[1], r->axis[2], r->axis[3], r->buttons[0], r->buttons[1], r->buttons[2], r->buttons[3]);
-    d_println();
-  }
-
-  prev_report = *r;
-
-}
-
-static uint8_t get_joy_num(uint8_t dev_addr, uint8_t instance)
+// a joystick report goes through the driver ini of the device, if there is one
+static void process_joy_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
 {
-  uint8_t res = 0;
-  uint8_t cnt = 0;
-  for (uint8_t i=0; i<CFG_TUH_HID; i++) {
-    if (hid_info[i].mounted && hid_info[i].has_driver) {
-      if (i == instance) {
-        res = cnt;
-      }
-      cnt++;
-    }
+  dump_hid_report(instance, report, len);
+  if (!hid_info[instance].has_driver) {
+    // the drivers may have been loaded after the device was mounted
+    hid_info[instance].has_driver = hid_driver_find(hid_info[instance].vid, hid_info[instance].pid, &hid_info[instance].joy_config);
+    if (!hid_info[instance].has_driver) return;
   }
-  joyUSB_len = cnt;
-  return res;
-}
-
-static void process_driver_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
-{
-  //d_println("Driver report processing");
   uint16_t res = hid_joy_map_report(&hid_info[instance].joy_config, report, len, SC_CTL_ON);
-  joyUSB[get_joy_num(dev_addr, instance)] = res;
+  usb_joy_set(dev_addr, instance, false, res);
 }
 
 //--------------------------------------------------------------------+
@@ -486,48 +418,13 @@ static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t c
           process_mouse_report_ext(dev_addr, instance, (hid_mouse_report_ext_t const*) report, len);
         }
       break;
-      case HID_USAGE_DESKTOP_JOYSTICK:
-        //d_printf("HID usage desktop joystick, len=%d", len); d_println();
-        dump_hid_report(instance, report, len);
-        if (hid_info[instance].has_driver) {
-          process_driver_report(dev_addr, instance, report, len);
-        } else {
-          // try find a driver
-          hid_info[instance].has_driver = hid_has_driver(hid_info[instance].vid, hid_info[instance].pid);
-          if (hid_info[instance].has_driver) {
-            hid_info[instance].joy_config = hid_load_driver(hid_info[instance].vid, hid_info[instance].pid);
-          } else {
-            process_joystick_report( dev_addr, instance, report, len );
-          }
-        }
-      break;
-      case HID_USAGE_DESKTOP_GAMEPAD:
-        //d_printf("HID usage desktop gamepad, len=%d", len); d_println();
-        dump_hid_report(instance, report, len);
-        if (hid_info[instance].has_driver) {
-          process_driver_report(dev_addr, instance, report, len);
-        } else {
-          // try find a driver
-          hid_info[instance].has_driver = hid_has_driver(hid_info[instance].vid, hid_info[instance].pid);
-          if (hid_info[instance].has_driver) {
-            hid_info[instance].joy_config = hid_load_driver(hid_info[instance].vid, hid_info[instance].pid);
-          } else {
-            process_gamepad_report( dev_addr, instance, report, len);
-          }
-        }
-      break;
-      default: 
-        dump_hid_report(instance, report, len);
-        if (hid_info[instance].has_driver) {
-          process_driver_report(dev_addr, instance, report, len);
-        } else {
-          // try find a driver
-          hid_info[instance].has_driver = hid_has_driver(hid_info[instance].vid, hid_info[instance].pid);
-          if (hid_info[instance].has_driver) {
-            hid_info[instance].joy_config = hid_load_driver(hid_info[instance].vid, hid_info[instance].pid);
-          }
-        }
+      default:
+        // joystick, gamepad and the rest
+        process_joy_report(dev_addr, instance, report, len);
     }
+  } else if (rpt_info->usage_page >= 0xFF00) {
+    // vendor usage pages: some pads have no desktop collection at all
+    process_joy_report(dev_addr, instance, report, len);
   }
 }
 

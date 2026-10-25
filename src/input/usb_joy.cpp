@@ -1,0 +1,26 @@
+#include "usb_joy.h"
+#include "usb_joy_slots.h"
+#include "hardware/sync.h"
+
+static UsbJoySlots<2> slots;
+// a plain hardware spinlock (irqs off for a few word copies), see kbd_report_lock in hid_app.cpp
+static spin_lock_t *joy_lock = spin_lock_init(spin_lock_claim_unused(true));
+
+bool usb_joy_set(uint8_t address, uint8_t instance, bool xinput, uint16_t buttons) {
+  uint32_t save = spin_lock_blocking(joy_lock);
+  bool res = slots.set(address, instance, xinput, buttons);
+  spin_unlock(joy_lock, save);
+  return res;
+}
+
+void usb_joy_remove(uint8_t address, uint8_t instance, bool xinput) {
+  uint32_t save = spin_lock_blocking(joy_lock);
+  slots.remove(address, instance, xinput);
+  spin_unlock(joy_lock, save);
+}
+
+void usb_joy_snapshot(uint16_t buttons[2]) {
+  uint32_t save = spin_lock_blocking(joy_lock);
+  slots.snapshot(buttons);
+  spin_unlock(joy_lock, save);
+}

@@ -162,8 +162,8 @@
 #define CMD_FILEDATA 0x0D
 #define CMD_FILELOADER 0x0E
 
-#define CMD_USB_GAMEPAD 0x11 // deprecated
-#define CMD_USB_JOYSTICK 0x12 // deprecated
+#define CMD_USB_GAMEPAD 0x11 // deprecated, not sent
+#define CMD_USB_JOYSTICK 0x12 // deprecated, not sent
 #define CMD_PRINTER_DATA 0x13 // FPGA -> MCU: addr=0, data=raw byte
 #define CMD_PRINTER_STATUS 0x14 // addr=0, status bit7=BUSY; no acknowledgement/reset command
 #define CMD_PRINTER_DIAG 0x15 // tagged read-only FPGA printer counters/CRC snapshot
@@ -247,7 +247,6 @@
 #define MAX_FILES 255
 #define MAX_FILE_SLOTS 8
 #define MAX_JOY_DRIVERS 255
-#define MAX_USB_JOYSTICKS 4
 #define MAX_CORES_PER_PAGE 16
 #define MAX_OSD_ITEMS 32
 #define MAX_OSD_ITEM_OPTIONS 8

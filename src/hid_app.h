@@ -5,56 +5,13 @@
 #include "Adafruit_TinyUSB.h"
 #include "config.h"
 
-#define LANGUAGE_ID 0x0409 // Language ID: English
-#define MAX_REPORT  4 // Max USB reports per instance
-
 extern hid_keyboard_report_t usb_keyboard_report;
 extern hid_mouse_report_t usb_mouse_report;
-extern uint16_t joyUSB[MAX_USB_JOYSTICKS];
-extern uint8_t joyUSB_len;
 
 // copy the latest keyboard report received by core1 into usb_keyboard_report (call from core0 only)
 void hid_kbd_report_sync();
 // copy the latest keyboard report received by core1 (any task, does not touch usb_keyboard_report)
 void hid_kbd_report_get(hid_keyboard_report_t *report);
-
-#include "hid_joy_map.h"
-
-// Each HID instance can has multiple reports
-static struct
-{
-  uint8_t report_count;
-  tuh_hid_report_info_t report_info[MAX_REPORT];
-  uint16_t vid;
-  uint16_t pid;
-  bool mounted;
-  bool has_driver;
-  hid_joy_config_t joy_config;
-} hid_info[CFG_TUH_HID];
-
-// joystick report struct
-typedef struct
-{
-    uint8_t axis[3];
-    uint8_t buttons[3];
-} hid_joystick_report_t;
-
-typedef struct
-{
-  uint8_t id;
-  uint8_t buttons; /**< buttons mask for currently pressed buttons in the mouse. */
-  int16_t  x;       /**< Current delta x movement of the mouse. */
-  int16_t  y;       /**< Current delta y movement on the mouse. */
-  int8_t  wheel;   /**< Current delta wheel movement on the mouse. */
-  int8_t  pan;     // using AC Pan
-} hid_mouse_report_ext_t;
-
-typedef struct
-{
-  uint8_t id;
-  uint8_t mod;
-  uint8_t bits[16];
-} hid_keyboard_report_ext_t;
 
 #ifdef __cplusplus
 extern "C" {
@@ -69,16 +26,5 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
 #ifdef __cplusplus
 }
 #endif
-
-static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_report_t const* report, uint16_t len);
-static void process_kbd_report_ext(uint8_t dev_addr, uint8_t instance, hid_keyboard_report_ext_t const* report, uint16_t len);
-static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_report_t const* report, uint16_t len);
-static void process_mouse_report_ext(uint8_t dev_addr, uint8_t instance, hid_mouse_report_ext_t const* report, uint16_t len);
-static void process_joystick_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len);
-static void process_gamepad_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len);
-static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len);
-static void process_driver_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len);
-static uint8_t get_joy_num(uint8_t dev_addr, uint8_t instance);
-static void dump_hid_report(uint8_t instance, uint8_t const* report, uint16_t len);
 
 #endif

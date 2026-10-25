@@ -10,11 +10,12 @@ The actual controller must enumerate in XInput mode; a HID-mode device still use
 the existing HID driver mechanism.
 
 XInput reports feed the existing Sega joystick state, FPGA commands and OSD
-hotkeys. Up to two XInput pads are tracked. Existing mapped USB HID joysticks
-take priority: with one HID joystick, the first XInput pad uses the right port;
-with two HID joysticks, no XInput pad is forwarded. On-board joystick states
-are combined as before. Unplugging a pad clears its buttons without moving
-the other XInput pad to a different port.
+hotkeys. XInput pads and mapped USB HID joysticks share the two USB ports
+(`src/input/usb_joy`): a pad takes the first free port when it is plugged in,
+the left one first, and keeps it until it is unplugged. A third pad is not
+forwarded until a port is free. On-board joystick states are combined as
+before. Unplugging a pad clears its buttons without moving the other pad to a
+different port.
 
 | XInput control | Karabas control |
 | --- | --- |

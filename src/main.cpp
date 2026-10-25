@@ -72,8 +72,6 @@ static void karabas_setup()
   //rp2040.wdt_begin(5000);
 
   joyL = joyR = 0;
-  for (uint8_t i=0; i<MAX_USB_JOYSTICKS; i++) { joyUSB[i] = 0; }
-  joyUSB_len = 0;
 
   for (uint8_t i=0; i<MAX_FILE_SLOTS; i++) { file_slots[i] = {0}; }
 
