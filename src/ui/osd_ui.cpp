@@ -5,6 +5,7 @@
 #include "app_setup.h"
 #include "app_about.h"
 #include "app_pad_mapper.h"
+#include "app_rtc.h"
 
 // OSD state and the app screens (one per osd_state)
 
@@ -43,6 +44,7 @@ static const app_t apps[] = {
   { app_core_browser_show,                             app_core_browser_on_keyboard }, // state_core_browser
   { []() { app_file_loader_overlay(true, false); },   app_file_loader_on_keyboard },  // state_file_loader
   { app_pad_mapper_overlay,                            app_pad_mapper_on_keyboard,     app_pad_mapper_tick }, // state_pad_mapper
+  { app_rtc_overlay,                                   app_rtc_on_keyboard },          // state_rtc
 };
 static const uint8_t apps_len = sizeof(apps) / sizeof(apps[0]);
 
@@ -120,7 +122,6 @@ void on_time() {
 
   // on time callback
   app_core_browser_on_time();
-  app_setup_on_time();
 
   if (core.type == CORE_TYPE_BOOT && has_ft == true && is_osd == true) {
     // redraw core browser

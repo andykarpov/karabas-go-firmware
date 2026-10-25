@@ -15,7 +15,6 @@
 #include <GyverMenu.h>
 
 GyverMenu setup_menu(32, 18);
-uint8_t setup_day, setup_month, setup_year, setup_hour, setup_minute;
 
 void app_setup_overlay() {
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
@@ -23,12 +22,6 @@ void app_setup_overlay() {
   zxosd.header(core.build, core.id, HW_ID);
   print_time();
   zxosd.setPos(0,5);
-
-  setup_day = zxrtc.getDay();
-  setup_month = zxrtc.getMonth() - 1;
-  setup_year = zxrtc.getYear();
-  setup_hour = zxrtc.getHour();
-  setup_minute = zxrtc.getMinute();
 
   setup_menu.setBackSign("< Return back");
   setup_menu.setFastCursor(false);
@@ -56,17 +49,7 @@ void app_setup_overlay() {
     b.Label("Setup");
     b.Label("");
 
-    b.Page(GM_NEXT, "Setup RTC", [](gm::Builder& b){
-      b.Label("Setup RTC");
-      b.Label("");
-      b.ValueInt<uint8_t>("Year", &setup_year, 0, 99, 1, DEC, "", [](uint8_t) { zxrtc.setYear(setup_year); zxrtc.save(); });
-      b.Select("Month", &setup_month, "January;February;March;April;May;June;July;August;September;October;November;December", [](uint8_t n, const char* str, uint8_t len) { zxrtc.setMonth(setup_month+1); zxrtc.save(); });
-      b.ValueInt<uint8_t>("Day", &setup_day, 1, 31, 1, DEC, "", [](uint8_t) { zxrtc.setDay(setup_day); zxrtc.save(); });
-      b.Label("");
-      b.ValueInt<uint8_t>("Hour", &setup_hour, 0, 23, 1, DEC, "", [](uint8_t v) { zxrtc.setHour(v); zxrtc.save(); });
-      b.ValueInt<uint8_t>("Minute", &setup_minute, 0, 59, 1, DEC, "", [](uint8_t v) { zxrtc.setMinute(v); zxrtc.save(); });
-      b.Label("");
-    });
+    b.Button("Setup RTC", []() { osd_state = state_rtc; });
 
     if (core.type == CORE_TYPE_BOOT) {
       b.Page(GM_NEXT, "Setup Wi-Fi", [](gm::Builder& b) {
@@ -79,13 +62,6 @@ void app_setup_overlay() {
     }
 
     b.Button("Map USB gamepad", []() { osd_state = state_pad_mapper; });
-
-    b.Page(GM_NEXT, "Options", [](gm::Builder& b) {
-      b.Label("Setup Options");
-      b.Label("");
-      b.Label("TODO");
-      b.Label("");
-    });
   });
 
   setup_menu.refresh();
@@ -129,14 +105,6 @@ void app_setup_on_keyboard()
 
   setup_menu.refresh();
   zxosd.update();
-}
-
-void app_setup_on_time() {
-  setup_day = zxrtc.getDay();
-  setup_month = zxrtc.getMonth() - 1;
-  setup_year = zxrtc.getYear();
-  setup_hour = zxrtc.getHour();
-  setup_minute = zxrtc.getMinute();
 }
 
 void app_esp_test() {

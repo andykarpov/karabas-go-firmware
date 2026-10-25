@@ -133,7 +133,8 @@ enum osd_state_e {
 	state_about,
 	state_core_browser,
 	state_file_loader,
-	state_pad_mapper
+	state_pad_mapper,
+	state_rtc
 };
 
 enum wifi_setup_e {
