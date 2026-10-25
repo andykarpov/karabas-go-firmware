@@ -25,8 +25,7 @@ static struct
   tuh_hid_report_info_t report_info[MAX_REPORT];
   uint16_t vid;
   uint16_t pid;
-  bool has_driver;
-  hid_joy_config_t joy_config;
+  const hid_joy_config_t *driver; // drivers/*.ini of the device
   hid_auto_map_t *auto_map; // default map from the report descriptor, for pads without a driver
 } hid_info[CFG_TUH_HID];
 
@@ -152,7 +151,7 @@ void tuh_hid_mount_cb (uint8_t dev_addr, uint8_t instance, uint8_t const* desc_r
   tuh_vid_pid_get(dev_addr, &vid, &pid);
   hid_info[instance].vid = vid;
   hid_info[instance].pid = pid;
-  hid_info[instance].has_driver = false;
+  hid_info[instance].driver = nullptr;
   hid_info[instance].auto_map = nullptr;
 
   d_printf("HID VID/PID = %04x/%04x\r\n", vid, pid);
@@ -162,14 +161,14 @@ void tuh_hid_mount_cb (uint8_t dev_addr, uint8_t instance, uint8_t const* desc_r
     hid_info[instance].report_count = tuh_hid_parse_report_descriptor(hid_info[instance].report_info, MAX_REPORT, desc_report, desc_len);
     d_printf("HID has %u reports \r\n", hid_info[instance].report_count);
     dump_hid_descriptor(instance, desc_report, desc_len);
-    hid_info[instance].has_driver = hid_driver_find(vid, pid, &hid_info[instance].joy_config);
-    if (hid_info[instance].has_driver) {
+    hid_info[instance].driver = hid_driver_find(vid, pid);
+    if (hid_info[instance].driver) {
       d_printf("HID %04x:%04x uses its driver ini\r\n", vid, pid);
     } else {
       hid_info[instance].auto_map = auto_map_build(desc_report, desc_len);
     }
     // take a joystick port right away, so the ports follow the order the pads were plugged in
-    if (hid_info[instance].has_driver || hid_info[instance].auto_map) {
+    if (hid_info[instance].driver || hid_info[instance].auto_map) {
       usb_joy_set(dev_addr, instance, false, SC_CTL_ON);
     }
   }
@@ -185,7 +184,7 @@ void tuh_hid_set_protocol_complete_cb(uint8_t dev_addr, uint8_t instance, uint8_
 /// Invoked when device is unmounted (bus reset/unplugged)
 void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
 {
-  hid_info[instance].has_driver = false;
+  hid_info[instance].driver = nullptr;
   auto_map_free(hid_info[instance].auto_map);
   hid_info[instance].auto_map = nullptr;
   usb_joy_remove(dev_addr, instance, false);
@@ -382,13 +381,16 @@ static void auto_map_free(hid_auto_map_t *m)
 static void process_joy_report(uint8_t dev_addr, uint8_t instance, uint8_t report_id, uint8_t const* report, uint16_t len)
 {
   dump_hid_report(instance, report, len);
-  if (!hid_info[instance].has_driver) {
+  if (!hid_info[instance].driver) {
     // the drivers may have been loaded after the device was mounted
-    hid_info[instance].has_driver = hid_driver_find(hid_info[instance].vid, hid_info[instance].pid, &hid_info[instance].joy_config);
+    hid_info[instance].driver = hid_driver_find(hid_info[instance].vid, hid_info[instance].pid);
   }
+  const hid_joy_config_t *driver = hid_info[instance].driver;
   uint16_t res;
-  if (hid_info[instance].has_driver) {
-    res = hid_joy_map_report(&hid_info[instance].joy_config, report, len, SC_CTL_ON);
+  if (driver) {
+    // reports with another id (battery, vendor data) must not release the buttons
+    if (!hid_joy_accepts_report(driver, report_id)) return;
+    res = hid_joy_map_report(driver, report, len, SC_CTL_ON);
   } else if (hid_info[instance].auto_map && hid_auto_map_has_report(hid_info[instance].auto_map, report_id)) {
     res = hid_auto_map_report(hid_info[instance].auto_map, report_id, report, len, SC_CTL_ON);
   } else {

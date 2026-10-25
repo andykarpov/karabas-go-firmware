@@ -22,6 +22,7 @@ static bool is_driver_file(FsFile &f, char *filename, size_t size)
 static hid_joy_config_t hid_driver_load(const char *filename)
 {
   hid_joy_config_t cfg = {0};
+  cfg.report_id = -1;
   const size_t bufferLen = 80;
   char buffer[bufferLen];
   char fullname[64];
@@ -37,15 +38,14 @@ static hid_joy_config_t hid_driver_load(const char *filename)
 
     cfg.vid = (ini.getValue("info", "vid", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : 0;
     cfg.pid = (ini.getValue("info", "pid", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : 0;
+    if (ini.getValue("info", "report_id", buffer, bufferLen)) cfg.report_id = (uint8_t) strtoul(buffer, 0, 10);
 
     const char* keys[HID_JOY_BUTTONS] = {"up", "down", "left", "right", "a", "b", "c", "x", "y", "z", "start", "mode"};
     uint16_t btns[HID_JOY_BUTTONS] = {SC_BTN_UP, SC_BTN_DOWN, SC_BTN_LEFT, SC_BTN_RIGHT, SC_BTN_A, SC_BTN_B, SC_BTN_C, SC_BTN_X, SC_BTN_Y, SC_BTN_Z, SC_BTN_START, SC_BTN_MODE};
 
     for(uint8_t i=0; i<HID_JOY_BUTTONS; i++) {
-      cfg.buttons[i].btn = btns[i];
-      cfg.buttons[i].isAvail = false;
       if (ini.getValue("buttons", keys[i], buffer, bufferLen)) {
-        if (!hid_joy_button_parse(buffer, &cfg.buttons[i])) {
+        if (!hid_joy_rules_parse(buffer, btns[i], &cfg)) {
           d_printf("%s: invalid mapping for %s: %s", filename, keys[i], buffer); d_println();
         }
       }
@@ -91,17 +91,16 @@ void hid_drivers_load()
   joy_drivers_len = len;
 }
 
-bool hid_driver_find(uint16_t vid, uint16_t pid, hid_joy_config_t *cfg)
+const hid_joy_config_t *hid_driver_find(uint16_t vid, uint16_t pid)
 {
   uint8_t len = joy_drivers_len;
   __dmb();
   for (uint8_t i = 0; i < len; i++) {
     if (joy_drivers[i].vid == vid && joy_drivers[i].pid == pid) {
-      *cfg = joy_drivers[i];
-      return true;
+      return &joy_drivers[i];
     }
   }
-  return false;
+  return nullptr;
 }
 
 void hid_drivers_dump()
@@ -113,13 +112,12 @@ void hid_drivers_dump()
   }
   d_printf("Loaded %d drivers", len); d_println();
   for (uint8_t i=0; i<len; i++) {
-    d_printf("Driver for %04x:%04x:", joy_drivers[i].vid, joy_drivers[i].pid); d_println();
-    for (uint8_t j=0; j<HID_JOY_BUTTONS; j++) {
-      const hid_joy_button_config_t &b = joy_drivers[i].buttons[j];
-      if (b.isAvail) {
-        d_printf("Button %d byte %d %s %d", b.btn, b.pos, b.isBit ? "bit" : "value", b.val);
-        d_println();
-      }
+    const hid_joy_config_t &d = joy_drivers[i];
+    d_printf("Driver for %04x:%04x, report id %d, %u rules:", d.vid, d.pid, d.report_id, d.count); d_println();
+    for (uint8_t j=0; j<d.count; j++) {
+      const hid_joy_rule_t &r = d.rules[j];
+      d_printf("Button %d byte %d type %d value %d arg %d", r.btn, r.pos, r.type, r.val, r.arg);
+      d_println();
     }
   }
 }
