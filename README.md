@@ -17,6 +17,7 @@ To upload the firmware you have 2 standard choices:
 
 ## Documentation
 
+- [USB HID gamepads](docs/usb_gamepads.md): the default map and driver ini files.
 - [USB XInput controllers / 8BitDo M30 2.4G](docs/xinput.md).
 - [USB Printer Host / Epson LX-300+II](docs/usb_printer.md) (driver and 2048-byte queue; FPGA integration pending).
 - [MCU ↔ FPGA protocol](docs/protocol.md) ([по-русски](docs/protocol.ru.md)) — SPI frames, all commands, load sequences.

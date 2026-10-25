@@ -4,6 +4,7 @@
 #include "hid_app.h"
 #include "hid_driver.h"
 #include "hid_joy_map.h"
+#include "hid_auto_map.h"
 #include "input/usb_joy.h"
 #include "main.h"
 #include "host/usbh.h"
@@ -26,7 +27,13 @@ static struct
   uint16_t pid;
   bool has_driver;
   hid_joy_config_t joy_config;
+  hid_auto_map_t *auto_map; // default map from the report descriptor, for pads without a driver
 } hid_info[CFG_TUH_HID];
+
+// a few default maps, enough for the two joystick ports and a spare
+#define MAX_AUTO_MAPS 4
+static hid_auto_map_t auto_maps[MAX_AUTO_MAPS];
+static bool auto_map_used[MAX_AUTO_MAPS];
 
 typedef struct
 {
@@ -50,8 +57,11 @@ static void process_kbd_report_ext(uint8_t dev_addr, uint8_t instance, hid_keybo
 static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_report_t const* report, uint16_t len);
 static void process_mouse_report_ext(uint8_t dev_addr, uint8_t instance, hid_mouse_report_ext_t const* report, uint16_t len);
 static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len);
-static void process_joy_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len);
+static void process_joy_report(uint8_t dev_addr, uint8_t instance, uint8_t report_id, uint8_t const* report, uint16_t len);
 static void dump_hid_report(uint8_t instance, uint8_t const* report, uint16_t len);
+static void dump_hid_descriptor(uint8_t instance, uint8_t const* desc, uint16_t len);
+static hid_auto_map_t *auto_map_build(uint8_t const* desc, uint16_t len);
+static void auto_map_free(hid_auto_map_t *m);
 
 // keyboard report is written by core1 (usb host) and read by core0 (osd, hotkeys)
 // a plain hardware spinlock (irqs off for an 8-byte copy): it never waits through FreeRTOS,
@@ -143,6 +153,7 @@ void tuh_hid_mount_cb (uint8_t dev_addr, uint8_t instance, uint8_t const* desc_r
   hid_info[instance].vid = vid;
   hid_info[instance].pid = pid;
   hid_info[instance].has_driver = false;
+  hid_info[instance].auto_map = nullptr;
 
   d_printf("HID VID/PID = %04x/%04x\r\n", vid, pid);
 
@@ -150,9 +161,15 @@ void tuh_hid_mount_cb (uint8_t dev_addr, uint8_t instance, uint8_t const* desc_r
   {
     hid_info[instance].report_count = tuh_hid_parse_report_descriptor(hid_info[instance].report_info, MAX_REPORT, desc_report, desc_len);
     d_printf("HID has %u reports \r\n", hid_info[instance].report_count);
+    dump_hid_descriptor(instance, desc_report, desc_len);
     hid_info[instance].has_driver = hid_driver_find(vid, pid, &hid_info[instance].joy_config);
-    // take a joystick port right away, so the ports follow the order the pads were plugged in
     if (hid_info[instance].has_driver) {
+      d_printf("HID %04x:%04x uses its driver ini\r\n", vid, pid);
+    } else {
+      hid_info[instance].auto_map = auto_map_build(desc_report, desc_len);
+    }
+    // take a joystick port right away, so the ports follow the order the pads were plugged in
+    if (hid_info[instance].has_driver || hid_info[instance].auto_map) {
       usb_joy_set(dev_addr, instance, false, SC_CTL_ON);
     }
   }
@@ -169,6 +186,8 @@ void tuh_hid_set_protocol_complete_cb(uint8_t dev_addr, uint8_t instance, uint8_
 void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
 {
   hid_info[instance].has_driver = false;
+  auto_map_free(hid_info[instance].auto_map);
+  hid_info[instance].auto_map = nullptr;
   usb_joy_remove(dev_addr, instance, false);
 
   d_printf("HID device unmounted, address = %d, instance = %d\r\n", dev_addr, instance);
@@ -340,16 +359,41 @@ static void process_mouse_report_ext(uint8_t dev_addr, uint8_t instance, hid_mou
   }
 }
 
-// a joystick report goes through the driver ini of the device, if there is one
-static void process_joy_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
+static hid_auto_map_t *auto_map_build(uint8_t const* desc, uint16_t len)
+{
+  for (uint8_t i = 0; i < MAX_AUTO_MAPS; i++) {
+    if (auto_map_used[i]) continue;
+    if (!hid_auto_map_build(desc, len, &auto_maps[i])) return nullptr;
+    auto_map_used[i] = true;
+    d_printf("HID default map: %u fields\r\n", auto_maps[i].count);
+    return &auto_maps[i];
+  }
+  d_printf("HID default map: no free slot\r\n");
+  return nullptr;
+}
+
+static void auto_map_free(hid_auto_map_t *m)
+{
+  if (m) auto_map_used[m - auto_maps] = false;
+}
+
+// a joystick report goes through the driver ini of the device if there is one, otherwise
+// through the default map built from its report descriptor
+static void process_joy_report(uint8_t dev_addr, uint8_t instance, uint8_t report_id, uint8_t const* report, uint16_t len)
 {
   dump_hid_report(instance, report, len);
   if (!hid_info[instance].has_driver) {
     // the drivers may have been loaded after the device was mounted
     hid_info[instance].has_driver = hid_driver_find(hid_info[instance].vid, hid_info[instance].pid, &hid_info[instance].joy_config);
-    if (!hid_info[instance].has_driver) return;
   }
-  uint16_t res = hid_joy_map_report(&hid_info[instance].joy_config, report, len, SC_CTL_ON);
+  uint16_t res;
+  if (hid_info[instance].has_driver) {
+    res = hid_joy_map_report(&hid_info[instance].joy_config, report, len, SC_CTL_ON);
+  } else if (hid_info[instance].auto_map && hid_auto_map_has_report(hid_info[instance].auto_map, report_id)) {
+    res = hid_auto_map_report(hid_info[instance].auto_map, report_id, report, len, SC_CTL_ON);
+  } else {
+    return;
+  }
   usb_joy_set(dev_addr, instance, false, res);
 }
 
@@ -420,11 +464,11 @@ static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t c
       break;
       default:
         // joystick, gamepad and the rest
-        process_joy_report(dev_addr, instance, report, len);
+        process_joy_report(dev_addr, instance, rpt_info->report_id, report, len);
     }
   } else if (rpt_info->usage_page >= 0xFF00) {
     // vendor usage pages: some pads have no desktop collection at all
-    process_joy_report(dev_addr, instance, report, len);
+    process_joy_report(dev_addr, instance, rpt_info->report_id, report, len);
   }
 }
 
@@ -433,6 +477,17 @@ static void dump_hid_report(uint8_t instance, uint8_t const* report, uint16_t le
     d_printf("RAW %04x:%04x: ", hid_info[instance].vid, hid_info[instance].pid);
     for (uint16_t j=0; j<len; j++) {
       d_printf("%02x ", report[j]);
+    }
+    d_println();
+  }
+}
+
+static void dump_hid_descriptor(uint8_t instance, uint8_t const* desc, uint16_t len) {
+  if (hw_setup.debug_hid) {
+    d_printf("DESC %04x:%04x, %u bytes:", hid_info[instance].vid, hid_info[instance].pid, len);
+    for (uint16_t j=0; j<len; j++) {
+      if ((j & 15) == 0) d_println();
+      d_printf("%02x ", desc[j]);
     }
     d_println();
   }
