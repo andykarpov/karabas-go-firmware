@@ -12,6 +12,23 @@ A HID pad is mapped in one of two ways:
 2. **Default map.** Otherwise the firmware builds a map from the HID report descriptor of the
    pad (`lib/KarabasCommon/src/hid_auto_map.cpp`). Most pads work this way without an ini.
 
+## OSD mapper
+
+If the default map does not suit a pad, map it in the OSD: open Setup (`S` in the core browser
+or in the core menu), then **Map USB gamepad**. A keyboard is needed to drive the screen.
+
+1. Press a button on the pad. The first pad whose report changes is the one being mapped.
+2. Release everything and leave the pad alone for a moment: the mapper learns the idle report
+   and how much the sticks jitter.
+3. Press each MD2 button when asked and release it. `Enter` skips a button (it is also skipped
+   after 10 s), `Backspace` goes back one.
+4. `Enter` saves `/drivers/<vid>_<pid>.ini`. Other ini files for the same VID/PID are renamed to
+   `*.ini.bak`. The drivers are reloaded, and the pad uses the new map right away.
+
+For each press the mapper takes a hat nibble first, then a single bit, then the axis that moved
+most, as an axis range from halfway between rest and pressed (`lib/KarabasCommon/src/hid_learn`).
+The result is an ordinary driver ini that can be edited by hand.
+
 ## Driver ini
 
 The format is described in [`drivers/example_ini.txt`](../drivers/example_ini.txt). Each of the

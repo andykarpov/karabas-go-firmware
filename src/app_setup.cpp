@@ -78,6 +78,8 @@ void app_setup_overlay() {
       });
     }
 
+    b.Button("Map USB gamepad", []() { osd_state = state_pad_mapper; });
+
     b.Page(GM_NEXT, "Options", [](gm::Builder& b) {
       b.Label("Setup Options");
       b.Label("");
