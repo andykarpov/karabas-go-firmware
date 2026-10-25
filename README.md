@@ -1,5 +1,7 @@
 # Karabas Go Firmware
 
+[![Build](https://github.com/andykarpov/karabas-go-firmware/actions/workflows/build.yml/badge.svg?branch=master)](https://github.com/andykarpov/karabas-go-firmware/actions/workflows/build.yml)
+
 RP2040 firmware for Karabas Go.
 
 ## How to build
