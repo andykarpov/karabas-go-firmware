@@ -287,6 +287,12 @@ public:
     uint8_t initAttempts() { return init_attempts; }
 
     /*!
+        @brief  The video modes init() takes (0..modeCount()-1) and their names ("800x600@60")
+    */
+    static uint8_t modeCount();
+    static const char *modeName(uint8_t m);
+
+    /*!
         @brief  Get current horizontal resolution 
     */
     uint16_t width();

@@ -7,6 +7,7 @@
 #include "app_pad_mapper.h"
 #include "app_rtc.h"
 #include "app_wifi.h"
+#include "app_settings.h"
 
 // OSD state and the app screens (one per osd_state)
 
@@ -47,6 +48,7 @@ static const app_t apps[] = {
   { app_pad_mapper_overlay,                            app_pad_mapper_on_keyboard,     app_pad_mapper_tick }, // state_pad_mapper
   { app_rtc_overlay,                                   app_rtc_on_keyboard },          // state_rtc
   { app_wifi_overlay,                                  app_wifi_on_keyboard,           app_wifi_tick }, // state_wifi
+  { app_settings_overlay,                              app_settings_on_keyboard },     // state_settings
 };
 static const uint8_t apps_len = sizeof(apps) / sizeof(apps[0]);
 

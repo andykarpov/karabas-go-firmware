@@ -8,6 +8,9 @@
 #include "bitmaps.h"
 #include "OSD.h"
 
+extern core_list_item_t cores[MAX_CORES];
+extern uint8_t cores_len;
+
 void app_core_browser_overlay();
 void app_core_browser_menu(uint8_t vpos);
 

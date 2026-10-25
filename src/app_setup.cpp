@@ -53,6 +53,7 @@ void app_setup_overlay() {
 
     if (core.type == CORE_TYPE_BOOT) {
       b.Button("Setup Wi-Fi", []() { osd_state = state_wifi; });
+      b.Button("Settings", []() { osd_state = state_settings; });
     }
 
     b.Button("Map USB gamepad", []() { osd_state = state_pad_mapper; });

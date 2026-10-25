@@ -127,5 +127,6 @@ enum osd_state_e {
 	state_file_loader,
 	state_pad_mapper,
 	state_rtc,
-	state_wifi
+	state_wifi,
+	state_settings
 };

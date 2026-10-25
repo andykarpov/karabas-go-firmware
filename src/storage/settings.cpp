@@ -1,7 +1,11 @@
 #include "main.h"
 #include <IniFile.h>
+#include "ini_update.h"
 
 // karabas.ini
+
+#define INI_FILE "/karabas.ini"
+#define INI_NEW "/karabas.new" // save_setup() writes it, then replaces karabas.ini with it
 
 setup_t hw_setup;
 
@@ -40,6 +44,11 @@ void load_setup() {
   if (!has_sd) return;
   sd1.chvol();
 
+  // a save was cut off between the remove and the rename
+  if (!sd1.exists(INI_FILE) && sd1.exists(INI_NEW)) {
+    sd1.rename(INI_NEW, INI_FILE);
+  }
+
   if (ini.open()) {
     // validate file (every line, comments included, must fit into the buffer)
     if (!ini.validate(buffer, bufferLen)) {
@@ -60,7 +69,7 @@ void load_setup() {
     
     ini.getValue("ft812", "enabled", buffer, bufferLen, hw_setup.ft_enabled);
     hw_setup.ft_video_mode = (ini.getValue("ft812", "video_mode", buffer, bufferLen)) ? strtoul(buffer, 0, 10) : 0;
-    if (hw_setup.ft_video_mode > 15) hw_setup.ft_video_mode = 0;
+    if (hw_setup.ft_video_mode >= FT812::modeCount()) hw_setup.ft_video_mode = 0;
     hw_setup.ft_sound = (ini.getValue("ft812", "sound", buffer, bufferLen)) ? strtoul(buffer, 0, 10) : 0;
     if (hw_setup.ft_sound > 4) hw_setup.ft_sound = 1;
     ini.getValue("ft812", "click", buffer, bufferLen, hw_setup.ft_click);
@@ -101,4 +110,102 @@ void load_setup() {
     ini.close();
     return;
   }
+}
+
+typedef struct {
+  FsFile *file;
+  bool crlf;
+  bool ok;
+} ini_writer_t;
+
+static void write_line(void *ctx, const char *line) {
+  ini_writer_t *w = (ini_writer_t *) ctx;
+  size_t len = strlen(line);
+  if (w->file->write(line, len) != len) w->ok = false;
+  if (w->crlf && w->file->write('\r') != 1) w->ok = false;
+  if (w->file->write('\n') != 1) w->ok = false;
+}
+
+static void add_item(kg_ini_item_t *items, uint8_t &count, const char *section, const char *key, const char *value) {
+  items[count].section = section;
+  items[count].key = key;
+  strncpy(items[count].value, value, KG_INI_VALUE_MAX);
+  items[count].value[KG_INI_VALUE_MAX] = '\0';
+  count++;
+}
+
+static void add_bool(kg_ini_item_t *items, uint8_t &count, const char *section, const char *key, bool v, bool old) {
+  if (v != old) add_item(items, count, section, key, v ? "1" : "0");
+}
+
+static void add_uint(kg_ini_item_t *items, uint8_t &count, const char *section, const char *key, unsigned v, unsigned old) {
+  char buf[12];
+  snprintf(buf, sizeof(buf), "%u", v);
+  if (v != old) add_item(items, count, section, key, buf);
+}
+
+bool save_setup(const setup_t &s) {
+  kg_ini_item_t items[16];
+  uint8_t count = 0;
+  const setup_t &o = hw_setup;
+  add_bool(items, count, "setup", "debug", s.debug_enabled, o.debug_enabled);
+  add_bool(items, count, "setup", "debug_hid", s.debug_hid, o.debug_hid);
+  add_bool(items, count, "setup", "burst", s.burst_enabled, o.burst_enabled);
+  add_bool(items, count, "setup", "dvi_only", s.dvi_only, o.dvi_only);
+  add_bool(items, count, "ft812", "enabled", s.ft_enabled, o.ft_enabled);
+  add_uint(items, count, "ft812", "video_mode", s.ft_video_mode, o.ft_video_mode);
+  add_bool(items, count, "autoload", "enabled", s.autoload_enabled, o.autoload_enabled);
+  add_uint(items, count, "autoload", "timeout", s.autoload_timeout, o.autoload_timeout);
+  if (strcmp(s.autoload_core, o.autoload_core) != 0) add_item(items, count, "autoload", "core", s.autoload_core);
+  if (count == 0) return true;
+
+  if (!has_sd || msc_active()) return false;
+  sd1.chvol();
+
+  FsFile old, f;
+  bool has_old = old.open(&sd1, INI_FILE, O_RDONLY);
+  if (!f.open(&sd1, INI_NEW, O_WRONLY | O_CREAT | O_TRUNC)) {
+    if (has_old) old.close();
+    d_println("karabas.ini: can't create " INI_NEW);
+    return false;
+  }
+
+  ini_writer_t w = { &f, false, true };
+  kg_ini_update_t u;
+  kg_ini_update_begin(&u, items, count, write_line, &w);
+  char line[KG_INI_LINE_MAX + 2]; // the line, its '\n' and the null
+  if (has_old) {
+    // keep the line ends of the file (fgets drops the CRs)
+    int n = old.read(line, sizeof(line) - 1);
+    w.crlf = n > 0 && memchr(line, '\r', n) != nullptr;
+    old.rewind();
+    int len = 0;
+    while (w.ok && (len = old.fgets(line, sizeof(line))) > 0) {
+      if (line[len - 1] == '\n') {
+        line[--len] = '\0';
+      } else if (old.available()) {
+        d_printf("karabas.ini: a line is longer than %u chars", KG_INI_LINE_MAX); d_println();
+        w.ok = false;
+        break;
+      }
+      kg_ini_update_line(&u, line);
+    }
+    if (len < 0) w.ok = false;
+    old.close();
+  }
+  if (w.ok) kg_ini_update_end(&u);
+  if (!f.close()) w.ok = false;
+
+  if (!w.ok) {
+    sd1.remove(INI_NEW);
+    d_println("karabas.ini: save failed");
+    return false;
+  }
+  if ((has_old && !sd1.remove(INI_FILE)) || !sd1.rename(INI_NEW, INI_FILE)) {
+    d_println("karabas.ini: can't replace the file");
+    return false;
+  }
+  hw_setup = s;
+  d_printf("karabas.ini: %u values saved", count); d_println();
+  return true;
 }

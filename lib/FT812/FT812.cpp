@@ -117,6 +117,21 @@ const ft_mode_t ft_modes[] =
   {8,  1, 24, 136, 160, 1024, 3,  6, 29, 938},   // 14: 1024x768@48.7Hz (64MHz) - for ZX-Evo sync pclk 64
 };
 
+// in the order of ft_modes
+static const char *const ft_mode_names[] =
+{
+  "640x480@57", "640x480@74", "640x480@76", "800x600@60", "800x600@60/80", "800x600@69",
+  "800x600@85", "1024x768@59", "1024x768@67", "1024x768@76", "640x1024@60", "1280x720@58",
+  "1280x720@60", "800x600@48.7", "1024x768@48.7",
+};
+
+static_assert(sizeof(ft_mode_names) / sizeof(ft_mode_names[0]) == sizeof(ft_modes) / sizeof(ft_modes[0]),
+  "a name for every video mode");
+
+uint8_t FT812::modeCount() { return sizeof(ft_modes) / sizeof(ft_modes[0]); }
+
+const char *FT812::modeName(uint8_t m) { return m < modeCount() ? ft_mode_names[m] : "?"; }
+
 /****************************************************************************/
 
 void FT812::begin(m_cb act)
