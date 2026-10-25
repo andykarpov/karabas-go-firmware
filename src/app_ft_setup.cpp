@@ -12,14 +12,17 @@
 
 // The graphic setup of the core browser (S on the FT812 menu): the sections on the left, the
 // settings of the chosen one on the right. Every change shows at once (the theme, the clock, the
-// buttons), Save writes karabas.ini, Cancel / Esc drop the changes. A new video mode is tried
-// first and kept only when confirmed; it falls back after a timeout.
+// buttons), Save writes karabas.ini, Cancel drops the changes (Esc asks first). A new video mode
+// is tried first and kept only when confirmed; it falls back after a timeout.
 // The setup of the clock, Wi-Fi and gamepads is still in the text menu ("Text setup").
 
 enum { T_SYSTEM, T_AUTOLOAD, T_DISPLAY, T_SOUND, T_THEME, T_PAGES = T_THEME + 1, T_TEXT = T_PAGES, T_SAVE, T_CANCEL, T_COUNT };
 
 // where the keys go
-enum { F_TABS, F_PAGE, F_COLOR, F_MODE_TEST };
+enum { F_TABS, F_PAGE, F_COLOR, F_DIALOG };
+
+// the dialogs: the left button does it, the right one (the default) is the safe way back
+enum { D_MODE, D_DROP };
 
 typedef struct {
   const char *name;
@@ -72,8 +75,10 @@ static const char *error;
 static uint8_t mode_pick;  // the video mode picked on its row, tried on Enter
 static uint8_t mode_cur;   // the video mode the FT812 runs
 static uint8_t mode_old;   // the one to fall back to
-static bool mode_keep;     // the Keep / Revert button of the test
 static ElapsedTimer mode_timer;
+
+static uint8_t dialog;     // D_*
+static bool dialog_left;   // the left button is chosen
 
 static uint8_t color_ch;   // R, G, B in the color editor
 static uint32_t color_old;
@@ -172,21 +177,33 @@ static void draw_color() {
   }
 }
 
-static void draw_mode_test() {
+// an opaque box: a dim layer over the whole screen is too much for the FT812 in the modes where
+// the system clock is the pixel clock (800x600@60), parts of the lines are left out
+static void draw_dialog() {
   int16_t w = 400, h = 160;
   int16_t x = (ft.width() - w) / 2, y = (ft.height() - h) / 2;
-  ft.drawRectAlpha(0, 0, ft.width(), ft.height(), 0, 0x000000, 160);
+  ft.drawRect(x - 3, y - 3, w + 6, h + 6, 8, s.color_active);
   ft.drawRect(x, y, w, h, 8, s.color_button);
-  char b[40];
-  snprintf(b, sizeof(b), "Keep %s?", FT812::modeName(mode_cur));
-  ft.drawText(x + w / 2, y + 30, 29, s.color_text, FT81x_OPT_CENTER, b);
-  uint32_t left = mode_timer.elapsed() < MODE_TEST_S * 1000 ? (MODE_TEST_S * 1000 - mode_timer.elapsed() + 999) / 1000 : 0;
-  snprintf(b, sizeof(b), "Going back in %lu s", (unsigned long) left);
-  ft.drawText(x + w / 2, y + 66, FONT_SMALL, s.color_copyright, FT81x_OPT_CENTER, b);
-  ft.drawButton(x + 40, y + h - 56, 140, TAB_H, FONT, mode_keep ? s.color_text_active : s.color_text,
-    mode_keep ? s.color_active : s.color_bg, ft_opt(), "Keep");
-  ft.drawButton(x + w - 180, y + h - 56, 140, TAB_H, FONT, !mode_keep ? s.color_text_active : s.color_text,
-    !mode_keep ? s.color_active : s.color_bg, ft_opt(), "Revert");
+  char title[40], text[40];
+  const char *left, *right;
+  if (dialog == D_MODE) {
+    snprintf(title, sizeof(title), "Keep %s?", FT812::modeName(mode_cur));
+    uint32_t t = mode_timer.elapsed() < MODE_TEST_S * 1000 ? (MODE_TEST_S * 1000 - mode_timer.elapsed() + 999) / 1000 : 0;
+    snprintf(text, sizeof(text), "Going back in %lu s", (unsigned long) t);
+    left = "Keep";
+    right = "Revert";
+  } else {
+    strlcpy(title, "Drop the changes?", sizeof(title));
+    strlcpy(text, "They are not saved", sizeof(text));
+    left = "Drop";
+    right = "Stay";
+  }
+  ft.drawText(x + w / 2, y + 30, 29, s.color_text, FT81x_OPT_CENTER, title);
+  ft.drawText(x + w / 2, y + 66, FONT_SMALL, s.color_copyright, FT81x_OPT_CENTER, text);
+  ft.drawButton(x + 40, y + h - 56, 140, TAB_H, FONT, dialog_left ? s.color_text_active : s.color_text,
+    dialog_left ? s.color_active : s.color_bg, ft_opt(), left);
+  ft.drawButton(x + w - 180, y + h - 56, 140, TAB_H, FONT, !dialog_left ? s.color_text_active : s.color_text,
+    !dialog_left ? s.color_active : s.color_bg, ft_opt(), right);
 }
 
 static void draw_footer() {
@@ -207,8 +224,8 @@ static void draw_footer() {
       hint = "Shift: fine steps";
       keys = "Up/Down: R G B  Left/Right: change  Enter: OK  Esc: undo";
       break;
-    case F_MODE_TEST:
-      keys = "Left/Right: choose   Enter: OK";
+    case F_DIALOG:
+      keys = "Left/Right: choose   Enter: OK   Esc: back";
       break;
   }
   ft.drawText(TAB_X, ft.height() - 40, FONT_SMALL, error ? ERROR_COLOR : s.color_copyright, FT81x_OPT_CENTERY, error ? error : hint);
@@ -227,7 +244,7 @@ void app_ft_setup_draw() {
   if (focus == F_COLOR) draw_color();
   else if (page) draw_page();
   draw_footer();
-  if (focus == F_MODE_TEST) draw_mode_test();
+  if (focus == F_DIALOG) draw_dialog();
   ft.swapScreen();
 }
 
@@ -259,7 +276,7 @@ static void leave() {
 }
 
 void app_ft_setup_tick() {
-  if (focus == F_MODE_TEST && mode_timer.elapsed() >= MODE_TEST_S * 1000) {
+  if (focus == F_DIALOG && dialog == D_MODE && mode_timer.elapsed() >= MODE_TEST_S * 1000) {
     set_mode(mode_old);
     focus = F_PAGE;
     app_ft_setup_draw();
@@ -313,8 +330,9 @@ static void enter_row() {
       error = "The video mode did not start";
       return;
     }
-    focus = F_MODE_TEST;
-    mode_keep = false;
+    focus = F_DIALOG;
+    dialog = D_MODE;
+    dialog_left = false;
     mode_timer.reset();
   } else {
     change(1);
@@ -347,6 +365,7 @@ void app_ft_setup_on_keyboard() {
       if (up) tab = (tab + T_COUNT - 1) % T_COUNT;
       else if (down || key == KEY_TAB) tab = (tab + 1) % T_COUNT;
       else if (enter || (right && tab < T_PAGES)) open_tab();
+      else if (esc && settings_differ(s, hw_setup)) { focus = F_DIALOG; dialog = D_DROP; dialog_left = false; }
       else if (esc) leave();
       break;
     case F_PAGE: {
@@ -368,10 +387,12 @@ void app_ft_setup_on_keyboard() {
       else if (enter) focus = F_PAGE;
       else if (back) { *settings_color(cur_id(), s) = color_old; focus = F_PAGE; }
       break;
-    case F_MODE_TEST:
-      if (left || right) mode_keep = !mode_keep;
-      else if (enter && mode_keep) { s.ft_video_mode = mode_cur; focus = F_PAGE; }
-      else if (enter || esc) { set_mode(mode_old); focus = F_PAGE; }
+    case F_DIALOG:
+      if (left || right) dialog_left = !dialog_left;
+      else if (dialog == D_MODE && enter && dialog_left) { s.ft_video_mode = mode_cur; focus = F_PAGE; }
+      else if (dialog == D_MODE && (enter || esc)) { set_mode(mode_old); focus = F_PAGE; }
+      else if (dialog == D_DROP && enter && dialog_left) leave();
+      else if (dialog == D_DROP && (enter || esc)) focus = F_TABS;
       break;
   }
 

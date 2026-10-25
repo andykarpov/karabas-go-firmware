@@ -32,7 +32,7 @@ typedef struct {
 } app_t;
 
 static void app_core_browser_show() {
-  if (hw_setup.ft_enabled && has_ft == true) {
+  if (has_ft) {
     app_core_browser_ft_overlay();
   } else {
     app_core_browser_overlay();

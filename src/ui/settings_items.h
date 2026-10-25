@@ -38,6 +38,8 @@ bool settings_bool(uint8_t id, const setup_t &s);
 // the next (d = 1) / previous (d = -1) value; a color does not change this way
 void settings_change(uint8_t id, setup_t &s, int d);
 uint32_t *settings_color(uint8_t id, setup_t &s);
+// a setting of the screens differs (the unsaved changes)
+bool settings_differ(const setup_t &a, const setup_t &b);
 
 // the color themes of the graphic menu; settings_theme() is -1 for colors of no theme (Custom)
 uint8_t settings_theme_count();

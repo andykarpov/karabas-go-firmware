@@ -1,5 +1,6 @@
 #include "main.h"
 #include "file_name.h"
+#include "ini_update.h"
 #include "app_core_browser.h"
 #include "ui/settings_items.h"
 
@@ -171,6 +172,20 @@ void settings_change(uint8_t id, setup_t &s, int d) {
       break;
     }
   }
+}
+
+bool settings_differ(const setup_t &a, const setup_t &b) {
+  for (uint8_t id = 0; id < SET_COUNT; id++) {
+    if (id == SET_CORE || id == SET_THEME) continue; // the core below; the theme is the colors
+    char va[KG_INI_VALUE_MAX], vb[KG_INI_VALUE_MAX];
+    settings_value_text(id, a, va, sizeof(va));
+    settings_value_text(id, b, vb, sizeof(vb));
+    if (strcmp(va, vb) != 0) return true;
+  }
+  char ca[sizeof(a.autoload_core)], cb[sizeof(b.autoload_core)];
+  trim_copy(ca, a.autoload_core, sizeof(ca));
+  trim_copy(cb, b.autoload_core, sizeof(cb));
+  return strcmp(ca, cb) != 0;
 }
 
 uint8_t settings_theme_count() { return themes_len; }

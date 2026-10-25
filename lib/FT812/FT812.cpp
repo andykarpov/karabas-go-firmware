@@ -62,7 +62,6 @@ extern "C" void ft812_bus_unlock(void);
 #define PROGRESSBAR()                0xFFFFFF0F                                                                                                                             ///< Draw progressbar
 #define SLIDER()                     0xFFFFFF10                                                                                                                             ///< Draw slider
 #define TOGGLE()                     0xFFFFFF12                                                                                                                             ///< Draw toggle
-#define COLOR_A(a)                   ((0x10L << 24) | ((a)&0xFF))                                                                                                           ///< Alpha of the next primitives
 #define SCROLLBAR()                  0xFFFFFF11                                                                                                                             ///< Draw scrollbar
 #define LOADIDENTITY()               0xFFFFFF26                                                                                                                             ///< Set the current matrix to identity
 #define SETMATRIX()                  0xFFFFFF2A                                                                                                                             ///< Write the current matrix as a bitmap transform
@@ -99,6 +98,9 @@ extern "C" void ft812_bus_unlock(void);
 
 const uint8_t CMD_SPI_CONTROL = 0x09;
 const uint8_t ADDR_CONTROL_REGISTER = 0x00;
+
+// the clock the FT812 gets, f_mul multiplies it (6 -> 48 MHz)
+#define FT81x_REF_CLOCK_HZ 8000000UL
 
 const ft_mode_t ft_modes[] =
 {
@@ -280,6 +282,10 @@ bool FT812::init(uint8_t m) {
     write8(FT81x_REG_CSPREAD, 0);
     write16(FT81x_REG_HSIZE, mode.h_visible);
     write16(FT81x_REG_VSIZE, mode.v_visible);
+
+    // the system clock of the mode: the chip times the audio samples (REG_PLAYBACK_FREQ) and its
+    // timers by this value, not by the real clock, so the sounds played at another speed per mode
+    write32(FT81x_REG_FREQUENCY, (uint32_t) mode.f_mul * FT81x_REF_CLOCK_HZ);
 
 
     // write first DL
@@ -566,17 +572,6 @@ void FT812::drawScrollbar(const int16_t x, const int16_t y, const int16_t width,
     intermediateCmd(width | ((uint32_t)height << 16));
     intermediateCmd(options | ((uint32_t)value << 16));
     endCmd(size | ((uint32_t)range << 16));
-}
-
-void FT812::drawRectAlpha(const int16_t x, const int16_t y, const uint16_t width, const uint16_t height, const uint8_t cornerRadius, const uint32_t color, const uint8_t alpha) {
-    startCmd(COLOR(color));
-    intermediateCmd(COLOR_A(alpha));
-    intermediateCmd(LINE_WIDTH(cornerRadius * 16));
-    intermediateCmd(BEGIN(RECTS));
-    intermediateCmd(VERTEX2F(x * 16, y * 16));
-    intermediateCmd(VERTEX2F((x + width) * 16, (y + height) * 16));
-    intermediateCmd(END());
-    endCmd(COLOR_A(255));
 }
 
 void FT812::drawToggle(const int16_t x, const int16_t y, const int16_t width, const uint8_t font, const uint32_t textColor, const uint32_t knobColor, const uint32_t barColor, const uint16_t options, const bool on, const char text[]) {

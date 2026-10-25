@@ -112,6 +112,7 @@ changed keys and keeps the rest of the file.
 | `A` (core OSD) | | About |
 | Delete / Backspace (core OSD) | | eject the disk image of the selected drive |
 | Space (graphical browser) | | switch to the text browser |
+| `G` (text browser) | | switch to the graphical browser, also when it is off in `karabas.ini` |
 
 Cores can define their own OSD hotkeys.
 
