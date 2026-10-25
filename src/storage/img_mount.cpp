@@ -41,6 +41,15 @@ static uint32_t img_last_write_ms = 0;
 #define IMG_FOLLOW_US 2000   // after a request, poll for the next one (the next sector of a track)
 #define IMG_TICK_MAX_US 20000 // at most this long in one img_tick()
 
+// a write request: the data follows it at once, and any frame on the link pulls it, also the
+// ones of the INPUT task (mouse, keys) before img_serve() holds the bus; so start counting here
+static void wr_reset() {
+  wr_bank = 0;
+  wr_count = 0;
+  wr_sum_seen = 0;
+  memset(wr_seen, 0, sizeof(wr_seen));
+}
+
 static uint16_t img_sum(const uint8_t *buf) {
   uint16_t sum = 0;
   for (int i = 0; i < IMG_SECTOR_SIZE; i++) sum += buf[i];
@@ -62,6 +71,7 @@ void img_register_handlers() {
   link_on(CMD_IMG_SEC, [](uint8_t addr, uint8_t data) {
     req_slot = addr;
     req_op = data;
+    if (data == IMG_REQ_WRITE) wr_reset();
     req_complete = (lba_mask == 0x0F);
     lba_mask = 0;
     req_pending = true;
@@ -167,11 +177,8 @@ static void img_send_sector() {
 }
 
 static bool img_receive_sector() {
-  // the core queues its write data and the sum behind the request: pull them with NOPs
-  wr_bank = 0;
-  wr_count = 0;
-  wr_sum_seen = 0;
-  memset(wr_seen, 0, sizeof(wr_seen));
+  // the core queues its write data and the sum behind the request: pull the rest with NOPs
+  // (wr_reset() ran on the request, some of it may have come already)
   for (int i = 0; i < IMG_WRITE_POLLS && (wr_count < IMG_SECTOR_SIZE || wr_sum_seen != 3); i++) {
     spi_send(CMD_NOP, 0, 0);
   }

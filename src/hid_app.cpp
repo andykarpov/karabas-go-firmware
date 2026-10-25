@@ -81,6 +81,32 @@ void hid_kbd_report_get(hid_keyboard_report_t *report)
   spin_unlock(usb_host_lock(), save);
 }
 
+// the mouse moves since the last hid_mouse_take(): written by core1, read by APP, under usb_host_lock()
+static hid_mouse_move_t mouse_shared = {0};
+
+static void mouse_add(int dx, int dy, int wheel, uint8_t buttons)
+{
+  uint32_t save = spin_lock_blocking(usb_host_lock());
+  mouse_shared.dx += dx;
+  mouse_shared.dy += dy;
+  mouse_shared.wheel += wheel;
+  mouse_shared.pressed |= buttons & ~mouse_shared.buttons;
+  mouse_shared.buttons = buttons;
+  mouse_shared.changed = true;
+  spin_unlock(usb_host_lock(), save);
+}
+
+bool hid_mouse_take(hid_mouse_move_t *m)
+{
+  uint32_t save = spin_lock_blocking(usb_host_lock());
+  *m = mouse_shared;
+  mouse_shared.dx = mouse_shared.dy = mouse_shared.wheel = 0;
+  mouse_shared.pressed = 0;
+  mouse_shared.changed = false;
+  spin_unlock(usb_host_lock(), save);
+  return m->changed;
+}
+
 typedef struct {
   tusb_desc_device_t desc_device;
   uint16_t manufacturer[32];
@@ -311,11 +337,12 @@ static void process_kbd_report_ext(uint8_t dev_addr, uint8_t instance, hid_keybo
 static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_report_t const * report, uint16_t len) {
 
   static hid_mouse_report_t prev_report = {0};
+  mouse_add(report->x, report->y, report->wheel, report->buttons);
 
-  bool change = ((report->x ^ prev_report.x) || 
-                 (report->y ^ prev_report.y) || 
-                 (report->buttons ^ prev_report.buttons) ||
-                 (report->wheel ^ prev_report.wheel));
+  // the core adds the deltas of every report (MS_UPD): a report that repeats the last one is a
+  // move too; only a report without a move and with the same buttons is dropped
+  bool change = (report->x || report->y || report->wheel ||
+                 (report->buttons ^ prev_report.buttons));
   if (change) {
     //d_print("Mouse protocol len="); d_println(len);
     usb_mouse_report = *report;
@@ -333,12 +360,11 @@ static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_r
 static void process_mouse_report_ext(uint8_t dev_addr, uint8_t instance, hid_mouse_report_ext_t const * report, uint16_t len) {
 
   static hid_mouse_report_ext_t prev_report = {0};
+  mouse_add(report->x, report->y, report->wheel, report->buttons);
 
-  bool change = ((report->x ^ prev_report.x) || 
-                 (report->y ^ prev_report.y) || 
-                 (report->buttons ^ prev_report.buttons) ||
-                 (report->wheel ^ prev_report.wheel) || 
-                 (report->pan ^ prev_report.pan));
+  // as in process_mouse_report: every report with a move goes to the core
+  bool change = (report->x || report->y || report->wheel || report->pan ||
+                 (report->buttons ^ prev_report.buttons));
   if (change) {
     //d_print("Mouse protocol len="); d_println(len);
     //usb_mouse_report = *report;

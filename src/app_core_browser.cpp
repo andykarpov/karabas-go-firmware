@@ -14,6 +14,7 @@
 #include "app_setup.h"
 #include "sorts.h"
 #include "file_name.h"
+#include "ui/ft_mouse.h"
 #include <cstdio>
 #include <iostream>
 using namespace std;
@@ -29,6 +30,10 @@ uint16_t rot = 0;
 ElapsedTimer autoload_timer;
 bool autoload_enabled;
 uint32_t autoload_countdown;
+
+// the clickable areas of the graphic browser besides the cores (0..cores_len-1)
+enum { HIT_SETUP = 1000, HIT_PREV, HIT_NEXT };
+static int16_t hover = FT_HIT_NONE; // under the pointer at the last draw
 
 void app_core_browser_overlay() {
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
@@ -96,10 +101,12 @@ void app_core_browser_ft_load() {
   ft.writeGRAM(KEY2_OFFSET, KEY2_SIZE, key2Data); // pcm sound, starts from after logo and bg in GRAM
   ft.writeGRAM(KEY3_OFFSET, KEY3_SIZE, key3Data); // pcm sound, starts from after logo and bg in GRAM
   ft.writeGRAM(KEY4_OFFSET, KEY4_SIZE, key4Data); // pcm sound, starts from after logo and bg in GRAM
+  ft_mouse_load();
 }
 
 void app_core_browser_ft_overlay() {
   app_core_browser_ft_load();
+  ft_mouse_reset();
   app_core_browser_ft_menu(0);
 }
 
@@ -170,6 +177,7 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
   uint32_t color_copyright = hw_setup.color_copyright;
 
   app_core_browser_ft_background(hw_setup);
+  ft_hit_clear();
 
   core_pages = ceil((float)cores_len / ft_core_page_size);
   core_page = ceil((float)(core_sel+1)/ft_core_page_size);
@@ -182,6 +190,10 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
     String n = String(cores[i].name); n.trim(); n.toCharArray(name, 18);
     const uint32_t colorb = i == core_sel ? color_button_active : color_button;
     const uint32_t colort = i == core_sel ? color_text_active : color_text;
+    if (ft_hit_add(ft.width()/4 + 8, offset + pos*40, ft.width()/2-16, 32, i)) {
+      // hovered: a rect grows by its corner radius, so this is a 2 px frame around the button
+      ft.drawRect(ft.width()/4 + 8, offset + pos*40, ft.width()/2-16, 32, 2, color_button_active);
+    }
     ft.drawButton(ft.width()/4 + 8, offset + pos*40, ft.width()/2-16, 32, 28, colort, colorb, (hw_setup.ft_3d_buttons) ? FT81x_OPT_3D : FT81x_OPT_FLAT , name);
     if (cores[i].flash) {
       ft.drawText(ft.width()/4+ft.width()/2-16-24, offset + pos*40 + 16, 28, colort, FT81x_OPT_CENTERY, "F\0");
@@ -201,6 +213,12 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
   ft.drawText(112, ft.height()-20, 27, color_copyright, FT81x_OPT_CENTER, "(c) 2026 andykarpov\0");
   sprintf(b, "Page %d of %d\0", core_page, core_pages);
   ft.drawText(ft.width()/2, ft.height()-40, 27, color_copyright, FT81x_OPT_CENTER, b);
+  if (core_pages > 1) {
+    bool h = ft_hit_add(ft.width()/2 - 96, ft.height()-54, 32, 28, HIT_PREV);
+    ft.drawText(ft.width()/2 - 80, ft.height()-40, 28, h ? color_text : color_copyright, FT81x_OPT_CENTER, "<");
+    h = ft_hit_add(ft.width()/2 + 64, ft.height()-54, 32, 28, HIT_NEXT);
+    ft.drawText(ft.width()/2 + 80, ft.height()-40, 28, h ? color_text : color_copyright, FT81x_OPT_CENTER, ">");
+  }
 
   if (autoload_enabled) {
     uint32_t diff = (autoload_timer.elapsed() < autoload_countdown * 1000) ? ceil((autoload_countdown * 1000 - autoload_timer.elapsed())/1000) : 0;
@@ -218,13 +236,15 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
   }
 
   // the Setup button (S) under the logo
+  if (ft_hit_add(14, 82, 120, 44, HIT_SETUP)) ft.drawCircle(36, 104, 20, color_button_active);
   ft.drawCircle(36, 104, 18, color_button);
   ft.drawText(36, 104, 29, color_text, FT81x_OPT_CENTER, "S");
   ft.drawText(62, 104, 28, color_text, FT81x_OPT_CENTERY, "Setup");
 
   app_core_browser_ft_decor(hw_setup, true);
 
-  ft.swapScreen();
+  hover = ft_hover();
+  ft_frame_end();
 }
 
 
@@ -284,7 +304,33 @@ void app_core_browser_read_list() {
 
 }
 
+static void start_core() {
+  autoload_enabled = false;
+  if (has_ft) {
+    app_core_browser_ft_menu(2); // play wav
+  }
+  d_printf("Selected core %s to boot from menu", cores[core_sel].filename); d_println();
+  String f = String(cores[core_sel].filename); f.trim(); 
+  char buf[32]; f.toCharArray(buf, sizeof(buf));
+  has_ft = false;
+  do_configure(buf);
+  switch (core.type) {
+    case CORE_TYPE_BOOT: osd_state = state_core_browser; break;
+    case CORE_TYPE_OSD: osd_state = state_main; break;
+    case CORE_TYPE_FILELOADER: osd_state = state_file_loader; break;
+    default: osd_state = state_main;
+  }
+}
+
+// the graphic setup on the FT812, else the classic one
+static void open_setup() {
+  autoload_enabled = false;
+  osd_return_state = state_core_browser;
+  osd_state = has_ft ? state_ft_setup : state_setup;
+}
+
 void app_core_browser_on_keyboard() {
+      if (has_ft) ft_mouse_hide(); // the keys move the selection
       if (cores_len > 0) {
         // down
         if (usb_keyboard_report.keycode[0] == KEY_DOWN || (joyL & SC_BTN_DOWN) || (joyR & SC_BTN_DOWN)) {
@@ -328,21 +374,7 @@ void app_core_browser_on_keyboard() {
         
         // enter
         if (usb_keyboard_report.keycode[0] == KEY_ENTER || (joyL & SC_BTN_A) || (joyR & SC_BTN_A) || (joyL & SC_BTN_B) || (joyR & SC_BTN_B)) {
-          autoload_enabled = false;
-          if (has_ft) {
-            app_core_browser_ft_menu(2); // play wav
-          }
-          d_printf("Selected core %s to boot from menu", cores[core_sel].filename); d_println();
-          String f = String(cores[core_sel].filename); f.trim(); 
-          char buf[32]; f.toCharArray(buf, sizeof(buf));
-          has_ft = false;
-          do_configure(buf);
-          switch (core.type) {
-            case CORE_TYPE_BOOT: osd_state = state_core_browser; break;
-            case CORE_TYPE_OSD: osd_state = state_main; break;
-            case CORE_TYPE_FILELOADER: osd_state = state_file_loader; break;
-            default: osd_state = state_main;
-          }
+          start_core();
         }
 
         if (usb_keyboard_report.keycode[0] == KEY_V && hw_setup.debug_enabled && has_ft) {
@@ -361,15 +393,9 @@ void app_core_browser_on_keyboard() {
           app_core_browser_ft_overlay();
         }
 
-        // enter setup mode: the graphic one on the FT812, else the classic one
+        // enter setup mode
         if (usb_keyboard_report.keycode[0] == KEY_S) {
-          autoload_enabled = false;
-          osd_return_state = state_core_browser;
-          if (has_ft) {
-            osd_state = state_ft_setup;
-          } else {
-            osd_state = state_setup;
-          }
+          open_setup();
         }
 
         // redraw core browser on keypress
@@ -404,6 +430,43 @@ void app_core_browser_on_keyboard() {
           ft.spi(false);
         }
       }
+}
+
+// the mouse on the graphic browser: the pointer hovers, a click selects a core, a click on the
+// selected one starts it; the wheel moves the selection
+void app_core_browser_tick() {
+  if (!has_ft) return;
+  ft_mouse_event_t ev;
+  if (!ft_mouse_poll(&ev)) return;
+  bool act = ev.pressed || ev.wheel;
+  if (act) autoload_enabled = false;
+  if (ev.wheel && cores_len > 0) {
+    int sel = core_sel - ev.wheel;
+    core_sel = sel < 0 ? 0 : sel >= cores_len ? cores_len - 1 : sel;
+  }
+  if (ev.pressed & FT_MOUSE_LEFT) {
+    int16_t id = ft_hover();
+    if (id >= 0 && id < cores_len) {
+      if (id == core_sel) {
+        start_core();
+        return;
+      }
+      core_sel = id;
+    } else if (id == HIT_SETUP) {
+      open_setup();
+      return;
+    } else if (id == HIT_PREV) {
+      core_sel = core_sel >= ft_core_page_size ? (core_sel / ft_core_page_size - 1) * ft_core_page_size : 0;
+    } else if (id == HIT_NEXT) {
+      uint8_t next = (core_sel / ft_core_page_size + 1) * ft_core_page_size;
+      if (next < cores_len) core_sel = next;
+    }
+  }
+  if (act || ft_hover() != hover) {
+    app_core_browser_ft_menu(act && hw_setup.ft_click ? 1 : 0);
+  } else if (ev.moved) {
+    ft_pointer_frame();
+  }
 }
 
 void app_core_browser_on_time() {

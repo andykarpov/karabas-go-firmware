@@ -8,6 +8,7 @@
 #include "SegaController.h"
 #include "ui/settings_items.h"
 #include "app_core_browser.h"
+#include "ui/ft_mouse.h"
 #include "app_ft_setup.h"
 
 // The graphic setup of the core browser (S on the FT812 menu): the sections on the left, the
@@ -15,6 +16,9 @@
 // buttons), Save writes karabas.ini, Cancel drops the changes (Esc asks first). A new video mode
 // is tried first and kept only when confirmed; it falls back after a timeout.
 // The setup of the clock, Wi-Fi and gamepads is still in the text menu ("Text setup").
+// The mouse: a click on a section opens it, on a setting picks it (and does Enter when it is
+// picked), on a toggle or an arrow changes it; the wheel changes the setting under the pointer
+// or the section; the sliders of a color follow a drag; the right button is Esc.
 
 enum { T_SYSTEM, T_AUTOLOAD, T_DISPLAY, T_SOUND, T_THEME, T_PAGES = T_THEME + 1, T_TEXT = T_PAGES, T_SAVE, T_CANCEL, T_COUNT };
 
@@ -24,6 +28,10 @@ enum { F_TABS, F_PAGE, F_COLOR, F_DIALOG };
 // the dialogs: the left button does it, the right one (the default) is the safe way back
 enum { D_MODE, D_DROP };
 
+// the clickable areas: the base plus the index
+enum { HIT_TAB = 100, HIT_ROW = 200, HIT_TOGGLE = 300, HIT_LESS = 400, HIT_MORE = 500,
+  HIT_CHAN = 600, HIT_SLIDER = 700, HIT_DLG_LEFT = 800, HIT_DLG_RIGHT };
+
 typedef struct {
   const char *name;
   const uint8_t *ids;
@@ -32,7 +40,7 @@ typedef struct {
 
 static const uint8_t page_system[] = { SET_DEBUG, SET_DEBUG_HID, SET_BURST, SET_DVI };
 static const uint8_t page_autoload[] = { SET_AUTOLOAD, SET_TIMEOUT, SET_CORE };
-static const uint8_t page_display[] = { SET_FT, SET_VIDEO_MODE, SET_3D, SET_TIME, SET_DATE, SET_CHAR };
+static const uint8_t page_display[] = { SET_FT, SET_VIDEO_MODE, SET_3D, SET_TIME, SET_DATE, SET_CHAR, SET_MOUSE_SPEED };
 static const uint8_t page_sound[] = { SET_SOUND, SET_CLICK };
 static const uint8_t page_theme[] = {
   SET_THEME, SET_COLOR_BG, SET_COLOR_GRADIENT, SET_COLOR_BUTTON, SET_COLOR_ACTIVE,
@@ -65,6 +73,7 @@ static const char *const tab_names[T_COUNT] = { "System", "Autoload", "Display",
 #define MODE_TEST_S 10
 #define COLOR_STEP 8
 #define ERROR_COLOR 0xff4040
+#define VALUE_W 200 // '<', the value of a choice, '>'
 
 static setup_t s;          // the edited copy of hw_setup
 static uint8_t focus;      // F_*
@@ -83,6 +92,9 @@ static bool dialog_left;   // the left button is chosen
 static uint8_t color_ch;   // R, G, B in the color editor
 static uint32_t color_old;
 
+static int16_t hover = FT_HIT_NONE; // under the pointer at the last draw
+static bool dragging;      // a slider follows the pointer
+
 static uint16_t ft_opt() { return s.ft_3d_buttons ? FT81x_OPT_3D : FT81x_OPT_FLAT; }
 
 static uint16_t panel_w() {
@@ -100,12 +112,16 @@ static void draw_tabs() {
     bool lit = chosen && focus == F_TABS;
     uint32_t bg = lit ? s.color_active : s.color_button;
     uint32_t fg = lit ? s.color_text_active : s.color_text;
+    if (ft_hit_add(TAB_X, tab_y(i), TAB_W, TAB_H, HIT_TAB + i)) {
+      ft.drawRect(TAB_X, tab_y(i), TAB_W, TAB_H, 2, s.color_active); // hovered: a 2 px frame (the corner radius)
+    }
     ft.drawButton(TAB_X, tab_y(i), TAB_W, TAB_H, FONT, fg, bg, ft_opt(), tab_names[i]);
     if (chosen && !lit) ft.drawRect(TAB_X, tab_y(i) + 4, 4, TAB_H - 8, 1, s.color_active);
   }
 }
 
-static void draw_value(uint8_t id, int16_t y, bool focused) {
+// arrows: the arrows of a choice (focused or hovered)
+static void draw_value(uint8_t id, int16_t y, bool focused, bool arrows) {
   int16_t right = PANEL_X + panel_w() - 16;
   const setting_t *st = &settings[id];
   if (st->kind == SET_KIND_BOOL) {
@@ -121,12 +137,14 @@ static void draw_value(uint8_t id, int16_t y, bool focused) {
     ft.drawText(right - 60, y + ROW_H / 2, FONT_SMALL, s.color_text, FT81x_OPT_RIGHTX | FT81x_OPT_CENTERY, hex);
     return;
   }
-  char v[24], b[32];
+  char v[14]; // a long core name is shortened to fit between the arrows
   if (id == SET_VIDEO_MODE) strlcpy(v, FT812::modeName(focused ? mode_pick : s.ft_video_mode), sizeof(v));
   else settings_value_text(id, s, v, sizeof(v));
-  if (focused) snprintf(b, sizeof(b), "<  %s  >", v);
-  else strlcpy(b, v, sizeof(b));
-  ft.drawText(right, y + ROW_H / 2, FONT, s.color_text, FT81x_OPT_RIGHTX | FT81x_OPT_CENTERY, b);
+  ft.drawText(right - VALUE_W / 2, y + ROW_H / 2, FONT, s.color_text, FT81x_OPT_CENTER, v);
+  if (arrows) {
+    ft.drawText(right - VALUE_W + 12, y + ROW_H / 2, FONT, s.color_text, FT81x_OPT_CENTER, "<");
+    ft.drawText(right - 12, y + ROW_H / 2, FONT, s.color_text, FT81x_OPT_CENTER, ">");
+  }
 }
 
 static void draw_page() {
@@ -136,15 +154,24 @@ static void draw_page() {
   ft.drawRect(PANEL_X + 16, TOP + TAB_H + 2, w - 32, 1, 1, s.color_copyright);
   for (uint8_t i = 0; i < p->len; i++) {
     int16_t y = TOP + 40 + i * ROW_STEP;
+    int16_t right = PANEL_X + w - 16;
+    uint8_t kind = settings[p->ids[i]].kind;
     bool focused = focus == F_PAGE && i == row;
-    if (focused) {
-      ft.drawRect(PANEL_X, y, w, ROW_H, 4, s.color_button);
-      ft.drawRect(PANEL_X, y + 4, 4, ROW_H - 8, 1, s.color_active);
+    // the toggle and the arrows before the row: the first area that holds the pointer wins
+    bool hovered = false;
+    if (kind == SET_KIND_BOOL) {
+      hovered |= ft_hit_add(right - 64, y, 80, ROW_H, HIT_TOGGLE + i);
+    } else if (kind == SET_KIND_CHOICE) {
+      hovered |= ft_hit_add(right - VALUE_W, y, 28, ROW_H, HIT_LESS + i);
+      hovered |= ft_hit_add(right - 28, y, 44, ROW_H, HIT_MORE + i);
     }
+    hovered |= ft_hit_add(PANEL_X, y, w, ROW_H, HIT_ROW + i);
+    if (focused || hovered) ft.drawRect(PANEL_X, y, w, ROW_H, 4, s.color_button);
+    if (focused) ft.drawRect(PANEL_X, y + 4, 4, ROW_H - 8, 1, s.color_active);
     const char *label = settings[p->ids[i]].label;
     if (p->ids[i] == SET_AUTOLOAD) label = "Autoload";
     ft.drawText(PANEL_X + 16, y + ROW_H / 2, FONT, s.color_text, FT81x_OPT_CENTERY, label);
-    draw_value(p->ids[i], y, focused);
+    draw_value(p->ids[i], y, focused, focused || hovered);
   }
 }
 
@@ -166,10 +193,10 @@ static void draw_color() {
   for (uint8_t i = 0; i < 3; i++) {
     int16_t y = TOP + 128 + i * ROW_STEP;
     uint8_t v = (c >> (16 - 8 * i)) & 0xff;
-    if (i == color_ch) {
-      ft.drawRect(PANEL_X, y, w, ROW_H, 4, s.color_button);
-      ft.drawRect(PANEL_X, y + 4, 4, ROW_H - 8, 1, s.color_active);
-    }
+    bool hovered = ft_hit_add(PANEL_X + 40, y, w - 48 - 56, ROW_H, HIT_SLIDER + i);
+    hovered |= ft_hit_add(PANEL_X, y, w, ROW_H, HIT_CHAN + i);
+    if (i == color_ch || hovered) ft.drawRect(PANEL_X, y, w, ROW_H, 4, s.color_button);
+    if (i == color_ch) ft.drawRect(PANEL_X, y + 4, 4, ROW_H - 8, 1, s.color_active);
     ft.drawText(PANEL_X + 16, y + ROW_H / 2, FONT, s.color_text, FT81x_OPT_CENTERY, names[i]);
     ft.drawSlider(PANEL_X + 48, y + ROW_H / 2 - 5, w - 48 - 72, 10, fills[i], s.color_text, s.color_copyright, ft_opt(), v, 255);
     snprintf(b, sizeof(b), "%u", v);
@@ -182,6 +209,7 @@ static void draw_color() {
 static void draw_dialog() {
   int16_t w = 400, h = 160;
   int16_t x = (ft.width() - w) / 2, y = (ft.height() - h) / 2;
+  ft_hit_clear(); // only the buttons of the dialog take clicks
   ft.drawRect(x - 3, y - 3, w + 6, h + 6, 8, s.color_active);
   ft.drawRect(x, y, w, h, 8, s.color_button);
   char title[40], text[40];
@@ -200,6 +228,8 @@ static void draw_dialog() {
   }
   ft.drawText(x + w / 2, y + 30, 29, s.color_text, FT81x_OPT_CENTER, title);
   ft.drawText(x + w / 2, y + 66, FONT_SMALL, s.color_copyright, FT81x_OPT_CENTER, text);
+  if (ft_hit_add(x + 40, y + h - 56, 140, TAB_H, HIT_DLG_LEFT)) ft.drawRect(x + 40, y + h - 56, 140, TAB_H, 2, s.color_active);
+  if (ft_hit_add(x + w - 180, y + h - 56, 140, TAB_H, HIT_DLG_RIGHT)) ft.drawRect(x + w - 180, y + h - 56, 140, TAB_H, 2, s.color_active);
   ft.drawButton(x + 40, y + h - 56, 140, TAB_H, FONT, dialog_left ? s.color_text_active : s.color_text,
     dialog_left ? s.color_active : s.color_bg, ft_opt(), left);
   ft.drawButton(x + w - 180, y + h - 56, 140, TAB_H, FONT, !dialog_left ? s.color_text_active : s.color_text,
@@ -235,6 +265,7 @@ static void draw_footer() {
 void app_ft_setup_draw() {
   if (!has_ft) return;
   ft.beginDisplayList();
+  ft_hit_clear();
   app_core_browser_ft_background(s);
   bool page = tab < T_PAGES;
   // the picture only where it does not cover the settings
@@ -245,7 +276,8 @@ void app_ft_setup_draw() {
   else if (page) draw_page();
   draw_footer();
   if (focus == F_DIALOG) draw_dialog();
-  ft.swapScreen();
+  hover = ft_hover();
+  ft_frame_end();
 }
 
 static void set_mode(uint8_t m) {
@@ -259,6 +291,8 @@ static void set_mode(uint8_t m) {
 }
 
 void app_ft_setup_overlay() {
+  ft_mouse_hide();
+  dragging = false;
   s = hw_setup;
   settings_begin(s);
   focus = F_TABS;
@@ -275,12 +309,16 @@ static void leave() {
   osd_state = osd_return_state;
 }
 
+static void mouse_tick();
+
 void app_ft_setup_tick() {
+  if (!has_ft) return;
   if (focus == F_DIALOG && dialog == D_MODE && mode_timer.elapsed() >= MODE_TEST_S * 1000) {
     set_mode(mode_old);
     focus = F_PAGE;
     app_ft_setup_draw();
   }
+  mouse_tick();
 }
 
 static void open_tab() {
@@ -347,23 +385,18 @@ static void change_color(int d) {
   *c = (*c & ~(0xfful << shift)) | ((uint32_t) v << shift);
 }
 
-void app_ft_setup_on_keyboard() {
-  uint8_t key = usb_keyboard_report.keycode[0];
-  bool up = key == KEY_UP || (joyL & SC_BTN_UP) || (joyR & SC_BTN_UP);
-  bool down = key == KEY_DOWN || (joyL & SC_BTN_DOWN) || (joyR & SC_BTN_DOWN);
-  bool left = key == KEY_LEFT || (joyL & SC_BTN_LEFT) || (joyR & SC_BTN_LEFT);
-  bool right = key == KEY_RIGHT || (joyL & SC_BTN_RIGHT) || (joyR & SC_BTN_RIGHT);
-  bool enter = key == KEY_ENTER || key == KEY_KPENTER || (joyL & SC_BTN_A) || (joyR & SC_BTN_A) || (joyL & SC_BTN_B) || (joyR & SC_BTN_B);
-  bool esc = key == KEY_ESC || (joyL & SC_BTN_C) || (joyR & SC_BTN_C);
-  bool back = esc || key == KEY_BACKSPACE;
-  bool shift = usb_keyboard_report.modifier & (KEY_MOD_LSHIFT | KEY_MOD_RSHIFT);
-  if (!(up || down || left || right || enter || back || key == KEY_TAB)) return;
+typedef struct {
+  bool up, down, left, right, enter, esc, back, tab, shift;
+} keys_t;
+
+static void handle(const keys_t &k) {
+  bool up = k.up, down = k.down, left = k.left, right = k.right, enter = k.enter, esc = k.esc, back = k.back, shift = k.shift;
   error = nullptr;
 
   switch (focus) {
     case F_TABS:
       if (up) tab = (tab + T_COUNT - 1) % T_COUNT;
-      else if (down || key == KEY_TAB) tab = (tab + 1) % T_COUNT;
+      else if (down || k.tab) tab = (tab + 1) % T_COUNT;
       else if (enter || (right && tab < T_PAGES)) open_tab();
       else if (esc && settings_differ(s, hw_setup)) { focus = F_DIALOG; dialog = D_DROP; dialog_left = false; }
       else if (esc) leave();
@@ -372,7 +405,7 @@ void app_ft_setup_on_keyboard() {
       uint8_t n = pages[tab].len;
       if (up) row = (row + n - 1) % n;
       else if (down) row = (row + 1) % n;
-      else if (key == KEY_TAB) { tab = (tab + 1) % T_PAGES; row = 0; }
+      else if (k.tab) { tab = (tab + 1) % T_PAGES; row = 0; }
       else if (left || right) change(left ? -1 : 1);
       else if (enter) enter_row();
       else if (back) focus = F_TABS;
@@ -382,7 +415,7 @@ void app_ft_setup_on_keyboard() {
     }
     case F_COLOR:
       if (up) color_ch = (color_ch + 2) % 3;
-      else if (down || key == KEY_TAB) color_ch = (color_ch + 1) % 3;
+      else if (down || k.tab) color_ch = (color_ch + 1) % 3;
       else if (left || right) change_color((left ? -1 : 1) * (shift ? 1 : COLOR_STEP));
       else if (enter) focus = F_PAGE;
       else if (back) { *settings_color(cur_id(), s) = color_old; focus = F_PAGE; }
@@ -399,4 +432,116 @@ void app_ft_setup_on_keyboard() {
   if (osd_state != state_ft_setup) return; // left the setup
   if (s.ft_click) ft.playSound();
   app_ft_setup_draw();
+}
+
+void app_ft_setup_on_keyboard() {
+  uint8_t key = usb_keyboard_report.keycode[0];
+  keys_t k;
+  k.up = key == KEY_UP || (joyL & SC_BTN_UP) || (joyR & SC_BTN_UP);
+  k.down = key == KEY_DOWN || (joyL & SC_BTN_DOWN) || (joyR & SC_BTN_DOWN);
+  k.left = key == KEY_LEFT || (joyL & SC_BTN_LEFT) || (joyR & SC_BTN_LEFT);
+  k.right = key == KEY_RIGHT || (joyL & SC_BTN_RIGHT) || (joyR & SC_BTN_RIGHT);
+  k.enter = key == KEY_ENTER || key == KEY_KPENTER || (joyL & SC_BTN_A) || (joyR & SC_BTN_A) || (joyL & SC_BTN_B) || (joyR & SC_BTN_B);
+  k.esc = key == KEY_ESC || (joyL & SC_BTN_C) || (joyR & SC_BTN_C);
+  k.back = k.esc || key == KEY_BACKSPACE;
+  k.tab = key == KEY_TAB;
+  k.shift = usb_keyboard_report.modifier & (KEY_MOD_LSHIFT | KEY_MOD_RSHIFT);
+  if (!(k.up || k.down || k.left || k.right || k.enter || k.back || k.tab)) return;
+  ft_mouse_hide(); // the keys move the focus
+  handle(k);
+}
+
+// ---------------- the mouse ----------------
+
+static void slider_set(int16_t x) {
+  int16_t sx = PANEL_X + 48, sw = panel_w() - 48 - 72;
+  int v = (int) (x - sx) * 255 / sw;
+  v = v < 0 ? 0 : v > 255 ? 255 : v;
+  uint32_t *c = settings_color(cur_id(), s);
+  uint8_t shift = 16 - 8 * color_ch;
+  *c = (*c & ~(0xfful << shift)) | ((uint32_t) v << shift);
+}
+
+// pick a row of the page; the video mode picked on another row is dropped
+static void pick_row(uint8_t i) {
+  if (focus != F_PAGE || row != i) mode_pick = s.ft_video_mode;
+  focus = F_PAGE;
+  row = i;
+}
+
+// true if it went through handle(), which draws
+static bool click(int16_t id) {
+  if (id >= HIT_TAB && id < HIT_TAB + T_COUNT) {
+    tab = id - HIT_TAB;
+    focus = F_TABS;
+    if (tab >= T_PAGES) open_tab();
+  } else if (id >= HIT_ROW && id < HIT_ROW + 16) {
+    uint8_t i = id - HIT_ROW;
+    if (focus == F_PAGE && row == i) enter_row();
+    else pick_row(i);
+  } else if (id >= HIT_TOGGLE && id < HIT_TOGGLE + 16) {
+    pick_row(id - HIT_TOGGLE);
+    change(1);
+  } else if (id >= HIT_LESS && id < HIT_LESS + 16) {
+    pick_row(id - HIT_LESS);
+    change(-1);
+  } else if (id >= HIT_MORE && id < HIT_MORE + 16) {
+    pick_row(id - HIT_MORE);
+    change(1);
+  } else if (id >= HIT_CHAN && id < HIT_CHAN + 3) {
+    color_ch = id - HIT_CHAN;
+  } else if (id >= HIT_SLIDER && id < HIT_SLIDER + 3) {
+    color_ch = id - HIT_SLIDER;
+    dragging = true;
+    slider_set(ft_mouse_x());
+  } else if (id == HIT_DLG_LEFT || id == HIT_DLG_RIGHT) {
+    dialog_left = id == HIT_DLG_LEFT;
+    keys_t k = {};
+    k.enter = true;
+    handle(k);
+    return true;
+  }
+  return false;
+}
+
+static void wheel(int16_t id, int d) {
+  if (id >= HIT_TAB && id < HIT_TAB + T_COUNT) {
+    tab = (tab - d + T_COUNT) % T_COUNT; // up: the section above
+    focus = F_TABS;
+  } else if (id >= HIT_ROW && id < HIT_MORE + 16) {
+    pick_row((id - HIT_ROW) % 100);
+    change(d);
+  } else if (id >= HIT_CHAN && id < HIT_SLIDER + 3) {
+    color_ch = (id - HIT_CHAN) % 100;
+    change_color(d * COLOR_STEP);
+  }
+}
+
+static void mouse_tick() {
+  ft_mouse_event_t ev;
+  if (!ft_mouse_poll(&ev)) return;
+  bool redraw = false;
+  if (dragging) {
+    if ((ev.buttons & FT_MOUSE_LEFT) && focus == F_COLOR) {
+      if (ev.moved) { slider_set(ft_mouse_x()); redraw = true; }
+    } else {
+      dragging = false;
+    }
+  }
+  if (ev.pressed & FT_MOUSE_RIGHT) {
+    keys_t k = {};
+    k.esc = k.back = true;
+    handle(k); // draws
+    return;
+  }
+  if (ev.pressed || ev.wheel) {
+    error = nullptr;
+    if ((ev.pressed & FT_MOUSE_LEFT) && click(ft_hover())) return;
+    if (ev.wheel) wheel(ft_hover(), ev.wheel);
+    if (osd_state != state_ft_setup) return; // left the setup
+    if (s.ft_click) ft.playSound();
+    redraw = true;
+  }
+  if (redraw || ft_hover() != hover) app_ft_setup_draw();
+  else if (ev.moved) ft_pointer_frame();
 }

@@ -114,12 +114,14 @@ static void joy_send(bool changedL, bool changedR) {
   }
 }
 
-// forward one event from core1 to the fpga (keys are not forwarded while the OSD is open)
+// forward one event from core1 to the fpga (keys, joysticks and the mouse are not forwarded while
+// the OSD is open)
 static void event_forward(const queue_spi_t &packet) {
   switch (packet.cmd) {
     case CMD_USB_KBD:
     case CMD_PS2_SCANCODE:
     case CMD_JOYSTICK:
+    case CMD_USB_MOUSE:
       if (!is_osd) {
         spi_send(packet.cmd, packet.addr, packet.data);
       }

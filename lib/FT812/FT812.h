@@ -643,6 +643,20 @@ public:
     void drawScrollbar(const int16_t x, const int16_t y, const int16_t width, const int16_t height, const uint32_t foregroundColor, const uint32_t backgroundColor, const uint16_t options, const uint16_t value, const uint16_t size, const uint16_t range);
 
     /*!
+        @brief  Draw an ARGB4 bitmap from GRAM at its own size (x, y may be past 511)
+    */
+    void drawBitmapARGB4(const uint32_t offset, const int16_t x, const int16_t y, const uint16_t width, const uint16_t height);
+
+    /*!
+        @brief  Keeping a frame: displayListSize() waits for the coprocessor and gives the bytes of
+                the display list built so far; cmdMemcpy(dest, FT81x_RAM_DL, size) copies it to GRAM,
+                cmdAppend() puts it into a later display list
+    */
+    uint16_t displayListSize();
+    void cmdMemcpy(const uint32_t dest, const uint32_t src, const uint32_t size);
+    void cmdAppend(const uint32_t offset, const uint32_t size);
+
+    /*!
         @brief  Draw a toggle (CMD_TOGGLE): text is "off\xffon", y is its top, the height comes from the font
     */
     void drawToggle(const int16_t x, const int16_t y, const int16_t width, const uint8_t font, const uint32_t textColor, const uint32_t knobColor, const uint32_t barColor, const uint16_t options, const bool on, const char text[]);
