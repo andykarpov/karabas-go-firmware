@@ -84,7 +84,9 @@ The card can be FAT16, FAT32 or exFAT. The cores are built with
 ### karabas.ini
 
 [`src/karabas.ini`](src/karabas.ini) is the default. Lines must be at most 79 characters long,
-or the whole file is ignored.
+or the whole file is ignored. Most of `[setup]` and `[autoload]`, and `enabled` / `video_mode`
+of `[ft812]`, can also be changed in Setup > Settings of the core browser; it writes only the
+changed keys and keeps the rest of the file.
 
 | Section | Key | Meaning |
 | --- | --- | --- |
@@ -106,7 +108,7 @@ or the whole file is ignored.
 | Menu (Win) + Esc | Start + C | open / close the OSD of the running core |
 | Ctrl + Alt + Backspace | Start + X | restart the MCU and go back to the core browser |
 | arrows, Enter, Esc | D-pad and buttons | navigate the menus |
-| `S` | | Setup: clock, Wi-Fi (core browser), USB gamepad mapper |
+| `S` | | Setup: clock, Wi-Fi and Settings (core browser), USB gamepad mapper |
 | `A` (core OSD) | | About |
 | Delete / Backspace (core OSD) | | eject the disk image of the selected drive |
 | Space (graphical browser) | | switch to the text browser |
