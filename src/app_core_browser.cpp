@@ -41,7 +41,9 @@ void app_core_browser_overlay() {
   zxosd.line(21);
   zxosd.setPos(0, 22); 
   zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_FLASH); zxosd.print("S");
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK); zxosd.print("etup");
+  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK); zxosd.print("etup ");
+  zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_FLASH); zxosd.print("G");
+  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK); zxosd.print("raphic menu");
   zxosd.line(23);
   zxosd.setPos(1,24); zxosd.print("Please use arrows to navigate");
   zxosd.setPos(1,25); zxosd.print("Press Enter to load selection");
@@ -215,6 +217,11 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
     app_core_browser_ft_sound(hw_setup.ft_sound, true);
   }
 
+  // the Setup button (S) under the logo
+  ft.drawCircle(36, 104, 18, color_button);
+  ft.drawText(36, 104, 29, color_text, FT81x_OPT_CENTER, "S");
+  ft.drawText(62, 104, 28, color_text, FT81x_OPT_CENTERY, "Setup");
+
   app_core_browser_ft_decor(hw_setup, true);
 
   ft.swapScreen();
@@ -322,7 +329,7 @@ void app_core_browser_on_keyboard() {
         // enter
         if (usb_keyboard_report.keycode[0] == KEY_ENTER || (joyL & SC_BTN_A) || (joyR & SC_BTN_A) || (joyL & SC_BTN_B) || (joyR & SC_BTN_B)) {
           autoload_enabled = false;
-          if (hw_setup.ft_enabled && has_ft == true) {
+          if (has_ft) {
             app_core_browser_ft_menu(2); // play wav
           }
           d_printf("Selected core %s to boot from menu", cores[core_sel].filename); d_println();
@@ -338,7 +345,7 @@ void app_core_browser_on_keyboard() {
           }
         }
 
-        if (usb_keyboard_report.keycode[0] == KEY_V && hw_setup.debug_enabled && hw_setup.ft_enabled && has_ft) {
+        if (usb_keyboard_report.keycode[0] == KEY_V && hw_setup.debug_enabled && has_ft) {
           autoload_enabled = false;
           uint8_t old_vmode = hw_setup.ft_video_mode;
           hw_setup.ft_video_mode++;
@@ -358,7 +365,7 @@ void app_core_browser_on_keyboard() {
         if (usb_keyboard_report.keycode[0] == KEY_S) {
           autoload_enabled = false;
           osd_return_state = state_core_browser;
-          if (hw_setup.ft_enabled && has_ft) {
+          if (has_ft) {
             osd_state = state_ft_setup;
           } else {
             osd_state = state_setup;
@@ -367,7 +374,7 @@ void app_core_browser_on_keyboard() {
 
         // redraw core browser on keypress
         if (osd_state == state_core_browser) {
-          if (hw_setup.ft_enabled && has_ft == true) {
+          if (has_ft) {
             app_core_browser_ft_menu(1);
           } else {
             app_core_browser_menu(APP_COREBROWSER_MENU_OFFSET);
@@ -376,11 +383,26 @@ void app_core_browser_on_keyboard() {
       }
 
       // return back to classic osd
-      if (usb_keyboard_report.keycode[0] == KEY_SPACE && has_ft == true && hw_setup.ft_enabled) {
+      if (usb_keyboard_report.keycode[0] == KEY_SPACE && has_ft) {
         has_ft = false;
         ft.vga(false);
         ft.spi(false);
         app_core_browser_overlay();
+      }
+
+      // the graphic menu, also when it is off in karabas.ini (until the next start)
+      if (usb_keyboard_report.keycode[0] == KEY_G && !has_ft) {
+        autoload_enabled = false;
+        ft.spi(true);
+        has_ft = ft.init(hw_setup.ft_video_mode);
+        if (has_ft) {
+          d_printf("FT81x started (system clock %lu kHz), switching to FT OSD", (unsigned long) (ft.initClockHz() / 1000)); d_println();
+          ft.vga(true);
+          app_core_browser_ft_overlay();
+        } else {
+          d_println("FT81x did not come up");
+          ft.spi(false);
+        }
       }
 }
 
