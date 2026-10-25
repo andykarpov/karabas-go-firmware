@@ -12,6 +12,23 @@ A HID pad is mapped in one of two ways:
 2. **Default map.** Otherwise the firmware builds a map from the HID report descriptor of the
    pad (`lib/KarabasCommon/src/hid_auto_map.cpp`). Most pads work this way without an ini.
 
+## Driver ini
+
+The format is described in [`drivers/example_ini.txt`](../drivers/example_ini.txt). Each of the
+12 MD2 buttons takes one or more sources separated by `|`, each `pos,type,value[,arg]`:
+
+| type | pressed when |
+| --- | --- |
+| 0 | byte `pos` equals `value` |
+| 1 | bit `value` of byte `pos` is set |
+| 2 | hat: the low 4 bits of byte `pos` shifted right by `arg` are `value` (0 = up, clockwise) or a diagonal next to it |
+| 3 | `value` <= byte `pos` <= `arg` (an axis range) |
+| 4 | bit `value` of byte `pos` is clear |
+
+Types 0 and 1 are the original format, so older ini files work unchanged. `report_id` in
+`[info]` limits the driver to the reports with that id. Without it, every report of the pad is
+mapped, as before. A driver ini holds up to 32 sources.
+
 ## Default map
 
 Only the joystick / gamepad / multi-axis collections of the descriptor are used.
