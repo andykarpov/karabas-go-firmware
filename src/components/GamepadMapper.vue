@@ -1,162 +1,203 @@
 <script setup lang="ts">
-import { ref, reactive } from 'vue';
-import { HidParserService } from '../services/HidParserService';
-import type { GamepadConfig } from '../services/HidParserService';
+import { ref, reactive, computed } from 'vue';
 import { TranslationService } from '../services/TranslationService';
+import {
+  MD2_BUTTONS, type Md2Button, type JoyConfig, formatRule, mapReport, acceptsReport,
+  generateIni, parseIni, validateIni, iniFileName,
+} from '../services/JoyMap';
+import { RestState, detect, isRest } from '../services/HidLearn';
+import { buildAutoMap, autoMapReport, autoMapHasReport, type AutoField, type Collection } from '../services/AutoMap';
 
 // Используем реактивный объект переводов
 const t = TranslationService.t;
 
-// Список стандартных кнопок Sega MD2 для маппинга
-const MD2_BUTTONS = ['up', 'down', 'left', 'right', 'a', 'b', 'c', 'x', 'y', 'z', 'start', 'mode'];
+const CALIBRATE_MS = 1000;
 
-const device = ref<any>(null);
+const device = ref<HIDDevice | null>(null);
 const rawReportHex = ref<string>('');
 const lastReportBytes = ref<number[]>([]);
 const activeSegaButtons = ref<Record<string, boolean>>({});
 
-// Храним текущую конфигурацию маппинга
-const config = reactive<GamepadConfig>({
-  vid: '',
-  pid: '',
-  name: '',
-  buttons: {}
+// Конфигурация драйвера (формат ini v2 прошивки)
+const config = reactive<JoyConfig>({ vid: '', pid: '', name: '', reportId: null, buttons: {} });
+
+// Раскладка, которую прошивка построит сама по HID-дескриптору
+const autoMap = ref<AutoField[]>([]);
+const previewSource = ref<'ini' | 'default'>('ini');
+
+// Состояние покоя геймпада (калибровка) и запись кнопок
+let rest = new RestState();
+const calibrating = ref(false);
+const recording = ref<Md2Button | null>(null);
+const appendMode = ref(false);      // добавить источник к кнопке, а не заменить
+const recordAll = ref(false);       // записать все кнопки по очереди
+const waitRelease = ref(false);     // кнопка записана, ждём отпускания
+const importNote = ref('');
+
+const iniText = computed(() => generateIni(config));
+const problems = computed(() => validateIni(iniText.value).map(p => {
+  switch (p.kind) {
+    case 'long_line': return TranslationService.format(t.value.problemLongLine, { line: String(p.line) });
+    case 'too_many_rules': return TranslationService.format(t.value.problemTooMany, { count: String(p.count) });
+    case 'bad_value': return TranslationService.format(t.value.problemBadValue, { key: p.key, value: p.value });
+    case 'no_vid_pid': return t.value.problemNoVidPid;
+  }
+}));
+const hasRules = computed(() => MD2_BUTTONS.some(b => (config.buttons[b] ?? []).length > 0));
+
+const status = computed(() => {
+  if (!device.value) return '';
+  if (calibrating.value) return t.value.calibrating;
+  if (recording.value) {
+    const fmt = waitRelease.value ? t.value.releaseButton : t.value.pressButton;
+    return TranslationService.format(fmt, { btn: recording.value.toUpperCase() });
+  }
+  return t.value.calibrated;
 });
 
-// Выбранная пользователем кнопка для назначения прямо сейчас
-const currentTargetButton = ref<string | null>(null);
+const hex = (n: number) => n.toString(16).padStart(4, '0');
 
-// Храним слепок репорта в момент начала записи кнопки
-const baselineReport = ref<number[] | null>(null);
-
-// Хранит базовый репорт покоя всего устройства для рендеринга подсветки
-const deviceBaseline = ref<number[]>([]);
+const calibrate = () => {
+  rest = new RestState();
+  calibrating.value = true;
+  setTimeout(() => {
+    calibrating.value = false;
+    // a pad may only report on changes: the last report is the idle one then
+    if (!rest.len && lastReportBytes.value.length) rest.add(lastReportId, new Uint8Array(lastReportBytes.value));
+    config.reportId = rest.reportId ? rest.reportId : null;
+  }, CALIBRATE_MS);
+};
 
 const connectDevice = async () => {
   try {
-    const nav = navigator as any;
-    const devices = await nav.hid.requestDevice({ filters: [] });
+    const devices = await navigator.hid.requestDevice({ filters: [] });
     if (devices.length === 0) return;
-    
-    device.value = devices[0];
-    await device.value.open();
-    
-    config.vid = device.value.vendorId.toString(16).padStart(4, '0');
-    config.pid = device.value.productId.toString(16).padStart(4, '0');
-    config.name = device.value.productName || 'Unknown HID Gamepad';
-    
-    device.value.oninputreport = handleInputReport;
+    const d = devices[0];
+    await d.open();
+    device.value = d;
+    config.vid = hex(d.vendorId);
+    config.pid = hex(d.productId);
+    config.name = d.productName || t.value.unknownDevice;
+    autoMap.value = buildAutoMap(d.collections as unknown as Collection[]);
+    previewSource.value = hasRules.value || !autoMap.value.length ? 'ini' : 'default';
+    d.oninputreport = handleInputReport;
+    calibrate();
   } catch (err) {
     console.error('Ошибка подключения HID:', err);
   }
 };
 
-const handleInputReport = (event: Event) => {
-  // Приводим к any, чтобы прочитать свойство .data без ошибок компиляции
-  const hidEvent = event as any;
-  const data = hidEvent.data;
-  if (!data) return;
+let lastReportId = 0;
 
-  const bytes: number[] = [];
+const handleInputReport = (event: HIDInputReportEvent) => {
+  const bytes = new Uint8Array(event.data.buffer, event.data.byteOffset, event.data.byteLength);
+  const reportId = event.reportId;
+  lastReportId = reportId;
+  lastReportBytes.value = Array.from(bytes);
+  rawReportHex.value = (reportId ? `[${reportId}] ` : '') +
+    Array.from(bytes, b => b.toString(16).padStart(2, '0').toUpperCase()).join(' ');
 
-  for (let i = 0; i < data.byteLength; i++) {
-    bytes.push(data.getUint8(i));
-  }
-
-  lastReportBytes.value = bytes;
-  rawReportHex.value = bytes.map(b => b.toString(16).padStart(2, '0').toUpperCase()).join(' ');
-
-  // Если базовый слепок устройства еще не сделан, сохраняем первый пришедший пакет как покой
-  if (deviceBaseline.value.length === 0) {
-    deviceBaseline.value = [...bytes];
-  }
-
-  // 1. Логика записи (автодетекта) кнопки
-  if (currentTargetButton.value) {
-    autoDetectMapping(data, currentTargetButton.value);
-  }
-
-  // 2. Рассчитываем подсветку кнопок, передавая deviceBaseline
-  const active: Record<string, boolean> = {};
-  for (const btn of MD2_BUTTONS) {
-    const mapping = config.buttons[btn];
-    if (mapping) {
-      // Передаем сохраненный deviceBaseline третьим аргументом
-      active[btn] = HidParserService.isButtonPressed(data, mapping, deviceBaseline.value);
-    }
-  }
-  activeSegaButtons.value = active;
-};
-
-// Модифицируем функцию старта записи (вызывается при клике на "Записать")
-const startRecording = (buttonName: string) => {
-  currentTargetButton.value = buttonName;
-  // Фиксируем текущее состояние геймпада как "покой"
-  if (lastReportBytes.value.length > 0) {
-    baselineReport.value = [...lastReportBytes.value];
-  } else {
-    baselineReport.value = null;
-  }
-};
-
-const autoDetectMapping = (dataView: DataView, buttonName: string) => {
-  if (!baselineReport.value || baselineReport.value.length !== dataView.byteLength) {
-    const current: number[] = [];
-    for (let i = 0; i < dataView.byteLength; i++) {
-      current.push(dataView.getUint8(i));
-    }
-    baselineReport.value = current;
+  if (calibrating.value) {
+    rest.add(reportId, bytes);
     return;
   }
+  if (recording.value) record(reportId, bytes);
 
-  for (let i = 0; i < dataView.byteLength; i++) {
-    const currentVal = dataView.getUint8(i);
-    const baseVal = baselineReport.value[i];
-
-    if (currentVal === baseVal) continue;
-
-    // --- ПРИОРИТЕТ 1: АНАЛОГОВЫЕ ОСИ И HAT-SWITCH ---
-    // Если значение улетело в крайние точки (0 или 255) — это гарантированно ось/крестовина.
-    // Также проверяем классический HAT-switch (если в покое было 15 или 0x0F, а стало от 0 до 7).
-    if (currentVal === 0 || currentVal === 255 || (baseVal === 0x0F && currentVal <= 7)) {
-      config.buttons[buttonName] = { byteIndex: i, isBitmask: 0, valueOrBit: currentVal };
-      currentTargetButton.value = null;
-      baselineReport.value = null;
-      return;
-    }
-
-    // --- ПРИОРИТЕТ 2: ЦИФРОВЫЕ КНОПКИ (БИТЫ) ---
-    // Выполняется только если значение НЕ является крайним для оси.
-    for (let bit = 0; bit < 8; bit++) {
-      const bitMask = 1 << bit;
-      const currentBit = (currentVal & bitMask) !== 0;
-      const baseBit = (baseVal & bitMask) !== 0;
-
-      if (currentBit !== baseBit && currentBit === true) {
-        config.buttons[buttonName] = { byteIndex: i, isBitmask: 1, valueOrBit: bit };
-        currentTargetButton.value = null;
-        baselineReport.value = null;
-        return;
-      }
-    }
+  // Подсветка: так, как это увидит прошивка
+  let pressed: Set<Md2Button> | null = null;
+  if (previewSource.value === 'default') {
+    if (autoMapHasReport(autoMap.value, reportId)) pressed = autoMapReport(autoMap.value, reportId, bytes);
+  } else if (acceptsReport(config, reportId)) {
+    pressed = mapReport(config, bytes);
   }
+  if (pressed) {
+    const active: Record<string, boolean> = {};
+    pressed.forEach(b => { active[b] = true; });
+    activeSegaButtons.value = active;
+  }
+};
+
+const record = (reportId: number, bytes: Uint8Array) => {
+  const btn = recording.value!;
+  if (waitRelease.value) {
+    if (isRest(rest, reportId, bytes)) {
+      waitRelease.value = false;
+      nextButton();
+    }
+    return;
+  }
+  const r = detect(rest, reportId, bytes);
+  if (!r) return;
+  const rules = appendMode.value ? [...(config.buttons[btn] ?? [])] : [];
+  if (!rules.some(x => formatRule(x) === formatRule(r))) rules.push(r);
+  config.buttons[btn] = rules;
+  previewSource.value = 'ini';
+  waitRelease.value = true;
+};
+
+const nextButton = () => {
+  if (recordAll.value && recording.value) {
+    const i = MD2_BUTTONS.indexOf(recording.value) + 1;
+    recording.value = i < MD2_BUTTONS.length ? MD2_BUTTONS[i] : null;
+  } else {
+    recording.value = null;
+  }
+  if (!recording.value) recordAll.value = false;
+};
+
+const startRecording = (btn: Md2Button, append = false) => {
+  if (calibrating.value) return;
+  recordAll.value = false;
+  appendMode.value = append;
+  waitRelease.value = false;
+  recording.value = btn;
+};
+
+const startRecordAll = () => {
+  if (calibrating.value) return;
+  recordAll.value = true;
+  appendMode.value = false;
+  waitRelease.value = false;
+  recording.value = MD2_BUTTONS[0];
+};
+
+const skipButton = () => { waitRelease.value = false; nextButton(); };
+const stopRecording = () => { recordAll.value = false; waitRelease.value = false; recording.value = null; };
+const clearButton = (btn: Md2Button) => { delete config.buttons[btn]; };
+
+const importIni = async (event: Event) => {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file) return;
+  const { cfg } = parseIni(await file.text());
+  importNote.value = '';
+  if (device.value && cfg.vid && (cfg.vid !== config.vid || cfg.pid !== config.pid)) {
+    importNote.value = TranslationService.format(t.value.importMismatch, { vid: cfg.vid, pid: cfg.pid, dvid: config.vid, dpid: config.pid });
+  }
+  if (!device.value) {
+    config.vid = cfg.vid;
+    config.pid = cfg.pid;
+  }
+  config.name = cfg.name || config.name;
+  config.reportId = cfg.reportId;
+  config.buttons = cfg.buttons;
+  previewSource.value = 'ini';
 };
 
 const downloadIni = () => {
-  const iniText = HidParserService.generateIni(config);
-  const blob = new Blob([iniText], { type: 'text/plain' });
+  const blob = new Blob([iniText.value], { type: 'text/plain' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${config.name.replace(/\s+/g, '_')}.ini`;
+  a.download = iniFileName(config);
   a.click();
   URL.revokeObjectURL(url);
 };
 
 const copyToClipboard = async () => {
-  const iniText = HidParserService.generateIni(config);
   try {
-    await navigator.clipboard.writeText(iniText);
+    await navigator.clipboard.writeText(iniText.value);
   } catch (err) {
     console.error('Failed to copy:', err);
   }
@@ -173,7 +214,7 @@ const copyToClipboard = async () => {
         </p>
       </div>
       
-      <div class="flex items-center space-x-3 self-end sm:self-auto">
+      <div class="flex flex-wrap items-center gap-2 self-end sm:self-auto">
         <!-- Выпадающий список языков -->
         <select 
           :value="TranslationService.currentLocale.value" 
@@ -185,48 +226,70 @@ const copyToClipboard = async () => {
           </option>
         </select>
 
+        <label class="bg-slate-100 hover:bg-slate-200 border border-slate-300 px-3 py-2 rounded-lg font-medium transition text-sm cursor-pointer">
+          {{ t.btnImport }}
+          <input type="file" accept=".ini,.txt" class="hidden" @change="importIni" />
+        </label>
         <button v-if="!device" @click="connectDevice" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition text-sm">
           {{ t.btnConnect }}
         </button>
-        <div v-else class="flex space-x-2">
+        <template v-if="device || hasRules">
           <button @click="copyToClipboard" class="bg-slate-600 hover:bg-slate-700 text-white px-3 py-2 rounded-lg font-medium transition text-sm">
             {{ t.btnCopy }}
           </button>
           <button @click="downloadIni" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium transition text-sm">
             {{ t.btnDownload }}
           </button>
-        </div>
+        </template>
       </div>
     </header>
 
+    <!-- Состояние, раскладка по умолчанию, проблемы ini -->
+    <div v-if="device || importNote || problems.length" class="bg-white p-4 rounded-xl shadow space-y-2 text-sm">
+      <div v-if="status" class="flex items-center justify-between gap-2">
+        <span :class="calibrating || recording ? 'text-amber-600 font-semibold' : 'text-slate-600'">{{ status }}</span>
+        <button v-if="device && !calibrating && !recording" @click="calibrate" class="text-xs px-3 py-1 rounded bg-slate-100 hover:bg-slate-200">{{ t.btnRecalibrate }}</button>
+      </div>
+      <p v-if="device" :class="autoMap.length ? 'text-emerald-700' : 'text-slate-500'">
+        {{ autoMap.length ? t.defaultMapYes : t.defaultMapNo }}
+      </p>
+      <p v-if="importNote" class="text-amber-700">{{ importNote }}</p>
+      <div v-if="problems.length && hasRules" class="text-red-700">
+        {{ t.problemsTitle }}
+        <ul class="list-disc pl-5"><li v-for="p in problems" :key="p">{{ p }}</li></ul>
+      </div>
+    </div>
+
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
       <!-- Панель маппинга -->
-      <div class="bg-white p-4 rounded-xl shadow space-y-3">
-        <h2 class="font-bold border-b pb-2">{{ t.mappingTitle }}</h2>
-        <div v-for="btn in MD2_BUTTONS" :key="btn" class="flex flex-col p-1 rounded bg-slate-50 space-y-0">
-          <div class="flex items-center justify-between">
-            <span class="uppercase font-mono text-sm font-semibold text-slate-700">{{ btn }}</span>
-            <button 
-              @click="startRecording(btn)"
-              :class="currentTargetButton === btn ? 'bg-amber-500 text-white' : config.buttons[btn] ? 'bg-green-500 text-white' : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-600'"
-              class="text-xs px-3 py-1 rounded font-medium transition"
-            >
-              {{ currentTargetButton === btn ? t.btnRecording : config.buttons[btn] ? t.btnRetryRecord : t.btnRecord }}
-            </button>
+      <div class="bg-white p-4 rounded-xl shadow space-y-2">
+        <div class="flex items-center justify-between border-b pb-2">
+          <h2 class="font-bold">{{ t.mappingTitle }}</h2>
+          <button v-if="device && !recording" @click="startRecordAll" :disabled="calibrating"
+            class="text-xs px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50">{{ t.btnRecordAll }}</button>
+          <div v-else-if="recording" class="flex gap-1">
+            <button v-if="recordAll" @click="skipButton" class="text-xs px-2 py-1 rounded bg-slate-100 hover:bg-slate-200">{{ t.btnSkip }}</button>
+            <button @click="stopRecording" class="text-xs px-2 py-1 rounded bg-slate-100 hover:bg-slate-200">{{ t.btnStop }}</button>
           </div>
-          
-          <!-- Инпуты ручной корректировки, если маппинг уже существует -->
-          <!-- <div v-if="config.buttons[btn]" class="grid grid-cols-3 gap-1 pt-1">
-            <label class="text-[10px] text-slate-400">Байт:
-              <input type="number" v-model.number="config.buttons[btn].byteIndex" class="w-full text-xs p-1 border rounded bg-white font-mono" />
-            </label>
-            <label class="text-[10px] text-slate-400">Тип (0/1):
-              <input type="number" v-model.number="config.buttons[btn].isBitmask" min="0" max="1" class="w-full text-xs p-1 border rounded bg-white font-mono" />
-            </label>
-            <label class="text-[10px] text-slate-400">Бит/Знач:
-              <input type="number" v-model.number="config.buttons[btn].valueOrBit" class="w-full text-xs p-1 border rounded bg-white font-mono" />
-            </label>
-          </div> -->
+        </div>
+        <div v-for="btn in MD2_BUTTONS" :key="btn"
+          :class="recording === btn ? 'bg-amber-50 ring-1 ring-amber-400' : 'bg-slate-50'"
+          class="flex items-center justify-between gap-1 p-1 rounded">
+          <span class="uppercase font-mono text-sm font-semibold text-slate-700 w-12">{{ btn }}</span>
+          <span class="font-mono text-xs text-slate-500 flex-1 truncate" :title="(config.buttons[btn] ?? []).map(formatRule).join('|')">
+            {{ (config.buttons[btn] ?? []).map(formatRule).join(' | ') || '—' }}
+          </span>
+          <template v-if="device">
+            <button @click="startRecording(btn)" :disabled="calibrating"
+              :class="recording === btn ? 'bg-amber-500 text-white' : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-600'"
+              class="text-xs px-2 py-1 rounded font-medium transition disabled:opacity-50">
+              {{ recording === btn ? t.btnRecording : t.btnRecord }}
+            </button>
+            <button v-if="config.buttons[btn]?.length" @click="startRecording(btn, true)" :disabled="calibrating"
+              class="text-xs px-2 py-1 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-600 disabled:opacity-50">{{ t.btnAdd }}</button>
+          </template>
+          <button v-if="config.buttons[btn]?.length" @click="clearButton(btn)"
+            class="text-xs px-2 py-1 rounded bg-slate-100 hover:bg-red-100 text-slate-600">{{ t.btnClear }}</button>
         </div>
       </div>
 
@@ -234,7 +297,12 @@ const copyToClipboard = async () => {
       <div class="md:col-span-2 space-y-6">
 
         <!-- Схематичный геймпад Sega MD2 -->
-        <div class="bg-white p-4 rounded-xl shadow flex flex-col items-center justify-center min-h-[300px]">
+        <div class="bg-white p-4 rounded-xl shadow flex flex-col items-center justify-center min-h-[300px] gap-4">
+          <div v-if="device && autoMap.length" class="flex items-center gap-3 text-sm self-start">
+            <span class="text-slate-500">{{ t.previewSource }}</span>
+            <label class="flex items-center gap-1"><input type="radio" value="ini" v-model="previewSource" /> {{ t.previewIni }}</label>
+            <label class="flex items-center gap-1"><input type="radio" value="default" v-model="previewSource" /> {{ t.previewDefault }}</label>
+          </div>
           
           <!-- Корпус контроллера -->
           <div class="w-[450px] h-[200px] bg-slate-200 rounded-[20px] relative shadow-2xl border-4 border-slate-700 flex items-center justify-between px-8">
