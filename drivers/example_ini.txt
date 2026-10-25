@@ -1,3 +1,6 @@
+; Optional: pads without an ini get a default map from their HID descriptor,
+; see docs/usb_gamepads.md. An ini is only needed to change that map.
+;
 [info]
 ;
 ; USB HID joystick VID/PID (hex values, lowercase)
