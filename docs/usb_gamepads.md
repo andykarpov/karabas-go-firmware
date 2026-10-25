@@ -8,7 +8,7 @@ A HID pad is mapped in one of two ways:
 
 1. **Driver ini.** If `/drivers/` on the SD card has an ini with the VID/PID of the pad, the
    ini is used (format: [`drivers/example_ini.txt`](../drivers/example_ini.txt), made with the
-   [hidmapper](https://karabas.uk/hidmapper/)).
+   [hidmapper](https://andykarpov.github.io/karabas-go-firmware/hidmapper/), source in [`tools/hidmapper`](../tools/hidmapper)).
 2. **Default map.** Otherwise the firmware builds a map from the HID report descriptor of the
    pad (`lib/KarabasCommon/src/hid_auto_map.cpp`). Most pads work this way without an ini.
 
