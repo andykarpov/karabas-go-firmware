@@ -34,6 +34,8 @@ void link_burst_reset();                  // at a core load: no bursts until the
 bool link_caps_query();                   // ask the loaded core for its capabilities (CMD_CAPS),
                                           // until it answers (true) or a timeout (an old core)
 bool link_burst_available();
+#define CAPS_BK 0x08                      // caps bit 3: backup RAM (CMD_BK_MOUNT, CMD_IMG_FLUSH)
+uint8_t link_core_caps();                 // the caps of the loaded core (0: no answer)
 // send data to `type`'s target starting at addr; returns how many bytes went out as bursts
 // (less than len if the fpga stopped being ready: send the rest with classic frames)
 size_t link_burst_write(uint8_t type, uint32_t addr, const uint8_t *data, size_t len);

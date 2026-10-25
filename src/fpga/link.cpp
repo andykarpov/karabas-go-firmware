@@ -236,10 +236,12 @@ void spi_send64(uint8_t cmd, uint64_t data) { spi_send_le(cmd, data, 8); }
 
 static uint8_t burst_caps = 0;
 static uint8_t burst_mhz = 0;
+static uint8_t core_caps = 0;
 
 void link_burst_reset() {
   burst_caps = 0;
   burst_mhz = 0;
+  core_caps = 0;
   pinMode(PIN_BURST_CS, INPUT_PULLUP); // only driven for cores that support bursts; idle high, so
                                        // the burst receiver of a core never sees a floating chip select
 }
@@ -268,6 +270,7 @@ bool link_caps_query() {
   }
   d_printf("FPGA caps: %02x, burst max %u MHz, core answered after %lu ms (%lu queries)", rx[1], rx[2],
     (unsigned long) timer.elapsed(), (unsigned long) tries); d_println();
+  core_caps = rx[1];
   burst_caps = rx[1];
   burst_mhz = rx[2];
   if (burst_caps & CAPS_BURST_WRITE) {
@@ -275,6 +278,10 @@ bool link_caps_query() {
     digitalWrite(PIN_BURST_CS, HIGH);
   }
   return true;
+}
+
+uint8_t link_core_caps() {
+  return core_caps;
 }
 
 bool link_burst_available() {

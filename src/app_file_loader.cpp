@@ -246,6 +246,10 @@ void app_file_loader_send_file(uint16_t file_id) {
   zxosd.loadingPopup();
   zxosd.update();
 
+  // the save of the game before: written and closed before the core loads another one
+  bk_flush();
+  bk_close();
+
   if (root1.isOpen()) {
     root1.close();
   }
@@ -276,6 +280,10 @@ void app_file_loader_send_file(uint16_t file_id) {
     app_file_loader_overlay(false, false);
     return;
   }
+
+  char game_name[256];
+  file1.getName(game_name, sizeof(game_name));
+  bk_set_game(core.dir, game_name); // its save, if the core asks for one after the load
 
   uint8_t buf[512];
   int c;

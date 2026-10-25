@@ -80,6 +80,7 @@ typedef struct {
 	bool osd_need_save;
 	bool eeprom_need_save;
 	char dir[32+1];
+	char save_dir[32+1]; // backup RAM files (FILE_POS_SAVE_DIR)
 //	char last_file[32+1];
 	uint16_t last_file_id;
 	char file_extensions[32+1];

@@ -34,6 +34,7 @@
 #include "storage/settings.h"
 #include "storage/msc.h"
 #include "storage/img_mount.h"
+#include "storage/bk_save.h"
 #include "usb/usb_device.h"
 #include "ui/osd_ui.h"
 
