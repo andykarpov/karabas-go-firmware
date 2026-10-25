@@ -6,6 +6,7 @@
 #include "app_about.h"
 #include "app_pad_mapper.h"
 #include "app_rtc.h"
+#include "app_wifi.h"
 
 // OSD state and the app screens (one per osd_state)
 
@@ -45,6 +46,7 @@ static const app_t apps[] = {
   { []() { app_file_loader_overlay(true, false); },   app_file_loader_on_keyboard },  // state_file_loader
   { app_pad_mapper_overlay,                            app_pad_mapper_on_keyboard,     app_pad_mapper_tick }, // state_pad_mapper
   { app_rtc_overlay,                                   app_rtc_on_keyboard },          // state_rtc
+  { app_wifi_overlay,                                  app_wifi_on_keyboard,           app_wifi_tick }, // state_wifi
 };
 static const uint8_t apps_len = sizeof(apps) / sizeof(apps[0]);
 
@@ -90,6 +92,14 @@ void ui_tick() {
     zxosd.hidePopup();
     osd_handle(true); // reinit osd
   }
+}
+
+void ui_button(uint8_t x, uint8_t y, uint8_t width, const char *label, bool focused) {
+  zxosd.setColor(OSD::COLOR_BLACK, focused ? OSD::COLOR_YELLOW_I : OSD::COLOR_GREY);
+  zxosd.fill(x, y, x + width - 1, y, ' ');
+  uint8_t len = strlen(label);
+  zxosd.setPos(x + (len < width ? (width - len) / 2 : 0), y);
+  zxosd.print(label);
 }
 
 void print_time() {

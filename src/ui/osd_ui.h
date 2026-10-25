@@ -18,4 +18,6 @@ void ui_on_keyboard();
 void ui_popup_start(uint8_t i);
 void ui_tick();
 void print_time();
+// a button of the OSD apps: width chars, the label centered; yellow when focused, else grey
+void ui_button(uint8_t x, uint8_t y, uint8_t width, const char *label, bool focused);
 void on_time();

@@ -42,6 +42,8 @@ work without one, see [USB HID gamepads](docs/usb_gamepads.md).
 - **USB host.** Runs on the second RP2040 core over PIO-USB, hubs included. A USB printer
   driver (Epson LX-300+II) is in progress.
 - **Real-time clock**, set in the OSD Setup menu and passed to the core.
+- **Wi-Fi setup** of the ESP8266 in the OSD Setup menu (core browser): scan, password, join. The
+  module keeps the network and joins it on start; its CTS flow control is turned on.
 - **SD card as a USB drive.** The PC sees the SD card as a USB mass storage device, so the card
   can stay in the board.
 - **USB serial bridge.** The USB serial port of the board is wired to the UART of the core, and a
@@ -104,7 +106,7 @@ or the whole file is ignored.
 | Menu (Win) + Esc | Start + C | open / close the OSD of the running core |
 | Ctrl + Alt + Backspace | Start + X | restart the MCU and go back to the core browser |
 | arrows, Enter, Esc | D-pad and buttons | navigate the menus |
-| `S` | | Setup: clock, USB gamepad mapper |
+| `S` | | Setup: clock, Wi-Fi (core browser), USB gamepad mapper |
 | `A` (core OSD) | | About |
 | Delete / Backspace (core OSD) | | eject the disk image of the selected drive |
 | Space (graphical browser) | | switch to the text browser |
@@ -127,6 +129,8 @@ answered by the firmware:
 | `AT+KARABAS=list` | list the cores on the SD card with their builds |
 | `AT+KARABAS=boot` | restart into BOOTSEL mode, to update the firmware |
 | `AT+KARABAS=msc` | restart with the SD card as a USB drive |
+| `AT+KARABAS=esp` | core browser only: the bridge goes to the ESP8266, for its own AT commands |
+| `AT+KARABAS=uart` | back to the UART of the core |
 
 ## Building from source
 
