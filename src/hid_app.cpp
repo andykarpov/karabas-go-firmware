@@ -65,10 +65,8 @@ static hid_auto_map_t *auto_map_build(uint8_t const* desc, uint16_t len);
 static void auto_map_free(hid_auto_map_t *m);
 static void capture_feed(uint8_t instance, uint8_t report_id, uint8_t const* report, uint16_t len);
 
-// keyboard report is written by core1 (usb host) and read by core0 (osd, hotkeys)
-// a plain hardware spinlock (irqs off for an 8-byte copy): it never waits through FreeRTOS,
-// unlike pico mutexes, whose wakeups from irq context go through the FreeRTOS timer task
-static spin_lock_t *kbd_report_lock = spin_lock_init(spin_lock_claim_unused(true));
+// keyboard report is written by core1 (usb host) and read by core0 (osd, hotkeys),
+// under usb_host_lock()
 static hid_keyboard_report_t kbd_report_shared = {0};
 
 void hid_kbd_report_sync()
@@ -78,9 +76,9 @@ void hid_kbd_report_sync()
 
 void hid_kbd_report_get(hid_keyboard_report_t *report)
 {
-  uint32_t save = spin_lock_blocking(kbd_report_lock);
+  uint32_t save = spin_lock_blocking(usb_host_lock());
   *report = kbd_report_shared;
-  spin_unlock(kbd_report_lock, save);
+  spin_unlock(usb_host_lock(), save);
 }
 
 typedef struct {
@@ -252,9 +250,9 @@ static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_
     || (report->keycode[4] ^ prev_report.keycode[4])
     || (report->keycode[5] ^ prev_report.keycode[5]));
   if (change != 0) {
-    uint32_t save = spin_lock_blocking(kbd_report_lock);
+    uint32_t save = spin_lock_blocking(usb_host_lock());
     kbd_report_shared = *report;
-    spin_unlock(kbd_report_lock, save);
+    spin_unlock(usb_host_lock(), save);
     spi_queue(CMD_USB_KBD, 0, report->modifier);
     for(uint8_t i=0; i<6; i++) {
       spi_queue(CMD_USB_KBD, i+1, report->keycode[i]);
@@ -381,8 +379,8 @@ static void auto_map_free(hid_auto_map_t *m)
 }
 
 // Raw reports of one pad for the OSD gamepad mapper. The pad is the first one whose report
-// changes after hid_capture_start(); a report hash per instance tells the change.
-static spin_lock_t *capture_lock = spin_lock_init(spin_lock_claim_unused(true));
+// changes after hid_capture_start(); a report hash per instance tells the change. Under
+// usb_host_lock().
 static bool capture_on = false;
 static uint8_t capture_instance;
 static uint32_t capture_hash[CFG_TUH_HID];
@@ -391,27 +389,27 @@ static hid_capture_t capture;
 
 void hid_capture_start()
 {
-  uint32_t save = spin_lock_blocking(capture_lock);
+  uint32_t save = spin_lock_blocking(usb_host_lock());
   capture_on = true;
   capture_instance = 0xff;
   memset(capture_hash_valid, 0, sizeof(capture_hash_valid));
   capture.seq = 0;
-  spin_unlock(capture_lock, save);
+  spin_unlock(usb_host_lock(), save);
 }
 
 void hid_capture_stop()
 {
-  uint32_t save = spin_lock_blocking(capture_lock);
+  uint32_t save = spin_lock_blocking(usb_host_lock());
   capture_on = false;
-  spin_unlock(capture_lock, save);
+  spin_unlock(usb_host_lock(), save);
 }
 
 bool hid_capture_get(hid_capture_t *out)
 {
-  uint32_t save = spin_lock_blocking(capture_lock);
+  uint32_t save = spin_lock_blocking(usb_host_lock());
   bool has = capture_on && capture.seq != 0;
   if (has) *out = capture;
-  spin_unlock(capture_lock, save);
+  spin_unlock(usb_host_lock(), save);
   return has;
 }
 
@@ -420,7 +418,7 @@ static void capture_feed(uint8_t instance, uint8_t report_id, uint8_t const* rep
   if (!capture_on) return; // a plain read: a report missed while it starts does not matter
   if (len > sizeof(capture.data)) len = sizeof(capture.data);
   uint32_t hash = kg_crc32_final(kg_crc32_update(KG_CRC32_INIT, report, len)) ^ report_id;
-  uint32_t save = spin_lock_blocking(capture_lock);
+  uint32_t save = spin_lock_blocking(usb_host_lock());
   if (capture_on && capture_instance == 0xff) {
     if (!capture_hash_valid[instance]) {
       capture_hash_valid[instance] = true;
@@ -437,7 +435,7 @@ static void capture_feed(uint8_t instance, uint8_t report_id, uint8_t const* rep
     memcpy(capture.data, report, len);
     capture.seq++;
   }
-  spin_unlock(capture_lock, save);
+  spin_unlock(usb_host_lock(), save);
 }
 
 // a joystick report goes through the driver ini of the device if there is one, otherwise
