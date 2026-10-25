@@ -3,8 +3,46 @@ name: Build
 on:
   push:
   pull_request:
+  # Manual run: builds the chosen branch and, on master, always releases.
+  workflow_dispatch:
 
 jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      ver: ${{ steps.ver.outputs.ver }}
+      release: ${{ steps.changes.outputs.release }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # Same date stamp as build*.sh. A second build in the same hour gets the
+      # run number appended, so its release tag does not collide.
+      - id: ver
+        run: |
+          ver=$(TZ=Europe/Berlin date +%y%m%d%H)
+          if git ls-remote --exit-code --tags origin "refs/tags/v$ver" >/dev/null; then
+            ver="${ver}_${{ github.run_number }}"
+          fi
+          echo "ver=$ver" >> "$GITHUB_OUTPUT"
+      # A push releases only if it changed what goes into the firmware.
+      - id: changes
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          release=false
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            release=true
+          elif [ "$GITHUB_EVENT_NAME" = push ]; then
+            if ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+              release=true
+            elif git diff --name-only "$BEFORE" "$GITHUB_SHA" -- \
+                src lib include patches apply_patches.py platformio.ini | grep -q .; then
+              release=true
+            fi
+          fi
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+
   test:
     runs-on: ubuntu-latest
     steps:
@@ -20,6 +58,7 @@ jobs:
       - run: pio test -e native
 
   firmware:
+    needs: version
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -37,8 +76,101 @@ jobs:
       - run: pip install platformio
       - run: pio run -e ${{ matrix.env }}
         env:
-          PLATFORMIO_BUILD_FLAGS: -DBUILD_VER=${{ github.run_number }}
+          PLATFORMIO_BUILD_FLAGS: -DBUILD_VER=${{ needs.version.outputs.ver }}
       - uses: actions/upload-artifact@v4
         with:
           name: firmware-${{ matrix.env }}
           path: .pio/build/${{ matrix.env }}/firmware.uf2
+
+  # A master build with firmware changes (or a manual run) that builds and
+  # passes the tests becomes a release and goes to the karabas-go and
+  # karabas-mini repos, as build*.sh did by hand.
+  release:
+    if: github.ref == 'refs/heads/master' && needs.version.outputs.release == 'true'
+    needs: [version, test, firmware]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency: release
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Collect files
+        run: |
+          mkdir dist
+          cp artifacts/firmware-go/firmware.uf2 dist/karabas-go-firmware.uf2
+          cp artifacts/firmware-mini/firmware.uf2 dist/karabas-mini-firmware.uf2
+          cp artifacts/firmware-minig/firmware.uf2 dist/karabas-minig-firmware.uf2
+          cp src/karabas.ini dist/karabas.ini
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VER: ${{ needs.version.outputs.ver }}
+        run: |
+          gh release create "v$VER" dist/* \
+            --target "$GITHUB_SHA" \
+            --title "Firmware build $VER" \
+            --generate-notes \
+            --latest
+      - name: Release message
+        id: msg
+        run: |
+          # Squash merge: the subject is the PR title. Merge commit: the PR
+          # title is the first line of the body.
+          subj=$(git log -1 --format=%s)
+          case "$subj" in
+            "Merge pull request"*) subj=$(git log -1 --format=%b | sed -n '/./{p;q}') ;;
+          esac
+          subj=$(echo "$subj" | sed 's/ *(#[0-9]*)$//')
+          echo "msg=Firmware build ${{ needs.version.outputs.ver }}: $subj" >> "$GITHUB_OUTPUT"
+      - name: Check the sibling repos token
+        id: token
+        env:
+          TOKEN: ${{ secrets.SIBLING_REPOS_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::warning::SIBLING_REPOS_TOKEN is not set, karabas-go and karabas-mini are not updated"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.token.outputs.ok == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: andykarpov/karabas-go
+          token: ${{ secrets.SIBLING_REPOS_TOKEN }}
+          path: sib/karabas-go
+      - if: steps.token.outputs.ok == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: andykarpov/karabas-mini
+          token: ${{ secrets.SIBLING_REPOS_TOKEN }}
+          path: sib/karabas-mini
+      - name: Update karabas-go and karabas-mini
+        if: steps.token.outputs.ok == 'true'
+        env:
+          MSG: ${{ steps.msg.outputs.msg }}
+        run: |
+          go=sib/karabas-go
+          mini=sib/karabas-mini
+          cp dist/karabas-go-firmware.uf2 $go/firmware/firmware.uf2
+          cp src/karabas.ini $go/firmware/karabas.ini
+          cp src/karabas.ini $go/cores/karabas.ini
+          cp dist/karabas-mini-firmware.uf2 $mini/firmware/firmware.uf2
+          cp dist/karabas-minig-firmware.uf2 $mini/firmware/firmware_g.uf2
+          cp src/karabas.ini $mini/firmware/karabas.ini
+          cp src/karabas.ini $mini/cores/karabas.ini
+          for repo in $go $mini; do
+            git -C $repo config user.name "github-actions[bot]"
+            git -C $repo config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git -C $repo add firmware cores
+            if git -C $repo diff --cached --quiet; then
+              echo "$repo: nothing to commit"
+              continue
+            fi
+            git -C $repo commit -m "$MSG"
+            git -C $repo pull --rebase
+            git -C $repo push
+          done
