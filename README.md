@@ -4,6 +4,10 @@
 
 RP2040 firmware for Karabas Go.
 
+**[USB gamepad mapper](https://andykarpov.github.io/karabas-go-firmware/hidmapper/)**: map a USB HID gamepad in the browser and download its
+driver ini for `/drivers/` on the SD card. Most pads also work without one, see
+[USB HID gamepads](docs/usb_gamepads.md).
+
 ## How to build
 
 To build the firmware you have to install a VS Code + PlatformIO and all required dependencies.

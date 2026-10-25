@@ -1,0 +1,60 @@
+name: HID mapper
+
+# Tests and builds tools/hidmapper; on master publishes it to GitHub Pages:
+# https://andykarpov.github.io/karabas-go-firmware/hidmapper/
+on:
+  push:
+    paths:
+      - tools/hidmapper/**
+      - .github/workflows/hidmapper.yml
+  pull_request:
+    paths:
+      - tools/hidmapper/**
+      - .github/workflows/hidmapper.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hidmapper-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools/hidmapper
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: tools/hidmapper/package-lock.json
+      - run: npm ci
+      - run: npx vitest run
+      - run: npm run build
+      # the site: the mapper under hidmapper/, the root redirects to it
+      - run: |
+          mkdir -p ../../_site/hidmapper
+          cp -r dist/. ../../_site/hidmapper/
+          printf '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=hidmapper/"><a href="hidmapper/">HID gamepad mapper</a>\n' > ../../_site/index.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}hidmapper/
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

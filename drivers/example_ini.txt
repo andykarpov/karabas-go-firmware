@@ -63,7 +63,8 @@ z = 6,1,1
 ; 3. press a button, see which byte changed to which value
 ; 4. fill the ini file
 ; 5. profit :)
-; Or use the hidmapper: https://karabas.uk/hidmapper/
+; Or use the hidmapper:
+; https://andykarpov.github.io/karabas-go-firmware/hidmapper/
 ;
 
 ; PS: WARNING! comments are not possible, remove all of them from your ini.
