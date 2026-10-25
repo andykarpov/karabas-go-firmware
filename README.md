@@ -109,10 +109,10 @@ changed keys and keeps the rest of the file.
 | Ctrl + Alt + Backspace | Start + X | restart the MCU and go back to the core browser |
 | arrows, Enter, Esc | D-pad and buttons | navigate the menus |
 | `S` | | Setup: clock, Wi-Fi and Settings (core browser), USB gamepad mapper; in the graphic browser, the graphic setup (settings, video mode, color themes) |
-| `G` | | Core browser: back to the graphic menu (also when it is off in `karabas.ini`) |
 | `A` (core OSD) | | About |
 | Delete / Backspace (core OSD) | | eject the disk image of the selected drive |
 | Space (graphical browser) | | switch to the text browser |
+| `G` (text browser) | | switch to the graphical browser, also when it is off in `karabas.ini` |
 
 Cores can define their own OSD hotkeys.
 
