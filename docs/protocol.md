@@ -253,6 +253,60 @@ At core start the firmware sends all RTC registers; then every 500 ms it sends t
 - **ZX Evolution:** MC146818A registers, always BCD.
 - **MSM6242B** (`rtc_mode` 3, the Amiga clock at $DC0000): registers 0-12, one BCD digit each: S1 S10 MI1 MI10 H1 H10 D1 D10 MO1 MO10 Y1 Y10 W (year mod 100, W = 0 for Sunday), 24 h. The control registers D, E, F are in the core. The core sends the digits the CPU writes; the firmware sets the clock chip 100 ms after the last of them (the CPU writes the time a digit at a time) and does not send the time in between.
 
+### USB printer: data and status only
+
+| Direction | Frame (hex) | Meaning |
+|---|---|---|
+| FPGA -> MCU | `13 00 xx` | One raw printer byte |
+| FPGA -> MCU | `14 00 00` | Optional status request; enables updates |
+| MCU -> FPGA | `14 00 ss` | Printer status only |
+
+`ss` is `80` (BUSY bit 7 set) or `00`; bits 6..0 are zero. There are no
+per-byte acknowledgements or SPI reset commands. Nonzero addresses are ignored.
+BUSY means disconnected, unknown/not-ready USB status, service error/reset,
+low queue capacity (32 or fewer free bytes), or a deferred DATA byte. The queue
+remains 2048 bytes; the reserve absorbs SPI traffic already in transit. FPGA
+initializes BUSY=1. BUSY clears automatically when capacity/readiness returns.
+
+DATA is enqueued immediately in the APP handler. Consecutive bytes do not need
+acknowledgement. MCU publishes changed status from its APP loop, and answers
+explicit status requests. A status frame never confirms receipt of a byte.
+The core enables updates with a status request or its first DATA frame; old cores
+receive no unsolicited printer traffic. A known status is required before BUSY=0,
+including after connection with paper absent. USB status is polled once per second.
+
+FPGA must account for SPI FIFO and status propagation latency when limiting Z80
+writes: cached BUSY=0 is not a reservation of queue space. One byte arriving at a
+full queue is retained in a separate protocol latch and enqueued when space returns,
+before subsequent bytes. Any further overrun is counted as rejected; it does not
+latch BUSY permanently. A session change discards the deferred byte. The 32-byte
+reserve is not a guarantee for arbitrarily deep FPGA FIFOs. The transport has no
+end-to-end delivery guarantee if FPGA overruns the queue or loses SPI frames.
+
+Core loading clears link state and requests service reset if queued data or a
+service fault remains. Explicit recovery is available through the local
+`printer_reset()` API, not an SPI command. Session-checked enqueue prevents data
+from crossing a disconnect/reset race. Already delivered bytes cannot be retracted.
+
+### Printer diagnostic snapshot (`15`)
+
+Historical debugging extension: removed from the GO FPGA after the SPI fix
+passed repeated hardware printing tests. Current GO HDL ignores `15` and does
+not contain the printer counters or CRC logic. The format below documents the
+older diagnostic builds; RP2040 diagnostic support remains available for those.
+
+MCU requests `15 00 tag`. Matching GO HDL replies with `15 80 tag`, then
+28 frames `15 index byte` (index `00..1B`), then `15 81 tag`.
+The first 24 bytes are six little-endian uint32 values: Z80 OUT count, Z80 data
+CRC, rejected OUT count, accepted DATA FIFO count, completed SPI DATA count,
+SPI DATA CRC. The last four bytes are the CRC of the preceding 24 bytes.
+All CRCs use CRC-32/ISO-HDLC (initial/final XOR FFFFFFFF, reflected EDB88320).
+The snapshot freezes at request reception. Replies have lowest queue priority;
+a request while a snapshot is being enqueued is ignored. Missing, reordered or
+corrupt replies are discarded; a later diagnostic request may retry with a new
+tag. Printer DATA is never retried by this command. Commands `13`/`14` are unchanged.
+See [hardware diagnostics](usb_printer.md#fpga--spi-loss-localisation).
+
 ## 7. Capabilities and burst transfers
 
 `CMD_CAPS` (`F7 00 01`) asks the core what it supports. The firmware then polls with up to 16 NOP frames, and sends the query and the polls again until the core answers or 100 ms have passed. A core that supports bursts answers `F7 caps max_mhz` in a reply frame:

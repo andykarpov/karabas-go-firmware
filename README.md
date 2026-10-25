@@ -15,6 +15,8 @@ To upload the firmware you have 2 standard choices:
 
 ## Documentation
 
+- [USB XInput controllers / 8BitDo M30 2.4G](docs/xinput.md).
+- [USB Printer Host / Epson LX-300+II](docs/usb_printer.md) (driver and 2048-byte queue; FPGA integration pending).
 - [MCU ↔ FPGA protocol](docs/protocol.md) ([по-русски](docs/protocol.ru.md)) — SPI frames, all commands, load sequences.
 - [Burst transfers](docs/burst_protocol.md) — the fast ROM / file transfer mode.
 - [LED matrix add-on](MATRIX.md).

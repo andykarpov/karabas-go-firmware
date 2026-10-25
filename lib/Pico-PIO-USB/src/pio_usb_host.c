@@ -15,6 +15,7 @@
 
 #include "pio_usb.h"
 #include "pio_usb_ll.h"
+#include "pio_usb_host_out.h"
 #include "usb_crc.h"
 #include "usb_rx.pio.h"
 #include "usb_tx.pio.h"
@@ -540,15 +541,7 @@ static int __no_inline_not_in_flash_func(usb_out_transaction)(pio_port_t *pp,
 
   uint8_t const receive_token = pp->usb_rx_buffer[1];
 
-  if (receive_token == USB_PID_ACK) {
-    pio_usb_ll_transfer_continue(ep, xact_len);
-  } else if (receive_token == USB_PID_NAK) {
-    // NAK try again next frame
-  } else if (receive_token == USB_PID_STALL) {
-    pio_usb_ll_transfer_complete(ep, PIO_USB_INTS_ENDPOINT_STALLED_BITS);
-  } else {
-    pio_usb_ll_transfer_complete(ep, PIO_USB_INTS_ENDPOINT_ERROR_BITS);
-  }
+  pio_usb_host_out_result(ep, receive_token, xact_len);
 
   pio_sm_set_enabled(pp->pio_usb_rx, pp->sm_rx, false);
   pp->usb_rx_buffer[0] = 0;

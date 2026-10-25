@@ -67,6 +67,7 @@ typedef struct {
   volatile uint8_t interval;
   volatile uint8_t interval_counter;
   volatile uint8_t data_id; // data0 or data1
+  volatile uint8_t out_errors; // consecutive invalid bulk OUT handshakes
 
   volatile bool stalled;
   volatile bool has_transfer;
