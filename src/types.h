@@ -128,5 +128,6 @@ enum osd_state_e {
 	state_pad_mapper,
 	state_rtc,
 	state_wifi,
-	state_settings
+	state_settings,
+	state_ft_setup
 };

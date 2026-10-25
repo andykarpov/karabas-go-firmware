@@ -60,6 +60,9 @@ extern "C" void ft812_bus_unlock(void);
 #define BGCOLOR()                    0xFFFFFF09                                                                                                                             ///< Set background color
 #define FGCOLOR()                    0xFFFFFF0A                                                                                                                             ///< Set foreground color
 #define PROGRESSBAR()                0xFFFFFF0F                                                                                                                             ///< Draw progressbar
+#define SLIDER()                     0xFFFFFF10                                                                                                                             ///< Draw slider
+#define TOGGLE()                     0xFFFFFF12                                                                                                                             ///< Draw toggle
+#define COLOR_A(a)                   ((0x10L << 24) | ((a)&0xFF))                                                                                                           ///< Alpha of the next primitives
 #define SCROLLBAR()                  0xFFFFFF11                                                                                                                             ///< Draw scrollbar
 #define LOADIDENTITY()               0xFFFFFF26                                                                                                                             ///< Set the current matrix to identity
 #define SETMATRIX()                  0xFFFFFF2A                                                                                                                             ///< Write the current matrix as a bitmap transform
@@ -455,7 +458,12 @@ void FT812::drawBitmap(const uint32_t offset, const uint16_t x, const uint16_t y
     intermediateCmd((uint32_t)65536 * -(height / 2));
     intermediateCmd(SETMATRIX());
     intermediateCmd(BLEND_FUNC(1, 1));
-    endCmd(VERTEX2II(x, y, 0, 0));
+    intermediateCmd(VERTEX2II(x, y, 0, 0));
+    intermediateCmd(END());
+    // back to the defaults, or the text and widgets drawn after it come out scaled and blended
+    intermediateCmd(LOADIDENTITY());
+    intermediateCmd(SETMATRIX());
+    endCmd(BLEND_FUNC(2, 4)); // SRC_ALPHA, ONE_MINUS_SRC_ALPHA
 }
 
 void FT812::overlayBitmap(const uint32_t offset, const uint16_t x, const uint16_t y, const uint16_t width, const uint16_t height, const uint8_t scale, const uint8_t rot) {
@@ -478,7 +486,12 @@ void FT812::overlayBitmap(const uint32_t offset, const uint16_t x, const uint16_
     intermediateCmd((uint32_t)65536 * -(height / 2));
     intermediateCmd(SETMATRIX());
     intermediateCmd(BLEND_FUNC(1, 1));
-    endCmd(VERTEX2II(x, y, 0, 0));
+    intermediateCmd(VERTEX2II(x, y, 0, 0));
+    intermediateCmd(END());
+    // back to the defaults, or the text and widgets drawn after it come out scaled and blended
+    intermediateCmd(LOADIDENTITY());
+    intermediateCmd(SETMATRIX());
+    endCmd(BLEND_FUNC(2, 4)); // SRC_ALPHA, ONE_MINUS_SRC_ALPHA
 }
 
 void FT812::drawText(const int16_t x, const int16_t y, const uint8_t font, const uint32_t color, const uint16_t options, const char text[]) {
@@ -553,6 +566,44 @@ void FT812::drawScrollbar(const int16_t x, const int16_t y, const int16_t width,
     intermediateCmd(width | ((uint32_t)height << 16));
     intermediateCmd(options | ((uint32_t)value << 16));
     endCmd(size | ((uint32_t)range << 16));
+}
+
+void FT812::drawRectAlpha(const int16_t x, const int16_t y, const uint16_t width, const uint16_t height, const uint8_t cornerRadius, const uint32_t color, const uint8_t alpha) {
+    startCmd(COLOR(color));
+    intermediateCmd(COLOR_A(alpha));
+    intermediateCmd(LINE_WIDTH(cornerRadius * 16));
+    intermediateCmd(BEGIN(RECTS));
+    intermediateCmd(VERTEX2F(x * 16, y * 16));
+    intermediateCmd(VERTEX2F((x + width) * 16, (y + height) * 16));
+    intermediateCmd(END());
+    endCmd(COLOR_A(255));
+}
+
+void FT812::drawToggle(const int16_t x, const int16_t y, const int16_t width, const uint8_t font, const uint32_t textColor, const uint32_t knobColor, const uint32_t barColor, const uint16_t options, const bool on, const char text[]) {
+    uint8_t fontHandle = initBitmapHandleForFont(font);
+    startCmd(COLOR(textColor));
+    intermediateCmd(FGCOLOR());
+    intermediateCmd(knobColor);
+    intermediateCmd(BGCOLOR());
+    intermediateCmd(barColor);
+    intermediateCmd(TOGGLE());
+    intermediateCmd(x | ((uint32_t)y << 16));
+    intermediateCmd(width | ((uint32_t)fontHandle << 16));
+    intermediateCmd(options | ((uint32_t)(on ? 65535 : 0) << 16));
+    sendText(text);
+}
+
+void FT812::drawSlider(const int16_t x, const int16_t y, const int16_t width, const int16_t height, const uint32_t fillColor, const uint32_t knobColor, const uint32_t barColor, const uint16_t options, const uint16_t value, const uint16_t range) {
+    startCmd(COLOR(fillColor));
+    intermediateCmd(FGCOLOR());
+    intermediateCmd(knobColor);
+    intermediateCmd(BGCOLOR());
+    intermediateCmd(barColor);
+    intermediateCmd(SLIDER());
+    intermediateCmd(x | ((uint32_t)y << 16));
+    intermediateCmd(width | ((uint32_t)height << 16));
+    intermediateCmd(options | ((uint32_t)value << 16));
+    endCmd(range);
 }
 
 void FT812::drawProgressbar(const int16_t x, const int16_t y, const int16_t width, const int16_t height, const uint32_t foregroundColor, const uint32_t backgroundColor, const uint16_t options, const uint16_t value, const uint16_t range) {

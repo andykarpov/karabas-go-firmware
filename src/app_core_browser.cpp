@@ -86,7 +86,7 @@ void app_core_browser_menu(uint8_t vpos) {
   zxosd.update();
 }
 
-void app_core_browser_ft_overlay() {
+void app_core_browser_ft_load() {
   ft.setSound(FT81x_SOUND_COWBELL, 60);
   ft.loadImage(LOGO_OFFSET, LOGO_SIZE, logoData, false); // karabas logo, starts from 0 in GRAM
   ft.loadImage(BG_OFFSET, BG_SIZE, bgData, false); // karabas bg, starts after logo in GRAM
@@ -94,29 +94,85 @@ void app_core_browser_ft_overlay() {
   ft.writeGRAM(KEY2_OFFSET, KEY2_SIZE, key2Data); // pcm sound, starts from after logo and bg in GRAM
   ft.writeGRAM(KEY3_OFFSET, KEY3_SIZE, key3Data); // pcm sound, starts from after logo and bg in GRAM
   ft.writeGRAM(KEY4_OFFSET, KEY4_SIZE, key4Data); // pcm sound, starts from after logo and bg in GRAM
+}
+
+void app_core_browser_ft_overlay() {
+  app_core_browser_ft_load();
   app_core_browser_ft_menu(0);
+}
+
+void app_core_browser_ft_background(const setup_t &t) {
+  ft.clear(t.color_bg);
+  ft.drawGradient(ft.width()/2, 0, t.color_gradient, ft.width()/2, ft.height()-ft.height()/4-1, t.color_bg);
+}
+
+void app_core_browser_ft_decor(const setup_t &t, bool show_char) {
+  if (t.ft_time) {
+    char time[9];
+    sprintf(time, "%02d:%02d:%02d", zxrtc.getHour(), zxrtc.getMinute(), zxrtc.getSecond());
+    ft.drawText(ft.width()-88, 30, 30, t.color_text, FT81x_OPT_CENTER, time);
+  }
+  if (t.ft_date) {
+    char date[9];
+    sprintf(date, "%02d/%02d/%02d", zxrtc.getDay(), zxrtc.getMonth(), zxrtc.getYear() % 100);
+    ft.drawText(ft.width()-88, 60, 30, t.color_text, FT81x_OPT_CENTER, date);
+  }
+  ft.drawBitmap(0, 8, 8, LOGO_WIDTH, LOGO_HEIGHT, 4, 0);  // logo scaled 4x
+  if (t.ft_char && show_char) {
+    ft.overlayBitmap(LOGO_BITMAP_SIZE, ft.width()-BG_WIDTH-8, ft.height()-BG_HEIGHT-8, BG_WIDTH, BG_HEIGHT, 1, 0); // bg image
+  }
+}
+
+void app_core_browser_ft_sound(uint8_t sound, bool wait) {
+  uint32_t key_size, key_samplerate, key_duration, key_offset;
+  switch (sound) {
+    case 2:
+      key_size = KEY2_SIZE;
+      key_samplerate = KEY2_SAMPLERATE;
+      key_duration = KEY2_DURATION;
+      key_offset = KEY2_OFFSET;
+      break;
+    case 3:
+      key_size = KEY3_SIZE;
+      key_samplerate = KEY3_SAMPLERATE;
+      key_duration = KEY3_DURATION;
+      key_offset = KEY3_OFFSET;
+      break;
+    case 4:
+      key_size = KEY4_SIZE;
+      key_samplerate = KEY4_SAMPLERATE;
+      key_duration = KEY4_DURATION;
+      key_offset = KEY4_OFFSET;
+      break;
+    default:
+      key_size = KEY1_SIZE;
+      key_samplerate = KEY1_SAMPLERATE;
+      key_duration = KEY1_DURATION;
+      key_offset = KEY1_OFFSET;
+  }
+  ft.playAudio(key_offset, key_size, key_samplerate, FT81x_AUDIO_FORMAT_ULAW, false);
+  if (wait) {
+    delay(key_duration);
+    ft.stopSound();
+  }
 }
 
 void app_core_browser_ft_menu(uint8_t play_sounds) {
 
   ft.beginDisplayList();
 
-  uint32_t color_black = hw_setup.color_bg;
-  uint32_t color_gradient = hw_setup.color_gradient;
   uint32_t color_button = hw_setup.color_button;
   uint32_t color_button_active = hw_setup.color_active;
   uint32_t color_text = hw_setup.color_text;
   uint32_t color_text_active = hw_setup.color_text_active;
   uint32_t color_copyright = hw_setup.color_copyright;
 
-  ft.clear(color_black);
-  ft.drawGradient(ft.width()/2, 0, color_gradient, ft.width()/2, ft.height()-ft.height()/4-1, color_black);
+  app_core_browser_ft_background(hw_setup);
 
   core_pages = ceil((float)cores_len / ft_core_page_size);
   core_page = ceil((float)(core_sel+1)/ft_core_page_size);
   uint8_t core_from = (core_page-1)*ft_core_page_size;
   uint8_t core_to = core_page*ft_core_page_size > cores_len ? cores_len : core_page*ft_core_page_size;
-  uint8_t core_fill = core_page*ft_core_page_size;
   uint8_t pos = 0;
   uint8_t offset = 64 + 16 + 8;
   for(uint8_t i=core_from; i < core_to; i++) {
@@ -153,60 +209,13 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
     ft.drawText(ft.width()/2, ft.height()-20, 27, color_copyright, FT81x_OPT_CENTER, b);
   }
 
-  if (hw_setup.ft_time) {
-    char time[9];
-    sprintf(time, "%02d:%02d:%02d\0", zxrtc.getHour(), zxrtc.getMinute(), zxrtc.getSecond());
-    ft.drawText(ft.width()-88, 30, 30, color_text, FT81x_OPT_CENTER, time);
-  }
-  if (hw_setup.ft_date) {
-    char date[9];
-    sprintf(date, "%02d/%02d/%02d\0", zxrtc.getDay(), zxrtc.getMonth(), zxrtc.getYear() % 100);
-    ft.drawText(ft.width()-88, 60, 30, color_text, FT81x_OPT_CENTER, date);
-  }
-
   if (play_sounds == 1 && hw_setup.ft_click) {
       ft.playSound();
   } else if (play_sounds == 2 && hw_setup.ft_sound > 0) {
-    uint32_t key_size, key_samplerate, key_duration, key_offset;
-    switch (hw_setup.ft_sound) {
-      case 1:
-        key_size = KEY1_SIZE;
-        key_samplerate = KEY1_SAMPLERATE;
-        key_duration = KEY1_DURATION;
-        key_offset = KEY1_OFFSET;
-        break;
-      case 2:
-        key_size = KEY2_SIZE;
-        key_samplerate = KEY2_SAMPLERATE;
-        key_duration = KEY2_DURATION;
-        key_offset = KEY2_OFFSET;
-        break;
-      case 3:
-        key_size = KEY3_SIZE;
-        key_samplerate = KEY3_SAMPLERATE;
-        key_duration = KEY3_DURATION;
-        key_offset = KEY3_OFFSET;
-        break;
-      case 4:
-        key_size = KEY4_SIZE;
-        key_samplerate = KEY4_SAMPLERATE;
-        key_duration = KEY4_DURATION;
-        key_offset = KEY4_OFFSET;
-        break;
-      default:
-        key_size = KEY1_SIZE;
-        key_samplerate = KEY1_SAMPLERATE;
-        key_duration = KEY1_DURATION;
-    }
-    ft.playAudio(key_offset, key_size, key_samplerate, FT81x_AUDIO_FORMAT_ULAW, false);
-    delay(key_duration);
-    ft.stopSound();
+    app_core_browser_ft_sound(hw_setup.ft_sound, true);
   }
 
-  ft.drawBitmap(0, 8, 8, LOGO_WIDTH, LOGO_HEIGHT, 4, 0);  // logo scaled 4x
-  if (hw_setup.ft_char) {
-    ft.overlayBitmap(LOGO_BITMAP_SIZE, ft.width()-BG_WIDTH-8, ft.height()-BG_HEIGHT-8, BG_WIDTH, BG_HEIGHT, 1, 0); // bg image
-  }
+  app_core_browser_ft_decor(hw_setup, true);
 
   ft.swapScreen();
 }
@@ -345,14 +354,15 @@ void app_core_browser_on_keyboard() {
           app_core_browser_ft_overlay();
         }
 
-        // enter setup mode
+        // enter setup mode: the graphic one on the FT812, else the classic one
         if (usb_keyboard_report.keycode[0] == KEY_S) {
           autoload_enabled = false;
-          has_ft = false;
-          ft.vga(false);
-          ft.spi(false);
           osd_return_state = state_core_browser;
-          osd_state = state_setup;
+          if (hw_setup.ft_enabled && has_ft) {
+            osd_state = state_ft_setup;
+          } else {
+            osd_state = state_setup;
+          }
         }
 
         // redraw core browser on keypress

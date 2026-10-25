@@ -8,6 +8,7 @@
 #include "app_rtc.h"
 #include "app_wifi.h"
 #include "app_settings.h"
+#include "app_ft_setup.h"
 
 // OSD state and the app screens (one per osd_state)
 
@@ -49,6 +50,7 @@ static const app_t apps[] = {
   { app_rtc_overlay,                                   app_rtc_on_keyboard },          // state_rtc
   { app_wifi_overlay,                                  app_wifi_on_keyboard,           app_wifi_tick }, // state_wifi
   { app_settings_overlay,                              app_settings_on_keyboard },     // state_settings
+  { app_ft_setup_overlay,                              app_ft_setup_on_keyboard,       app_ft_setup_tick }, // state_ft_setup
 };
 static const uint8_t apps_len = sizeof(apps) / sizeof(apps[0]);
 
@@ -136,7 +138,11 @@ void on_time() {
   app_core_browser_on_time();
 
   if (core.type == CORE_TYPE_BOOT && has_ft == true && is_osd == true) {
-    // redraw core browser
-    app_core_browser_ft_menu(0);
+    // redraw the graphic menu (the clock)
+    if (osd_state == state_ft_setup) {
+      app_ft_setup_draw();
+    } else {
+      app_core_browser_ft_menu(0);
+    }
   }
 }

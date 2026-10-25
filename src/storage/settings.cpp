@@ -144,8 +144,14 @@ static void add_uint(kg_ini_item_t *items, uint8_t &count, const char *section, 
   if (v != old) add_item(items, count, section, key, buf);
 }
 
+static void add_color(kg_ini_item_t *items, uint8_t &count, const char *key, uint32_t v, uint32_t old) {
+  char buf[8];
+  snprintf(buf, sizeof(buf), "%06lx", (unsigned long) (v & 0xffffff));
+  if (v != old) add_item(items, count, "ft812", key, buf);
+}
+
 bool save_setup(const setup_t &s) {
-  kg_ini_item_t items[16];
+  kg_ini_item_t items[24];
   uint8_t count = 0;
   const setup_t &o = hw_setup;
   add_bool(items, count, "setup", "debug", s.debug_enabled, o.debug_enabled);
@@ -154,6 +160,19 @@ bool save_setup(const setup_t &s) {
   add_bool(items, count, "setup", "dvi_only", s.dvi_only, o.dvi_only);
   add_bool(items, count, "ft812", "enabled", s.ft_enabled, o.ft_enabled);
   add_uint(items, count, "ft812", "video_mode", s.ft_video_mode, o.ft_video_mode);
+  add_uint(items, count, "ft812", "sound", s.ft_sound, o.ft_sound);
+  add_bool(items, count, "ft812", "click", s.ft_click, o.ft_click);
+  add_bool(items, count, "ft812", "time", s.ft_time, o.ft_time);
+  add_bool(items, count, "ft812", "date", s.ft_date, o.ft_date);
+  add_bool(items, count, "ft812", "char", s.ft_char, o.ft_char);
+  add_color(items, count, "color_bg", s.color_bg, o.color_bg);
+  add_color(items, count, "color_gradient", s.color_gradient, o.color_gradient);
+  add_color(items, count, "color_button", s.color_button, o.color_button);
+  add_color(items, count, "color_active", s.color_active, o.color_active);
+  add_color(items, count, "color_text", s.color_text, o.color_text);
+  add_color(items, count, "color_text_active", s.color_text_active, o.color_text_active);
+  add_color(items, count, "color_copyright", s.color_copyright, o.color_copyright);
+  add_bool(items, count, "ft812", "3d_buttons", s.ft_3d_buttons, o.ft_3d_buttons);
   add_bool(items, count, "autoload", "enabled", s.autoload_enabled, o.autoload_enabled);
   add_uint(items, count, "autoload", "timeout", s.autoload_timeout, o.autoload_timeout);
   if (strcmp(s.autoload_core, o.autoload_core) != 0) add_item(items, count, "autoload", "core", s.autoload_core);
