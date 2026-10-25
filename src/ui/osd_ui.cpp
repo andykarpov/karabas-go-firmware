@@ -4,6 +4,7 @@
 #include "app_file_loader.h"
 #include "app_setup.h"
 #include "app_about.h"
+#include "app_pad_mapper.h"
 
 // OSD state and the app screens (one per osd_state)
 
@@ -23,6 +24,7 @@ static uint8_t osd_prev_state = state_main;
 typedef struct {
   void (*overlay)();
   void (*on_keyboard)();
+  void (*tick)(); // optional, every loop while the app owns the OSD
 } app_t;
 
 static void app_core_browser_show() {
@@ -40,6 +42,7 @@ static const app_t apps[] = {
   { app_about_overlay,                                 app_about_on_keyboard },        // state_about
   { app_core_browser_show,                             app_core_browser_on_keyboard }, // state_core_browser
   { []() { app_file_loader_overlay(true, false); },   app_file_loader_on_keyboard },  // state_file_loader
+  { app_pad_mapper_overlay,                            app_pad_mapper_on_keyboard,     app_pad_mapper_tick }, // state_pad_mapper
 };
 static const uint8_t apps_len = sizeof(apps) / sizeof(apps[0]);
 
@@ -68,6 +71,10 @@ void ui_popup_start(uint8_t i) {
 }
 
 void ui_tick() {
+  if (is_osd && osd_state < apps_len && apps[osd_state].tick) {
+    apps[osd_state].tick();
+  }
+
   // set is_osd off after 200ms of real switching off 
   // to avoid esc keypress passes to the host
   if (is_osd_hiding && hide_timer.elapsed() >= 200) {

@@ -5,6 +5,7 @@
 #include "hid_driver.h"
 #include "hid_joy_map.h"
 #include "hid_auto_map.h"
+#include "crc32.h"
 #include "input/usb_joy.h"
 #include "main.h"
 #include "host/usbh.h"
@@ -26,6 +27,7 @@ static struct
   uint16_t vid;
   uint16_t pid;
   const hid_joy_config_t *driver; // drivers/*.ini of the device
+  uint32_t driver_gen; // hid_drivers_gen when driver was looked up
   hid_auto_map_t *auto_map; // default map from the report descriptor, for pads without a driver
 } hid_info[CFG_TUH_HID];
 
@@ -61,6 +63,7 @@ static void dump_hid_report(uint8_t instance, uint8_t const* report, uint16_t le
 static void dump_hid_descriptor(uint8_t instance, uint8_t const* desc, uint16_t len);
 static hid_auto_map_t *auto_map_build(uint8_t const* desc, uint16_t len);
 static void auto_map_free(hid_auto_map_t *m);
+static void capture_feed(uint8_t instance, uint8_t report_id, uint8_t const* report, uint16_t len);
 
 // keyboard report is written by core1 (usb host) and read by core0 (osd, hotkeys)
 // a plain hardware spinlock (irqs off for an 8-byte copy): it never waits through FreeRTOS,
@@ -161,6 +164,7 @@ void tuh_hid_mount_cb (uint8_t dev_addr, uint8_t instance, uint8_t const* desc_r
     hid_info[instance].report_count = tuh_hid_parse_report_descriptor(hid_info[instance].report_info, MAX_REPORT, desc_report, desc_len);
     d_printf("HID has %u reports \r\n", hid_info[instance].report_count);
     dump_hid_descriptor(instance, desc_report, desc_len);
+    hid_info[instance].driver_gen = hid_drivers_gen;
     hid_info[instance].driver = hid_driver_find(vid, pid);
     if (hid_info[instance].driver) {
       d_printf("HID %04x:%04x uses its driver ini\r\n", vid, pid);
@@ -376,13 +380,76 @@ static void auto_map_free(hid_auto_map_t *m)
   if (m) auto_map_used[m - auto_maps] = false;
 }
 
+// Raw reports of one pad for the OSD gamepad mapper. The pad is the first one whose report
+// changes after hid_capture_start(); a report hash per instance tells the change.
+static spin_lock_t *capture_lock = spin_lock_init(spin_lock_claim_unused(true));
+static bool capture_on = false;
+static uint8_t capture_instance;
+static uint32_t capture_hash[CFG_TUH_HID];
+static bool capture_hash_valid[CFG_TUH_HID];
+static hid_capture_t capture;
+
+void hid_capture_start()
+{
+  uint32_t save = spin_lock_blocking(capture_lock);
+  capture_on = true;
+  capture_instance = 0xff;
+  memset(capture_hash_valid, 0, sizeof(capture_hash_valid));
+  capture.seq = 0;
+  spin_unlock(capture_lock, save);
+}
+
+void hid_capture_stop()
+{
+  uint32_t save = spin_lock_blocking(capture_lock);
+  capture_on = false;
+  spin_unlock(capture_lock, save);
+}
+
+bool hid_capture_get(hid_capture_t *out)
+{
+  uint32_t save = spin_lock_blocking(capture_lock);
+  bool has = capture_on && capture.seq != 0;
+  if (has) *out = capture;
+  spin_unlock(capture_lock, save);
+  return has;
+}
+
+static void capture_feed(uint8_t instance, uint8_t report_id, uint8_t const* report, uint16_t len)
+{
+  if (!capture_on) return; // a plain read: a report missed while it starts does not matter
+  if (len > sizeof(capture.data)) len = sizeof(capture.data);
+  uint32_t hash = kg_crc32_final(kg_crc32_update(KG_CRC32_INIT, report, len)) ^ report_id;
+  uint32_t save = spin_lock_blocking(capture_lock);
+  if (capture_on && capture_instance == 0xff) {
+    if (!capture_hash_valid[instance]) {
+      capture_hash_valid[instance] = true;
+      capture_hash[instance] = hash;
+    } else if (capture_hash[instance] != hash) {
+      capture_instance = instance;
+    }
+  }
+  if (capture_on && capture_instance == instance) {
+    capture.vid = hid_info[instance].vid;
+    capture.pid = hid_info[instance].pid;
+    capture.report_id = report_id;
+    capture.len = len;
+    memcpy(capture.data, report, len);
+    capture.seq++;
+  }
+  spin_unlock(capture_lock, save);
+}
+
 // a joystick report goes through the driver ini of the device if there is one, otherwise
 // through the default map built from its report descriptor
 static void process_joy_report(uint8_t dev_addr, uint8_t instance, uint8_t report_id, uint8_t const* report, uint16_t len)
 {
   dump_hid_report(instance, report, len);
-  if (!hid_info[instance].driver) {
-    // the drivers may have been loaded after the device was mounted
+  capture_feed(instance, report_id, report, len);
+  uint32_t gen = hid_drivers_gen;
+  if (hid_info[instance].driver_gen != gen) {
+    // the drivers were (re)loaded after the device was mounted
+    hid_info[instance].driver_gen = gen;
     hid_info[instance].driver = hid_driver_find(hid_info[instance].vid, hid_info[instance].pid);
   }
   const hid_joy_config_t *driver = hid_info[instance].driver;

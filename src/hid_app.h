@@ -13,6 +13,20 @@ void hid_kbd_report_sync();
 // copy the latest keyboard report received by core1 (any task, does not touch usb_keyboard_report)
 void hid_kbd_report_get(hid_keyboard_report_t *report);
 
+// Raw reports of one pad, for the OSD gamepad mapper (APP). After start, the pad whose report
+// changes first is followed; get returns its latest report (seq counts them).
+typedef struct {
+  uint16_t vid, pid;
+  uint8_t report_id; // 0: the pad has no report ids
+  uint16_t len;
+  uint8_t data[64];  // the report without the report id byte
+  uint32_t seq;
+} hid_capture_t;
+
+void hid_capture_start();
+void hid_capture_stop();
+bool hid_capture_get(hid_capture_t *out); // false until the pad is found
+
 #ifdef __cplusplus
 extern "C" {
 #endif
