@@ -1,4 +1,4 @@
-#include "xinput_app.h"
+#include "usb_joy.h"
 #include "main.h"
 #include "ps2kbd.h"
 #include "usb_hid_keys.h"
@@ -85,18 +85,11 @@ static void joy_poll(bool &changedL, bool &changedR) {
   uint16_t l, r;
   board_joy_read(l, r);
 
-  // merge 
-  if (joyUSB_len > 0) {
-    l = l | joyUSB[0];
-  }
-  if (joyUSB_len > 1) {
-    r = r | joyUSB[1];
-  }
-  // XInput pads use the ports following the existing HID joysticks.
-  uint16_t xinput[2];
-  xinput_joystick_snapshot(xinput);
-  if (joyUSB_len == 0) { l |= xinput[0]; r |= xinput[1]; }
-  else if (joyUSB_len == 1) { r |= xinput[0]; }
+  // merge the usb pads (HID and XInput share the two ports)
+  uint16_t usb[2];
+  usb_joy_snapshot(usb);
+  l |= usb[0];
+  r |= usb[1];
 
   joyL = l;
   joyR = r;

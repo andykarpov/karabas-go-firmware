@@ -48,7 +48,7 @@ The firmware runs on FreeRTOS only (`main.cpp` stops the build with `#error` oth
 
 **Modules** (`src/`):
 - `fpga/`: `link` (SPI protocol), `bitstream` (FPGA configuration), `core_loader` (core file header, OSD items, ROMs, `do_configure`).
-- `input/`: buttons, joysticks, the core 1 event queue and global hotkeys.
+- `input/`: buttons, joysticks, the core 1 event queue and global hotkeys. `usb_joy` holds the two USB joystick ports, shared by HID (`drivers/*.ini`) and XInput pads: a pad keeps the port it took when plugged in.
 - `ui/`: OSD state and the app table, plus the shared file list arrays.
 - `storage/`: SD card, `karabas.ini` settings and USB MSC.
   - The SD card can be FAT16, FAT32 or exFAT (`SdFs` / `FsFile`, `SDFAT_FILE_TYPE=3`). exFAT has no 8.3 names, so the file lists and the saved image names use the long names (`getName`, never `getSFN`). Files in a list are opened by id: use `sd_file_id()` / `sd_open_id()`, not `dirIndex()` / `open(dir, index)`. On exFAT the id is the dir index + 1, because the first file of a subdir has index 0 and 0 means no file.

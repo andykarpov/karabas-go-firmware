@@ -48,10 +48,6 @@ void halt(const char* msg);
 // hid_app.cpp / hid_driver.cpp
 extern hid_keyboard_report_t usb_keyboard_report;
 extern hid_mouse_report_t usb_mouse_report;
-extern uint16_t joyUSB[MAX_USB_JOYSTICKS];
-extern uint8_t joyUSB_len;
-extern hid_joy_config_t joy_drivers[MAX_JOY_DRIVERS];
-extern uint8_t joy_drivers_len;
 
 // ui/file_list.cpp
 extern file_list_sort_item_t *files;
