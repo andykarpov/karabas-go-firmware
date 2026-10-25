@@ -171,6 +171,13 @@ static void usb_host_setup() {
   pio_sm_unclaim(pio0, 0);
   for (uint i=0; i<4; i++) pio_sm_unclaim(pio1, i);
 
+  // PIO-USB claims a hardware spinlock for its alarm pool and panics if none is left
+  // (only 8 can be claimed, see usb_host_lock())
+  int free_locks[8], n_free = 0;
+  while (n_free < 8 && (free_locks[n_free] = spin_lock_claim_unused(false)) >= 0) n_free++;
+  for (int i = 0; i < n_free; i++) spin_lock_unclaim(free_locks[i]);
+  d_printf("USB host: %d hardware spinlocks free\r\n", n_free);
+
   tuh_configure(1, TUH_CFGID_RPI_PIO_USB_CONFIGURATION, &pio_cfg);
   tuh_init(1);
   if (!pio_usb_host_programs_loaded()) {
