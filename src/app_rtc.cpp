@@ -41,16 +41,11 @@ static void draw_field(uint8_t y, const char *label, const char *hint, const kg_
   zxosd.setPos(FIELD_X + f->len + 2, y); zxosd.print(hint);
 }
 
-static void draw_button(uint8_t x, const char *label, bool focused) {
-  zxosd.setColor(OSD::COLOR_BLACK, focused ? OSD::COLOR_YELLOW_I : OSD::COLOR_GREY);
-  zxosd.setPos(x, ROW_BUTTONS); zxosd.print(label);
-}
-
 static void draw() {
   draw_field(ROW_DATE, "Date", "DD.MM.YYYY", &date_field, focus == F_DATE);
   draw_field(ROW_TIME, "Time", "HH:MM", &time_field, focus == F_TIME);
-  draw_button(1, "[ Save ]", focus == F_SAVE);
-  draw_button(12, "[ Cancel ]", focus == F_CANCEL);
+  ui_button(1, ROW_BUTTONS, 10, "Save", focus == F_SAVE);
+  ui_button(12, ROW_BUTTONS, 10, "Cancel", focus == F_CANCEL);
   zxosd.setColor(OSD::COLOR_RED_I, OSD::COLOR_BLACK);
   zxosd.fill(0, ROW_ERROR, 31, ROW_ERROR, ' ');
   if (error) { zxosd.setPos(1, ROW_ERROR); zxosd.print(error); }

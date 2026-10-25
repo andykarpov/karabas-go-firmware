@@ -7,6 +7,8 @@
 //   list - the installed cores: "+KARABAS:<file>;<id>;<name>;<build>" lines, then OK
 //   boot - reboot into the RP2040 USB bootloader (BOOTSEL, firmware update)
 //   msc  - reboot with the SD card exposed as USB mass storage (core update)
+//   esp  - BOOT core only: the bridge goes to the ESP8266 uart (AT commands to the module)
+//   uart - back to the core UART (also when another core is loaded)
 
 static uint8_t uart_idx = 0;
 static uint8_t evo_rs232_dll = 0;
@@ -19,6 +21,7 @@ static char tx_buf[sizeof(at_parser.out)]; // bytes to forward to the core, one 
 static uint8_t tx_len = 0, tx_pos = 0;
 static ElapsedTimer at_hold_timer;         // held bytes go to the core when the host goes quiet
 #define AT_HOLD_TIMEOUT_MS 500
+static bool esp_mode = false;
 
 void serial_set_speed(uint8_t dll, uint8_t dlm) {
   uint32_t speed = 0;
@@ -101,6 +104,12 @@ static void at_command(const char *arg) {
   } else if (strcasecmp(arg, "msc") == 0) {
     Serial.print("OK\r\n"); Serial.flush(); delay(100);
     msc_reboot_to_msc();
+  } else if (strcasecmp(arg, "esp") == 0 && core.type == CORE_TYPE_BOOT) {
+    esp_mode = true;
+    Serial.print("OK\r\n");
+  } else if (strcasecmp(arg, "uart") == 0) {
+    esp_mode = false;
+    Serial.print("OK\r\n");
   } else {
     Serial.print("ERROR\r\n");
   }
@@ -111,8 +120,35 @@ void serial_bridge_begin() {
   Serial.begin(serial_speed);
 }
 
+// esp mode: host <-> ESP8266 uart, except while Setup Wi-Fi waits for a reply of the module
+static void esp_tick() {
+  if (esp_at_busy()) return;
+
+  uint8_t buf[64];
+  int n = 0;
+  while (n < (int) sizeof(buf) && esp_serial.available() > 0) buf[n++] = (uint8_t) esp_serial.read();
+  if (n > 0) Serial.write(buf, n);
+
+  while (Serial.available() > 0 && esp_serial.availableForWrite() > (int) sizeof(at_parser.out)) {
+    int c = Serial.read();
+    if (c == -1) return;
+    at_hold_timer.reset();
+    switch (kg_at_feed(&at_parser, (char) c)) {
+      case KG_AT_PASS: esp_serial.write((const uint8_t *) at_parser.out, at_parser.out_len); break;
+      case KG_AT_COMMAND: at_command(kg_at_arg(&at_parser)); return;
+      default: break;
+    }
+  }
+  if (at_parser.len > 0 && at_hold_timer.elapsed() >= AT_HOLD_TIMEOUT_MS && kg_at_flush(&at_parser) > 0) {
+    esp_serial.write((const uint8_t *) at_parser.out, at_parser.out_len);
+  }
+}
+
 // forward bytes received from the host to the core
 void serial_bridge_tick() {
+  if (esp_mode && core.type != CORE_TYPE_BOOT) esp_mode = false;
+  if (esp_mode) { esp_tick(); return; }
+
   // receive at least on the serial_speed
   unsigned long uart_rx_delay = 30 * 1e6 / serial_speed;
   if (micros() - uart_rx_last < uart_rx_delay) return;

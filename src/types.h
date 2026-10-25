@@ -119,14 +119,6 @@ typedef struct {
 	uint32_t color_copyright;
 } setup_t;
 
-typedef struct {
-	uint8_t ecn;
-	char ssid[32+1];
-	int rssi;
-	char mac[17+1];
-	int ch;
-} wifi_ap_t;
-
 enum osd_state_e {
     state_main = 0,
 	state_setup,
@@ -134,16 +126,6 @@ enum osd_state_e {
 	state_core_browser,
 	state_file_loader,
 	state_pad_mapper,
-	state_rtc
-};
-
-enum wifi_setup_e {
-	state_ap_idle = 0,
-	state_ap_scan_start,
-	state_ap_scanning,
-	state_ap_result,
-	state_ap_selected,
-	state_ap_pass,
-	state_ap_connected,
-	state_ap_error
+	state_rtc,
+	state_wifi
 };

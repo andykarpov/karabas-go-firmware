@@ -44,7 +44,6 @@ static_assert(configTIMER_TASK_PRIORITY == configMAX_PRIORITIES - 1, "FreeRTOS t
 RTC zxrtc;
 volatile bool usb_host_ready = false;
 EspSerial esp_serial;
-ESP8266 wifi(esp_serial);
 
 static ElapsedTimer led_timer;
 
@@ -147,13 +146,8 @@ static void karabas_setup()
       halt("Boot file not found. System stopped");
     }
 
-    // todo: move this code to the app_setup 
-    d_println("ESP8266 Init");
+    // the ESP8266 uart bridged by the boot core (Setup Wi-Fi, AT+KARABAS=esp)
     esp_serial.begin(spi_send);
-    //wifi.init();
-
-    //d_println("ESP8266 FW Version:");
-    //d_println(wifi.getVersion());
 
     osd_state = state_core_browser;
     app_core_browser_read_list();
