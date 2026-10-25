@@ -45,7 +45,7 @@ The firmware runs on FreeRTOS only (`main.cpp` stops the build with `#error` oth
 
 **Dual-core split**:
 - Core 0: the `APP` task runs everything else. `karabas_loop()` in `src/main.cpp` calls the module ticks in order: MSC, RTC, UI timers, buttons, UI events from `INPUT`, key repeat, OSD redraw, FPGA command dispatch, serial bridge, ESP, link poll. The order matters, so keep it when adding a tick. `INPUT`, `MATRIX` and `OLED` also run on core 0 (see the task list above).
-- Core 1: the `USB` task only runs the TinyUSB host stack on PIO-USB (`tuh_task`). HID callbacks in `hid_app.cpp` push events with `spi_queue()`, which wakes `INPUT`. The keyboard report crosses cores only through `hid_kbd_report_sync()`.
+- Core 1: the `USB` task only runs the TinyUSB host stack on PIO-USB (`tuh_task`). HID callbacks in `hid_app.cpp` push events with `spi_queue()`, which wakes `INPUT`. The keyboard report crosses cores only through `hid_kbd_report_sync()`, the mouse moves for the graphic menus through `hid_mouse_take()` (sums under `usb_host_lock()`).
 
 **Modules** (`src/`):
 - `fpga/`: `link` (SPI protocol), `bitstream` (FPGA configuration), `core_loader` (core file header, OSD items, ROMs, `do_configure`).
@@ -91,6 +91,7 @@ The firmware runs on FreeRTOS only (`main.cpp` stops the build with `#error` oth
 - `osd_handle()` redraws the overlay whenever the state changes, and `ui_on_keyboard()` routes keys. Both go through the `apps[]` table in `ui/osd_ui.cpp`, which is indexed by `osd_state_e`. A new screen needs an enum value and a table entry in the same order. An entry can have an optional `tick`, called from `ui_tick()` while its app owns the OSD.
 - Buttons of the OSD apps are drawn with `ui_button()` (`ui/osd_ui`): no brackets, the label centered, yellow when focused, grey otherwise. Buttons on one screen have the same width. Text cursors are cyan.
 - The settings of both Settings screens (names, hints, values, changes, the color themes) are in `ui/settings_items`; each screen only draws them.
+- The mouse of the graphic menus is `ui/ft_mouse`: a screen ends its frame with `ft_frame_end()` (the frame is kept in GRAM, a pointer move only appends it with `CMD_APPEND`), adds its clickable areas with `ft_hit_add()` while drawing, and polls `ft_mouse_poll()` from its app tick. Keys, joysticks and the mouse are not forwarded to the core while the OSD is open.
 - The core browser has two renderers: a text one through the FPGA OSD (`lib/OSD`) and a graphical one through the FT812 (`lib/FT812`), used when it's present and enabled.
 
 **Per-board code**: pin maps are in `config.h`. Board behaviour lives behind the `src/board/board.h` API, implemented by `board_go.cpp` (I2C extender, Sega joysticks) and `board_mini.cpp` (Mini and Mini G, including the Mini G ESP, MIDI and FT reset lines). Outside `config.h`, `bitmaps.h` (logo selection) and `src/board/`, code must not use `#if HW_ID`. Add a `board_*` function instead.

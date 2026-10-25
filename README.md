@@ -99,6 +99,7 @@ changed keys and keeps the rest of the file.
 | | `sound`, `click` | menu sounds |
 | | `time`, `date`, `char` | show the clock, the date and the Karabas picture in the graphical browser |
 | | `color_*`, `3d_buttons` | colors (hex RGB) and button style |
+| | `mouse_speed` | mouse pointer speed in the graphic menu, 1..5 |
 | `[autoload]` | `enabled`, `timeout`, `core` | start `core` after `timeout` seconds |
 
 ## Controls
@@ -112,6 +113,7 @@ changed keys and keeps the rest of the file.
 | `A` (core OSD) | | About |
 | Delete / Backspace (core OSD) | | eject the disk image of the selected drive |
 | Space (graphical browser) | | switch to the text browser |
+| mouse (graphical browser, Setup) | | hover, click, wheel; right button = Esc |
 | `G` (text browser) | | switch to the graphical browser, also when it is off in `karabas.ini` |
 
 Cores can define their own OSD hotkeys.

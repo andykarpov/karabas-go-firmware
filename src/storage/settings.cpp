@@ -26,6 +26,7 @@ void load_setup() {
   hw_setup.ft_date = true;
   hw_setup.ft_char = true;
   hw_setup.ft_3d_buttons = false;
+  hw_setup.ft_mouse_speed = 3;
 
   hw_setup.autoload_enabled = false;
   hw_setup.autoload_timeout = 15;
@@ -77,6 +78,8 @@ void load_setup() {
     ini.getValue("ft812", "date", buffer, bufferLen, hw_setup.ft_date);
     ini.getValue("ft812", "char", buffer, bufferLen, hw_setup.ft_char);
     ini.getValue("ft812", "3d_buttons", buffer, bufferLen, hw_setup.ft_3d_buttons);
+    if (ini.getValue("ft812", "mouse_speed", buffer, bufferLen)) hw_setup.ft_mouse_speed = strtoul(buffer, 0, 10);
+    if (hw_setup.ft_mouse_speed < 1 || hw_setup.ft_mouse_speed > 5) hw_setup.ft_mouse_speed = 3;
     hw_setup.color_bg = (ini.getValue("ft812", "color_bg", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_bg;
     hw_setup.color_gradient = (ini.getValue("ft812", "color_gradient", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_gradient;
     hw_setup.color_button = (ini.getValue("ft812", "color_button", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_button;
@@ -103,6 +106,7 @@ void load_setup() {
     d_print("FT812 show date: "); d_println(hw_setup.ft_date ? "yes" : "no"); 
     d_print("FT812 show character: "); d_println(hw_setup.ft_char ? "yes" : "no"); 
     d_print("FT812 use 3d buttons: "); d_println(hw_setup.ft_3d_buttons ? "yes" : "no"); 
+    d_print("FT812 mouse speed: "); d_println(hw_setup.ft_mouse_speed);
     d_print("Autoload enabled: "); d_println(hw_setup.autoload_enabled ? "yes" : "no"); 
     d_print("Autoload timeout: "); d_println(hw_setup.autoload_timeout); 
     d_print("Autoload core: "); d_println(hw_setup.autoload_core); 
@@ -173,6 +177,7 @@ bool save_setup(const setup_t &s) {
   add_color(items, count, "color_text_active", s.color_text_active, o.color_text_active);
   add_color(items, count, "color_copyright", s.color_copyright, o.color_copyright);
   add_bool(items, count, "ft812", "3d_buttons", s.ft_3d_buttons, o.ft_3d_buttons);
+  add_uint(items, count, "ft812", "mouse_speed", s.ft_mouse_speed, o.ft_mouse_speed);
   add_bool(items, count, "autoload", "enabled", s.autoload_enabled, o.autoload_enabled);
   add_uint(items, count, "autoload", "timeout", s.autoload_timeout, o.autoload_timeout);
   if (strcmp(s.autoload_core, o.autoload_core) != 0) add_item(items, count, "autoload", "core", s.autoload_core);

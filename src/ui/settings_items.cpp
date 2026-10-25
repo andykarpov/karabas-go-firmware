@@ -22,6 +22,7 @@ const setting_t settings[SET_COUNT] = {
   { "Show time",      "The clock at the top",           SET_KIND_BOOL },
   { "Show date",      "The date under the clock",       SET_KIND_BOOL },
   { "Character",      "The Karabas picture",            SET_KIND_BOOL },
+  { "Mouse speed",    "How fast the pointer moves",     SET_KIND_CHOICE },
   { "Start sound",    "Played when a core starts",      SET_KIND_CHOICE },
   { "Key click",      "A click on every key",           SET_KIND_BOOL },
   { "Theme",          "The colors of the menu",         SET_KIND_CHOICE },
@@ -134,6 +135,7 @@ void settings_value_text(uint8_t id, const setup_t &s, char *out, size_t size) {
       break;
     }
     case SET_VIDEO_MODE: strlcpy(out, FT812::modeName(s.ft_video_mode), size); break;
+    case SET_MOUSE_SPEED: snprintf(out, size, "%u", s.ft_mouse_speed); break;
     case SET_SOUND: strlcpy(out, sound_names[s.ft_sound < SOUNDS ? s.ft_sound : 0], size); break;
     case SET_THEME: {
       int t = settings_theme(s);
@@ -165,6 +167,7 @@ void settings_change(uint8_t id, setup_t &s, int d) {
       break;
     }
     case SET_SOUND: s.ft_sound = (s.ft_sound + d + SOUNDS) % SOUNDS; break;
+    case SET_MOUSE_SPEED: s.ft_mouse_speed = (s.ft_mouse_speed - 1 + d + 5) % 5 + 1; break;
     case SET_THEME: {
       int t = settings_theme(s);
       if (t < 0) t = d > 0 ? -1 : 0; // Custom: to the first / the last theme

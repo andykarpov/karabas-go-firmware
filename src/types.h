@@ -106,6 +106,7 @@ typedef struct {
 	bool ft_date;
 	bool ft_char;
 	bool ft_3d_buttons;
+	uint8_t ft_mouse_speed; // 1..5
 	bool autoload_enabled;
 	bool dvi_only;
 	uint8_t autoload_timeout;

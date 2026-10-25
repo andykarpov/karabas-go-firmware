@@ -13,6 +13,17 @@ void hid_kbd_report_sync();
 // copy the latest keyboard report received by core1 (any task, does not touch usb_keyboard_report)
 void hid_kbd_report_get(hid_keyboard_report_t *report);
 
+// The mouse moves for the graphic menus (APP): the sums since the last take, the buttons held and
+// the ones pressed since then (a short click between two takes is not lost).
+typedef struct {
+  int32_t dx, dy, wheel;
+  uint8_t buttons;
+  uint8_t pressed;
+  bool changed;
+} hid_mouse_move_t;
+
+bool hid_mouse_take(hid_mouse_move_t *m); // false: nothing since the last take
+
 // Raw reports of one pad, for the OSD gamepad mapper (APP). After start, the pad whose report
 // changes first is followed; get returns its latest report (seq counts them).
 typedef struct {

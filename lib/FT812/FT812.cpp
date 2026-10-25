@@ -60,6 +60,8 @@ extern "C" void ft812_bus_unlock(void);
 #define BGCOLOR()                    0xFFFFFF09                                                                                                                             ///< Set background color
 #define FGCOLOR()                    0xFFFFFF0A                                                                                                                             ///< Set foreground color
 #define PROGRESSBAR()                0xFFFFFF0F                                                                                                                             ///< Draw progressbar
+#define MEMCPY()                     0xFFFFFF1D                                                                                                                             ///< Copy memory
+#define APPEND()                     0xFFFFFF1E                                                                                                                             ///< Append memory to the display list
 #define SLIDER()                     0xFFFFFF10                                                                                                                             ///< Draw slider
 #define TOGGLE()                     0xFFFFFF12                                                                                                                             ///< Draw toggle
 #define SCROLLBAR()                  0xFFFFFF11                                                                                                                             ///< Draw scrollbar
@@ -572,6 +574,34 @@ void FT812::drawScrollbar(const int16_t x, const int16_t y, const int16_t width,
     intermediateCmd(width | ((uint32_t)height << 16));
     intermediateCmd(options | ((uint32_t)value << 16));
     endCmd(size | ((uint32_t)range << 16));
+}
+
+void FT812::drawBitmapARGB4(const uint32_t offset, const int16_t x, const int16_t y, const uint16_t width, const uint16_t height) {
+    startCmd(COLOR(FT81x_COLOR_RGB(255, 255, 255)));
+    intermediateCmd(BITMAP_SOURCE(FT81x_RAM_G + offset));
+    intermediateCmd(BITMAP_LAYOUT(FT81x_BITMAP_LAYOUT_ARGB4, (uint32_t)width * 2, (uint32_t)height));
+    intermediateCmd(BITMAP_SIZE(FT81x_BITMAP_SIZE_NEAREST, 0, 0, (uint32_t)width, (uint32_t)height));
+    intermediateCmd(BEGIN(BITMAPS));
+    intermediateCmd(VERTEX2F(x * 16, y * 16));
+    endCmd(END());
+}
+
+void FT812::cmdMemcpy(const uint32_t dest, const uint32_t src, const uint32_t size) {
+    startCmd(MEMCPY());
+    intermediateCmd(dest);
+    intermediateCmd(src);
+    endCmd(size);
+}
+
+void FT812::cmdAppend(const uint32_t offset, const uint32_t size) {
+    startCmd(APPEND());
+    intermediateCmd(FT81x_RAM_G + offset);
+    endCmd(size);
+}
+
+uint16_t FT812::displayListSize() {
+    waitForCommandBuffer();
+    return read16(FT81x_REG_CMD_DL);
 }
 
 void FT812::drawToggle(const int16_t x, const int16_t y, const int16_t width, const uint8_t font, const uint32_t textColor, const uint32_t knobColor, const uint32_t barColor, const uint16_t options, const bool on, const char text[]) {

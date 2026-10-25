@@ -28,5 +28,6 @@ core_list_item_t app_core_browser_get_item();
 void app_core_browser_read_list();
 
 void app_core_browser_on_keyboard();
+void app_core_browser_tick(); // the mouse
 
 void app_core_browser_on_time();
