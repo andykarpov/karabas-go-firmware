@@ -251,6 +251,7 @@ static void karabas_loop()
 static void usb_host_loop()
 {
   diag_loop_core1();
+  hang_beat_core1();
   tuh_task();
   printer_host_tick(millis());
   printer_usb_tick();

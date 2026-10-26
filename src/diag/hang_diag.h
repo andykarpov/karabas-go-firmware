@@ -17,6 +17,7 @@ void hang_diag_start();    // with debug=1: the watchdog and its task
 void hang_diag_stop();     // before a reboot into BOOTSEL: the bootloader must not be reset
 void hang_mark(uint16_t where); // APP only: (tick << 8) | step
 void hang_step(uint8_t step);    // APP only: a step inside the current tick
+void hang_beat_core1();          // the USB loop on core1
 void hang_lock_wait(uint8_t lock);
 void hang_lock_held(uint8_t lock);
 void hang_lock_free(uint8_t lock, bool still_held);
