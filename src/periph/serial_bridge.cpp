@@ -136,7 +136,7 @@ static void esp_tick() {
   uint8_t buf[64];
   int n = 0;
   while (n < (int) sizeof(buf) && esp_serial.available() > 0) buf[n++] = (uint8_t) esp_serial.read();
-  if (n > 0) Serial.write(buf, n);
+  if (n > 0) { Serial.write(buf, n); Serial.flush(); }
 
   while (Serial.available() > 0 && esp_serial.availableForWrite() > (int) sizeof(at_parser.out)) {
     int c = Serial.read();
@@ -155,6 +155,10 @@ static void esp_tick() {
 
 // forward bytes received from the host to the core
 void serial_bridge_tick() {
+  // TinyUSB sends only full 64-byte packets by itself, and the FreeRTOS yield() of arduino-pico
+  // does not flush the CDC as the plain one does after loop(): the tail of what the core, the ESP
+  // or at_command() wrote would wait for the next 64 bytes
+  Serial.flush();
   if (esp_mode && core.type != CORE_TYPE_BOOT) esp_mode = false;
   if (esp_mode) { esp_tick(); return; }
 
