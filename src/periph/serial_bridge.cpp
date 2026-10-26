@@ -100,6 +100,7 @@ static void at_command(const char *arg) {
   if (strcasecmp(arg, "list") == 0) {
     at_list_cores();
   } else if (strcasecmp(arg, "boot") == 0) {
+    bk_flush();
     Serial.print("OK\r\n"); Serial.flush(); delay(100);
     hang_diag_stop();
     rp2040.rebootToBootloader();

@@ -188,6 +188,13 @@
 // a physical floppy drive for an F slot (Karabas Go), after its size 0 frames: addr = slot,
 // data = 1 drive DS0, 2 drive DS1. The core takes it back at the next size frames of the slot.
 #define CMD_IMG_PHYS 0x46
+// backup RAM (docs/protocol.md, "Backup RAM"), cores with CAPS_BK: the fpga asks for its save file
+// with 48 00..03 size in sectors (LE), 48 10 img slot, 48 80 kind (0 .sav, n save state n);
+// the mcu mounts it in the slot (CMD_IMG_SLOT / CMD_IMG_SIZE, size 0 without a file)
+#define CMD_BK_MOUNT 0x48
+// mcu -> fpga 47 slot 00: write the dirty sectors of the slot now; fpga -> mcu 47 slot 01 done,
+// 47 slot 02 a write failed
+#define CMD_IMG_FLUSH 0x47
 
 // fileloader files will be transferred in the following order:
 // 1. send SLOT num  - 1 byte
@@ -268,6 +275,7 @@
 #define FILE_POS_FILELOADER_FILE 121
 #define FILE_POS_FILELOADER_EXTENSIONS 153
 #define FILE_POS_SPI_FREQ 185
+#define FILE_POS_SAVE_DIR 186 // 32 bytes: the dir of the backup RAM files ("" = <fileloader dir>/saves)
 #define FILE_POS_EEPROM_DATA 256
 #define FILE_POS_SWITCHES_DATA 512
 #define FILE_POS_BITSTREAM_START 1024

@@ -67,7 +67,7 @@ Commands that the core does not know must be ignored.
 `do_configure()` in `src/fpga/core_loader.cpp`, for every core load:
 
 1. The bitstream is sent through the FPGA configuration pins (not this link).
-2. `CMD_CAPS` query, answered only by cores that support bursts. It is repeated until the core answers (up to 100 ms), so nothing else goes to a core whose link is still in reset after CONF_DONE. See section 7.
+2. `CMD_CAPS` query, answered only by cores that support bursts or backup RAM. It is repeated until the core answers (up to 100 ms), so nothing else goes to a core whose link is still in reset after CONF_DONE. See section 7.
 3. `CMD_INIT_START` — the core shows itself busy.
 4. `CMD_HW_SETUP` `(0, HW_ID)` and `(1, dvi_only)`.
 5. OSD font: `CMD_OSD` font reset and the font data.
@@ -101,6 +101,7 @@ Commands that the core does not know must be ignored.
 | `44` | `CMD_IMG_BUF_BANK` | 0 | sector offset bits 8..15 | Sector data of a read request (classic frames). |
 | `45` | `CMD_IMG_BUF_DATA` | offset bits 7..0 | byte | Same; also the burst type of the sector data, address = offset. |
 | `46` | `CMD_IMG_PHYS` | slot | 1 = drive DS0, 2 = DS1 | The slot is a physical floppy drive (Karabas Go), after its size 0 frames. |
+| `47` | `CMD_IMG_FLUSH` | slot | 0 | Backup RAM: write the dirty sectors of the slot now (cores with caps bit 3), see section 6. |
 | `50` | `CMD_IOCTL_SLOT` | 0 | slot | Ioctl file loader (`FL` OSD items), see section 6. |
 | `51` | `CMD_IOCTL_SIZE` | byte index 0..7 | file size (LE) | |
 | `52` | `CMD_IOCTL_BANK` | byte index 0..2 | file address bits 15..8 / 23..16 / 31..24 | |
@@ -132,6 +133,8 @@ These are sent in the reply bytes of any transfer.
 | `43` | `CMD_IMG_SEC` | slot | 1 = read, 2 = write | The request. The firmware serves it from its main loop, see section 6. |
 | `44` / `45` | `CMD_IMG_BUF_BANK` / `_DATA` | 0 / offset bits 7..0 | offset bits 8..15 / byte | Sector data of a write request, after the request. |
 | `44` | `CMD_IMG_BUF_BANK` | `10` / `11` | sum bits 7..0 / 15..8 | 16-bit sum of the sector written, after its data. |
+| `47` | `CMD_IMG_FLUSH` | slot | 1 = done, 2 = a write failed | Answer to `47 slot 00`: no dirty sectors left. |
+| `48` | `CMD_BK_MOUNT` | 0..3 / `10` / `80` | size in sectors (LE) / img slot / kind | Backup RAM: the core asks for its save file; `80` last (kind 0 = `.sav`). Section 6. |
 | `60` | `CMD_MATRIX_CTL` | 0 | bit 0 clear, bit 1 update, bit 2 set brightness (bits 7..4), bit 3 audio meter mode | LED matrix ([MATRIX.md](../MATRIX.md)). |
 | `61` | `CMD_MATRIX_PIXEL` | Y (bits 7..4), X (bits 3..0) | color: 0 black, 1 red, 2 green, 3 yellow | |
 | `62` | `CMD_MATRIX_BITPLAN` | byte 0..31 | bitmap byte | |
@@ -229,6 +232,30 @@ A frame used to get lost on the link now and then (on Mini G: chip select spikes
 
 The firmware sends the sector data of a read as one burst when the core has burst caps, as classic frames otherwise (and for whatever a burst did not send). The core checks the sum either way and passes a sector on only when it is complete and right. The data of a write request does not fit the reply queue of `mcu.vhd` (512 entries) together with the request, so the core queues it while the queue has room. A short last sector of a read is padded with zeros.
 
+### Backup RAM (`.sav`, cores with caps bit 3)
+
+The battery RAM of a cartridge (NES and the like) is kept in a file next to the games. The core decides its size (only it knows the rules of the mapper) and asks for the file after a game is loaded; the firmware does not parse the game. The file is a raw dump of the backup RAM, as MiSTer and the emulators keep it.
+
+```
+FPGA: 48 00 size_0, 48 01 size_1, 48 02 size_2, 48 03 size_3   size in 512-byte sectors (LE)
+FPGA: 48 10 slot                                                the img slot for the file
+FPGA: 48 80 kind                                                0 = .sav (n = save state n, later)
+MCU:  opens or creates <save dir>/<game name without its extension>.sav with at least size sectors
+      (new bytes 0), then mounts it in the slot as the file mounter does: 40 00 slot, 41 i 00,
+      41 i file_size_i. Without a file (no game name, no sd card, read only): the size 0 frames only.
+```
+
+The save dir is `save_dir` of the core header (`FILE_POS_SAVE_DIR`, 32 bytes), or `<fileloader dir>/saves` when it is empty. The core reads its sectors with ordinary read requests before its CPU starts, and writes the sectors its CPU changed with ordinary write requests, a second after the last write (or a few seconds after the first one, for games that write all the time). A core that gets no mount in about a second goes on without a save (a firmware without this command).
+
+Flush, before the firmware loads another game, another core, reboots (the hotkey, `AT+KARABAS=boot`) or enters USB mass storage:
+
+```
+MCU:  47 slot 00
+FPGA: write requests of the dirty sectors (the firmware serves them while it waits)
+FPGA: 47 slot 01 (no dirty sectors left) or 47 slot 02 (a write failed)
+MCU:  waits up to 3 s for the answer, then syncs and closes the file (size 0 frames to the core)
+```
+
 ### OSD overlay (`CMD_OSD`)
 
 | ADDR | Register |
@@ -309,11 +336,12 @@ See [hardware diagnostics](usb_printer.md#fpga--spi-loss-localisation).
 
 ## 7. Capabilities and burst transfers
 
-`CMD_CAPS` (`F7 00 01`) asks the core what it supports. The firmware then polls with up to 16 NOP frames, and sends the query and the polls again until the core answers or 100 ms have passed. A core that supports bursts answers `F7 caps max_mhz` in a reply frame:
+`CMD_CAPS` (`F7 00 01`) asks the core what it supports. The firmware then polls with up to 16 NOP frames, and sends the query and the polls again until the core answers or 100 ms have passed. A core that supports bursts or backup RAM answers `F7 caps max_mhz` in a reply frame:
 
 - caps bit 0: burst write;
 - caps bit 1: the core drives `BURST_READY`;
-- caps bit 2: burst read (planned).
+- caps bit 2: burst read (planned);
+- caps bit 3: backup RAM (`CMD_BK_MOUNT`, `CMD_IMG_FLUSH`, section 6): the firmware flushes the save of the core before it loads another game or core.
 
 Old cores do not answer and stay on classic frames (their load takes the 100 ms longer).
 

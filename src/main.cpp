@@ -86,6 +86,7 @@ static void karabas_setup()
   link_on(CMD_PS2_SCANCODE, ps2_command_receive);
   matrix_register_handlers();
   img_register_handlers();
+  bk_register_handlers();
   printer_link_begin();
 
   // FPGA bitstream loader
@@ -239,6 +240,8 @@ static void karabas_loop()
   // sector requests of the file mounter
   hang_mark(0x0c00);
   img_tick();
+  // a backup RAM file the core asked for
+  bk_tick();
 
   hang_mark(0x0d00);
   serial_bridge_tick();

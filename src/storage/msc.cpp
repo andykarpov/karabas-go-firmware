@@ -29,6 +29,7 @@ void msc_init() {
 }
 
 void msc_reboot_to_msc() {
+  bk_flush();
   watchdog_hw->scratch[0] = MSC_REQUEST_MAGIC;
   rp2040.reboot();
 }

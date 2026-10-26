@@ -263,6 +263,7 @@ bool on_global_hotkeys() {
   }
 
   if (hotkey == HOTKEY_REBOOT) {
+     bk_flush();
      rp2040.reboot();
      return true;
   }

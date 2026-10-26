@@ -164,6 +164,7 @@ void do_configure(const char* filename) {
   SpiBusGuard bus;
   hang_step(0x83);
   matrix_on_configure_start();
+  bk_flush(); // the save of the game of the core before (it is still running)
   hang_step(0x84);
   link_set_rx_enabled(false);
   link_burst_reset(); // the new core may not support bursts
@@ -263,6 +264,9 @@ void read_core(const char* filename) {
   file_seek(FILE_POS_FILELOADER_FILE); core.last_file_id = file_read16(FILE_POS_FILELOADER_FILE);
   file_seek(FILE_POS_FILELOADER_EXTENSIONS); file_read_bytes(core.file_extensions, 32); core.file_extensions[32] = '\0';
   file_seek(FILE_POS_SPI_FREQ); core.spi_freq = file_read();
+  file_seek(FILE_POS_SAVE_DIR); file_read_bytes(core.save_dir, 32); core.save_dir[32] = '\0';
+  // reserved bytes of older core files are FF: no save dir
+  for (uint8_t i=0; i<32; i++) { if ((uint8_t) core.save_dir[i] == 0xFF) { core.save_dir[i] = '\0'; break; } }
   link_set_freq(core.spi_freq);
   uint32_t roms_len = file_read32(FILE_POS_ROM_LEN);
   uint32_t offset = FILE_POS_BITSTREAM_START + core.bitstream_length + roms_len;
@@ -273,6 +277,7 @@ void read_core(const char* filename) {
   d_print("Core SPI Frequency: "); if (core.spi_freq > 0 && core.spi_freq < 255) { d_print(core.spi_freq); d_println(" MHz"); } else d_println("default");
   
   img_close_all(); // the images of the previous core
+  bk_forget();
   for (uint8_t i=0; i<MAX_FILE_SLOTS; i++) { file_slots[i].is_mounted = false; }
 
   for (uint8_t i=0; i<core.osd_len; i++) {
