@@ -604,7 +604,7 @@ void usb_pads_get(usb_pad_t pads[2])
   usb_joy_ports(ports);
   for (uint8_t i = 0; i < 2; i++) {
     usb_pad_t &p = pads[i];
-    p = {};
+    memset(&p, 0, sizeof(p)); // the padding too: the screens memcmp two snapshots
     if (!ports[i].address) continue;
     if (ports[i].xinput) {
       p.source = USB_PAD_XINPUT;
