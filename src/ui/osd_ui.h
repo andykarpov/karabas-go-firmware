@@ -38,3 +38,5 @@ uint8_t ui_joy_key();
 bool ui_joy_edit(char *text, size_t max, uint8_t key);
 // false while a screen reads the joystick itself (the pad mapping): no repeat of the directions
 bool ui_joy_repeats();
+// false while a screen reads the joystick itself: no global joystick hotkeys (Start+X reboots)
+bool ui_joy_hotkeys();

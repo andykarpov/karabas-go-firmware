@@ -313,7 +313,8 @@ void input_tick_ui() {
 
 bool on_global_hotkeys() {
 
-  int hotkey = hotkey_find(usb_keyboard_report, joyL, joyR);
+  bool joy = ui_joy_hotkeys();
+  int hotkey = hotkey_find(usb_keyboard_report, joy ? joyL : 0, joy ? joyR : 0);
 
   if (hotkey == HOTKEY_OSD_TOGGLE) {
     osd_toggle();

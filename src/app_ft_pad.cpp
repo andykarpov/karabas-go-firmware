@@ -16,12 +16,15 @@
 // changes), let it rest to learn the idle report and its jitter, then for each button wait for
 // a press and for the release. A Mega Drive pad shows the button asked for and the ones mapped;
 // when all are done it shows the presses through the learned map, also after Save (a test).
+// Test: both ports as the core gets them (the USB pads and the Sega / DB9 ones of the board),
+// until Esc or a hold of Start+Mode; the global joystick hotkeys are off meanwhile.
 // The learned sources are not listed as in the text menu: 24 more texts are too much for the
 // FT812 in 800x600@60 (40 MHz), the lower lines of the screen are left out.
 // The keyboard and the mouse drive the page: the pad being mapped must not.
 
 enum {
   ST_LIST,    // the ports
+  ST_TEST,    // the presses on both ports
   ST_SELECT,  // waiting for a pad
   ST_SETTLE,  // a pad was found, give it time to be released
   ST_REST,    // collecting the idle reports
@@ -33,17 +36,21 @@ enum {
 };
 
 // the clickable areas
-enum { HIT_SKIP, HIT_BACK, HIT_SAVE, HIT_DONE, HIT_MAP, HIT_FORGET, HIT_PORT = 10 };
+enum { HIT_SKIP, HIT_BACK, HIT_SAVE, HIT_DONE, HIT_MAP, HIT_TEST, HIT_FORGET, HIT_PORT = 10 };
 
 #define SETTLE_MS 700
 #define REST_MS 700
 #define PRESS_TIMEOUT_MS 10000
 #define RELEASE_TIMEOUT_MS 3000
 #define LIST_REFRESH_MS 500
+#define TEST_EXIT_MS 2000
+#define TEST_EXIT (SC_BTN_START | SC_BTN_MODE)
 
 #define PAD_W 300
 #define PAD_H 98
 #define BTN_W 110
+#define LIST_BTN_W 120
+#define TEST_LABEL_H 22
 #define ROW_H 30
 #define COL_PAD 80
 #define COL_SRC 220
@@ -73,9 +80,13 @@ static bool dirty;
 
 static usb_pad_t pads[2];
 static uint8_t port;         // the port chosen in the list
-static uint8_t list_btn;     // 0: Map, 1: Forget
+static uint8_t list_btn;     // 0: Map, 1: Test, 2: Forget
 static const char *list_msg;
 static bool list_msg_ok;
+static uint16_t test_joy[2]; // the test: the buttons held on each port
+static uint8_t draw_port;    // the port whose pad is drawn
+static ElapsedTimer test_exit; // how long Start+Mode is held
+static bool joy_released = true; // after the test: the pad keys count again once all are released
 
 static void set_state(uint8_t s) {
   state = s;
@@ -84,6 +95,7 @@ static void set_state(uint8_t s) {
 }
 
 static bool can_forget() { return pads[port].source == USB_PAD_DRIVER; }
+static uint8_t list_btns() { return can_forget() ? 3 : 2; }
 
 static void show_list() {
   hid_capture_stop();
@@ -104,6 +116,19 @@ static void build_cfg() {
     cfg.count++;
   }
   live = 0;
+}
+
+static void start_test() {
+  test_joy[0] = test_joy[1] = 0;
+  list_msg = nullptr;
+  test_exit.reset();
+  set_state(ST_TEST);
+}
+
+static void stop_test() {
+  joy_released = false; // Start+Mode may still be held: Mode is Esc on the list
+  show_list();
+  list_btn = 1;
 }
 
 static void start() {
@@ -141,6 +166,7 @@ static void close() {
 static uint32_t key_color(const ft_page_ctx_t &c, bool lit) { return lit ? c.s->color_active : PAD_KEY; }
 
 static bool lit(uint8_t i) {
+  if (state == ST_TEST) return test_joy[draw_port] & hid_joy_btns[i];
   if (state == ST_PRESS || state == ST_RELEASE) return i == btn;
   if (state >= ST_DONE) return live & hid_joy_btns[i];
   return false;
@@ -228,8 +254,9 @@ static void draw_list(const ft_page_ctx_t &c) {
       FT81x_OPT_CENTERY, b, (c.w - COL_SRC - 32) / 12);
   }
   int16_t by = y + ROW_H * 3 + 12;
-  ft_page_button(c, x, by, 140, "Map", list_btn == 0, HIT_MAP);
-  if (can_forget()) ft_page_button(c, x + 156, by, 140, "Forget", list_btn == 1, HIT_FORGET);
+  ft_page_button(c, x, by, LIST_BTN_W, "Map", list_btn == 0, HIT_MAP);
+  ft_page_button(c, x + LIST_BTN_W + 12, by, LIST_BTN_W, "Test", list_btn == 1, HIT_TEST);
+  if (can_forget()) ft_page_button(c, x + 2 * (LIST_BTN_W + 12), by, LIST_BTN_W, "Forget", list_btn == 2, HIT_FORGET);
   if (list_msg && c.focused) {
     ft.drawText(x, by + FT_PAGE_BTN_H + 20, FT_PAGE_FONT, list_msg_ok ? FT_PAGE_OK : FT_PAGE_ERROR, FT81x_OPT_CENTERY, list_msg);
   }
@@ -298,8 +325,29 @@ static void draw_mapper(const ft_page_ctx_t &c) {
   }
 }
 
+// the two ports, one pad under the other
+static void draw_test(const ft_page_ctx_t &c) {
+  int16_t pw = c.w - 32 < PAD_W ? c.w - 32 : PAD_W;
+  int16_t px = c.x + 16 + (c.w - 32 - pw) / 2;
+  for (uint8_t i = 0; i < 2; i++) {
+    const usb_pad_t &p = pads[i];
+    int16_t y = c.y + i * (TEST_LABEL_H + PAD_H + 10);
+    char src[24], b[48];
+    if (p.source == USB_PAD_NONE && p.vid == 0) {
+      snprintf(b, sizeof(b), "Port %u: no USB pad", i + 1);
+    } else {
+      pad_source(p, src, sizeof(src));
+      snprintf(b, sizeof(b), "Port %u: %04x:%04x, %s", i + 1, p.vid, p.pid, src);
+    }
+    ft_page_text(px, y + TEST_LABEL_H / 2 - 2, FT_PAGE_FONT_SMALL, c.s->color_text, FT81x_OPT_CENTERY, b, pw / 10);
+    draw_port = i;
+    draw_pad(c, px, y + TEST_LABEL_H);
+  }
+}
+
 static void draw(const ft_page_ctx_t &c) {
   if (state == ST_LIST) draw_list(c);
+  else if (state == ST_TEST) draw_test(c);
   else draw_mapper(c);
 }
 
@@ -342,7 +390,8 @@ static void forget() {
 }
 
 static bool tick() {
-  if (state == ST_LIST) {
+  if (!joy_released && (joyL | joyR) == 0) joy_released = true;
+  if (state == ST_LIST || state == ST_TEST) {
     // the pads come and go
     if (timer.elapsed() >= LIST_REFRESH_MS) {
       timer.reset();
@@ -350,11 +399,17 @@ static bool tick() {
       usb_pads_get(now);
       if (memcmp(now, pads, sizeof(now)) != 0) {
         memcpy(pads, now, sizeof(now));
-        if (!can_forget()) list_btn = 0;
+        if (list_btn >= list_btns()) list_btn = 0;
         dirty = true;
       }
     }
-  } else {
+  }
+  if (state == ST_TEST) {
+    uint16_t l = joyL, r = joyR;
+    if (l != test_joy[0] || r != test_joy[1]) { test_joy[0] = l; test_joy[1] = r; dirty = true; }
+    if ((l & TEST_EXIT) != TEST_EXIT && (r & TEST_EXIT) != TEST_EXIT) test_exit.reset();
+    else if (test_exit.elapsed() >= TEST_EXIT_MS) stop_test();
+  } else if (state != ST_LIST) {
     bool fresh = hid_capture_get(&rep) && rep.seq != last_seq;
     if (fresh) last_seq = rep.seq;
 
@@ -404,10 +459,12 @@ static bool list_key(uint8_t key) {
   bool enter = key == KEY_ENTER || key == KEY_KPENTER;
   if (key == KEY_ESC) return false;
   if (key == KEY_UP || key == KEY_DOWN) { port ^= 1; list_msg = nullptr; }
-  else if (key == KEY_LEFT || key == KEY_RIGHT || key == KEY_TAB) list_btn = can_forget() ? list_btn ^ 1 : 0;
+  else if (key == KEY_RIGHT || key == KEY_TAB) list_btn = (list_btn + 1) % list_btns();
+  else if (key == KEY_LEFT) list_btn = (list_btn + list_btns() - 1) % list_btns();
   else if (enter && list_btn == 0) start();
+  else if (enter && list_btn == 1) start_test();
   else if (enter) forget();
-  if (!can_forget()) list_btn = 0;
+  if (list_btn >= list_btns()) list_btn = 0;
   return true;
 }
 
@@ -416,6 +473,7 @@ bool ft_page_pad_mapping() {
 }
 
 static bool key(uint8_t key, bool shift, bool joy) {
+  if (joy && !joy_released) return true; // the keys of the Start+Mode that ended the test
   if (state == ST_LIST) {
     bool r = list_key(key);
     dirty = false; // the setup draws after a key
@@ -435,11 +493,12 @@ static bool click(int16_t id) {
   if (id == HIT_PORT || id == HIT_PORT + 1) {
     if (port != id - HIT_PORT) list_msg = nullptr;
     port = id - HIT_PORT;
-    if (!can_forget()) list_btn = 0;
+    if (list_btn >= list_btns()) list_btn = 0;
   } else {
     switch (id) {
       case HIT_MAP: start(); break;
-      case HIT_FORGET: list_btn = 1; forget(); break;
+      case HIT_TEST: list_btn = 1; start_test(); break;
+      case HIT_FORGET: list_btn = 2; forget(); break;
       case HIT_SKIP: if (state == ST_PRESS) next_button(); break;
       case HIT_BACK: prev_button(); break;
       case HIT_SAVE: save(); break;
@@ -452,8 +511,10 @@ static bool click(int16_t id) {
 
 static const char *hint() {
   switch (state) {
-    case ST_LIST: return list_btn == 1 ? "Forget: the driver ini becomes .bak, the default map is used" :
+    case ST_LIST: return list_btn == 2 ? "Forget: the driver ini becomes .bak, the default map is used" :
+                         list_btn == 1 ? "Test: the buttons held on both ports, as the core gets them" :
                                          "Map: learns the pad you press a button on, also one not on a port";
+    case ST_TEST: return "Hold Start+Mode for 2 s to go back";
     case ST_PRESS: return "Enter: skip   Backspace: back";
     case ST_DONE: return "Enter: save the driver   Backspace: redo the last one";
     case ST_SAVED: case ST_FAILED: return "Enter: back to the ports";
@@ -463,6 +524,7 @@ static const char *hint() {
 
 static const char *keys() {
   return state == ST_LIST ? "Up/Down: port   Left/Right: button   Enter: OK   Esc: back" :
+         state == ST_TEST ? "Esc: back to the ports (the keyboard), or Start+Mode held on the pad" :
                             "Esc: back to the ports (the keyboard or the mouse, not the pad)";
 }
 

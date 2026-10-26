@@ -198,3 +198,7 @@ bool ui_joy_repeats() {
   if (osd_state == state_ft_setup) return !ft_page_pad_mapping();
   return true;
 }
+
+bool ui_joy_hotkeys() {
+  return !is_osd || ui_joy_repeats();
+}

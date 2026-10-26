@@ -6,5 +6,5 @@
 extern const ft_page_t ft_page_clock;
 extern const ft_page_t ft_page_wifi;
 extern const ft_page_t ft_page_pad;
-// true while the Gamepad page maps a pad (it reads the pad itself)
+// true while the Gamepad page maps or tests a pad (it reads the pad itself)
 bool ft_page_pad_mapping();
