@@ -1,0 +1,68 @@
+--- Adafruit_USBD_CDC_orig.cpp	2026-10-26 03:05:32.800937629 +0100
++++ Adafruit_USBD_CDC.cpp	2026-10-26 03:05:32.809450184 +0100
+@@ -38,6 +38,21 @@
+ #define TINYUSB_API_VERSION 0
+ #endif
+ 
++// karabas: tud_task() runs in the USBD task (src/usb/usb_device.cpp) under __usb_mutex, and so
++// does the task side. TinyUSB's own pico mutexes belong to a core, not a task, and a wait for
++// one is a wfe loop: USBD (above APP) waiting for an endpoint that APP claimed would never let
++// APP run again. When the mutex is taken already, this runs inside tud_task() (a callback) or
++// USBD is blocked in an MSC callback; the call then goes without it.
++#ifdef ARDUINO_ARCH_RP2040
++#include "pico/mutex.h"
++extern mutex_t __usb_mutex;
++#define USB_TASK_LOCK() bool usb_locked_ = mutex_try_enter(&__usb_mutex, NULL)
++#define USB_TASK_UNLOCK() do { if (usb_locked_) mutex_exit(&__usb_mutex); } while (0)
++#else
++#define USB_TASK_LOCK() do {} while (0)
++#define USB_TASK_UNLOCK() do {} while (0)
++#endif
++
+ // SerialTinyUSB can be macro expanding to "Serial" on supported cores
+ Adafruit_USBD_CDC SerialTinyUSB;
+ 
+@@ -214,7 +229,10 @@
+   if (!isValid()) {
+     return -1;
+   }
+-  return (int)tud_cdc_n_read_char(_instance);
++  USB_TASK_LOCK();
++  int ch = (int)tud_cdc_n_read_char(_instance);
++  USB_TASK_UNLOCK();
++  return ch;
+ }
+ 
+ #if TINYUSB_API_VERSION >= 10700
+@@ -223,7 +241,10 @@
+     return 0;
+   }
+ 
+-  return tud_cdc_n_read(_instance, buffer, size);
++  USB_TASK_LOCK();
++  size_t n = tud_cdc_n_read(_instance, buffer, size);
++  USB_TASK_UNLOCK();
++  return n;
+ }
+ #endif
+ 
+@@ -232,7 +253,9 @@
+     return;
+   }
+ 
++  USB_TASK_LOCK();
+   tud_cdc_n_write_flush(_instance);
++  USB_TASK_UNLOCK();
+ }
+ 
+ size_t Adafruit_USBD_CDC::write(uint8_t ch) { return write(&ch, 1); }
+@@ -244,7 +267,9 @@
+ 
+   size_t remain = size;
+   while (remain && tud_cdc_n_connected(_instance)) {
++    USB_TASK_LOCK();
+     size_t wrcount = tud_cdc_n_write(_instance, buffer, remain);
++    USB_TASK_UNLOCK();
+     remain -= wrcount;
+     buffer += wrcount;
+ 

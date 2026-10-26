@@ -4,8 +4,9 @@
 
 // Debug output (d_print* macros in config.h). Only one context may write to the USB CDC
 // Serial: Adafruit's CDC write has no lock, and concurrent writers corrupt the TinyUSB device
-// state until the host resets the port. The owner (the APP task) writes directly; everything else (core1, other tasks, irqs) goes to a ring buffer
-// that the owner drains with debug_drain().
+// state until the host resets the port. Everything goes to a ring buffer; the owner (the APP
+// task) sends from it what the CDC fifo takes at once, on its own writes and in debug_drain()
+// from the loop. It never waits for the host.
 
 Print &debug_out();
 void debug_flush();

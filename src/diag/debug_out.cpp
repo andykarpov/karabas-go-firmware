@@ -3,12 +3,16 @@
 #include "hardware/sync.h"
 #include "tusb.h"
 
+#include "pico/mutex.h"
 #include <FreeRTOS.h>
 #include <task.h>
+
+// taken by the USBD task while it runs tud_task(): see src/usb/usb_device.cpp
+extern mutex_t __usb_mutex;
 static TaskHandle_t owner_task = nullptr;
 
-// bytes kept for non-owner writers between two drains, and for everyone until a terminal
-// opens the port: after a reboot the host needs a moment to bring the CDC port back, and the
+// all output, until the owner sends it (as much as the CDC fifo takes), and for everyone until
+// a terminal opens the port: after a reboot the host needs a moment to bring the CDC port back, and the
 // boot log (usb enumeration included) would be lost otherwise
 #define DEBUG_BUF_SIZE 8192
 
@@ -48,38 +52,51 @@ static size_t debug_buffer(const uint8_t *data, size_t len) {
   return len;
 }
 
+// as much as the CDC fifo takes now: never waits. Adafruit's Serial.write loops with yield()
+// until all of it is sent, and the board hung for good at a boot right after a flash, with a
+// terminal opening the port while the boot log was written
 void debug_drain() {
   if (!is_owner() || !port_open()) return;
+  // a write claims the endpoint with TinyUSB's (per core) mutex: USBD, above APP, would wait
+  // for it forever. Taken already: USBD is in tud_task(), the rest goes out later
+  if (!mutex_try_enter(&__usb_mutex, NULL)) return;
   uint8_t chunk[64];
+  bool sent = false;
   for (;;) {
+    size_t room = tud_cdc_write_available();
+    if (room > sizeof(chunk)) room = sizeof(chunk);
     size_t n = 0;
     uint32_t save = spin_lock_blocking(debug_lock);
-    while (n < sizeof(chunk) && debug_tail != debug_head) {
+    while (n < room && debug_tail != debug_head) {
       chunk[n++] = debug_buf[debug_tail % DEBUG_BUF_SIZE];
       debug_tail++;
     }
     spin_unlock(debug_lock, save);
     if (n == 0) break;
-    Serial.write(chunk, n);
+    tud_cdc_write(chunk, n);
+    sent = true;
   }
+  if (sent) tud_cdc_write_flush();
+  mutex_exit(&__usb_mutex);
   static uint32_t reported_dropped = 0;
   if (debug_dropped != reported_dropped) {
     reported_dropped = debug_dropped;
-    Serial.printf("[debug output buffer overflow, %lu bytes dropped]\r\n", (unsigned long) reported_dropped);
+    char b[64];
+    int len = snprintf(b, sizeof(b), "[debug output buffer overflow, %lu bytes dropped]\r\n", (unsigned long) reported_dropped);
+    debug_buffer((const uint8_t *) b, len); // goes out with the next drain
   }
 }
 
+// everything goes through the buffer; the owner sends what fits right away
 class DebugOut : public Print {
 public:
   size_t write(uint8_t c) override {
     return write(&c, 1);
   }
   size_t write(const uint8_t *data, size_t len) override {
-    if (is_owner() && port_open()) {
-      debug_drain(); // keep the order with buffered output
-      return Serial.write(data, len);
-    }
-    return debug_buffer(data, len);
+    debug_buffer(data, len);
+    debug_drain();
+    return len;
   }
 };
 
@@ -90,7 +107,5 @@ Print &debug_out() {
 }
 
 void debug_flush() {
-  if (!is_owner() || !port_open()) return;
   debug_drain();
-  Serial.flush();
 }

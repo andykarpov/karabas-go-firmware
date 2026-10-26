@@ -1,4 +1,5 @@
 #include "main.h"
+#include "diag/hang_diag.h"
 
 #include <FreeRTOS.h>
 #include <task.h>
@@ -45,11 +46,16 @@ void link_os_init() {
 }
 
 void spi_bus_lock() {
-  if (spi_bus_mutex) xSemaphoreTakeRecursive(spi_bus_mutex, portMAX_DELAY);
+  if (!spi_bus_mutex) return;
+  hang_lock_wait(HANG_LOCK_SPI);
+  xSemaphoreTakeRecursive(spi_bus_mutex, portMAX_DELAY);
+  hang_lock_held(HANG_LOCK_SPI);
 }
 
 void spi_bus_unlock() {
-  if (spi_bus_mutex) xSemaphoreGiveRecursive(spi_bus_mutex);
+  if (!spi_bus_mutex) return;
+  xSemaphoreGiveRecursive(spi_bus_mutex);
+  hang_lock_free(HANG_LOCK_SPI, xSemaphoreGetMutexHolder(spi_bus_mutex) != nullptr);
 }
 
 // hooks called by lib/FT812 around its own SPI0 transactions

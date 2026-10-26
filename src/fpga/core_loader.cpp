@@ -1,4 +1,5 @@
 #include "main.h"
+#include "diag/hang_diag.h"
 #include "osd_font.h"
 #include "ps2kbd.h"
 #include "usb_hid_keys.h"
@@ -154,32 +155,45 @@ void flashboot (uint8_t data) {
   }
 }
 
+// hang_step: the steps of a core load (0x8x, 0x9x in fpga_send, 0xax after it)
 void do_configure(const char* filename) {
+  hang_step(0x81);
   printer_link_reset();
   // the whole core load (bitstream, setup, roms) is one sequence on the fpga link
+  hang_step(0x82);
   SpiBusGuard bus;
+  hang_step(0x83);
   matrix_on_configure_start();
+  hang_step(0x84);
   link_set_rx_enabled(false);
   link_burst_reset(); // the new core may not support bursts
+  hang_step(0x85);
   ft.vga(false); // FT off
   ft.spi(false);
+  hang_step(0x86);
   kb_reset(); // reset to ps/2 defaults
 
+  hang_step(0x87);
   fpga_send(filename);
+  hang_step(0xa0);
   // wait for the core to answer before anything else goes to it (frames sent while its link is
   // still in reset are lost: a Kickstart sent then never arrived); burst transfers for the roms /
   // files below, if the core supports them
   link_caps_query();
+  hang_step(0xa1);
   spi_send(CMD_INIT_START, 0, 0);
   spi_send(CMD_HW_SETUP, 0, HW_ID); // hw id
   spi_send(CMD_HW_SETUP, 1, hw_setup.dvi_only); // dvi only flag
   // trigger font loader reset
+  hang_step(0xa2);
   zxosd.fontReset();
   // send font data
   for (int i=0; i<OSD_FONT_SIZE; i++) {
     zxosd.fontSend(osd_font[i]);
   }
+  hang_step(0xa3);
   read_core(filename);
+  hang_step(0xa4);
   if (!is_osd) {
     zxosd.clear();
     zxosd.logo(0,0, HW_ID);
@@ -189,7 +203,9 @@ void do_configure(const char* filename) {
     zxosd.update();
     zxosd.showPopup();
   }
+  hang_step(0xa5);
   read_roms(filename);
+  hang_step(0xa6);
   if (!is_osd) {
     zxosd.hidePopup();
     osd_handle(true); // reinit osd
@@ -197,12 +213,15 @@ void do_configure(const char* filename) {
   for (uint8_t i=0; i<7; i++) { // cleanup kbd: modifier + 6 keycodes
     spi_queue(CMD_USB_KBD, i, 0);
   }
+  hang_step(0xa7);
   spi_send(CMD_INIT_DONE, 0, 0);
   is_flashboot = false;
   link_set_rx_enabled(true);
 
   // reinit matrix
+  hang_step(0xa8);
   matrix_on_configure_done(core.type);
+  hang_step(0xa9);
 }
 
 void read_core(const char* filename) {
@@ -361,7 +380,8 @@ void read_core(const char* filename) {
             (unsigned long) (ft.initClockHz() / 1000), ft.initAttempts()); d_println();
           ft.vga(true);
         } else {
-          d_printf("FT81x IC did not found (%u attempts)", ft.initAttempts()); d_println();
+          d_printf("FT81x IC did not found (%u attempts, last system clock %lu kHz)", ft.initAttempts(),
+            (unsigned long) (ft.initClockHz() / 1000)); d_println();
           ft.vga(false);
           ft.spi(false);
         }

@@ -228,7 +228,11 @@ bool FT812::powerUp() {
     delay(20);
     sendCommand(FT81x_CMD_CLKEXT); // may reset the chip when the clock source changes
     delay(20);
-    sendCommand(FT81x_CMD_CLKSEL + ((mode.f_mul | 0xC0) << 8)); // f_mul
+    // Byte2 [7:6] is the PLL range: 0 for 24..36 MHz, 1 for 48..60 MHz (the datasheet gives it by
+    // multiplier, for a 12 MHz input; ours is 8 MHz). It was 3, which the datasheet does not define.
+    uint32_t pll_hz = (uint32_t) mode.f_mul * FT81x_REF_CLOCK_HZ;
+    uint8_t pll_range = pll_hz <= 42000000UL ? 0 : 1;
+    sendCommand(FT81x_CMD_CLKSEL + ((mode.f_mul | (pll_range << 6)) << 8)); // f_mul
     delay(20);
     sendCommand(FT81x_CMD_ACTIVE);
     delay(50); // PLL lock
@@ -243,12 +247,15 @@ bool FT812::powerUp() {
         delay(1);
     }
 
-    // the system clock must run: count it over 10 ms (REG_CLOCK counts system clock cycles)
+    // the PLL must run at the clock of the mode: count REG_CLOCK (system clock cycles) over 10 ms
+    uint32_t t0 = time_us_32();
     uint32_t c0 = read32(FT81x_REG_CLOCK);
     delay(10);
+    uint32_t t1 = time_us_32();
     uint32_t c1 = read32(FT81x_REG_CLOCK);
-    clock_hz = (c1 - c0) * 100;
-    if (clock_hz < 10000000) return false; // not running (FT81x system clock is 24..72 MHz)
+    clock_hz = (uint32_t) ((uint64_t) (c1 - c0) * 1000000ULL / (t1 - t0));
+    uint32_t want_hz = pll_hz;
+    if (clock_hz < want_hz - want_hz / 20 || clock_hz > want_hz + want_hz / 20) return false; // off by 5 %
 
     slow_spi = false;
     return true;
@@ -675,6 +682,12 @@ void FT812::playAudio(const uint32_t offset, const uint32_t size, const uint16_t
     write16(FT81x_REG_PLAYBACK_FREQ, sampleRate);
     write8(FT81x_REG_PLAYBACK_FORMAT, format);
     write8(FT81x_REG_PLAYBACK_LOOP, loop);
+    write8(FT81x_REG_PLAYBACK_PLAY, 1);
+}
+
+void FT812::stopAudio() {
+    // the programmer guide's way: a zero length, played
+    write32(FT81x_REG_PLAYBACK_LENGTH, 0);
     write8(FT81x_REG_PLAYBACK_PLAY, 1);
 }
 

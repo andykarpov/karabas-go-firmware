@@ -1,4 +1,5 @@
 #include "main.h"
+#include "diag/hang_diag.h"
 #include "at_cmd.h"
 #include "file_name.h"
 
@@ -100,9 +101,11 @@ static void at_command(const char *arg) {
     at_list_cores();
   } else if (strcasecmp(arg, "boot") == 0) {
     Serial.print("OK\r\n"); Serial.flush(); delay(100);
+    hang_diag_stop();
     rp2040.rebootToBootloader();
   } else if (strcasecmp(arg, "msc") == 0) {
     Serial.print("OK\r\n"); Serial.flush(); delay(100);
+    hang_diag_stop();
     msc_reboot_to_msc();
   } else if (strcasecmp(arg, "esp") == 0 && core.type == CORE_TYPE_BOOT) {
     esp_mode = true;

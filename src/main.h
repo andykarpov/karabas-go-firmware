@@ -34,6 +34,7 @@
 #include "storage/settings.h"
 #include "storage/msc.h"
 #include "storage/img_mount.h"
+#include "usb/usb_device.h"
 #include "ui/osd_ui.h"
 
 #define SD2_CONFIG SdSpiConfig(PIN_MCU_SD2_CS, SHARED_SPI, SD_SCK_MHZ(16)) // SD2 SPI Settings

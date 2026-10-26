@@ -259,7 +259,7 @@ private:
   bool has_reset;
   ElapsedTimer init_timer;
   bool slow_spi = false;             ///< SPI at FT81x_SPI_LOW_CLOCK_SPEED until the system clock runs
-  uint32_t clock_hz = 0;             ///< system clock measured by the last init()
+  uint32_t clock_hz = 0;             ///< system clock measured by the last init() (also when it failed)
   uint8_t init_attempts = 0;         ///< attempts used by the last init()
 
   void powerCycle();                 ///< hardware reset through PD_N (MCU pin or FPGA)
@@ -757,6 +757,7 @@ public:
         @brief  Stop audio output by playing silence
     */
     void stopSound();
+    void stopAudio(); // stops PCM playback (playAudio)
 
 };
 

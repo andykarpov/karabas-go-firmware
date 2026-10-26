@@ -1,0 +1,19 @@
+--- Adafruit_TinyUSB_rp2040_orig.cpp	2026-10-26 11:59:58.701339300 +0100
++++ Adafruit_TinyUSB_rp2040.cpp	2026-10-26 12:00:07.730802556 +0100
+@@ -78,7 +78,16 @@
+ // have multiple cores updating the TUSB state in parallel
+ mutex_t __usb_mutex;
+ 
++// karabas: a FreeRTOS firmware runs tud_task() in a task. TinyUSB (OPT_OS_PICO) waits for its
++// pico mutexes, and a wait in an irq is a FreeRTOS assert that stops the core with irqs off.
++// The hook wakes that task and returns true; without it (or before the task exists) the irq
++// runs tud_task() itself, as before.
++extern "C" bool TinyUSB_Port_DeviceTaskHook(void) __attribute__((weak));
++
+ static void usb_task_irq(void) {
++  if (TinyUSB_Port_DeviceTaskHook && TinyUSB_Port_DeviceTaskHook()) {
++    return;
++  }
+   // if the mutex is already owned, then we are in user code
+   // in this file which will do a tud_task itself, so we'll just do nothing
+   // until the next tick; we won't starve

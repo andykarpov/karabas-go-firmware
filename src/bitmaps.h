@@ -1439,11 +1439,20 @@ static const uint8_t bgData[]  = {
 
 #endif
 
+// the FT812 plays PCM from an 8 byte aligned start, with a length a multiple of 8 bytes
+// (FT81x programmer guide, REG_PLAYBACK_START / REG_PLAYBACK_LENGTH): the sounds start aligned
+#define FT_AUDIO_ALIGN(x) (((x) + 7) & ~7u)
+// KEYn_PCM_START / KEYn_PCM_SIZE: the u-law samples in the array. Sounds 2..4 are whole .wav
+// files: only their "data" chunk goes into GRAM, the RIFF header and the LIST / id3 tags at
+// the end played as clicks.
+
 // давай ключик wav
 #define KEY1_SIZE 23040
 #define KEY1_DURATION 1200
 #define KEY1_SAMPLERATE 22050
-#define KEY1_OFFSET LOGO_BITMAP_SIZE + BG_BITMAP_SIZE
+#define KEY1_PCM_START 0
+#define KEY1_PCM_SIZE KEY1_SIZE
+#define KEY1_OFFSET FT_AUDIO_ALIGN(LOGO_BITMAP_SIZE + BG_BITMAP_SIZE)
 
 // array size is 23040
 static const uint8_t key1Data[]  = {
@@ -2893,7 +2902,9 @@ static const uint8_t key1Data[]  = {
 #define KEY2_SIZE 43468
 #define KEY2_DURATION 1000
 #define KEY2_SAMPLERATE 44100
-#define KEY2_OFFSET LOGO_BITMAP_SIZE + BG_BITMAP_SIZE + KEY1_SIZE
+#define KEY2_PCM_START 58
+#define KEY2_PCM_SIZE 43088
+#define KEY2_OFFSET (KEY1_OFFSET + FT_AUDIO_ALIGN(KEY1_PCM_SIZE))
 
 // array size is 43468
 static const uint8_t key2Data[]  = {
@@ -5618,9 +5629,11 @@ static const uint8_t key2Data[]  = {
 
 // run wav
 #define KEY3_SIZE 31076
-#define KEY3_DURATION 1400
+#define KEY3_DURATION 1450
 #define KEY3_SAMPLERATE 22050
-#define KEY3_OFFSET LOGO_BITMAP_SIZE + BG_BITMAP_SIZE + KEY1_SIZE + KEY2_SIZE
+#define KEY3_PCM_START 58
+#define KEY3_PCM_SIZE 31017
+#define KEY3_OFFSET (KEY2_OFFSET + FT_AUDIO_ALIGN(KEY2_PCM_SIZE))
 
 static const uint8_t key3Data[]  = {
   0x52, 0x49, 0x46, 0x46, 0x5c, 0x79, 0x00, 0x00, 0x57, 0x41, 0x56, 0x45, 0x66, 0x6d, 0x74, 0x20, 
@@ -7569,9 +7582,11 @@ static const uint8_t key3Data[]  = {
 };
 
 #define KEY4_SIZE 62786
-#define KEY4_DURATION 2800
+#define KEY4_DURATION 2900
 #define KEY4_SAMPLERATE 22050
-#define KEY4_OFFSET LOGO_BITMAP_SIZE + BG_BITMAP_SIZE + KEY1_SIZE + KEY2_SIZE + KEY3_SIZE
+#define KEY4_PCM_START 58
+#define KEY4_PCM_SIZE 62520
+#define KEY4_OFFSET (KEY3_OFFSET + FT_AUDIO_ALIGN(KEY3_PCM_SIZE))
 
 // array size is 62786
 static const uint8_t key4Data[]  = {

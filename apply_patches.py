@@ -8,6 +8,10 @@ FRAMEWORK_DIR = env.PioPlatform().get_package_dir("framework-arduinopico")
 patches = [
     [join("patches", "1-adafruit-usbh-host.patch"), join(FRAMEWORK_DIR, "libraries", "Adafruit_TinyUSB_Arduino", "src", "arduino", "Adafruit_USBH_Host.cpp")],
 #    [join("patches", "1-adafruit-usbh-host.patch"), join(LIBDEPS_DIR, env["PIOENV"], "Adafruit TinyUSB Library", "src", "arduino", "Adafruit_USBH_Host.cpp")],
+    # the task side of the CDC serial takes __usb_mutex, as the USBD task does around tud_task()
+    [join("patches", "3-adafruit-usbd-cdc.patch"), join(FRAMEWORK_DIR, "libraries", "Adafruit_TinyUSB_Arduino", "src", "arduino", "Adafruit_USBD_CDC.cpp")],
+    # tud_task() runs in a task (src/usb/usb_device.cpp), the USB irq only wakes it
+    [join("patches", "4-adafruit-tinyusb-rp2040-port.patch"), join(FRAMEWORK_DIR, "libraries", "Adafruit_TinyUSB_Arduino", "src", "arduino", "ports", "rp2040", "Adafruit_TinyUSB_rp2040.cpp")],
     [join("patches", "2-adafruit-sdfatconfig.patch"), join(LIBDEPS_DIR, env["PIOENV"], "SdFat - Adafruit Fork", "src", "SdFatConfig.h")],
 ]
 

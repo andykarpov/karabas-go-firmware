@@ -29,6 +29,7 @@
 #include "ps2kbd.h"
 #include "app_core_browser.h"
 #include "diag/diag.h"
+#include "diag/hang_diag.h"
 #include "usb/printer_host.h"
 #include "periph/printer_usb.h"
 #include "periph/printer_link.h"
@@ -65,6 +66,7 @@ static struct UsbPioReserve {
 static void karabas_setup()
 {
   hw_setup.debug_enabled = true;
+  hang_diag_report();
 
   msc_init();
 
@@ -138,6 +140,7 @@ static void karabas_setup()
   if (!msc_active()) {
     // load setup
     load_setup();
+    if (hw_setup.debug_enabled) hang_diag_start();
 
     // load boot from SD or flashfs
     if (has_sd && sd1.exists(FILENAME_BOOT)) {  
@@ -184,8 +187,11 @@ static void usb_host_setup() {
 // firmware main loop, runs on core0
 static void karabas_loop()
 {
+  // hang_mark: where APP is, for the hang diagnostics (tick << 8 | step)
+  hang_mark(0x0100);
   diag_loop_core0();
   diag_tick();
+  hang_mark(0x0200);
   debug_drain();
 
   //rp2040.wdt_reset();
@@ -194,11 +200,14 @@ static void karabas_loop()
   bool btn2 = btn_read(1);
 
   // in msc mode nothing else runs until eject or btn1 long press
+  hang_mark(0x0300);
   if (msc_tick(btn1)) return;
 
+  hang_mark(0x0400);
   zxrtc.handle();
 
   // osd hide / popup timers
+  hang_mark(0x0500);
   ui_tick();
 
   if (led_timer.elapsed() >= 100) {
@@ -206,25 +215,35 @@ static void karabas_loop()
       led_timer.reset();
   }
 
+  hang_mark(0x0600);
   input_tick_buttons(btn1, btn2);
+  hang_mark(0x0700);
   input_tick_ui();
+  hang_mark(0x0800);
   input_tick_repeat();
 
+  hang_mark(0x0900);
   osd_handle(false);
 
+  hang_mark(0x0a00);
   link_report_drops();
   link_dispatch_pending();
+  hang_mark(0x0b00);
   printer_link_tick();
 
   // sector requests of the file mounter
+  hang_mark(0x0c00);
   img_tick();
 
+  hang_mark(0x0d00);
   serial_bridge_tick();
 
   // send byte from esp tx fifo
+  hang_mark(0x0e00);
   esp_serial.handle();
 
   // let the fpga talk even when nothing else was sent
+  hang_mark(0x0f00);
   link_poll();
 }
 
@@ -232,6 +251,7 @@ static void karabas_loop()
 static void usb_host_loop()
 {
   diag_loop_core1();
+  hang_beat_core1();
   tuh_task();
   printer_host_tick(millis());
   printer_usb_tick();
@@ -279,6 +299,8 @@ static void usb_task(void *param) {
 }
 
 void setup() {
+  // first: until it exists, the USB irq runs the device stack itself
+  usb_device_task_start();
   link_os_init();
   // before the USB task: its hid callbacks push events into the link queue
   link_queue_init();

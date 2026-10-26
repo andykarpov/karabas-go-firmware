@@ -1,6 +1,7 @@
 #include "main.h"
 #include "bitmaps.h"
 #include "ui/ft_mouse.h"
+#include "diag/hang_diag.h"
 
 // GRAM after the images and sounds of the menu: the pointer, then the kept frame
 #define POINTER_OFFSET 0xF0000
@@ -8,7 +9,7 @@
 #define POINTER_H 17
 #define FRAME_OFFSET (POINTER_OFFSET + 0x400)
 #define FRAME_MAX 8192 // the display list RAM
-static_assert(KEY4_OFFSET + KEY4_SIZE <= POINTER_OFFSET, "the pointer overlaps the sounds in GRAM");
+static_assert(KEY4_OFFSET + KEY4_PCM_SIZE <= POINTER_OFFSET, "the pointer overlaps the sounds in GRAM");
 static_assert(FRAME_OFFSET + FRAME_MAX <= 0x100000, "the kept frame is past the GRAM");
 
 #define HIDE_MS 5000
@@ -143,13 +144,18 @@ static void draw_pointer() {
   frame_timer.reset();
 }
 
+// hang marks: the FT steps inside the tick that draws
+static void ft_mark(uint8_t step) { hang_step(step); }
+
 void ft_frame_end() {
+  ft_mark(0x51);
   uint16_t len = ft.displayListSize();
   static uint16_t len_max = 0;
   if (len > len_max) { // how close a screen gets to the 8 KB of the display list
     len_max = len;
     d_printf("FT display list: %u bytes (most so far)", len); d_println();
   }
+  ft_mark(0x52);
   if (len > 0 && len <= FRAME_MAX) {
     ft.cmdMemcpy(FRAME_OFFSET, FT81x_RAM_DL, len);
     frame_len = len;
@@ -158,12 +164,16 @@ void ft_frame_end() {
   }
   draw_pointer();
   ft.swapScreen();
+  ft_mark(0x53);
 }
 
 void ft_pointer_frame() {
   if (!frame_len) return;
+  ft_mark(0x61);
   ft.beginDisplayList();
   ft.cmdAppend(FRAME_OFFSET, frame_len);
+  ft_mark(0x62);
   draw_pointer();
   ft.swapScreen();
+  ft_mark(0x63);
 }
