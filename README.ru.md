@@ -62,6 +62,29 @@ USB HID геймпада в браузере и загрузка его ini-др
 [karabas-go](https://github.com/andykarpov/karabas-go) и
 [karabas-mini](https://github.com/andykarpov/karabas-mini).
 
+### Тестовая прошивка из pull request
+
+CI собирает прошивку для каждого PR. Скачать её может любой, кто вошёл в GitHub, права на
+репозиторий не нужны.
+
+1. Откройте страницу PR и перейдите на вкладку **Checks**.
+2. Выберите слева **Build**, затем **Summary** в самом верху левой колонки.
+3. Внизу страницы, в блоке **Artifacts**, скачайте архив для своей платы:
+
+   | Плата | Артефакт |
+   |---|---|
+   | Karabas Go | `firmware-go` |
+   | Karabas Mini | `firmware-mini` |
+   | Karabas Mini G | `firmware-minig` |
+
+4. Распакуйте zip и прошейте `firmware.uf2`, как описано в разделе
+   [Обновление прошивки](#обновление-прошивки).
+
+На **Checks** показан прогон последнего коммита PR, это самая свежая сборка. Это тестовая
+прошивка, не релиз: чтобы вернуться на стабильную, прошейте `.uf2` из
+[Releases](https://github.com/andykarpov/karabas-go-firmware/releases). GitHub хранит
+артефакты 90 дней.
+
 ## Обновление прошивки
 
 1. Переведите RP2040 в режим BOOTSEL: зажмите кнопку **Boot**, нажмите и отпустите **Reset**,

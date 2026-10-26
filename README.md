@@ -62,6 +62,29 @@ The same files go to the `firmware/` folders of
 [karabas-go](https://github.com/andykarpov/karabas-go) and
 [karabas-mini](https://github.com/andykarpov/karabas-mini), together with an example `karabas.ini`.
 
+### Test firmware from a pull request
+
+CI builds the firmware of every PR. Anyone signed in to GitHub can download it, no rights to
+the repository are needed.
+
+1. Open the PR page and go to the **Checks** tab.
+2. Pick **Build** on the left, then **Summary** at the top of the left column.
+3. At the bottom of the page, under **Artifacts**, download the archive for your board:
+
+   | Board | Artifact |
+   |---|---|
+   | Karabas Go | `firmware-go` |
+   | Karabas Mini | `firmware-mini` |
+   | Karabas Mini G | `firmware-minig` |
+
+4. Unzip it and flash `firmware.uf2` as described in
+   [Updating the firmware](#updating-the-firmware).
+
+**Checks** shows the run of the latest commit of the PR, the newest build. It is a test build,
+not a release: to go back to the stable firmware, flash the `.uf2` from
+[Releases](https://github.com/andykarpov/karabas-go-firmware/releases). GitHub keeps the
+artifacts for 90 days.
+
 ## Updating the firmware
 
 1. Put the RP2040 into BOOTSEL mode: hold the **Boot** button, press and release **Reset**, then
