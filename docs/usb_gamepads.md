@@ -33,8 +33,8 @@ default map at once. **Map** learns a pad:
 3. Press each MD2 button when asked and release it. `Enter` skips a button (it is also skipped
    after 10 s), `Backspace` goes back one.
 4. `Enter` saves `/drivers/<vid>_<pid>.ini`. Other ini files for the same VID/PID are renamed to
-   `*.ini.bak`. The drivers are reloaded, and the pad uses the new map right away. Until the
-   screen is left, the pad on the screen shows the buttons held through the new map.
+   `*.ini.bak`. The drivers are reloaded, and the pad uses the new map right away. In the graphic
+   setup the pad drawn on the screen then shows the buttons held through the new map.
 
 For each press the mapper takes a hat nibble first, then a single bit, then the axis that moved
 most, as an axis range from halfway between rest and pressed (`lib/KarabasCommon/src/hid_learn`).
