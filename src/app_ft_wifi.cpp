@@ -421,7 +421,9 @@ static void status_enter() {
 
 static bool key(uint8_t key, bool shift, bool joy) {
   bool enter = key == KEY_ENTER || key == KEY_KPENTER;
-  if (key == KEY_ESC) { back(); return !closed; }
+  // Left goes back too where it has nothing else to do
+  bool left_back = key == KEY_LEFT && !ui_repeat && (screen == W_NO_ESP || screen == W_STATUS || screen == W_LIST || screen == W_RESULT);
+  if (key == KEY_ESC || left_back) { back(); return !closed; }
   if (joy && (screen == W_SSID || screen == W_PASS)) {
     bool p = screen == W_PASS;
     if (ui_joy_edit(p ? pass : ssid, p ? PASS_MAX : KG_WIFI_SSID_MAX, key)) {

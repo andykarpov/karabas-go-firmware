@@ -47,8 +47,9 @@ void app_about_overlay() {
 
 void app_about_on_keyboard() 
 {
-  // esc
-  if (usb_keyboard_report.keycode[0] == KEY_ESC || ((joyL | joyR) & UI_JOY_ESC)) {
+  // esc, left
+  bool left = usb_keyboard_report.keycode[0] == KEY_LEFT || ((joyL | joyR) & SC_BTN_LEFT);
+  if (usb_keyboard_report.keycode[0] == KEY_ESC || ((joyL | joyR) & UI_JOY_ESC) || (left && !ui_repeat)) {
     osd_state = osd_return_state;
   }
   zxosd.update();

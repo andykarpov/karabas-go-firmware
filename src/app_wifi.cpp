@@ -409,7 +409,9 @@ static void edit(char *text, size_t max, uint8_t key, bool shift) {
 
 static void on_key(uint8_t key, bool shift) {
   bool enter = key == KEY_ENTER || key == KEY_KPENTER;
-  if (key == KEY_ESC) { back(); return; }
+  // Left goes back too where it has nothing else to do
+  bool left_back = key == KEY_LEFT && !ui_repeat && (screen == W_NO_ESP || screen == W_STATUS || screen == W_LIST || screen == W_RESULT);
+  if (key == KEY_ESC || left_back) { back(); return; }
 
   switch (screen) {
     case W_NO_ESP:

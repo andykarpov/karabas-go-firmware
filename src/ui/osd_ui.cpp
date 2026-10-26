@@ -24,6 +24,7 @@ bool has_ft = false;
 ElapsedTimer hide_timer;
 uint8_t osd_state;
 uint8_t osd_return_state;
+bool ui_repeat = false;
 
 static bool is_popup_hiding = false;
 static ElapsedTimer popup_timer;

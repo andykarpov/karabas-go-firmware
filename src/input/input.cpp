@@ -138,7 +138,9 @@ static void event_forward(const queue_spi_t &packet) {
 // use repeat state to fire on_keyboard event for osd repeating navigation
 void input_tick_repeat() {
   if (is_osd && kb_repeat_key && kb_repeat_state && !prev_kb_repeat_state) {
+    ui_repeat = true;
     on_keyboard();
+    ui_repeat = false;
   }
   prev_kb_repeat_state = kb_repeat_state;
 
@@ -154,7 +156,9 @@ void input_tick_repeat() {
   } else if (dirs && joy_timer.elapsed() >= (joy_repeating ? JOY_REPEAT_MS : JOY_REPEAT_DELAY_MS)) {
     joy_repeating = true;
     joy_timer.reset();
+    ui_repeat = true;
     on_keyboard();
+    ui_repeat = false;
   }
 }
 

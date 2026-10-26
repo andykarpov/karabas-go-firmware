@@ -464,8 +464,8 @@ static void handle(const keys_t &k) {
       if (up) tab = (tab + T_COUNT - 1) % T_COUNT;
       else if (down || k.tab) tab = (tab + 1) % T_COUNT;
       else if (enter || (right && tab < T_SAVE)) open_tab();
-      else if (esc && settings_differ(s, hw_setup)) { focus = F_DIALOG; dialog = D_DROP; dialog_left = false; }
-      else if (esc) leave();
+      else if ((esc || (left && !ui_repeat)) && settings_differ(s, hw_setup)) { focus = F_DIALOG; dialog = D_DROP; dialog_left = false; }
+      else if (esc || (left && !ui_repeat)) leave(); // Left: the tabs are the top level
       break;
     case F_PAGE: {
       uint8_t n = pages[tab].len;

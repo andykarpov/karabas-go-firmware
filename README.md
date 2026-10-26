@@ -133,6 +133,7 @@ long, or the whole file is ignored.
 | Menu (Win) + Esc | Start + C, Start + Select | open / close the OSD of the running core |
 | Ctrl + Alt + Backspace | Start + X | restart the MCU and go back to the core browser |
 | arrows, Enter, Esc | D-pad, A / B, C or Select | navigate the menus (a held direction repeats); not in the gamepad mapping itself |
+| Left | Left | back, where Left has nothing else to do: Setup menu, About, Wi-Fi status and network list, the tabs of the graphic setup |
 | digits | Up / Down | the digit under the cursor of a date / time field |
 | typing | Up / Down, Right, Left | a Wi-Fi text field: change the last char, add one, delete one |
 | `S` | Start (core browser) | Setup: clock, Wi-Fi and Settings (core browser), USB gamepad mapper; in the graphic browser, the graphic setup (settings, video mode, color themes) |

@@ -17,6 +17,8 @@ extern bool has_ft;
 extern ElapsedTimer hide_timer;
 extern uint8_t osd_state;
 extern uint8_t osd_return_state;
+// on_keyboard() runs for a held key or joystick direction, not a press (Left as back ignores it)
+extern bool ui_repeat;
 
 void osd_handle(bool force);
 void ui_on_keyboard();
