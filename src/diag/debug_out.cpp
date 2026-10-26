@@ -3,8 +3,12 @@
 #include "hardware/sync.h"
 #include "tusb.h"
 
+#include "pico/mutex.h"
 #include <FreeRTOS.h>
 #include <task.h>
+
+// taken by the USB irq while it runs tud_task(): see patches/3-adafruit-usbd-cdc.patch
+extern mutex_t __usb_mutex;
 static TaskHandle_t owner_task = nullptr;
 
 // all output, until the owner sends it (as much as the CDC fifo takes), and for everyone until
@@ -53,6 +57,9 @@ static size_t debug_buffer(const uint8_t *data, size_t len) {
 // terminal opening the port while the boot log was written
 void debug_drain() {
   if (!is_owner() || !port_open()) return;
+  // a write claims the endpoint with TinyUSB's mutex: an irq tud_task() in between would wait
+  // for it forever. Taken already: this runs inside tud_task(), the rest goes out later
+  if (!mutex_try_enter(&__usb_mutex, NULL)) return;
   uint8_t chunk[64];
   bool sent = false;
   for (;;) {
@@ -70,6 +77,7 @@ void debug_drain() {
     sent = true;
   }
   if (sent) tud_cdc_write_flush();
+  mutex_exit(&__usb_mutex);
   static uint32_t reported_dropped = 0;
   if (debug_dropped != reported_dropped) {
     reported_dropped = debug_dropped;
