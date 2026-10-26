@@ -30,6 +30,7 @@ enum { CTS_UNKNOWN, CTS_ON, CTS_OFF };
 #define ECHO_TRIES 3
 #define BTN_WIDTH 10
 #define MENU_WIDTH 18
+#define ROW_RESCAN 22
 
 static uint8_t screen;
 static uint8_t step;
@@ -44,6 +45,7 @@ static char version[16];
 static uint8_t cts;
 static int mode;
 static int flow;
+static bool on_rescan; // the list: the Rescan button has the focus (below the last network)
 static char cur_ssid[KG_WIFI_SSID_MAX + 1];
 static char ip[16];
 static kg_wifi_ap_t aps[AP_MAX];
@@ -108,6 +110,7 @@ static void draw();
 static void show(uint8_t s) {
   screen = s;
   sel = 0;
+  on_rescan = false;
   top = 0;
   draw();
 }
@@ -241,6 +244,7 @@ static void draw_field(uint8_t y, const char *text, bool hidden) {
 }
 
 static void draw_list() {
+  ui_button(1, ROW_RESCAN, BTN_WIDTH, "Rescan", on_rescan || aps_len == 0);
   if (aps_len == 0) {
     draw_message(LIST_ROW, "No networks found", OSD::COLOR_YELLOW_I);
     return;
@@ -249,7 +253,7 @@ static void draw_list() {
   if (sel >= top + LIST_ROWS) top = sel - LIST_ROWS + 1;
   for (uint8_t row = 0; row < LIST_ROWS && top + row < aps_len; row++) {
     const kg_wifi_ap_t &ap = aps[top + row];
-    bool focused = top + row == sel;
+    bool focused = top + row == sel && !on_rescan;
     zxosd.setColor(focused ? OSD::COLOR_BLACK : OSD::COLOR_WHITE, focused ? OSD::COLOR_YELLOW_I : OSD::COLOR_BLACK);
     zxosd.fill(0, LIST_ROW + row, 31, LIST_ROW + row, ' ');
     zxosd.setPos(0, LIST_ROW + row);
@@ -405,7 +409,9 @@ static void edit(char *text, size_t max, uint8_t key, bool shift) {
 
 static void on_key(uint8_t key, bool shift) {
   bool enter = key == KEY_ENTER || key == KEY_KPENTER;
-  if (key == KEY_ESC) { back(); return; }
+  // Left goes back too where it has nothing else to do
+  bool left_back = key == KEY_LEFT && !ui_repeat && (screen == W_NO_ESP || screen == W_STATUS || screen == W_LIST || screen == W_RESULT);
+  if (key == KEY_ESC || left_back) { back(); return; }
 
   switch (screen) {
     case W_NO_ESP:
@@ -428,12 +434,14 @@ static void on_key(uint8_t key, bool shift) {
       draw();
       break;
     case W_LIST:
-      if (key == KEY_UP && sel > 0) sel--;
-      else if (key == KEY_DOWN && sel + 1 < aps_len) sel++;
-      else if (key == KEY_PAGEUP) sel = sel > LIST_ROWS ? sel - LIST_ROWS : 0;
-      else if (key == KEY_PAGEDOWN) sel = sel + LIST_ROWS < aps_len ? sel + LIST_ROWS : (aps_len ? aps_len - 1 : 0);
-      else if (key == KEY_R) { show(W_SCAN); run(S_SCAN); return; }
-      else if (enter && aps_len) {
+      if (key == KEY_UP && on_rescan) on_rescan = false;
+      else if (key == KEY_UP && sel > 0) sel--;
+      else if (key == KEY_DOWN && !on_rescan && sel + 1 < aps_len) sel++;
+      else if (key == KEY_DOWN) on_rescan = true; // below the last network
+      else if (key == KEY_PAGEUP) { on_rescan = false; sel = sel > LIST_ROWS ? sel - LIST_ROWS : 0; }
+      else if (key == KEY_PAGEDOWN) { on_rescan = false; sel = sel + LIST_ROWS < aps_len ? sel + LIST_ROWS : (aps_len ? aps_len - 1 : 0); }
+      else if (key == KEY_R || (enter && (on_rescan || aps_len == 0))) { show(W_SCAN); run(S_SCAN); return; }
+      else if (enter) {
         if (aps[sel].ecn == 0) { strcpy(ssid, aps[sel].ssid); pass[0] = '\0'; from_list = true; join(); }
         else open_pass(aps[sel].ssid, true);
         return;
@@ -463,14 +471,16 @@ void app_wifi_on_keyboard() {
   bool shift = usb_keyboard_report.modifier & (KEY_MOD_LSHIFT | KEY_MOD_RSHIFT);
   for (uint8_t i = 0; i < n && osd_state == state_wifi; i++) on_key(keys[i], shift);
 
-  // the joystick moves through the lists and buttons
-  uint16_t joy = joyL | joyR;
-  if (n == 0 && joy && osd_state == state_wifi && screen != W_SSID && screen != W_PASS) {
-    if (joy & SC_BTN_UP) on_key(KEY_UP, false);
-    else if (joy & SC_BTN_DOWN) on_key(KEY_DOWN, false);
-    else if (joy & SC_BTN_LEFT) on_key(KEY_LEFT, false);
-    else if (joy & SC_BTN_RIGHT) on_key(KEY_RIGHT, false);
-    else if (joy & (SC_BTN_A | SC_BTN_B)) on_key(KEY_ENTER, false);
-    else if (joy & SC_BTN_C) on_key(KEY_ESC, false);
+  // the joystick moves through the lists and buttons, picks the chars of the text fields
+  uint8_t key = n == 0 && osd_state == state_wifi ? ui_joy_key() : 0;
+  if (!key) return;
+  if (screen == W_SSID || screen == W_PASS) {
+    bool p = screen == W_PASS;
+    if (ui_joy_edit(p ? pass : ssid, p ? PASS_MAX : KG_WIFI_SSID_MAX, key)) {
+      if (p) show_pass = true; // the picked chars are seen
+      draw();
+      return;
+    }
   }
+  on_key(key, false);
 }

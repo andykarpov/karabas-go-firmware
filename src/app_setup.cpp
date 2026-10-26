@@ -83,18 +83,14 @@ void app_setup_on_keyboard()
     setup_menu.right();
   }
 
-  // left
-  if (usb_keyboard_report.keycode[0] == KEY_LEFT || (joyL & SC_BTN_LEFT) || (joyR & SC_BTN_LEFT)) {
-    setup_menu.left();
-  }
-
   // enter
   if (usb_keyboard_report.keycode[0] == KEY_ENTER || (joyL & SC_BTN_A) || (joyR & SC_BTN_A) || (joyL & SC_BTN_B) || (joyR & SC_BTN_B)) {
     setup_menu.set();
   }
 
-  // esc
-  if (usb_keyboard_report.keycode[0] == KEY_ESC || (joyL & SC_BTN_C) || (joyR & SC_BTN_C)) {
+  // esc, left (the menu has only buttons)
+  bool left = usb_keyboard_report.keycode[0] == KEY_LEFT || ((joyL | joyR) & SC_BTN_LEFT);
+  if (usb_keyboard_report.keycode[0] == KEY_ESC || ((joyL | joyR) & UI_JOY_ESC) || (left && !ui_repeat)) {
     osd_state = osd_return_state;
   }
 

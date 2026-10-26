@@ -258,8 +258,14 @@ static void list_on_keyboard(uint8_t key) {
   draw();
 }
 
+bool app_pad_mapper_listing() {
+  return state == ST_LIST;
+}
+
 void app_pad_mapper_on_keyboard() {
   uint8_t key = usb_keyboard_report.keycode[0];
+  // the joystick only on the ports: the mapping reads the pads itself
+  if (!key && state == ST_LIST) key = ui_joy_key();
   if (key == KEY_ESC && state == ST_LIST) {
     state = ST_IDLE;
     osd_state = state_setup;

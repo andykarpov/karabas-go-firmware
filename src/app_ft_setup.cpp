@@ -464,8 +464,8 @@ static void handle(const keys_t &k) {
       if (up) tab = (tab + T_COUNT - 1) % T_COUNT;
       else if (down || k.tab) tab = (tab + 1) % T_COUNT;
       else if (enter || (right && tab < T_SAVE)) open_tab();
-      else if (esc && settings_differ(s, hw_setup)) { focus = F_DIALOG; dialog = D_DROP; dialog_left = false; }
-      else if (esc) leave();
+      else if ((esc || (left && !ui_repeat)) && settings_differ(s, hw_setup)) { focus = F_DIALOG; dialog = D_DROP; dialog_left = false; }
+      else if (esc || (left && !ui_repeat)) leave(); // Left: the tabs are the top level
       break;
     case F_PAGE: {
       uint8_t n = pages[tab].len;
@@ -510,11 +510,8 @@ static void custom_on_keyboard(const uint8_t *keys, uint8_t n) {
     ft_mouse_hide();
     custom_key(keys[i], shift, false);
   }
-  uint16_t joy = joyL | joyR;
-  if (n == 0 && joy) {
-    uint8_t key = (joy & SC_BTN_UP) ? KEY_UP : (joy & SC_BTN_DOWN) ? KEY_DOWN :
-                  (joy & SC_BTN_LEFT) ? KEY_LEFT : (joy & SC_BTN_RIGHT) ? KEY_RIGHT :
-                  (joy & (SC_BTN_A | SC_BTN_B)) ? KEY_ENTER : (joy & SC_BTN_C) ? KEY_ESC : 0;
+  if (n == 0) {
+    uint8_t key = ui_joy_key();
     if (!key) return;
     ft_mouse_hide();
     custom_key(key, false, true);
@@ -539,7 +536,7 @@ void app_ft_setup_on_keyboard() {
   k.left = key == KEY_LEFT || (joyL & SC_BTN_LEFT) || (joyR & SC_BTN_LEFT);
   k.right = key == KEY_RIGHT || (joyL & SC_BTN_RIGHT) || (joyR & SC_BTN_RIGHT);
   k.enter = key == KEY_ENTER || key == KEY_KPENTER || (joyL & SC_BTN_A) || (joyR & SC_BTN_A) || (joyL & SC_BTN_B) || (joyR & SC_BTN_B);
-  k.esc = key == KEY_ESC || (joyL & SC_BTN_C) || (joyR & SC_BTN_C);
+  k.esc = key == KEY_ESC || ((joyL | joyR) & UI_JOY_ESC);
   k.back = k.esc || key == KEY_BACKSPACE;
   k.tab = key == KEY_TAB;
   k.shift = usb_keyboard_report.modifier & (KEY_MOD_LSHIFT | KEY_MOD_RSHIFT);

@@ -115,7 +115,7 @@ void app_rtc_on_keyboard() {
   bool left = key == KEY_LEFT || (joyL & SC_BTN_LEFT) || (joyR & SC_BTN_LEFT);
   bool right = key == KEY_RIGHT || (joyL & SC_BTN_RIGHT) || (joyR & SC_BTN_RIGHT);
   bool enter = key == KEY_ENTER || key == KEY_KPENTER || (joyL & SC_BTN_A) || (joyR & SC_BTN_A) || (joyL & SC_BTN_B) || (joyR & SC_BTN_B);
-  bool esc = key == KEY_ESC || (joyL & SC_BTN_C) || (joyR & SC_BTN_C);
+  bool esc = key == KEY_ESC || ((joyL | joyR) & UI_JOY_ESC);
   kg_field_t *field = focus == F_DATE ? &date_field : focus == F_TIME ? &time_field : nullptr;
   char digit = key_digit(key);
 
@@ -123,7 +123,11 @@ void app_rtc_on_keyboard() {
     osd_state = state_setup;
     return;
   }
-  if (up) {
+  if (field && !key && (up || down)) {
+    // the joystick has no digits: Up / Down turn the one under the cursor
+    error = nullptr;
+    kg_field_turn(field, up ? 1 : -1);
+  } else if (up) {
     focus = focus == F_DATE ? F_CANCEL : focus == F_CANCEL ? F_TIME : focus - 1;
   } else if (down) {
     focus = (focus + 1) % F_COUNT;

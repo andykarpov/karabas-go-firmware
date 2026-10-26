@@ -433,7 +433,7 @@ void app_core_on_keyboard() {
     }
 
     // esc: back to the dir of the mounted image
-    if (usb_keyboard_report.keycode[0] == KEY_ESC || (joyL & SC_BTN_A) || (joyR & SC_BTN_A) ) {
+    if (usb_keyboard_report.keycode[0] == KEY_ESC || (joyL & SC_BTN_A) || (joyR & SC_BTN_A) || ((joyL | joyR) & UI_JOY_ESC)) {
       core_file_slot_t &fs = file_slots[core.osd[curr_osd_item].slot_id];
       if (strcmp(fs.dir, filebrowser_dir) != 0) {
         memcpy(fs.dir, filebrowser_dir, sizeof(filebrowser_dir));

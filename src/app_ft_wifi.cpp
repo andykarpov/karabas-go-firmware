@@ -50,6 +50,7 @@ static bool closed;    // Esc left the page
 static uint8_t sel;
 static uint8_t top;
 static uint8_t list_rows = 8; // the rows that fit, from the last draw
+static bool on_rescan; // the list: the Rescan button has the focus (above the first network)
 
 static char version[16];
 static uint8_t cts;
@@ -115,6 +116,7 @@ static void start_step() {
 static void show(uint8_t s) {
   screen = s;
   sel = 0;
+  on_rescan = false;
   top = 0;
   dirty = true;
 }
@@ -250,7 +252,7 @@ static void draw_list(const ft_page_ctx_t &c) {
     snprintf(b, sizeof(b), "%u/%u", sel + 1, aps_len);
     ft.drawText(c.x + c.w - 16 - 140 - 16, c.y + FT_PAGE_BTN_H / 2, FT_PAGE_FONT_SMALL, c.s->color_copyright, FT81x_OPT_RIGHTX | FT81x_OPT_CENTERY, b);
   }
-  ft_page_button(c, c.x + c.w - 16 - 140, c.y, 140, "Rescan", false, HIT_RESCAN);
+  ft_page_button(c, c.x + c.w - 16 - 140, c.y, 140, "Rescan", c.focused && (on_rescan || aps_len == 0), HIT_RESCAN);
   int16_t y0 = c.y + FT_PAGE_BTN_H + 8;
   list_rows = (c.h - (y0 - c.y)) / LIST_ROW_H;
   if (list_rows < 1) list_rows = 1;
@@ -264,7 +266,7 @@ static void draw_list(const ft_page_ctx_t &c) {
     const kg_wifi_ap_t &ap = aps[top + row];
     int16_t y = y0 + row * LIST_ROW_H;
     bool hovered = ft_page_hit(c.x, y, c.w, LIST_ROW_H - 2, HIT_AP + top + row);
-    ft_page_row(c, c.x, y, c.w, LIST_ROW_H - 2, top + row == sel, hovered);
+    ft_page_row(c, c.x, y, c.w, LIST_ROW_H - 2, top + row == sel && !on_rescan, hovered);
     char b[8];
     snprintf(b, sizeof(b), "%d", ap.rssi);
     int16_t cy = y + (LIST_ROW_H - 2) / 2;
@@ -419,8 +421,17 @@ static void status_enter() {
 
 static bool key(uint8_t key, bool shift, bool joy) {
   bool enter = key == KEY_ENTER || key == KEY_KPENTER;
-  if (key == KEY_ESC) { back(); return !closed; }
-  if (joy && (screen == W_SSID || screen == W_PASS)) return true; // the keyboard types there
+  // Left goes back too where it has nothing else to do
+  bool left_back = key == KEY_LEFT && !ui_repeat && (screen == W_NO_ESP || screen == W_STATUS || screen == W_LIST || screen == W_RESULT);
+  if (key == KEY_ESC || left_back) { back(); return !closed; }
+  if (joy && (screen == W_SSID || screen == W_PASS)) {
+    bool p = screen == W_PASS;
+    if (ui_joy_edit(p ? pass : ssid, p ? PASS_MAX : KG_WIFI_SSID_MAX, key)) {
+      if (p) show_pass = true; // the picked chars are seen
+      dirty = false;
+      return true;
+    }
+  }
 
   switch (screen) {
     case W_NO_ESP:
@@ -439,12 +450,14 @@ static bool key(uint8_t key, bool shift, bool joy) {
       else if (enter) show(W_STATUS);
       break;
     case W_LIST:
-      if (key == KEY_UP && sel > 0) sel--;
+      if (key == KEY_UP && !on_rescan && sel > 0) sel--;
+      else if (key == KEY_UP) on_rescan = true; // above the first network
+      else if (key == KEY_DOWN && on_rescan) on_rescan = false;
       else if (key == KEY_DOWN && sel + 1 < aps_len) sel++;
-      else if (key == KEY_PAGEUP) sel = sel > list_rows ? sel - list_rows : 0;
-      else if (key == KEY_PAGEDOWN) sel = sel + list_rows < aps_len ? sel + list_rows : (aps_len ? aps_len - 1 : 0);
-      else if (key == KEY_R) scan();
-      else if (enter && aps_len) join_ap(sel);
+      else if (key == KEY_PAGEUP) { on_rescan = false; sel = sel > list_rows ? sel - list_rows : 0; }
+      else if (key == KEY_PAGEDOWN) { on_rescan = false; sel = sel + list_rows < aps_len ? sel + list_rows : (aps_len ? aps_len - 1 : 0); }
+      else if (key == KEY_R || (enter && (on_rescan || aps_len == 0))) scan();
+      else if (enter) join_ap(sel);
       break;
     case W_SSID:
       if (enter) { if (ssid[0]) open_pass(ssid, false); }
@@ -466,6 +479,7 @@ static bool key(uint8_t key, bool shift, bool joy) {
 static bool click(int16_t id) {
   if (id >= HIT_AP && id < HIT_AP + AP_MAX) {
     uint8_t i = id - HIT_AP;
+    on_rescan = false;
     if (i == sel) join_ap(i);
     else sel = i;
   } else if (id >= HIT_STATUS && id < HIT_STATUS + 3) {
@@ -488,6 +502,7 @@ static bool click(int16_t id) {
 
 static void wheel(int16_t id, int d) {
   if (screen != W_LIST || aps_len == 0) return;
+  on_rescan = false;
   if (d > 0 && sel > 0) sel--;
   else if (d < 0 && sel + 1 < aps_len) sel++;
 }
@@ -496,6 +511,7 @@ static const char *hint() {
   switch (screen) {
     case W_INIT: case W_SCAN: case W_JOIN: return "Please wait";
     case W_LIST: return "* password, joined in color";
+    case W_SSID: return "Pad: Up/Down: char   Right: add   Left: delete";
     case W_PASS: return show_pass ? "Tab: hide the password" : "Tab: show the password";
     default: return "";
   }

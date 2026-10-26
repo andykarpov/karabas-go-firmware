@@ -7,3 +7,5 @@
 void app_pad_mapper_overlay();
 void app_pad_mapper_on_keyboard();
 void app_pad_mapper_tick();
+// true on the list of the ports (not mapping a pad)
+bool app_pad_mapper_listing();

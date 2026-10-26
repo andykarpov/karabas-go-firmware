@@ -35,6 +35,30 @@ bool kg_field_type(kg_field_t *f, char digit) {
   return f->pos == was;
 }
 
+void kg_field_turn(kg_field_t *f, int d) {
+  if (f->pos >= f->len) return;
+  char &ch = f->text[f->pos];
+  if (!is_digit(ch)) return;
+  ch = '0' + ((ch - '0' + d) % 10 + 10) % 10;
+}
+
+void kg_text_add(char *text, size_t max) {
+  size_t len = strlen(text);
+  if (len >= max) return;
+  text[len] = KG_TEXT_CHARS[0];
+  text[len + 1] = '\0';
+}
+
+void kg_text_turn(char *text, size_t max, int d) {
+  size_t len = strlen(text);
+  if (len == 0) { kg_text_add(text, max); return; }
+  static const char chars[] = KG_TEXT_CHARS;
+  const int n = sizeof(chars) - 1;
+  const char *p = strchr(chars, text[len - 1]);
+  int i = p && text[len - 1] ? (int)(p - chars) : 0;
+  text[len - 1] = chars[((i + d) % n + n) % n];
+}
+
 // n digits at text, -1 if one is not a digit
 static int number(const char *text, int n) {
   int v = 0;

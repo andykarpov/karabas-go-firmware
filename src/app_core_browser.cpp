@@ -45,6 +45,7 @@ uint32_t autoload_countdown;
 // the clickable areas of the graphic browser besides the cores (0..cores_len-1)
 enum { HIT_SETUP = 1000, HIT_PREV, HIT_NEXT };
 static int16_t hover = FT_HIT_NONE; // under the pointer at the last draw
+static bool setup_focus = false;    // the graphic browser: the keys are on the Setup button
 
 void app_core_browser_overlay() {
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
@@ -251,8 +252,9 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
   for(uint8_t i=core_from; i < core_to; i++) {
     char name[18];
     String n = String(cores[i].name); n.trim(); n.toCharArray(name, 18);
-    const uint32_t colorb = i == core_sel ? color_button_active : color_button;
-    const uint32_t colort = i == core_sel ? color_text_active : color_text;
+    const bool sel = i == core_sel && !setup_focus;
+    const uint32_t colorb = sel ? color_button_active : color_button;
+    const uint32_t colort = sel ? color_text_active : color_text;
     if (ft_hit_add(ft.width()/4 + 8, offset + pos*FT_CORE_STEP, ft.width()/2-16, 32, i)) {
       // hovered: a rect grows by its corner radius, so this is a 2 px frame around the button
       ft.drawRect(ft.width()/4 + 8, offset + pos*FT_CORE_STEP, ft.width()/2-16, 32, 2, color_button_active);
@@ -300,8 +302,8 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
 
   // the Setup button (S) under the logo
   if (ft_hit_add(14, 82, 120, 44, HIT_SETUP)) ft.drawCircle(36, 104, 20, color_button_active);
-  ft.drawCircle(36, 104, 18, color_button);
-  ft.drawText(36, 104, 29, color_text, FT81x_OPT_CENTER, "S");
+  ft.drawCircle(36, 104, 18, setup_focus ? color_button_active : color_button);
+  ft.drawText(36, 104, 29, setup_focus ? color_text_active : color_text, FT81x_OPT_CENTER, "S");
   ft.drawText(62, 104, 28, color_text, FT81x_OPT_CENTERY, "Setup");
 
   app_core_browser_ft_decor(hw_setup, true);
@@ -388,12 +390,32 @@ static void start_core() {
 // the graphic setup on the FT812, else the classic one
 static void open_setup() {
   autoload_enabled = false;
+  setup_focus = false;
   osd_return_state = state_core_browser;
   osd_state = has_ft ? state_ft_setup : state_setup;
 }
 
+// the graphic browser with the keys on the Setup button: Enter opens it, Right / Up / Down go
+// back to the cores. true if the key was taken.
+static bool setup_focus_key() {
+  uint8_t key = usb_keyboard_report.keycode[0];
+  uint16_t joy = joyL | joyR;
+  if (key == KEY_ENTER || key == KEY_KPENTER || (joy & (SC_BTN_A | SC_BTN_B))) {
+    open_setup();
+    return true;
+  }
+  if (key == KEY_RIGHT || key == KEY_UP || key == KEY_DOWN || (joy & (SC_BTN_RIGHT | SC_BTN_UP | SC_BTN_DOWN))) {
+    setup_focus = false;
+    app_core_browser_ft_menu(1);
+    return true;
+  }
+  return false;
+}
+
 void app_core_browser_on_keyboard() {
       if (has_ft) ft_mouse_hide(); // the keys move the selection
+      if (!has_ft) setup_focus = false;
+      if (setup_focus && setup_focus_key()) return;
       if (cores_len > 0) {
         // down
         if (usb_keyboard_report.keycode[0] == KEY_DOWN || (joyL & SC_BTN_DOWN) || (joyR & SC_BTN_DOWN)) {
@@ -428,7 +450,10 @@ void app_core_browser_on_keyboard() {
         // left
         if (usb_keyboard_report.keycode[0] == KEY_LEFT || (joyL & SC_BTN_LEFT) || (joyR & SC_BTN_LEFT)) {
           autoload_enabled = false;
-          if (core_sel - page_size() >= 0) {
+          if (has_ft && core_sel == 0) {
+            // already on the first core: onto the Setup button (not by a held Left)
+            if (!ui_repeat) setup_focus = true;
+          } else if (core_sel - page_size() >= 0) {
             core_sel -= page_size();
           } else {
             core_sel = 0;
@@ -453,8 +478,8 @@ void app_core_browser_on_keyboard() {
           app_core_browser_ft_overlay();
         }
 
-        // enter setup mode
-        if (usb_keyboard_report.keycode[0] == KEY_S) {
+        // enter setup mode (S, joy start)
+        if (usb_keyboard_report.keycode[0] == KEY_S || (joyL & SC_BTN_START) || (joyR & SC_BTN_START)) {
           open_setup();
         }
 
@@ -500,6 +525,7 @@ void app_core_browser_tick() {
   if (!ft_mouse_poll(&ev)) return;
   bool act = ev.pressed || ev.wheel;
   if (act) autoload_enabled = false;
+  if (act) setup_focus = false; // the mouse picks
   if (ev.wheel && cores_len > 0) {
     int sel = core_sel - ev.wheel;
     core_sel = sel < 0 ? 0 : sel >= cores_len ? cores_len - 1 : sel;

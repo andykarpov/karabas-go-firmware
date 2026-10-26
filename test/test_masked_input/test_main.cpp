@@ -37,6 +37,40 @@ static void test_field_cursor() {
   TEST_ASSERT_EQUAL(1, f.pos);
 }
 
+static void test_field_turn() {
+  kg_field_t f;
+  kg_field_init(&f, "09:30");
+  kg_field_turn(&f, -1);
+  TEST_ASSERT_EQUAL_STRING("99:30", f.text);
+  kg_field_turn(&f, 1);
+  kg_field_turn(&f, 1);
+  TEST_ASSERT_EQUAL_STRING("19:30", f.text);
+  kg_field_right(&f);
+  kg_field_turn(&f, 12);
+  TEST_ASSERT_EQUAL_STRING("11:30", f.text);
+}
+
+static void test_text_turn() {
+  char t[4] = "";
+  kg_text_turn(t, 3, -1); // an empty text gets the first char
+  TEST_ASSERT_EQUAL_STRING("a", t);
+  kg_text_turn(t, 3, 1);
+  TEST_ASSERT_EQUAL_STRING("b", t);
+  kg_text_turn(t, 3, -2); // round
+  TEST_ASSERT_EQUAL_STRING("~", t);
+  kg_text_turn(t, 3, 1);
+  TEST_ASSERT_EQUAL_STRING("a", t);
+  kg_text_add(t, 3);
+  kg_text_turn(t, 3, 26);
+  TEST_ASSERT_EQUAL_STRING("aA", t);
+  kg_text_add(t, 3);
+  kg_text_add(t, 3); // full
+  TEST_ASSERT_EQUAL_STRING("aAa", t);
+  t[2] = '\t'; // not in the chars: from the first one
+  kg_text_turn(t, 3, 1);
+  TEST_ASSERT_EQUAL_STRING("aAb", t);
+}
+
 static void test_date_parse() {
   int d, m, y;
   TEST_ASSERT_TRUE(kg_date_parse("25.10.2026", &d, &m, &y));
@@ -68,6 +102,8 @@ int main() {
   UNITY_BEGIN();
   RUN_TEST(test_field_typing);
   RUN_TEST(test_field_cursor);
+  RUN_TEST(test_field_turn);
+  RUN_TEST(test_text_turn);
   RUN_TEST(test_date_parse);
   RUN_TEST(test_time_parse);
   return UNITY_END();

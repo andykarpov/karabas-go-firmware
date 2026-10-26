@@ -28,11 +28,11 @@ enum {
 
 // which global hotkey (if any) the keyboard report / joysticks match
 static int hotkey_find(const hid_keyboard_report_t &kbd, uint16_t jl, uint16_t jr) {
-  // menu+esc (joy start+c) to toggle osd only for osd supported cores
+  // menu+esc (joy start+c, start+select) to toggle osd only for osd supported cores
   if (core.type != CORE_TYPE_BOOT && core.type != CORE_TYPE_HIDDEN &&
       ((((kbd.modifier & KEY_MOD_LMETA) || (kbd.modifier & KEY_MOD_RMETA)) && kbd.keycode[0] == KEY_ESC) ||
-       ((jl & SC_BTN_START) && (jl & SC_BTN_C)) ||
-       ((jr & SC_BTN_START) && (jr & SC_BTN_C))
+       ((jl & SC_BTN_START) && (jl & UI_JOY_ESC)) ||
+       ((jr & SC_BTN_START) && (jr & UI_JOY_ESC))
       )
     ) {
     return HOTKEY_OSD_TOGGLE;
@@ -131,12 +131,35 @@ static void event_forward(const queue_spi_t &packet) {
   }
 }
 
+#define JOY_REPEAT_DELAY_MS 500
+#define JOY_REPEAT_MS 100
+#define JOY_DIRS (SC_BTN_UP | SC_BTN_DOWN | SC_BTN_LEFT | SC_BTN_RIGHT)
+
 // use repeat state to fire on_keyboard event for osd repeating navigation
 void input_tick_repeat() {
   if (is_osd && kb_repeat_key && kb_repeat_state && !prev_kb_repeat_state) {
+    ui_repeat = true;
     on_keyboard();
+    ui_repeat = false;
   }
   prev_kb_repeat_state = kb_repeat_state;
+
+  // a held joystick direction repeats in the OSD like a held key
+  static uint16_t joy_held = 0;
+  static bool joy_repeating = false;
+  static ElapsedTimer joy_timer;
+  uint16_t dirs = is_osd && ui_joy_repeats() ? (joyL | joyR) & JOY_DIRS : 0;
+  if (dirs != joy_held) {
+    joy_held = dirs;
+    joy_repeating = false;
+    joy_timer.reset();
+  } else if (dirs && joy_timer.elapsed() >= (joy_repeating ? JOY_REPEAT_MS : JOY_REPEAT_DELAY_MS)) {
+    joy_repeating = true;
+    joy_timer.reset();
+    ui_repeat = true;
+    on_keyboard();
+    ui_repeat = false;
+  }
 }
 
 

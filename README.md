@@ -62,6 +62,29 @@ The same files go to the `firmware/` folders of
 [karabas-go](https://github.com/andykarpov/karabas-go) and
 [karabas-mini](https://github.com/andykarpov/karabas-mini), together with an example `karabas.ini`.
 
+### Test firmware from a pull request
+
+CI builds the firmware of every PR. Anyone signed in to GitHub can download it, no rights to
+the repository are needed.
+
+1. Open the PR page and go to the **Checks** tab.
+2. Pick **Build** on the left, then **Summary** at the top of the left column.
+3. At the bottom of the page, under **Artifacts**, download the archive for your board:
+
+   | Board | Artifact |
+   |---|---|
+   | Karabas Go | `firmware-go` |
+   | Karabas Mini | `firmware-mini` |
+   | Karabas Mini G | `firmware-minig` |
+
+4. Unzip it and flash `firmware.uf2` as described in
+   [Updating the firmware](#updating-the-firmware).
+
+**Checks** shows the run of the latest commit of the PR, the newest build. It is a test build,
+not a release: to go back to the stable firmware, flash the `.uf2` from
+[Releases](https://github.com/andykarpov/karabas-go-firmware/releases). GitHub keeps the
+artifacts for 90 days.
+
 ## Updating the firmware
 
 1. Put the RP2040 into BOOTSEL mode: hold the **Boot** button, press and release **Reset**, then
@@ -107,10 +130,13 @@ long, or the whole file is ignored.
 
 | Keys | Joystick | Action |
 | --- | --- | --- |
-| Menu (Win) + Esc | Start + C | open / close the OSD of the running core |
+| Menu (Win) + Esc | Start + C, Start + Select | open / close the OSD of the running core |
 | Ctrl + Alt + Backspace | Start + X | restart the MCU and go back to the core browser |
-| arrows, Enter, Esc | D-pad and buttons | navigate the menus |
-| `S` | | Setup: clock, Wi-Fi and Settings (core browser), USB gamepad mapper; in the graphic browser, the graphic setup (settings, video mode, color themes) |
+| arrows, Enter, Esc | D-pad, A / B, C or Select | navigate the menus (a held direction repeats); not in the gamepad mapping itself |
+| Left | Left | back, where Left has nothing else to do: Setup menu, About, Wi-Fi status and network list, the tabs of the graphic setup; on the first core of the graphic browser, onto the Setup button (Enter opens it, Right goes back) |
+| digits | Up / Down | the digit under the cursor of a date / time field |
+| typing | Up / Down, Right, Left | a Wi-Fi text field: change the last char, add one, delete one |
+| `S` | Start (core browser) | Setup: clock, Wi-Fi and Settings (core browser), USB gamepad mapper; in the graphic browser, the graphic setup (settings, video mode, color themes) |
 | `A` (core OSD) | | About |
 | Delete / Backspace (core OSD) | | eject the disk image of the selected drive |
 | Space (graphical browser) | | switch to the text browser |
