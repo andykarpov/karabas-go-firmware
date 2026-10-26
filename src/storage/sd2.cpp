@@ -31,14 +31,42 @@ uint32_t sd2_sector_count() {
   return sd2.sectorCount();
 }
 
-bool sd2_read(uint32_t sector, uint8_t *dst, uint32_t count) {
+static bool read_once(uint32_t sector, uint8_t *dst, uint32_t count) {
   SpiBusGuard g;
   return count == 1 ? sd2.readSector(sector, dst) : sd2.readSectors(sector, dst, count);
 }
 
-bool sd2_write(uint32_t sector, const uint8_t *src, uint32_t count) {
+static bool write_once(uint32_t sector, const uint8_t *src, uint32_t count) {
   SpiBusGuard g;
   return count == 1 ? sd2.writeSector(sector, src) : sd2.writeSectors(sector, src, count);
+}
+
+// a failed transfer: logged, the card is set up again (begin() only reads its registers) and
+// the transfer is tried once more
+static bool recover(const char *op, uint32_t sector, uint32_t count) {
+  d_printf("SD2: %s %lu+%lu failed, error 0x%02X data 0x%lX", op, (unsigned long) sector,
+           (unsigned long) count, sd2.errorCode(), (unsigned long) sd2.errorData());
+  d_println();
+  if (sd2_begin()) return true;
+  d_printf("SD2: init failed, error 0x%02X data 0x%lX", sd2.errorCode(), (unsigned long) sd2.errorData());
+  d_println();
+  return false;
+}
+
+bool sd2_read(uint32_t sector, uint8_t *dst, uint32_t count) {
+  if (read_once(sector, dst, count)) return true;
+  if (!recover("read", sector, count)) return false;
+  bool ok = read_once(sector, dst, count);
+  d_println(ok ? "SD2: read again: ok" : "SD2: read again: failed");
+  return ok;
+}
+
+bool sd2_write(uint32_t sector, const uint8_t *src, uint32_t count) {
+  if (write_once(sector, src, count)) return true;
+  if (!recover("write", sector, count)) return false;
+  bool ok = write_once(sector, src, count);
+  d_println(ok ? "SD2: write again: ok" : "SD2: write again: failed");
+  return ok;
 }
 
 void sd2_sync() {
@@ -62,7 +90,7 @@ static bool read_pass(Print &out, uint8_t *buf, uint8_t mhz, uint8_t n, uint32_t
   for (uint32_t s = 0; s < SD2_TEST_SECTORS; s += n) {
     hang_step(SD2_HANG_STEP);
     uint32_t t = micros();
-    bool ok = sd2_read(s, buf, n);
+    bool ok = read_once(s, buf, n);
     us += micros() - t;
     if (!ok) {
       if (errors++ == 0) { out.printf(" x%u read of %lu failed", n, (unsigned long) s); print_error(out); }
@@ -104,7 +132,7 @@ void sd2_test(Print &out) {
   for (uint8_t mhz : test_mhz) {
     out.printf("+SD2:%u MHz", mhz);
     if (!sd2_begin_mhz(mhz)) { out.print(" init failed"); print_error(out); out.print("\r\n"); break; }
-    sd2_read(0, buf, 1);
+    read_once(0, buf, 1);
     out.printf(" (%lu kHz):", (unsigned long) (spi_get_baudrate(spi0) / 1000));
     uint32_t crc1, crc8;
     bool ok = read_pass(out, buf, mhz, 1, ref_crc, crc1);

@@ -9,7 +9,7 @@
 
 bool sd2_begin();                 // sets the card up (again)
 uint32_t sd2_sector_count();
-bool sd2_read(uint32_t sector, uint8_t *dst, uint32_t count);
+bool sd2_read(uint32_t sector, uint8_t *dst, uint32_t count); // a failure: set up again, one more try
 bool sd2_write(uint32_t sector, const uint8_t *src, uint32_t count);
 void sd2_sync();
 
