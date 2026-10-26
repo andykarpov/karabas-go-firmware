@@ -106,6 +106,7 @@ void img_close_all() {
       file_slots[i].file.close(); // close() syncs
     }
     img_dirty[i] = false;
+    matrix_drive_mount(i, 0);
   }
   req_pending = false;
   req_started = false;
@@ -119,6 +120,7 @@ void img_mount(uint8_t slot) {
     fs.file.close(); // close() syncs
   }
   img_dirty[slot] = false;
+  matrix_drive_mount(slot, 0);
   uint64_t fsize = 0;
   int phys = fs.is_mounted ? kg_phys_drive(fs.filename) : -1;
   if (phys >= 0) {
@@ -144,6 +146,7 @@ void img_mount(uint8_t slot) {
       d_printf("Mount slot %d: %s, %lu bytes", slot, fname.c_str(), (unsigned long) fsize); d_println();
     }
   }
+  matrix_drive_mount(slot, (uint32_t) ((fsize + IMG_SECTOR_SIZE - 1) / IMG_SECTOR_SIZE));
   // size 0 first: the core sees an eject before a new image
   SpiBusGuard bus;
   spi_send(CMD_IMG_SLOT, 0, slot);
@@ -219,6 +222,7 @@ static bool img_serve() {
     }
   }
   spi_send(CMD_IMG_SEC, slot, ok ? IMG_RES_DONE : IMG_RES_ERROR);
+  if (req_complete) matrix_drive_access(slot, lba, req_op == IMG_REQ_WRITE);
   uint32_t end_us = micros();
   d_printf("Image slot %d: %s %lu%s, wait %lu us, %lu us", slot, what, (unsigned long) lba, ok ? "" : " FAILED",
     (unsigned long) (serve_us - req_start_us), (unsigned long) (end_us - serve_us));

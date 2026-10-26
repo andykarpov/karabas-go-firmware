@@ -47,7 +47,8 @@ static void test_life_reseeds() {
 static void test_clock() {
   matrix_fx_t fx;
   matrix_fx_init(&fx, KG_MATRIX_FX_CLOCK, 0, 1);
-  matrix_fx_time_t t = {12, 34, 59};
+  matrix_fx_input_t t = {};
+  t.hour = 12; t.minute = 34; t.second = 59;
   matrix_fx_step(&fx, &t);
   // "1" top row: only the middle column
   TEST_ASSERT_EQUAL_UINT8(KG_MX_GREEN, fx.fb[1][1]);
@@ -94,6 +95,106 @@ static void test_fire_rises() {
   TEST_ASSERT_TRUE(bottom > 200 * 8);
 }
 
+static void test_sin8() {
+  TEST_ASSERT_EQUAL_INT8(0, matrix_fx_sin8(0));
+  TEST_ASSERT_EQUAL_INT8(127, matrix_fx_sin8(64));
+  TEST_ASSERT_EQUAL_INT8(0, matrix_fx_sin8(128));
+  TEST_ASSERT_EQUAL_INT8(-127, matrix_fx_sin8(192));
+  TEST_ASSERT_EQUAL_INT8(-matrix_fx_sin8(20), matrix_fx_sin8(148));
+}
+
+static void test_rain() {
+  matrix_fx_t fx;
+  matrix_fx_init(&fx, KG_MATRIX_FX_RAIN, 0, 7);
+  uint16_t lit = 0;
+  for (int i = 0; i < 300; i++) {
+    matrix_fx_step(&fx, nullptr);
+    TEST_ASSERT_EQUAL_UINT8(0, count(&fx, KG_MX_RED));
+    // a column has at most one head
+    for (uint8_t x = 0; x < KG_MATRIX_W; x++) {
+      uint8_t heads = 0;
+      for (uint8_t y = 0; y < KG_MATRIX_H; y++) if (fx.fb[y][x] == KG_MX_YELLOW) heads++;
+      TEST_ASSERT_TRUE(heads <= 1);
+    }
+    lit += count(&fx, KG_MX_GREEN);
+  }
+  TEST_ASSERT_TRUE(lit > 300);
+}
+
+static void test_plasma_moves() {
+  matrix_fx_t fx;
+  matrix_fx_init(&fx, KG_MATRIX_FX_PLASMA, 0, 1);
+  matrix_fx_step(&fx, nullptr);
+  uint8_t first[KG_MATRIX_H][KG_MATRIX_W];
+  memcpy(first, fx.fb, sizeof(first));
+  for (int i = 0; i < 5; i++) matrix_fx_step(&fx, nullptr);
+  TEST_ASSERT_TRUE(memcmp(first, fx.fb, sizeof(first)) != 0);
+  // all four bands show up
+  TEST_ASSERT_TRUE(count(&fx, KG_MX_OFF) + count(&fx, KG_MX_GREEN) + count(&fx, KG_MX_YELLOW) + count(&fx, KG_MX_RED) == 128);
+}
+
+static void test_stars() {
+  matrix_fx_t fx;
+  matrix_fx_init(&fx, KG_MATRIX_FX_STARS, 0, 3);
+  for (int i = 0; i < 500; i++) {
+    matrix_fx_step(&fx, nullptr);
+    uint8_t lit = 128 - count(&fx, KG_MX_OFF);
+    TEST_ASSERT_TRUE(lit > 0 && lit <= MATRIX_FX_STARS);
+  }
+}
+
+static void test_pong() {
+  matrix_fx_t fx;
+  matrix_fx_init(&fx, KG_MATRIX_FX_PONG, 0, 5);
+  uint16_t bounces = 0;
+  int8_t dx = fx.ball_dx;
+  for (int i = 0; i < 2000; i++) {
+    matrix_fx_step(&fx, nullptr);
+    // the paddles, 3 pixels each (the ball may stand on one of them after a miss)
+    for (uint8_t k = 0; k < 3; k++) {
+      uint8_t l = fx.fb[fx.paddle[0] + k][0], r = fx.fb[fx.paddle[1] + k][KG_MATRIX_W - 1];
+      TEST_ASSERT_TRUE(l == KG_MX_GREEN || l == KG_MX_YELLOW);
+      TEST_ASSERT_TRUE(r == KG_MX_RED || r == KG_MX_YELLOW);
+    }
+    TEST_ASSERT_TRUE(count(&fx, KG_MX_GREEN) >= 2 && count(&fx, KG_MX_GREEN) <= 3);
+    TEST_ASSERT_TRUE(count(&fx, KG_MX_YELLOW) <= 1);
+    TEST_ASSERT_TRUE(fx.ball_y >= 0 && fx.ball_y <= (KG_MATRIX_H - 1) * 16);
+    TEST_ASSERT_TRUE(fx.paddle[0] >= 0 && fx.paddle[0] <= KG_MATRIX_H - 3);
+    if (fx.ball_dx != dx && fx.serve_wait == 0) { bounces++; dx = fx.ball_dx; }
+  }
+  TEST_ASSERT_TRUE(bounces > 20);
+}
+
+static void test_drive() {
+  matrix_fx_t fx;
+  matrix_fx_input_t in = {};
+  matrix_fx_init(&fx, KG_MATRIX_FX_DRIVE, 0, 1);
+  // no image: a dotted line
+  matrix_fx_step(&fx, &in);
+  TEST_ASSERT_EQUAL_UINT8(KG_MX_RED, fx.fb[3][1]);
+  TEST_ASSERT_EQUAL_UINT8(0, count(&fx, KG_MX_YELLOW));
+  // one image, a read at the end: 4 rows of the head at the last column, the dot green
+  in.drive[2].sectors = 1760;
+  in.drive[2].lba = 1759;
+  in.drive[2].reads = 1;
+  matrix_fx_step(&fx, &in);
+  TEST_ASSERT_EQUAL_UINT8(4, count(&fx, KG_MX_YELLOW));
+  TEST_ASSERT_EQUAL_UINT8(KG_MX_YELLOW, fx.fb[2][15]);
+  TEST_ASSERT_EQUAL_UINT8(8, count(&fx, KG_MX_GREEN));
+  // a write: red; then the dot goes out
+  in.drive[2].writes = 1;
+  in.drive[2].lba = 0;
+  matrix_fx_step(&fx, &in);
+  TEST_ASSERT_EQUAL_UINT8(8, count(&fx, KG_MX_RED));
+  TEST_ASSERT_EQUAL_UINT8(KG_MX_YELLOW, fx.fb[2][3]);
+  for (int i = 0; i < 8; i++) matrix_fx_step(&fx, &in);
+  TEST_ASSERT_EQUAL_UINT8(0, count(&fx, KG_MX_RED));
+  // two images: 3 rows each
+  in.drive[5].sectors = 100;
+  matrix_fx_step(&fx, &in);
+  TEST_ASSERT_EQUAL_UINT8(6, count(&fx, KG_MX_YELLOW));
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_life_blinker);
@@ -102,5 +203,11 @@ int main() {
   RUN_TEST(test_clock);
   RUN_TEST(test_scanner_bounces);
   RUN_TEST(test_fire_rises);
+  RUN_TEST(test_sin8);
+  RUN_TEST(test_rain);
+  RUN_TEST(test_plasma_moves);
+  RUN_TEST(test_stars);
+  RUN_TEST(test_pong);
+  RUN_TEST(test_drive);
   return UNITY_END();
 }

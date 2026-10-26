@@ -14,7 +14,7 @@ What the matrix shows is set by the `"matrix"` key of the `core.json` of a core 
 
 - `core` (the default, and the core files made before): the core draws on the matrix or shows its audio meters, as described below. The boot core scrolls `KARABAS GO`.
 - `scroll`: a text of up to 64 chars with `{name}`, `{build}`, `{time}`, `{date}`; colors `yellow`, `red`, `green`, `rainbow` (by char), `gradient` (by column); `step_ms`, `repeat`.
-- `effect`: `clock` (HH:MM, the seconds run along the bottom row), `fire`, `life` (Conway's Game of Life), `scanner`.
+- `effect`: `clock` (HH:MM, the seconds run along the bottom row), `fire`, `life` (Conway's Game of Life), `scanner`, `rain`, `plasma`, `stars`, `pong`, `drive` (the mounted disk images: a dot lit on an access, green read / red write, and the head position over the image in yellow, up to 4 images; no image: a dotted line).
 - `image`: a 16x8 picture, or an animation of up to 4 frames.
 - `blank`: off.
 
@@ -23,6 +23,8 @@ After `repeat` passes of the scroll (or loops of the animation) the matrix goes 
 ```json
 "matrix": {"mode": "scroll", "text": "NES {build}", "color": "rainbow", "repeat": 2, "then": "core"}
 ```
+
+`karabas.ini` `[matrix]`: `enabled=0` keeps the matrix dark in all cores, `brightness=1..16` sets the brightness of all cores (`0`: as the core sets it). Both are in Setup > Settings of the boot menu.
 
 The core can draw on the matrix (the registers below, `CMD_MATRIX_*`) only in the `core` mode; otherwise its writes are ignored.
 
@@ -52,7 +54,7 @@ The higher bits 7-4 are to set the Y position (from 0 to 7)
 
 ### Pixel Data register 0xF2
 
-Write to this register will set the color to the pixel at position x-y (from the 0xF1 register) to the virtual framebuffer. 
+Write to this register will set the color to the pixel at position x-y (from the 0xF1 register) to the virtual framebuffer: 0 off, 1 red, 2 yellow, 3 green. 
 Do display the pixel or set of pixels - please call the "update" action to the control register 0xF0.
 
 ## Example program for the Boriel ZX Basic Compiler
@@ -68,8 +70,8 @@ CLS: BORDER 0: PAPER 0: INK 7: CLS
 
 CONST COLOR_NONE as uByte = 0
 CONST COLOR_RED as uByte = 1
-CONST COLOR_GREEN as uByte = 2
-CONST COLOR_YELLOW as uByte = 3
+CONST COLOR_YELLOW as uByte = 2
+CONST COLOR_GREEN as uByte = 3
 
 CONST PORT_CTL as uLong = 64571
 CONST PORT_DATA as uLong = 64827

@@ -41,7 +41,7 @@ typedef struct {
   uint8_t len;
 } page_t;
 
-static const uint8_t page_system[] = { SET_DEBUG, SET_DVI };
+static const uint8_t page_system[] = { SET_DEBUG, SET_DVI, SET_MATRIX, SET_MATRIX_BRIGHTNESS };
 static const uint8_t page_autoload[] = { SET_AUTOLOAD, SET_TIMEOUT, SET_CORE };
 static const uint8_t page_display[] = { SET_FT, SET_VIDEO_MODE, SET_3D, SET_TIME, SET_DATE, SET_CHAR, SET_MOUSE_SPEED };
 static const uint8_t page_sound[] = { SET_SOUND, SET_CLICK };
@@ -370,6 +370,7 @@ static void leave() {
   if (shown && shown->hide) shown->hide();
   shown = nullptr;
   if (mode_cur != hw_setup.ft_video_mode) set_mode(hw_setup.ft_video_mode);
+  settings_end();
   osd_state = osd_return_state;
 }
 

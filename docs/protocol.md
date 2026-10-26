@@ -136,7 +136,7 @@ These are sent in the reply bytes of any transfer.
 | `47` | `CMD_IMG_FLUSH` | slot | 1 = done, 2 = a write failed | Answer to `47 slot 00`: no dirty sectors left. |
 | `48` | `CMD_BK_MOUNT` | 0..3 / `10` / `80` | size in sectors (LE) / img slot / kind | Backup RAM: the core asks for its save file; `80` last (kind 0 = `.sav`). Section 6. |
 | `60` | `CMD_MATRIX_CTL` | 0 | bit 0 clear, bit 1 update, bit 2 set brightness (bits 7..4), bit 3 audio meter mode | LED matrix ([MATRIX.md](../MATRIX.md)). |
-| `61` | `CMD_MATRIX_PIXEL` | Y (bits 7..4), X (bits 3..0) | color: 0 black, 1 red, 2 green, 3 yellow | |
+| `61` | `CMD_MATRIX_PIXEL` | Y (bits 7..4), X (bits 3..0) | color: 0 black, 1 red, 2 yellow, 3 green | |
 | `62` | `CMD_MATRIX_BITPLAN` | byte 0..31 | bitmap byte | |
 | `70` / `71` | `CMD_AUDIO_PEAKS_L` / `_R` | high byte | low byte | 16-bit audio peak for the matrix meters. |
 | `F7` | `CMD_CAPS` | caps | max_mhz | Answer to the capability query, section 7. |

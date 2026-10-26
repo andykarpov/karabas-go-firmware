@@ -138,6 +138,8 @@ typedef struct {
 	uint32_t color_text;
 	uint32_t color_text_active;
 	uint32_t color_copyright;
+	bool matrix_enabled;        // [matrix] enabled: off = the LED matrix stays dark
+	uint8_t matrix_brightness;  // [matrix] brightness: 0 = by the core, 1..16
 } setup_t;
 
 enum osd_state_e {

@@ -14,17 +14,17 @@
 
 // the settings of the screen, then the buttons
 static const uint8_t ids[] = {
-  SET_DEBUG, SET_DVI,
+  SET_DEBUG, SET_DVI, SET_MATRIX, SET_MATRIX_BRIGHTNESS,
   SET_AUTOLOAD, SET_TIMEOUT, SET_CORE,
   SET_FT, SET_VIDEO_MODE,
 };
-static const uint8_t rows[] = { 11, 12, 14, 15, 16, 18, 19 };
+static const uint8_t rows[] = { 9, 10, 11, 12, 14, 15, 16, 18, 19 };
 #define ITEMS (sizeof(ids) / sizeof(ids[0]))
 #define I_SAVE ITEMS
 #define I_CANCEL (ITEMS + 1)
 #define I_COUNT (ITEMS + 2)
 
-#define ROW_SYSTEM 10
+#define ROW_SYSTEM 8
 #define ROW_AUTOLOAD 13
 #define ROW_FT 17
 #define ROW_BUTTONS 21
@@ -113,6 +113,7 @@ void app_settings_on_keyboard() {
   bool button = focus == I_SAVE || focus == I_CANCEL;
 
   if (esc) {
+    settings_end();
     osd_state = state_setup;
     return;
   }
@@ -130,6 +131,7 @@ void app_settings_on_keyboard() {
     draw();
     return;
   } else if (enter && focus == I_CANCEL) {
+    settings_end();
     osd_state = state_setup;
     return;
   } else {
