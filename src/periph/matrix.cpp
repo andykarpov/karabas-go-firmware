@@ -32,6 +32,10 @@ static kg_matrix_cfg_t cfg;
 static char cfg_name[32+1], cfg_build[8+1];
 static uint8_t cfg_core_type;
 
+// karabas.ini [matrix] as shown now: hw_setup, or the values being edited in Settings
+static bool mx_enabled = true;
+static uint8_t mx_brightness = 0; // 0: the core's
+
 // the boot core without settings: the scroll of old
 static const char *const matrix_boot_text = "KARABAS GO ";
 
@@ -57,7 +61,7 @@ void matrix_init()
 {
   if (has_matrix) {
     // karabas.ini over the core; KG_MATRIX_DEFAULT_BRIGHTNESS (4) is safe enough
-    matrix.setBrightness(hw_setup.matrix_brightness ? hw_setup.matrix_brightness - 1 : cfg.brightness);
+    matrix.setBrightness(mx_brightness ? mx_brightness - 1 : cfg.brightness);
     text_canvas.setTextWrap(false);
   }
 }
@@ -220,7 +224,7 @@ static void matrix_start_mode(uint8_t mode);
 
 // the matrix switched off in karabas.ini: dark in every mode
 static void matrix_start(uint8_t mode) {
-  matrix_start_mode(hw_setup.matrix_enabled ? mode : KG_MATRIX_MODE_BLANK);
+  matrix_start_mode(mx_enabled ? mode : KG_MATRIX_MODE_BLANK);
 }
 
 static void matrix_start_mode(uint8_t mode) {
@@ -293,7 +297,7 @@ void matrix_register_handlers() {
 }
 
 void matrix_progress(uint32_t val, uint32_t max) {
-  if (has_matrix && hw_setup.matrix_enabled) {
+  if (has_matrix && mx_enabled) {
     I2cGuard i2c;
     matrix.drawLine(0, 0, map(val, 0, max, 0, 15), 0, LED_GREEN);
     matrix.drawLine(0, 1, map(val, 0, max, 0, 15), 1, LED_GREEN);
@@ -321,12 +325,15 @@ void matrix_drive_access(uint8_t slot, uint32_t lba, bool write) {
   else drives[slot].reads++;
 }
 
-void matrix_apply_setup() {
+void matrix_setup(bool enabled, uint8_t brightness) {
   if (!has_matrix) return;
   I2cGuard i2c;
+  bool restart = enabled != mx_enabled;
+  mx_enabled = enabled;
+  mx_brightness = brightness;
   if (matrix_mode == MATRIX_MODE_ICON || matrix_mode == MATRIX_MODE_LOADING) return;
   matrix_init();
-  matrix_start(cfg.mode);
+  if (restart) matrix_start(cfg.mode);
 }
 
 void matrix_on_configure_start() {
@@ -341,6 +348,8 @@ void matrix_on_configure_start() {
 void matrix_on_configure_done(uint8_t core_type) {
   if (has_matrix) {
     I2cGuard i2c;
+    mx_enabled = hw_setup.matrix_enabled;
+    mx_brightness = hw_setup.matrix_brightness;
     matrix_init();
     cfg_core_type = core_type;
     matrix_start(cfg.mode);
@@ -372,7 +381,7 @@ static const char *const matrix_icons[][8] = {
 };
 
 void matrix_icon(uint8_t icon) {
-  if (!has_matrix || !hw_setup.matrix_enabled || icon >= sizeof(matrix_icons) / sizeof(matrix_icons[0])) return;
+  if (!has_matrix || !mx_enabled || icon >= sizeof(matrix_icons) / sizeof(matrix_icons[0])) return;
   I2cGuard i2c;
   matrix_mode = MATRIX_MODE_ICON;
   matrix.clear();

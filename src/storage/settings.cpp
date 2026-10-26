@@ -237,7 +237,7 @@ bool save_setup(const setup_t &s) {
     return false;
   }
   hw_setup = s;
-  matrix_apply_setup();
+  matrix_setup(hw_setup.matrix_enabled, hw_setup.matrix_brightness);
   d_printf("karabas.ini: %u values saved", count); d_println();
   return true;
 }

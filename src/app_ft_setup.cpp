@@ -370,6 +370,7 @@ static void leave() {
   if (shown && shown->hide) shown->hide();
   shown = nullptr;
   if (mode_cur != hw_setup.ft_video_mode) set_mode(hw_setup.ft_video_mode);
+  settings_end();
   osd_state = osd_return_state;
 }
 

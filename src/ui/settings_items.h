@@ -32,6 +32,9 @@ extern const setting_t settings[SET_COUNT];
 
 // starts editing s (a copy of hw_setup): picks the autoload core in the core list
 void settings_begin(setup_t &s);
+// editing is over (saved or not): what shows at once while editing (the LED matrix) goes back
+// to hw_setup
+void settings_end();
 // the value as text ("On", "5 s", "800x600@60", "0000c8")
 void settings_value_text(uint8_t id, const setup_t &s, char *out, size_t size);
 bool settings_bool(uint8_t id, const setup_t &s);

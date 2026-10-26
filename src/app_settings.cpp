@@ -113,6 +113,7 @@ void app_settings_on_keyboard() {
   bool button = focus == I_SAVE || focus == I_CANCEL;
 
   if (esc) {
+    settings_end();
     osd_state = state_setup;
     return;
   }
@@ -130,6 +131,7 @@ void app_settings_on_keyboard() {
     draw();
     return;
   } else if (enter && focus == I_CANCEL) {
+    settings_end();
     osd_state = state_setup;
     return;
   } else {
