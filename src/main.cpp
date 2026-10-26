@@ -140,12 +140,16 @@ static void karabas_setup()
   load_setup();
   if (!hw_setup.debug_enabled) debug_discard();
 
-  // if btn2 pressed on boot - espose msc
+  // msc mode asked by the reboot before (AT+KARABAS=msc, the msc button action)
   msc_check_boot();
 
-  osd_state = state_main;
-
-  if (!msc_active()) {
+  if (msc_active()) {
+    // the boot core shows the msc screen; the card is read before the PC gets it
+    osd_state = state_msc;
+    if (has_sd && sd1.exists(FILENAME_BOOT)) do_configure(FILENAME_BOOT);
+    msc_start();
+  } else {
+    osd_state = state_main;
     if (hw_setup.debug_enabled) hang_diag_start();
 
     // load boot from SD or flashfs
@@ -201,13 +205,9 @@ static void karabas_loop()
   debug_drain();
 
   //rp2040.wdt_reset();
-  // read hw buttons to manipulate msc / reboots
-  bool btn1 = btn_read(0);
-  bool btn2 = btn_read(1);
-
-  // in msc mode nothing else runs until eject or btn1 long press
+  // in msc mode nothing else runs until eject
   hang_mark(0x0300);
-  if (msc_tick(btn1)) return;
+  if (msc_tick()) return;
 
   hang_mark(0x0400);
   zxrtc.handle();
@@ -222,7 +222,7 @@ static void karabas_loop()
   }
 
   hang_mark(0x0600);
-  input_tick_buttons(btn1, btn2);
+  input_tick_buttons();
   hang_mark(0x0700);
   input_tick_ui();
   hang_mark(0x0800);

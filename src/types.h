@@ -61,6 +61,26 @@ typedef struct {
 	uint8_t prev_val;
 } core_eeprom_t;
 
+// actions of the on-board buttons (FILE_POS_BUTTONS, make_core "buttons")
+enum btn_action_e {
+	BTN_ACTION_CORE = 0,    // press / release go to the core (CMD_BTN)
+	BTN_ACTION_NONE,
+	BTN_ACTION_OSD,         // toggle the osd
+	BTN_ACTION_MENU,        // back to the boot core
+	BTN_ACTION_RELOAD,      // load the core again
+	BTN_ACTION_BOOTSEL,     // reboot the mcu into BOOTSEL
+	BTN_ACTION_MSC,         // reboot into USB mass storage
+	BTN_ACTION_COUNT
+};
+
+#define CORE_BUTTONS 2 // btn3..btn6 of the header are the Mini G extra buttons (not used yet)
+
+typedef struct {
+	uint8_t press;     // btn_action_e
+	uint8_t hold;      // btn_action_e, BTN_ACTION_NONE: no hold
+	uint16_t hold_ms;
+} core_btn_t;
+
 typedef struct {
 	char id[32+1];
 	char build[8+1];
@@ -81,6 +101,7 @@ typedef struct {
 	bool eeprom_need_save;
 	char dir[32+1];
 	char save_dir[32+1]; // backup RAM files (FILE_POS_SAVE_DIR)
+	core_btn_t btn[CORE_BUTTONS];
 //	char last_file[32+1];
 	uint16_t last_file_id;
 	char file_extensions[32+1];
@@ -129,5 +150,6 @@ enum osd_state_e {
 	state_rtc,
 	state_wifi,
 	state_settings,
-	state_ft_setup
+	state_ft_setup,
+	state_msc
 };

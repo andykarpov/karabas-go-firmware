@@ -12,6 +12,7 @@
 #include "app_settings.h"
 #include "app_ft_setup.h"
 #include "app_ft_pages.h"
+#include "app_msc.h"
 #include "masked_input.h"
 
 // OSD state and the app screens (one per osd_state)
@@ -56,6 +57,7 @@ static const app_t apps[] = {
   { app_wifi_overlay,                                  app_wifi_on_keyboard,           app_wifi_tick }, // state_wifi
   { app_settings_overlay,                              app_settings_on_keyboard },     // state_settings
   { app_ft_setup_overlay,                              app_ft_setup_on_keyboard,       app_ft_setup_tick }, // state_ft_setup
+  { app_msc_overlay,                                   app_msc_on_keyboard },          // state_msc
 };
 static const uint8_t apps_len = sizeof(apps) / sizeof(apps[0]);
 

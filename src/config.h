@@ -276,6 +276,7 @@
 #define FILE_POS_FILELOADER_EXTENSIONS 153
 #define FILE_POS_SPI_FREQ 185
 #define FILE_POS_SAVE_DIR 186 // 32 bytes: the dir of the backup RAM files ("" = <fileloader dir>/saves)
+#define FILE_POS_BUTTONS 218 // 3 bytes per button (btn1..btn6): press action, hold action, hold time / 100 ms; FF = not set
 #define FILE_POS_EEPROM_DATA 256
 #define FILE_POS_SWITCHES_DATA 512
 #define FILE_POS_BITSTREAM_START 1024

@@ -52,9 +52,11 @@ The firmware runs on FreeRTOS only (`main.cpp` stops the build with `#error` oth
 
 **Modules** (`src/`):
 - `fpga/`: `link` (SPI protocol), `bitstream` (FPGA configuration), `core_loader` (core file header, OSD items, ROMs, `do_configure`).
-- `input/`: buttons, joysticks, the core 1 event queue and global hotkeys. `usb_joy` holds the two USB joystick ports, shared by HID (`drivers/*.ini`) and XInput pads: a pad keeps the port it took when plugged in.
+- `input/`: buttons, joysticks, the core 1 event queue and global hotkeys.
+  - The on-board buttons follow the actions of the core (`core.btn`, header `FILE_POS_BUTTONS`, make_core `buttons`): `core` sends `CMD_BTN` (the default, also for older core files with `FF`), or a global action (`osd`, `menu`, `reload`, `bootsel`, `msc`) on the press or on a hold, `input_tick_buttons()`. Nothing is hardcoded for a button: the boot core gets its actions from its `core.json` too. `usb_joy` holds the two USB joystick ports, shared by HID (`drivers/*.ini`) and XInput pads: a pad keeps the port it took when plugged in.
 - `ui/`: OSD state and the app table, plus the shared file list arrays.
 - `storage/`: SD card, `karabas.ini` settings and USB MSC.
+  - MSC mode starts only on a reboot asked through watchdog scratch 0 (`msc_reboot_to_msc()`: `AT+KARABAS=msc`, the `msc` button action). The boot core is loaded first and shows the msc screen (`app_msc`, text or FT812), then `msc_start()` hands the card to the PC; ejecting it reboots.
   - The SD card can be FAT16, FAT32 or exFAT (`SdFs` / `FsFile`, `SDFAT_FILE_TYPE=3`). exFAT has no 8.3 names, so the file lists and the saved image names use the long names (`getName`, never `getSFN`). Files in a list are opened by id: use `sd_file_id()` / `sd_open_id()`, not `dirIndex()` / `open(dir, index)`. On exFAT the id is the dir index + 1, because the first file of a subdir has index 0 and 0 means no file.
   - `FL` OSD items (ioctl file loader): `core_ioctl_send()` in `fpga/core_loader` sends the file when it is chosen, and at core start if the item has `autoload` and its file exists (the NanoMig Kickstart).
   - In the OSD, the browser of an `F` slot without an image opens in the dir of the image chosen last for a slot with the same extensions, on the file after it (disk 2 after disk 1). Esc goes back to the slot's own dir.
