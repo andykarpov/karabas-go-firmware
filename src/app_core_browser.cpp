@@ -23,9 +23,20 @@ core_list_item_t cores[MAX_CORES];
 uint8_t cores_len = 0;
 uint8_t core_sel = 0;
 const uint8_t core_page_size = MAX_CORES_PER_PAGE;
-const uint8_t ft_core_page_size = MAX_CORES_PER_PAGE/2;
+// the graphic list: as many buttons as fit between the logo and the page line
+#define FT_CORE_TOP (64 + 16 + 8)
+#define FT_CORE_STEP 40
+#define FT_CORE_BOTTOM 60 // the page line and the footer
 uint8_t core_pages = 1;
 uint8_t core_page = 1;
+
+static uint8_t ft_core_page_size() {
+  int n = (ft.height() - FT_CORE_BOTTOM - FT_CORE_TOP) / FT_CORE_STEP;
+  return n < 1 ? 1 : n;
+}
+
+// the cores on a page of the menu on screen (Left / Right jump by it)
+static uint8_t page_size() { return has_ft ? ft_core_page_size() : core_page_size; }
 uint16_t rot = 0;
 ElapsedTimer autoload_timer;
 bool autoload_enabled;
@@ -180,28 +191,29 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
   app_core_browser_ft_background(hw_setup);
   ft_hit_clear();
 
-  core_pages = ceil((float)cores_len / ft_core_page_size);
-  core_page = ceil((float)(core_sel+1)/ft_core_page_size);
-  uint8_t core_from = (core_page-1)*ft_core_page_size;
-  uint8_t core_to = core_page*ft_core_page_size > cores_len ? cores_len : core_page*ft_core_page_size;
+  uint8_t ft_page = ft_core_page_size();
+  core_pages = ceil((float)cores_len / ft_page);
+  core_page = ceil((float)(core_sel+1)/ft_page);
+  uint8_t core_from = (core_page-1)*ft_page;
+  uint8_t core_to = core_page*ft_page > cores_len ? cores_len : core_page*ft_page;
   uint8_t pos = 0;
-  uint8_t offset = 64 + 16 + 8;
+  uint8_t offset = FT_CORE_TOP;
   for(uint8_t i=core_from; i < core_to; i++) {
     char name[18];
     String n = String(cores[i].name); n.trim(); n.toCharArray(name, 18);
     const uint32_t colorb = i == core_sel ? color_button_active : color_button;
     const uint32_t colort = i == core_sel ? color_text_active : color_text;
-    if (ft_hit_add(ft.width()/4 + 8, offset + pos*40, ft.width()/2-16, 32, i)) {
+    if (ft_hit_add(ft.width()/4 + 8, offset + pos*FT_CORE_STEP, ft.width()/2-16, 32, i)) {
       // hovered: a rect grows by its corner radius, so this is a 2 px frame around the button
-      ft.drawRect(ft.width()/4 + 8, offset + pos*40, ft.width()/2-16, 32, 2, color_button_active);
+      ft.drawRect(ft.width()/4 + 8, offset + pos*FT_CORE_STEP, ft.width()/2-16, 32, 2, color_button_active);
     }
-    ft.drawButton(ft.width()/4 + 8, offset + pos*40, ft.width()/2-16, 32, 28, colort, colorb, (hw_setup.ft_3d_buttons) ? FT81x_OPT_3D : FT81x_OPT_FLAT , name);
+    ft.drawButton(ft.width()/4 + 8, offset + pos*FT_CORE_STEP, ft.width()/2-16, 32, 28, colort, colorb, (hw_setup.ft_3d_buttons) ? FT81x_OPT_3D : FT81x_OPT_FLAT , name);
     if (cores[i].flash) {
-      ft.drawText(ft.width()/4+ft.width()/2-16-24, offset + pos*40 + 16, 28, colort, FT81x_OPT_CENTERY, "F\0");
+      ft.drawText(ft.width()/4+ft.width()/2-16-24, offset + pos*FT_CORE_STEP + 16, 28, colort, FT81x_OPT_CENTERY, "F\0");
     }
     if (autoload_enabled && i==core_sel) {
       uint32_t diff = (autoload_timer.elapsed() < autoload_countdown * 1000) ? ceil((autoload_countdown * 1000 - autoload_timer.elapsed())/1000) : 0;
-      ft.drawGauge(ft.width()/4+16+12, offset + pos*40 + 16, 12, colort, colorb, 0, 1, 1, diff, autoload_countdown);
+      ft.drawGauge(ft.width()/4+16+12, offset + pos*FT_CORE_STEP + 16, 12, colort, colorb, 0, 1, 1, diff, autoload_countdown);
     }
     pos++;
   }
@@ -356,8 +368,8 @@ void app_core_browser_on_keyboard() {
         // right
         if (usb_keyboard_report.keycode[0] == KEY_RIGHT || (joyL & SC_BTN_RIGHT) || (joyR & SC_BTN_RIGHT)) {
           autoload_enabled = false;
-          if (core_sel + core_page_size <= cores_len-1) {
-            core_sel += core_page_size;
+          if (core_sel + page_size() <= cores_len-1) {
+            core_sel += page_size();
           } else {
             core_sel = cores_len-1;
           }
@@ -366,8 +378,8 @@ void app_core_browser_on_keyboard() {
         // left
         if (usb_keyboard_report.keycode[0] == KEY_LEFT || (joyL & SC_BTN_LEFT) || (joyR & SC_BTN_LEFT)) {
           autoload_enabled = false;
-          if (core_sel - core_page_size >= 0) {
-            core_sel -= core_page_size;
+          if (core_sel - page_size() >= 0) {
+            core_sel -= page_size();
           } else {
             core_sel = 0;
           }
@@ -457,9 +469,11 @@ void app_core_browser_tick() {
       open_setup();
       return;
     } else if (id == HIT_PREV) {
-      core_sel = core_sel >= ft_core_page_size ? (core_sel / ft_core_page_size - 1) * ft_core_page_size : 0;
+      uint8_t n = ft_core_page_size();
+      core_sel = core_sel >= n ? (core_sel / n - 1) * n : 0;
     } else if (id == HIT_NEXT) {
-      uint8_t next = (core_sel / ft_core_page_size + 1) * ft_core_page_size;
+      uint8_t n = ft_core_page_size();
+      uint8_t next = (core_sel / n + 1) * n;
       if (next < cores_len) core_sel = next;
     }
   }
