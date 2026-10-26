@@ -1,6 +1,8 @@
 #include "main.h"
 #include "bitmaps.h"
 #include "ui/ft_mouse.h"
+#include "diag/hang_diag.h"
+#include "hardware/structs/watchdog.h"
 
 // GRAM after the images and sounds of the menu: the pointer, then the kept frame
 #define POINTER_OFFSET 0xF0000
@@ -143,13 +145,18 @@ static void draw_pointer() {
   frame_timer.reset();
 }
 
+// hang marks: the FT steps inside the tick that draws (tick byte kept)
+static void ft_mark(uint8_t step) { hang_mark((watchdog_hw->scratch[1] & 0xff00) | step); }
+
 void ft_frame_end() {
+  ft_mark(0x51);
   uint16_t len = ft.displayListSize();
   static uint16_t len_max = 0;
   if (len > len_max) { // how close a screen gets to the 8 KB of the display list
     len_max = len;
     d_printf("FT display list: %u bytes (most so far)", len); d_println();
   }
+  ft_mark(0x52);
   if (len > 0 && len <= FRAME_MAX) {
     ft.cmdMemcpy(FRAME_OFFSET, FT81x_RAM_DL, len);
     frame_len = len;
@@ -158,12 +165,16 @@ void ft_frame_end() {
   }
   draw_pointer();
   ft.swapScreen();
+  ft_mark(0x53);
 }
 
 void ft_pointer_frame() {
   if (!frame_len) return;
+  ft_mark(0x61);
   ft.beginDisplayList();
   ft.cmdAppend(FRAME_OFFSET, frame_len);
+  ft_mark(0x62);
   draw_pointer();
   ft.swapScreen();
+  ft_mark(0x63);
 }
