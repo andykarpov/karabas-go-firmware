@@ -1,4 +1,5 @@
 #include "main.h"
+#include "diag/hang_diag.h"
 #include "hardware/pio.h"
 #include "hardware/dma.h"
 #include "hardware/clocks.h"
@@ -145,19 +146,23 @@ uint32_t fpga_send(const char* filename) {
   timer.reset();
 
   uint32_t sent = 0;
+  hang_step(0x90);
   if (!bitstream_send_pio(total, sent)) {
     d_println("Falling back to bit-banged bitstream loading");
     bitstream_send_bitbang(total, sent);
   }
+  hang_step(0x91);
   file1.close();
 
   // give the pins back to SIO
   pinMode(PIN_CONF_CLK, INPUT);
   pinMode(PIN_CONF_IO1, INPUT);
 
+  hang_step(0x92);
   d_print(sent, DEC); d_println(" bytes done");
   d_print("Elapsed time: "); d_print(timer.elapsed(), DEC); d_println(" ms");
   d_flush();
+  hang_step(0x93);
 
   if (sent < total) {
     d_print("Bitstream is truncated, expected "); d_print(total, DEC); d_println(" bytes");
@@ -165,12 +170,14 @@ uint32_t fpga_send(const char* filename) {
 
   d_print("Waiting for CONF_DONE... ");
   timer.reset();
+  hang_step(0x94);
   while(digitalRead(PIN_CONF_DONE) == LOW) {
     if (timer.elapsed() >= 1000) {
       halt("FPGA configuration failed: CONF_DONE timeout");
     }
     delay(10);
   }
+  hang_step(0x95);
   d_println("Done");
 
   return sent;

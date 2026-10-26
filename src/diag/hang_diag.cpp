@@ -32,6 +32,10 @@ void hang_mark(uint16_t where) {
   watchdog_hw->scratch[3] = (watchdog_hw->scratch[3] & 0xffff) | ((uint32_t) seconds() << 16);
 }
 
+void hang_step(uint8_t step) {
+  hang_mark((watchdog_hw->scratch[1] & 0xff00) | step);
+}
+
 // one byte of scratch 2: 3 SPI holder, 2 SPI waiter, 1 I2C holder, 0 I2C waiter
 static void set_byte(uint8_t i, uint8_t v) {
   uint32_t save = save_and_disable_interrupts();

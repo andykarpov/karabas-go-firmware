@@ -2,7 +2,6 @@
 #include "bitmaps.h"
 #include "ui/ft_mouse.h"
 #include "diag/hang_diag.h"
-#include "hardware/structs/watchdog.h"
 
 // GRAM after the images and sounds of the menu: the pointer, then the kept frame
 #define POINTER_OFFSET 0xF0000
@@ -145,8 +144,8 @@ static void draw_pointer() {
   frame_timer.reset();
 }
 
-// hang marks: the FT steps inside the tick that draws (tick byte kept)
-static void ft_mark(uint8_t step) { hang_mark((watchdog_hw->scratch[1] & 0xff00) | step); }
+// hang marks: the FT steps inside the tick that draws
+static void ft_mark(uint8_t step) { hang_step(step); }
 
 void ft_frame_end() {
   ft_mark(0x51);
