@@ -28,11 +28,11 @@ enum {
 
 // which global hotkey (if any) the keyboard report / joysticks match
 static int hotkey_find(const hid_keyboard_report_t &kbd, uint16_t jl, uint16_t jr) {
-  // menu+esc (joy start+c) to toggle osd only for osd supported cores
+  // menu+esc (joy start+c, start+select) to toggle osd only for osd supported cores
   if (core.type != CORE_TYPE_BOOT && core.type != CORE_TYPE_HIDDEN &&
       ((((kbd.modifier & KEY_MOD_LMETA) || (kbd.modifier & KEY_MOD_RMETA)) && kbd.keycode[0] == KEY_ESC) ||
-       ((jl & SC_BTN_START) && (jl & SC_BTN_C)) ||
-       ((jr & SC_BTN_START) && (jr & SC_BTN_C))
+       ((jl & SC_BTN_START) && (jl & UI_JOY_ESC)) ||
+       ((jr & SC_BTN_START) && (jr & UI_JOY_ESC))
       )
     ) {
     return HOTKEY_OSD_TOGGLE;

@@ -536,7 +536,7 @@ void app_ft_setup_on_keyboard() {
   k.left = key == KEY_LEFT || (joyL & SC_BTN_LEFT) || (joyR & SC_BTN_LEFT);
   k.right = key == KEY_RIGHT || (joyL & SC_BTN_RIGHT) || (joyR & SC_BTN_RIGHT);
   k.enter = key == KEY_ENTER || key == KEY_KPENTER || (joyL & SC_BTN_A) || (joyR & SC_BTN_A) || (joyL & SC_BTN_B) || (joyR & SC_BTN_B);
-  k.esc = key == KEY_ESC || (joyL & SC_BTN_C) || (joyR & SC_BTN_C);
+  k.esc = key == KEY_ESC || ((joyL | joyR) & UI_JOY_ESC);
   k.back = k.esc || key == KEY_BACKSPACE;
   k.tab = key == KEY_TAB;
   k.shift = usb_keyboard_report.modifier & (KEY_MOD_LSHIFT | KEY_MOD_RSHIFT);

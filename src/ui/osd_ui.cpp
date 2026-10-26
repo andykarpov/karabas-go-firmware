@@ -173,7 +173,7 @@ uint8_t ui_joy_key() {
   uint16_t joy = joyL | joyR;
   return (joy & SC_BTN_UP) ? KEY_UP : (joy & SC_BTN_DOWN) ? KEY_DOWN :
          (joy & SC_BTN_LEFT) ? KEY_LEFT : (joy & SC_BTN_RIGHT) ? KEY_RIGHT :
-         (joy & (SC_BTN_A | SC_BTN_B)) ? KEY_ENTER : (joy & SC_BTN_C) ? KEY_ESC : 0;
+         (joy & (SC_BTN_A | SC_BTN_B)) ? KEY_ENTER : (joy & UI_JOY_ESC) ? KEY_ESC : 0;
 }
 
 bool ui_joy_edit(char *text, size_t max, uint8_t key) {

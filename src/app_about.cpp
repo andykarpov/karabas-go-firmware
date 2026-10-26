@@ -48,7 +48,7 @@ void app_about_overlay() {
 void app_about_on_keyboard() 
 {
   // esc
-  if (usb_keyboard_report.keycode[0] == KEY_ESC || (joyL & SC_BTN_C) || (joyR & SC_BTN_C)) {
+  if (usb_keyboard_report.keycode[0] == KEY_ESC || ((joyL | joyR) & UI_JOY_ESC)) {
     osd_state = osd_return_state;
   }
   zxosd.update();
