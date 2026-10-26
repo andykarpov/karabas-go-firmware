@@ -51,7 +51,12 @@
 #define KG_MATRIX_FX_FIRE 1
 #define KG_MATRIX_FX_LIFE 2
 #define KG_MATRIX_FX_SCANNER 3
-#define KG_MATRIX_FX_COUNT 4
+#define KG_MATRIX_FX_RAIN 4
+#define KG_MATRIX_FX_PLASMA 5
+#define KG_MATRIX_FX_STARS 6
+#define KG_MATRIX_FX_PONG 7
+#define KG_MATRIX_FX_DRIVE 8  // the activity of the mounted images (img_mount)
+#define KG_MATRIX_FX_COUNT 9
 
 typedef struct {
   uint8_t mode;

@@ -11,6 +11,8 @@
 const setting_t settings[SET_COUNT] = {
   { "Debug log",      "Log to the USB serial port",     SET_KIND_BOOL },
   { "DVI only",       "No HDMI audio, next core",       SET_KIND_BOOL },
+  { "LED matrix",     "The dot matrix add-on",          SET_KIND_BOOL },
+  { "Matrix bright.", "Core: as the core sets it",      SET_KIND_CHOICE },
   { "Enabled",        "Start a core on power on",       SET_KIND_BOOL },
   { "Timeout",        "Seconds before the start",       SET_KIND_CHOICE },
   { "Core",           "The core to start",              SET_KIND_CHOICE },
@@ -83,6 +85,7 @@ static bool *bool_ref(uint8_t id, setup_t &s) {
   switch (id) {
     case SET_DEBUG: return &s.debug_enabled;
     case SET_DVI: return &s.dvi_only;
+    case SET_MATRIX: return &s.matrix_enabled;
     case SET_AUTOLOAD: return &s.autoload_enabled;
     case SET_FT: return &s.ft_enabled;
     case SET_3D: return &s.ft_3d_buttons;
@@ -132,6 +135,10 @@ void settings_value_text(uint8_t id, const setup_t &s, char *out, size_t size) {
     }
     case SET_VIDEO_MODE: strlcpy(out, FT812::modeName(s.ft_video_mode), size); break;
     case SET_MOUSE_SPEED: snprintf(out, size, "%u", s.ft_mouse_speed); break;
+    case SET_MATRIX_BRIGHTNESS:
+      if (s.matrix_brightness == 0) strlcpy(out, "Core", size);
+      else snprintf(out, size, "%u", s.matrix_brightness);
+      break;
     case SET_SOUND: strlcpy(out, sound_names[s.ft_sound < SOUNDS ? s.ft_sound : 0], size); break;
     case SET_THEME: {
       int t = settings_theme(s);
@@ -164,6 +171,7 @@ void settings_change(uint8_t id, setup_t &s, int d) {
     }
     case SET_SOUND: s.ft_sound = (s.ft_sound + d + SOUNDS) % SOUNDS; break;
     case SET_MOUSE_SPEED: s.ft_mouse_speed = (s.ft_mouse_speed - 1 + d + 5) % 5 + 1; break;
+    case SET_MATRIX_BRIGHTNESS: s.matrix_brightness = (s.matrix_brightness + d + 17) % 17; break;
     case SET_THEME: {
       int t = settings_theme(s);
       if (t < 0) t = d > 0 ? -1 : 0; // Custom: to the first / the last theme

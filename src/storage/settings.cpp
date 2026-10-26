@@ -40,6 +40,9 @@ void load_setup() {
 
   hw_setup.dvi_only = false;
 
+  hw_setup.matrix_enabled = true;
+  hw_setup.matrix_brightness = 0;
+
   if (!has_sd) return;
   sd1.chvol();
 
@@ -87,6 +90,10 @@ void load_setup() {
     hw_setup.color_text_active = (ini.getValue("ft812", "color_text_active", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_text_active;
     hw_setup.color_copyright = (ini.getValue("ft812", "color_copyright", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_copyright;
 
+    ini.getValue("matrix", "enabled", buffer, bufferLen, hw_setup.matrix_enabled);
+    if (ini.getValue("matrix", "brightness", buffer, bufferLen)) hw_setup.matrix_brightness = strtoul(buffer, 0, 10);
+    if (hw_setup.matrix_brightness > 16) hw_setup.matrix_brightness = 0;
+
     ini.getValue("autoload", "enabled", buffer, bufferLen, hw_setup.autoload_enabled);
     hw_setup.autoload_timeout = (ini.getValue("autoload", "timeout", buffer, bufferLen)) ? strtoul(buffer, 0, 10) : 0;
     if (ini.getValue("autoload", "core", buffer, bufferLen)) {
@@ -105,6 +112,8 @@ void load_setup() {
     d_print("FT812 show character: "); d_println(hw_setup.ft_char ? "yes" : "no"); 
     d_print("FT812 use 3d buttons: "); d_println(hw_setup.ft_3d_buttons ? "yes" : "no"); 
     d_print("FT812 mouse speed: "); d_println(hw_setup.ft_mouse_speed);
+    d_print("Matrix enabled: "); d_println(hw_setup.matrix_enabled ? "yes" : "no");
+    d_print("Matrix brightness: "); d_println(hw_setup.matrix_brightness);
     d_print("Autoload enabled: "); d_println(hw_setup.autoload_enabled ? "yes" : "no"); 
     d_print("Autoload timeout: "); d_println(hw_setup.autoload_timeout); 
     d_print("Autoload core: "); d_println(hw_setup.autoload_core); 
@@ -153,7 +162,7 @@ static void add_color(kg_ini_item_t *items, uint8_t &count, const char *key, uin
 }
 
 bool save_setup(const setup_t &s) {
-  kg_ini_item_t items[24];
+  kg_ini_item_t items[28];
   uint8_t count = 0;
   const setup_t &o = hw_setup;
   add_bool(items, count, "setup", "debug", s.debug_enabled, o.debug_enabled);
@@ -174,6 +183,8 @@ bool save_setup(const setup_t &s) {
   add_color(items, count, "color_copyright", s.color_copyright, o.color_copyright);
   add_bool(items, count, "ft812", "3d_buttons", s.ft_3d_buttons, o.ft_3d_buttons);
   add_uint(items, count, "ft812", "mouse_speed", s.ft_mouse_speed, o.ft_mouse_speed);
+  add_bool(items, count, "matrix", "enabled", s.matrix_enabled, o.matrix_enabled);
+  add_uint(items, count, "matrix", "brightness", s.matrix_brightness, o.matrix_brightness);
   add_bool(items, count, "autoload", "enabled", s.autoload_enabled, o.autoload_enabled);
   add_uint(items, count, "autoload", "timeout", s.autoload_timeout, o.autoload_timeout);
   if (strcmp(s.autoload_core, o.autoload_core) != 0) add_item(items, count, "autoload", "core", s.autoload_core);
@@ -226,6 +237,7 @@ bool save_setup(const setup_t &s) {
     return false;
   }
   hw_setup = s;
+  matrix_apply_setup();
   d_printf("karabas.ini: %u values saved", count); d_println();
   return true;
 }
