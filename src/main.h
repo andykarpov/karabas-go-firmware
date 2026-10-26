@@ -28,6 +28,7 @@
 #include "periph/oled.h"
 #include "periph/serial_bridge.h"
 #include "periph/esp_at.h"
+#include "periph/ntp_sync.h"
 #include "periph/periph.h"
 #include "periph/i2c_bus.h"
 #include "storage/storage.h"

@@ -53,7 +53,7 @@ static const app_t apps[] = {
   { app_core_browser_show,                             app_core_browser_on_keyboard,   app_core_browser_tick }, // state_core_browser
   { []() { app_file_loader_overlay(true, false); },   app_file_loader_on_keyboard },  // state_file_loader
   { app_pad_mapper_overlay,                            app_pad_mapper_on_keyboard,     app_pad_mapper_tick }, // state_pad_mapper
-  { app_rtc_overlay,                                   app_rtc_on_keyboard },          // state_rtc
+  { app_rtc_overlay,                                   app_rtc_on_keyboard,            app_rtc_tick }, // state_rtc
   { app_wifi_overlay,                                  app_wifi_on_keyboard,           app_wifi_tick }, // state_wifi
   { app_settings_overlay,                              app_settings_on_keyboard },     // state_settings
   { app_ft_setup_overlay,                              app_ft_setup_on_keyboard,       app_ft_setup_tick }, // state_ft_setup
@@ -140,6 +140,11 @@ void print_time() {
 void on_time() {
   print_time();
   zxosd.update();
+
+  if (osd_state == state_msc) {
+    if (has_ft) app_msc_ft_draw();
+    return;
+  }
 
   // on time callback
   app_core_browser_on_time();

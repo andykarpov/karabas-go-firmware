@@ -2,6 +2,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "time_zone.h"
 
 // Parsing of the ESP8266 AT firmware replies (AT 1.x and 2.x), one line at a time without the
 // CR LF, and quoting of the command arguments.
@@ -42,6 +43,11 @@ int kg_esp_parse_flow(const char *line);
 int kg_esp_parse_mode(const char *line);
 // "AT version:1.7.4.0(May 11 2020 19:13:04)" -> "1.7.4.0"
 bool kg_esp_parse_version(const char *line, char *version, size_t size);
+
+// +CIPSNTPTIME:Mon Oct 26 18:46:23 2026 (UTC with the timezone 0 of AT+CIPSNTPCFG) -> true.
+// False for other lines and for a year out of 2000..2099: before the first sync the ESP gives
+// 1970.
+bool kg_esp_parse_sntptime(const char *line, kg_datetime_t *t);
 
 // s quoted for an AT string argument: '"', ',' and '\' get a '\' before them. out must hold
 // 2 * strlen(s) + 1 bytes to never cut it.

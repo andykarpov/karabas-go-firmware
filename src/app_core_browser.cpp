@@ -109,15 +109,20 @@ void app_core_browser_menu(uint8_t vpos) {
 // The background gradient as a bitmap in GRAM, after the kept frame of ft_mouse (0xF0400 + 8 KB):
 // CMD_GRADIENT took too much of the render time of every line (in 800x600, where the system
 // clock is the pixel clock, busy lines came out unfinished). A 4 px wide column, ordered dither for the RGB565 steps,
-// repeated across the screen: one bitmap a line. Made again when the colors or the mode change.
+// repeated across the screen: one bitmap a line. Made again when the colors or the mode change,
+// into the other of two buffers: the frame on the screen keeps drawing the old one until the swap
+// (a theme change tore the background for a frame).
 #define GRADIENT_OFFSET 0xF4000
 #define GRADIENT_W 4
 #define GRADIENT_MAX_H 450 // 3/4 of 600 lines
-static_assert(GRADIENT_OFFSET + GRADIENT_W * 2 * GRADIENT_MAX_H <= 0x100000, "the gradient is past the GRAM");
+#define GRADIENT_BUF 0x1000 // the second buffer is after the first
+static_assert(GRADIENT_W * 2 * GRADIENT_MAX_H <= GRADIENT_BUF, "the gradient buffers overlap");
+static_assert(GRADIENT_OFFSET + 2 * GRADIENT_BUF <= 0x100000, "the gradient is past the GRAM");
 
 static uint16_t gradient_px[GRADIENT_W * GRADIENT_MAX_H];
 static uint32_t gradient_from, gradient_to;
 static uint16_t gradient_h; // 0: not in GRAM
+static uint8_t gradient_buf; // the buffer of the last gradient
 
 static uint8_t gradient_mix(uint32_t from, uint32_t to, uint8_t shift, uint16_t y, uint16_t h) {
   int a = (from >> shift) & 0xFF, b = (to >> shift) & 0xFF;
@@ -137,7 +142,8 @@ static void gradient_load(uint32_t from, uint32_t to, uint16_t h) {
       gradient_px[y * GRADIENT_W + x] = (r5 << 11) | (g6 << 5) | b5;
     }
   }
-  ft.writeGRAM(GRADIENT_OFFSET, GRADIENT_W * 2 * h, (const uint8_t *) gradient_px, false);
+  gradient_buf ^= 1;
+  ft.writeGRAM(GRADIENT_OFFSET + gradient_buf * GRADIENT_BUF, GRADIENT_W * 2 * h, (const uint8_t *) gradient_px, false);
   gradient_from = from;
   gradient_to = to;
   gradient_h = h;
@@ -174,7 +180,7 @@ void app_core_browser_ft_background(const setup_t &t) {
   if (h != gradient_h || t.color_gradient != gradient_from || t.color_bg != gradient_to) {
     gradient_load(t.color_gradient, t.color_bg, h);
   }
-  ft.drawBitmapRGB565RepeatX(GRADIENT_OFFSET, 0, 0, GRADIENT_W, h, ft.width());
+  ft.drawBitmapRGB565RepeatX(GRADIENT_OFFSET + gradient_buf * GRADIENT_BUF, 0, 0, GRADIENT_W, h, ft.width());
 }
 
 void app_core_browser_ft_decor(const setup_t &t, bool show_char) {

@@ -205,12 +205,13 @@ static void karabas_loop()
   debug_drain();
 
   //rp2040.wdt_reset();
-  // in msc mode nothing else runs until eject
+  // the clock runs in msc mode too (the msc screen shows it)
   hang_mark(0x0300);
-  if (msc_tick()) return;
-
-  hang_mark(0x0400);
   zxrtc.handle();
+
+  // in msc mode nothing else runs until eject
+  hang_mark(0x0400);
+  if (msc_tick()) return;
 
   // osd hide / popup timers
   hang_mark(0x0500);

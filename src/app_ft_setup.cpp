@@ -319,6 +319,10 @@ void app_ft_setup_draw() {
   ft_frame_end();
 }
 
+void app_ft_setup_tz_saved(int16_t tz) {
+  s.tz = tz;
+}
+
 static void set_mode(uint8_t m) {
   if (ft.init(m)) {
     mode_cur = m;
