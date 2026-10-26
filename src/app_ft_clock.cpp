@@ -27,20 +27,33 @@ enum { HIT_FIELD = 0, HIT_SET = 2, HIT_CHAR = 10 }; // HIT_CHAR + 20 * field + c
 #define CURSOR_COLOR 0x00d8d8
 
 static kg_field_t fields[2];
+static bool edited[2]; // a field not edited follows the RTC
 static uint8_t focus;
 static const char *message;
 static bool message_ok;
 static ElapsedTimer message_timer;
 
+// the fields not edited from the RTC, the cursor stays
 static void init_fields() {
   char buf[11];
-  snprintf(buf, sizeof(buf), "%02u.%02u.%04u", zxrtc.getDay(), zxrtc.getMonth(), 2000 + zxrtc.getYear());
-  kg_field_init(&fields[F_DATE], buf);
-  snprintf(buf, sizeof(buf), "%02u:%02u", zxrtc.getHour(), zxrtc.getMinute());
-  kg_field_init(&fields[F_TIME], buf);
+  uint8_t pos;
+  if (!edited[F_DATE]) {
+    snprintf(buf, sizeof(buf), "%02u.%02u.%04u", zxrtc.getDay(), zxrtc.getMonth(), 2000 + zxrtc.getYear());
+    pos = fields[F_DATE].pos;
+    kg_field_init(&fields[F_DATE], buf);
+    fields[F_DATE].pos = pos < fields[F_DATE].len ? pos : 0;
+  }
+  if (!edited[F_TIME]) {
+    snprintf(buf, sizeof(buf), "%02u:%02u", zxrtc.getHour(), zxrtc.getMinute());
+    pos = fields[F_TIME].pos;
+    kg_field_init(&fields[F_TIME], buf);
+    fields[F_TIME].pos = pos < fields[F_TIME].len ? pos : 0;
+  }
 }
 
 static void open() {
+  edited[F_DATE] = edited[F_TIME] = false;
+  fields[F_DATE].pos = fields[F_TIME].pos = 0;
   init_fields();
   focus = F_DATE;
   message = nullptr;
@@ -72,7 +85,8 @@ static void draw_field(const ft_page_ctx_t &c, uint8_t i, int16_t y, const char 
 }
 
 static void draw(const ft_page_ctx_t &c) {
-  if (!c.focused) init_fields(); // the RTC as it runs
+  if (!c.focused) edited[F_DATE] = edited[F_TIME] = false;
+  init_fields(); // the RTC as it runs
   draw_field(c, F_DATE, c.y + TOP_GAP, "Date", "DD.MM.YYYY");
   draw_field(c, F_TIME, c.y + TOP_GAP + ROW_STEP, "Time", "HH:MM");
   int16_t y = c.y + TOP_GAP + 2 * ROW_STEP + 8;
@@ -102,6 +116,7 @@ static void set_clock() {
   zxrtc.setMinute(minute);
   zxrtc.setSecond(0);
   zxrtc.save();
+  edited[F_DATE] = edited[F_TIME] = false;
   message = "The clock is set";
   message_ok = true;
   message_timer.reset();
@@ -132,7 +147,7 @@ static bool key(uint8_t key, bool shift, bool joy) {
 
   if (key == KEY_UP) focus = (focus + F_COUNT - 1) % F_COUNT;
   else if (key == KEY_DOWN || key == KEY_TAB) focus = (focus + 1) % F_COUNT;
-  else if (field && digit) { if (kg_field_type(field, digit)) focus++; }
+  else if (field && digit) { edited[focus] = true; if (kg_field_type(field, digit)) focus++; }
   else if (field && (key == KEY_LEFT || key == KEY_BACKSPACE)) kg_field_left(field);
   else if (field && key == KEY_RIGHT) kg_field_right(field);
   else if (field && enter) focus++;
@@ -180,6 +195,7 @@ static void wheel(int16_t id, int d) {
     return;
   }
   message = nullptr;
+  edited[focus] = true;
   turn_digit(&fields[focus], d);
 }
 
