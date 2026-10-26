@@ -105,12 +105,50 @@ void app_core_browser_menu(uint8_t vpos) {
   zxosd.update();
 }
 
+// The background gradient as a bitmap in GRAM, after the kept frame of ft_mouse (0xF0400 + 8 KB):
+// CMD_GRADIENT took too much of the render time of every line (in 800x600, where the system
+// clock is the pixel clock, busy lines came out unfinished). A 4 px wide column, ordered dither for the RGB565 steps,
+// repeated across the screen: one bitmap a line. Made again when the colors or the mode change.
+#define GRADIENT_OFFSET 0xF4000
+#define GRADIENT_W 4
+#define GRADIENT_MAX_H 450 // 3/4 of 600 lines
+static_assert(GRADIENT_OFFSET + GRADIENT_W * 2 * GRADIENT_MAX_H <= 0x100000, "the gradient is past the GRAM");
+
+static uint16_t gradient_px[GRADIENT_W * GRADIENT_MAX_H];
+static uint32_t gradient_from, gradient_to;
+static uint16_t gradient_h; // 0: not in GRAM
+
+static uint8_t gradient_mix(uint32_t from, uint32_t to, uint8_t shift, uint16_t y, uint16_t h) {
+  int a = (from >> shift) & 0xFF, b = (to >> shift) & 0xFF;
+  return a + (b - a) * y / (h - 1);
+}
+
+static void gradient_load(uint32_t from, uint32_t to, uint16_t h) {
+  static const uint8_t bayer[4][4] = { {0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5} };
+  for (uint16_t y = 0; y < h; y++) {
+    uint8_t r = gradient_mix(from, to, 16, y, h), g = gradient_mix(from, to, 8, y, h), b = gradient_mix(from, to, 0, y, h);
+    for (uint8_t x = 0; x < GRADIENT_W; x++) {
+      uint8_t t = bayer[y & 3][x];
+      uint16_t r5 = (r + t / 2) >> 3, g6 = (g + t / 4) >> 2, b5 = (b + t / 2) >> 3;
+      if (r5 > 31) r5 = 31;
+      if (g6 > 63) g6 = 63;
+      if (b5 > 31) b5 = 31;
+      gradient_px[y * GRADIENT_W + x] = (r5 << 11) | (g6 << 5) | b5;
+    }
+  }
+  ft.writeGRAM(GRADIENT_OFFSET, GRADIENT_W * 2 * h, (const uint8_t *) gradient_px, false);
+  gradient_from = from;
+  gradient_to = to;
+  gradient_h = h;
+}
+
 static_assert(KEY1_PCM_START + KEY1_PCM_SIZE <= sizeof(key1Data), "sound 1 is past its array");
 static_assert(KEY2_PCM_START + KEY2_PCM_SIZE <= sizeof(key2Data), "sound 2 is past its array");
 static_assert(KEY3_PCM_START + KEY3_PCM_SIZE <= sizeof(key3Data), "sound 3 is past its array");
 static_assert(KEY4_PCM_START + KEY4_PCM_SIZE <= sizeof(key4Data), "sound 4 is past its array");
 
 void app_core_browser_ft_load() {
+  gradient_h = 0; // the GRAM is cleared by a reset of the FT812
   ft.setSound(FT81x_SOUND_COWBELL, 60);
   ft.loadImage(LOGO_OFFSET, LOGO_SIZE, logoData, false); // karabas logo, starts from 0 in GRAM
   ft.loadImage(BG_OFFSET, BG_SIZE, bgData, false); // karabas bg, starts after logo in GRAM
@@ -129,7 +167,13 @@ void app_core_browser_ft_overlay() {
 
 void app_core_browser_ft_background(const setup_t &t) {
   ft.clear(t.color_bg);
-  ft.drawGradient(ft.width()/2, 0, t.color_gradient, ft.width()/2, ft.height()-ft.height()/4-1, t.color_bg);
+  // from the top to 3/4 of the height, as CMD_GRADIENT drew it; below is the clear color
+  uint16_t h = ft.height() - ft.height() / 4;
+  if (h > GRADIENT_MAX_H) h = GRADIENT_MAX_H;
+  if (h != gradient_h || t.color_gradient != gradient_from || t.color_bg != gradient_to) {
+    gradient_load(t.color_gradient, t.color_bg, h);
+  }
+  ft.drawBitmapRGB565RepeatX(GRADIENT_OFFSET, 0, 0, GRADIENT_W, h, ft.width());
 }
 
 void app_core_browser_ft_decor(const setup_t &t, bool show_char) {
@@ -399,10 +443,7 @@ void app_core_browser_on_keyboard() {
         if (usb_keyboard_report.keycode[0] == KEY_V && hw_setup.debug_enabled && has_ft) {
           autoload_enabled = false;
           uint8_t old_vmode = hw_setup.ft_video_mode;
-          hw_setup.ft_video_mode++;
-          if (hw_setup.ft_video_mode > 14) {
-            hw_setup.ft_video_mode = 0;
-          }
+          hw_setup.ft_video_mode = (hw_setup.ft_video_mode + 1) % FT812::modeCount();
           d_printf("Changing video mode from %d to %d", old_vmode, hw_setup.ft_video_mode); d_println();
           if (ft.init(hw_setup.ft_video_mode)) {
             d_printf("FT81x system clock %lu kHz, attempt %u", (unsigned long) (ft.initClockHz() / 1000), ft.initAttempts()); d_println();

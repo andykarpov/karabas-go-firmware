@@ -18,7 +18,7 @@ void load_setup() {
   // defaults
   hw_setup.debug_enabled = false;
   hw_setup.ft_enabled = true;
-  hw_setup.ft_video_mode = 3; // 800x600@60
+  hw_setup.ft_video_mode = 1; // 800x600@60
   hw_setup.ft_sound = 1;
   hw_setup.ft_click = true;
   hw_setup.ft_time = true;
@@ -65,8 +65,11 @@ void load_setup() {
 
     
     ini.getValue("ft812", "enabled", buffer, bufferLen, hw_setup.ft_enabled);
-    hw_setup.ft_video_mode = (ini.getValue("ft812", "video_mode", buffer, bufferLen)) ? strtoul(buffer, 0, 10) : 0;
-    if (hw_setup.ft_video_mode >= FT812::modeCount()) hw_setup.ft_video_mode = 0;
+    if (ini.getValue("ft812", "video_mode", buffer, bufferLen)) {
+      hw_setup.ft_video_mode = strtoul(buffer, 0, 10);
+      // 0 640x480@60, 1 800x600@60; the other modes of older firmware are gone
+      if (hw_setup.ft_video_mode >= FT812::modeCount()) hw_setup.ft_video_mode = 0;
+    }
     hw_setup.ft_sound = (ini.getValue("ft812", "sound", buffer, bufferLen)) ? strtoul(buffer, 0, 10) : 0;
     if (hw_setup.ft_sound > 4) hw_setup.ft_sound = 1;
     ini.getValue("ft812", "click", buffer, bufferLen, hw_setup.ft_click);

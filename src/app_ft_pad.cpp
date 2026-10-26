@@ -448,7 +448,8 @@ static bool click(int16_t id) {
 
 static const char *hint() {
   switch (state) {
-    case ST_LIST: return can_forget() ? "Forget: the driver ini becomes .bak, the default map is used" : "";
+    case ST_LIST: return list_btn == 1 ? "Forget: the driver ini becomes .bak, the default map is used" :
+                                         "Map: learns the pad you press a button on, also one not on a port";
     case ST_PRESS: return "Enter: skip   Backspace: back";
     case ST_DONE: return "Enter: save the driver   Backspace: redo the last one";
     case ST_SAVED: case ST_FAILED: return "Enter: back to the ports";

@@ -44,7 +44,7 @@ void RTC::begin(spi_cb act, osd_cb evt)
   action = act;
   event = evt;
 
-  rtc_clock.begin(&Wire);
+  has_clock = rtc_clock.begin(&Wire);
 
   if (rtc_clock.lostPower()) {
     DateTime now = rtc_clock.now();
@@ -60,6 +60,18 @@ void RTC::begin(spi_cb act, osd_cb evt)
 bool RTC::started()
 {
   return is_started;
+}
+
+bool RTC::hasClock()
+{
+  return has_clock;
+}
+
+bool RTC::now(DateTime &dt)
+{
+  if (!has_clock || rtc_month == 0) return false; // no clock or not read yet
+  dt = DateTime(2000 + rtc_year, rtc_month, rtc_day, rtc_hours, rtc_minutes, rtc_seconds);
+  return true;
 }
 
 void RTC::handle()

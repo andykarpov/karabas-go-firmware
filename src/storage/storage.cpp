@@ -10,7 +10,23 @@ FsFile file1, file2;
 FsFile root1;
 bool has_sd = false;
 
+// file dates from the RTC (the time read last by zxrtc.handle(), no I2C here)
+static void sd_date_time(uint16_t *date, uint16_t *time, uint8_t *ms10) {
+  DateTime dt;
+  if (zxrtc.now(dt)) {
+    *date = FS_DATE(dt.year(), dt.month(), dt.day());
+    *time = FS_TIME(dt.hour(), dt.minute(), dt.second());
+    *ms10 = dt.second() & 1 ? 100 : 0;
+  } else {
+    *date = FS_DEFAULT_DATE;
+    *time = FS_DEFAULT_TIME;
+    *ms10 = 0;
+  }
+}
+
 void storage_begin() {
+  if (zxrtc.hasClock()) FsDateTime::setCallback(sd_date_time);
+
   // SD
   d_print("Mounting SD card... ");
   if (!sd1.begin(SD_CONFIG)) {

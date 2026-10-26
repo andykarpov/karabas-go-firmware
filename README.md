@@ -96,7 +96,7 @@ long, or the whole file is ignored.
 | `[setup]` | `debug` | `1`: debug log on the USB serial port |
 | | `dvi_only` | `1`: the cores drop the HDMI frames (audio, info) and output plain DVI |
 | `[ft812]` | `enabled` | `1`: graphical core browser on the FT812 |
-| | `video_mode` | FT812 video mode (0..14) |
+| | `video_mode` | FT812 video mode: `0` 640x480@60, `1` 800x600@60 |
 | | `sound`, `click` | menu sounds |
 | | `time`, `date`, `char` | show the clock, the date and the Karabas picture in the graphical browser |
 | | `color_*`, `3d_buttons` | colors (hex RGB) and button style |

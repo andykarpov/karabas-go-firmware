@@ -126,9 +126,11 @@ static void draw_list() {
     zxosd.setPos(1, 16); zxosd.print(list_msg);
   }
   zxosd.setColor(OSD::COLOR_GREY, OSD::COLOR_BLACK);
-  zxosd.setPos(1, 18); zxosd.print("Forget: the driver ini -> .bak,");
-  zxosd.setPos(1, 19); zxosd.print("the pad goes on by its default");
-  zxosd.setPos(1, 20); zxosd.print("map");
+  zxosd.setPos(1, 18); zxosd.print("Map: learns the pad you press a");
+  zxosd.setPos(1, 19); zxosd.print("button on, also one not on a");
+  zxosd.setPos(1, 20); zxosd.print("port");
+  zxosd.setPos(1, 21); zxosd.print("Forget: the driver ini -> .bak,");
+  zxosd.setPos(1, 22); zxosd.print("the pad uses its default map");
   draw_footer("Up/Down: port, Left/Right: btn", "Enter: OK, Esc: return");
 }
 

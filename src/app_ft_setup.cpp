@@ -238,8 +238,8 @@ static void draw_color() {
   }
 }
 
-// an opaque box: a dim layer over the whole screen is too much for the FT812 in the modes where
-// the system clock is the pixel clock (800x600@60), parts of the lines are left out
+// an opaque box: a dim layer over the whole screen is too much for the FT812 where the system
+// clock is the pixel clock (800x600), parts of the lines are left out
 static void draw_dialog() {
   int16_t w = 400, h = 160;
   int16_t x = (ft.width() - w) / 2, y = (ft.height() - h) / 2;
