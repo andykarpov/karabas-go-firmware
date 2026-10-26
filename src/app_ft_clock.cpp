@@ -11,7 +11,7 @@
 
 // The Clock page of the graphic setup: the date and the time typed into masked fields (as in
 // Setup RTC of the text menu), Set writes them to the RTC. A click on a digit puts the cursor
-// there.
+// there, the wheel turns the digit under the pointer (or the cursor).
 
 enum { F_DATE, F_TIME, F_SET, F_COUNT };
 
@@ -163,10 +163,30 @@ static bool click(int16_t id) {
   return true;
 }
 
+// the digit under the cursor + d, 0..9 round
+static void turn_digit(kg_field_t *f, int d) {
+  char &ch = f->text[f->pos];
+  if (ch < '0' || ch > '9') return;
+  ch = '0' + ((ch - '0' + d) % 10 + 10) % 10;
+}
+
+static void wheel(int16_t id, int d) {
+  if (id >= HIT_CHAR && id < HIT_CHAR + 40) {
+    focus = (id - HIT_CHAR) / 20;
+    put_cursor(&fields[focus], (id - HIT_CHAR) % 20);
+  } else if (id == HIT_FIELD + F_DATE || id == HIT_FIELD + F_TIME) {
+    focus = id - HIT_FIELD;
+  } else {
+    return;
+  }
+  message = nullptr;
+  turn_digit(&fields[focus], d);
+}
+
 static const char *hint() {
   return focus == F_SET ? "Write the date and the time to the RTC" : "Digits: type   Left/Right: cursor";
 }
 
 static const char *keys() { return "Up/Down: select   Enter: next / set   Esc: back"; }
 
-const ft_page_t ft_page_clock = { open, close, nullptr, nullptr, draw, key, tick, click, nullptr, hint, keys };
+const ft_page_t ft_page_clock = { open, close, nullptr, nullptr, draw, key, tick, click, wheel, hint, keys };
