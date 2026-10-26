@@ -145,11 +145,19 @@ long, or the whole file is ignored.
 
 Cores can define their own OSD hotkeys.
 
+## On-board buttons
+
+Each core sets what the buttons **BTN1** and **BTN2** do (`buttons` in its `core.json`, see
+`make_core` in karabas-go-tools): pass them to the core (reset, NMI... as the core decides; the
+default), open the OSD, go back to the menu, reload the core, reboot into BOOTSEL or into USB mass
+storage, on a press or on a hold. In the boot menu BTN1 reboots into BOOTSEL and BTN2 into USB mass
+storage.
+
 ## SD card as a USB drive
 
-Hold the second button (**BTN2**) while powering on, or send `AT+KARABAS=msc` to the serial port.
-The board then shows its SD card to the PC as a USB drive, and nothing else runs. Eject the drive
-on the PC, or press the first button, to restart normally.
+Press **BTN2** in the boot menu, or send `AT+KARABAS=msc` to the serial port. The board then shows
+its SD card to the PC as a USB drive, and nothing else runs; the screen says so. Eject the drive on
+the PC to restart normally.
 
 ## USB serial bridge
 

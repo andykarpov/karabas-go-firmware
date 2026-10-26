@@ -225,6 +225,23 @@ void do_configure(const char* filename) {
   hang_step(0xa9);
 }
 
+// the on-board button actions; FF (older core files): press goes to the core, no hold
+static void read_buttons() {
+  static const char *const names[BTN_ACTION_COUNT] = {"core", "none", "osd", "menu", "reload", "bootsel", "msc"};
+  file_seek(FILE_POS_BUTTONS);
+  for (uint8_t i=0; i<CORE_BUTTONS; i++) {
+    uint8_t press = file_read();
+    uint8_t hold = file_read();
+    uint8_t hold_time = file_read();
+    core.btn[i].press = press < BTN_ACTION_COUNT ? press : BTN_ACTION_CORE;
+    core.btn[i].hold = (hold < BTN_ACTION_COUNT && hold_time > 0 && hold_time != 0xFF) ? hold : BTN_ACTION_NONE;
+    core.btn[i].hold_ms = core.btn[i].hold == BTN_ACTION_NONE ? 0 : hold_time * 100;
+    d_printf("Button %u: %s", i+1, names[core.btn[i].press]);
+    if (core.btn[i].hold != BTN_ACTION_NONE) d_printf(", hold %u ms: %s", core.btn[i].hold_ms, names[core.btn[i].hold]);
+    d_println();
+  }
+}
+
 void read_core(const char* filename) {
 
   sd1.chvol();
@@ -268,6 +285,7 @@ void read_core(const char* filename) {
   // reserved bytes of older core files are FF: no save dir
   for (uint8_t i=0; i<32; i++) { if ((uint8_t) core.save_dir[i] == 0xFF) { core.save_dir[i] = '\0'; break; } }
   link_set_freq(core.spi_freq);
+  read_buttons();
   uint32_t roms_len = file_read32(FILE_POS_ROM_LEN);
   uint32_t offset = FILE_POS_BITSTREAM_START + core.bitstream_length + roms_len;
   //d_print("OSD section: "); d_println(offset);

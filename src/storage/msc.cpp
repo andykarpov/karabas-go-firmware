@@ -2,7 +2,7 @@
 #include "Adafruit_TinyUSB.h"
 #include "hardware/watchdog.h"
 
-// Expose the SD card as USB mass storage (btn2 held on boot, or AT+KARABAS=msc)
+// Expose the SD card as USB mass storage (AT+KARABAS=msc, the msc button action)
 
 // watchdog scratch 0..3 survive a watchdog reboot (the bootrom uses 4..7)
 #define MSC_REQUEST_MAGIC 0x4B47534D // "MSGK"
@@ -11,7 +11,7 @@ static Adafruit_USBD_MSC usb_msc;
 static bool expose_msc = false;
 static bool ejected = false;
 static bool msc_blink = false;
-static ElapsedTimer msc_timer, msc_blink_timer;
+static ElapsedTimer msc_blink_timer;
 
 int32_t msc_read_cb_sd (uint32_t lba, void* buffer, uint32_t bufsize);
 int32_t msc_write_cb_sd (uint32_t lba, uint8_t* buffer, uint32_t bufsize);
@@ -37,18 +37,18 @@ void msc_reboot_to_msc() {
 void msc_check_boot() {
   bool requested = (watchdog_hw->scratch[0] == MSC_REQUEST_MAGIC);
   watchdog_hw->scratch[0] = 0;
-  // if btn2 pressed on boot - espose msc
 #if ENABLE_MSC
-  if (btn_read(1) || requested) {
-    if (has_sd) {
-      expose_msc = true;
-      ejected = false;
-      uint32_t block_count = sd1.card()->sectorCount();
-      usb_msc.setCapacity(0, block_count, 512);
-      usb_msc.setUnitReady(0, true);
-      msc_timer.reset();
-    }
-  }
+  expose_msc = requested && has_sd;
+#endif
+}
+
+void msc_start() {
+#if ENABLE_MSC
+  if (!expose_msc) return;
+  ejected = false;
+  uint32_t block_count = sd1.card()->sectorCount();
+  usb_msc.setCapacity(0, block_count, 512);
+  usb_msc.setUnitReady(0, true);
 #endif
 }
 
@@ -57,7 +57,7 @@ bool msc_active() {
 }
 
 // returns true while in msc mode (the rest of the main loop is skipped)
-bool msc_tick(bool btn1) {
+bool msc_tick() {
   // if eject event registered - reboot rp2040
   if (ejected) {
     ejected = false;
@@ -65,20 +65,12 @@ bool msc_tick(bool btn1) {
   }
 
 #if ENABLE_MSC
-  // if msc mounted but btn1 pressed - also reboot rp2040
   if (expose_msc) {
 
     if (msc_blink_timer.elapsed() >= 200) {
           msc_blink = !msc_blink;
         led_write(1, msc_blink);
         msc_blink_timer.reset();
-    }
-
-    if (btn1 && msc_timer.elapsed() > 10000) {
-      // wait for btn1 to release
-      while(btn1) { btn1 = btn_read(0); delay(100); }
-      expose_msc = false;
-      rp2040.reboot();
     }
 
     // do not process other loop things until exit from msc mode

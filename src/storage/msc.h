@@ -1,7 +1,8 @@
 #pragma once
 
 void msc_init();
-void msc_check_boot();   // expose the sd card if btn2 is held on boot or msc_reboot_to_msc() asked
+void msc_check_boot();    // msc mode if msc_reboot_to_msc() asked (the sd card is not exposed yet)
+void msc_start();         // msc mode: expose the sd card (after the boot core shows the msc screen)
 void msc_reboot_to_msc(); // reboot and expose the sd card
 bool msc_active();
-bool msc_tick(bool btn1);
+bool msc_tick();

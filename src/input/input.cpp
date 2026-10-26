@@ -3,6 +3,7 @@
 #include "ps2kbd.h"
 #include "usb_hid_keys.h"
 #include "app_core.h"
+#include "diag/hang_diag.h"
 
 #include <FreeRTOS.h>
 #include <task.h>
@@ -61,20 +62,82 @@ static int hotkey_find(const hid_keyboard_report_t &kbd, uint16_t jl, uint16_t j
   return HOTKEY_NONE;
 }
 
-void input_tick_buttons(bool btn1, bool btn2) {
-  static bool prev_btn1 = false;
-  static bool prev_btn2 = false;
-
-  if (prev_btn1 != btn1) {
-    d_print("Button 1: "); d_println((btn1) ? "on" : "off");
-    prev_btn1 = btn1;
-    spi_send(CMD_BTN, 0, btn1);
+// the osd of a core with one (Menu+Esc, the osd button action)
+static void osd_toggle() {
+  if (core.type == CORE_TYPE_BOOT || core.type == CORE_TYPE_HIDDEN) return;
+  if (!is_osd) {
+    is_osd = true;
+    zxosd.showMenu();
+  } else if (!is_osd_hiding) {
+    is_osd_hiding = true;
+    hide_timer.reset();
+    zxosd.hideMenu();
   }
+}
 
-  if (prev_btn2 != btn2) {
-    d_print("Button 2: "); d_println((btn2) ? "on" : "off");
-    prev_btn2 = btn2;
-    spi_send(CMD_BTN, 1, btn2);
+static void btn_run(uint8_t i, uint8_t action) {
+  d_printf("Button %u: action %u", i+1, action); d_println();
+  switch (action) {
+    case BTN_ACTION_OSD:
+      osd_toggle();
+      break;
+    case BTN_ACTION_MENU:
+      bk_flush();
+      rp2040.reboot();
+      break;
+    case BTN_ACTION_RELOAD: {
+      char filename[sizeof(core.filename)];
+      strcpy(filename, core.filename);
+      do_configure(filename);
+      break;
+    }
+    case BTN_ACTION_BOOTSEL:
+      bk_flush();
+      hang_diag_stop();
+      rp2040.rebootToBootloader();
+      break;
+    case BTN_ACTION_MSC:
+      hang_diag_stop();
+      msc_reboot_to_msc(); // flushes the backup RAM
+      break;
+  }
+}
+
+#define BTN_DEBOUNCE_MS 20
+
+// the on-board buttons by the actions of the core (core.btn, make_core "buttons"):
+// press "core" sends the press and the release to the core at once, and its hold runs while the
+// button is still held; another press action runs on the press when the button has no hold, else
+// on a release before the hold time (a hold runs only the hold action)
+void input_tick_buttons() {
+  static bool state[CORE_BUTTONS];
+  static bool held[CORE_BUTTONS];   // the hold action ran: the release does nothing
+  static ElapsedTimer debounce[CORE_BUTTONS], pressed_for[CORE_BUTTONS];
+
+  for (uint8_t i=0; i<CORE_BUTTONS; i++) {
+    const core_btn_t &b = core.btn[i];
+    bool pressed = btn_read(i);
+    if (pressed == state[i]) {
+      debounce[i].reset();
+      if (pressed && b.hold != BTN_ACTION_NONE && !held[i] && pressed_for[i].elapsed() >= b.hold_ms) {
+        held[i] = true;
+        btn_run(i, b.hold);
+      }
+      continue;
+    }
+    if (debounce[i].elapsed() < BTN_DEBOUNCE_MS) continue;
+
+    state[i] = pressed;
+    d_printf("Button %u: %s", i+1, pressed ? "on" : "off"); d_println();
+    if (pressed) {
+      held[i] = false;
+      pressed_for[i].reset();
+    }
+    if (b.press == BTN_ACTION_CORE) {
+      spi_send(CMD_BTN, i, pressed);
+    } else if (pressed ? b.hold == BTN_ACTION_NONE : (b.hold != BTN_ACTION_NONE && !held[i])) {
+      btn_run(i, b.press);
+    }
   }
 }
 
@@ -251,14 +314,7 @@ bool on_global_hotkeys() {
   int hotkey = hotkey_find(usb_keyboard_report, joyL, joyR);
 
   if (hotkey == HOTKEY_OSD_TOGGLE) {
-    if (!is_osd) {
-      is_osd = true;
-      zxosd.showMenu();
-    } else if (!is_osd_hiding) {
-      is_osd_hiding = true;
-      hide_timer.reset();
-      zxosd.hideMenu();
-    }
+    osd_toggle();
     return true;
   }
 
