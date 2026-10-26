@@ -17,3 +17,8 @@ const hid_joy_config_t *hid_driver_find(uint16_t vid, uint16_t pid);
 // write /drivers/<vid>_<pid>.ini (other ini files of the pad become *.ini.bak) and reload the
 // drivers (APP). path gets the file name.
 bool hid_driver_save(const hid_joy_config_t *cfg, char *path, size_t path_size);
+// the file name of a driver of hid_driver_find() ("retrolink.ini")
+const char *hid_driver_file(const hid_joy_config_t *cfg);
+// all driver files of the pad become *.ini.bak, and the drivers are reloaded (APP); false if
+// it had none. The pad falls back to its default map.
+bool hid_driver_forget(uint16_t vid, uint16_t pid);

@@ -48,11 +48,27 @@ static void test_full() {
   TEST_ASSERT_FALSE(s.set(0, 0, false, 1)); // address 0 is never a device
 }
 
+static void test_get_port() {
+  UsbJoySlots<2> s;
+  uint8_t a, i;
+  bool x;
+  s.set(4, 1, true, 1);
+  TEST_ASSERT_TRUE(s.get(0, a, i, x));
+  TEST_ASSERT_EQUAL_UINT8(4, a);
+  TEST_ASSERT_EQUAL_UINT8(1, i);
+  TEST_ASSERT_TRUE(x);
+  TEST_ASSERT_FALSE(s.get(1, a, i, x));
+  TEST_ASSERT_FALSE(s.get(2, a, i, x));
+  s.remove(4, 1, true);
+  TEST_ASSERT_FALSE(s.get(0, a, i, x));
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_ports_follow_plug_order);
   RUN_TEST(test_hid_and_xinput_do_not_collide);
   RUN_TEST(test_remove_keeps_other_port);
   RUN_TEST(test_full);
+  RUN_TEST(test_get_port);
   return UNITY_END();
 }
