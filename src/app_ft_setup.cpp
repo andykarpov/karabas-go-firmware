@@ -16,14 +16,14 @@
 // settings of the chosen one on the right. Every change shows at once (the theme, the clock, the
 // buttons), Save writes karabas.ini, Cancel drops the changes (Esc asks first). A new video mode
 // is tried first and kept only when confirmed; it falls back after a timeout.
-// The pages after the settings (Clock, ...) are their own modules (ui/ft_page.h); their changes
-// are done at once. The setup of Wi-Fi and gamepads is still in the text menu ("Text setup").
+// The pages after the settings (Clock, Wi-Fi) are their own modules (ui/ft_page.h); their changes
+// are done at once. The gamepad mapper is still in the text menu ("Text setup").
 // The mouse: a click on a section opens it, on a setting picks it (and does Enter when it is
 // picked), on a toggle or an arrow changes it; the wheel changes the setting under the pointer
 // or the section; the sliders of a color follow a drag; the right button is Esc.
 
 // T_PAGES: the settings pages; then the pages of their own modules
-enum { T_SYSTEM, T_AUTOLOAD, T_DISPLAY, T_SOUND, T_THEME, T_PAGES, T_CLOCK = T_PAGES, T_TEXT, T_SAVE, T_CANCEL, T_COUNT };
+enum { T_SYSTEM, T_AUTOLOAD, T_DISPLAY, T_SOUND, T_THEME, T_PAGES, T_CLOCK = T_PAGES, T_WIFI, T_TEXT, T_SAVE, T_CANCEL, T_COUNT };
 
 // where the keys go
 enum { F_TABS, F_PAGE, F_COLOR, F_DIALOG, F_CUSTOM };
@@ -59,9 +59,9 @@ static const page_t pages[T_PAGES] = {
   PAGE("Theme", page_theme),
 };
 
-static const ft_page_t *const custom_pages[T_TEXT - T_PAGES] = { &ft_page_clock };
+static const ft_page_t *const custom_pages[T_TEXT - T_PAGES] = { &ft_page_clock, &ft_page_wifi };
 
-static const char *const tab_names[T_COUNT] = { "System", "Autoload", "Display", "Sound", "Theme", "Clock", "Text setup", "Save", "Cancel" };
+static const char *const tab_names[T_COUNT] = { "System", "Autoload", "Display", "Sound", "Theme", "Clock", "Wi-Fi", "Text setup", "Save", "Cancel" };
 
 #define TOP 88
 #define TAB_X 16
@@ -275,7 +275,7 @@ static void draw_footer() {
   switch (focus) {
     case F_TABS:
       hint = custom_page() ? "Enter: open" :
-             tab == T_TEXT ? "Wi-Fi, gamepads (drops the changes)" :
+             tab == T_TEXT ? "Gamepads (drops the changes)" :
              tab == T_SAVE ? "Write the settings to karabas.ini" :
              tab == T_CANCEL ? "Drop the changes" : "";
       keys = "Up/Down: section   Enter: open   Esc: cancel";
