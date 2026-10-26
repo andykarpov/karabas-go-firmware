@@ -65,6 +65,7 @@ static struct UsbPioReserve {
 // firmware init, runs on core0
 static void karabas_setup()
 {
+  // the boot log goes into the buffer until karabas.ini says whether debug is on
   hw_setup.debug_enabled = true;
   hang_diag_report();
 
@@ -132,14 +133,18 @@ static void karabas_setup()
   hid_drivers_load();
   hid_drivers_dump();
 
+  // also in MSC mode, and before it: then the host reads the card from the USBD task.
+  // debug=0 (the default): the boot log so far is dropped, or the main loop would send it as
+  // soon as a terminal opens the port
+  load_setup();
+  if (!hw_setup.debug_enabled) debug_discard();
+
   // if btn2 pressed on boot - espose msc
   msc_check_boot();
 
   osd_state = state_main;
 
   if (!msc_active()) {
-    // load setup
-    load_setup();
     if (hw_setup.debug_enabled) hang_diag_start();
 
     // load boot from SD or flashfs

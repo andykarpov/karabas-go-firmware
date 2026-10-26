@@ -17,7 +17,6 @@ void load_setup() {
   
   // defaults
   hw_setup.debug_enabled = false;
-  hw_setup.debug_hid = false;
   hw_setup.ft_enabled = true;
   hw_setup.ft_video_mode = 3; // 800x600@60
   hw_setup.ft_sound = 1;
@@ -40,7 +39,6 @@ void load_setup() {
   hw_setup.color_copyright = 0x00787878;  
 
   hw_setup.dvi_only = false;
-  hw_setup.burst_enabled = true;
 
   if (!has_sd) return;
   sd1.chvol();
@@ -63,9 +61,7 @@ void load_setup() {
     }
 
     ini.getValue("setup", "debug", buffer, bufferLen, hw_setup.debug_enabled);
-    ini.getValue("setup", "debug_hid", buffer, bufferLen, hw_setup.debug_hid);
     ini.getValue("setup", "dvi_only", buffer, bufferLen, hw_setup.dvi_only);
-    ini.getValue("setup", "burst", buffer, bufferLen, hw_setup.burst_enabled);
 
     
     ini.getValue("ft812", "enabled", buffer, bufferLen, hw_setup.ft_enabled);
@@ -96,7 +92,6 @@ void load_setup() {
 
     d_println("Setup:");
     d_print("Debug enabled: "); d_println(hw_setup.debug_enabled ? "yes" : "no"); 
-    d_print("Debug HID enabled: "); d_println(hw_setup.debug_hid ? "yes" : "no"); 
     d_print("DVI only: "); d_println(hw_setup.dvi_only ? "yes" : "no"); 
     d_print("FT812 enabled: "); d_println(hw_setup.ft_enabled ? "yes" : "no"); 
     d_print("FT812 video mode: "); d_println(hw_setup.ft_video_mode);
@@ -159,8 +154,6 @@ bool save_setup(const setup_t &s) {
   uint8_t count = 0;
   const setup_t &o = hw_setup;
   add_bool(items, count, "setup", "debug", s.debug_enabled, o.debug_enabled);
-  add_bool(items, count, "setup", "debug_hid", s.debug_hid, o.debug_hid);
-  add_bool(items, count, "setup", "burst", s.burst_enabled, o.burst_enabled);
   add_bool(items, count, "setup", "dvi_only", s.dvi_only, o.dvi_only);
   add_bool(items, count, "ft812", "enabled", s.ft_enabled, o.ft_enabled);
   add_uint(items, count, "ft812", "video_mode", s.ft_video_mode, o.ft_video_mode);

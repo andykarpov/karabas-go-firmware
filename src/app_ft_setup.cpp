@@ -41,7 +41,7 @@ typedef struct {
   uint8_t len;
 } page_t;
 
-static const uint8_t page_system[] = { SET_DEBUG, SET_DEBUG_HID, SET_BURST, SET_DVI };
+static const uint8_t page_system[] = { SET_DEBUG, SET_DVI };
 static const uint8_t page_autoload[] = { SET_AUTOLOAD, SET_TIMEOUT, SET_CORE };
 static const uint8_t page_display[] = { SET_FT, SET_VIDEO_MODE, SET_3D, SET_TIME, SET_DATE, SET_CHAR, SET_MOUSE_SPEED };
 static const uint8_t page_sound[] = { SET_SOUND, SET_CLICK };
