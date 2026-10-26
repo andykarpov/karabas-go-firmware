@@ -81,6 +81,7 @@ extern "C" void ft812_bus_unlock(void);
 
 // KTOME addition
 #define BLEND_FUNC(src, dst) ((0x0BL << 24) | (src << 3) | (dst))
+#define VERTEX_FORMAT(frac) ((0x27L << 24) | ((frac) & 7)) ///< Fraction bits of VERTEX2F (4, 1/16 px, by default)
 #define CMD_ROTATE()         0xffffff29
 #define CMD_TRANSLATE()      0xffffff27
 
@@ -466,7 +467,10 @@ void FT812::drawBitmap(const uint32_t offset, const uint16_t x, const uint16_t y
     intermediateCmd((uint32_t)65536 * -(height / 2));
     intermediateCmd(SETMATRIX());
     intermediateCmd(BLEND_FUNC(1, 1));
-    intermediateCmd(VERTEX2II(x, y, 0, 0));
+    // whole pixels: VERTEX2II only takes 0..511, VERTEX2F at 1/16 px only up to 1023
+    intermediateCmd(VERTEX_FORMAT(0));
+    intermediateCmd(VERTEX2F(x, y));
+    intermediateCmd(VERTEX_FORMAT(4));
     intermediateCmd(END());
     // back to the defaults, or the text and widgets drawn after it come out scaled and blended
     intermediateCmd(LOADIDENTITY());
@@ -494,7 +498,10 @@ void FT812::overlayBitmap(const uint32_t offset, const uint16_t x, const uint16_
     intermediateCmd((uint32_t)65536 * -(height / 2));
     intermediateCmd(SETMATRIX());
     intermediateCmd(BLEND_FUNC(1, 1));
-    intermediateCmd(VERTEX2II(x, y, 0, 0));
+    // whole pixels: VERTEX2II only takes 0..511, VERTEX2F at 1/16 px only up to 1023
+    intermediateCmd(VERTEX_FORMAT(0));
+    intermediateCmd(VERTEX2F(x, y));
+    intermediateCmd(VERTEX_FORMAT(4));
     intermediateCmd(END());
     // back to the defaults, or the text and widgets drawn after it come out scaled and blended
     intermediateCmd(LOADIDENTITY());
@@ -582,7 +589,9 @@ void FT812::drawBitmapARGB4(const uint32_t offset, const int16_t x, const int16_
     intermediateCmd(BITMAP_LAYOUT(FT81x_BITMAP_LAYOUT_ARGB4, (uint32_t)width * 2, (uint32_t)height));
     intermediateCmd(BITMAP_SIZE(FT81x_BITMAP_SIZE_NEAREST, 0, 0, (uint32_t)width, (uint32_t)height));
     intermediateCmd(BEGIN(BITMAPS));
-    intermediateCmd(VERTEX2F(x * 16, y * 16));
+    intermediateCmd(VERTEX_FORMAT(0)); // whole pixels: at 1/16 px VERTEX2F only goes to 1023
+    intermediateCmd(VERTEX2F(x, y));
+    intermediateCmd(VERTEX_FORMAT(4));
     endCmd(END());
 }
 
