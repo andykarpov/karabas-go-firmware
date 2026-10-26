@@ -59,7 +59,7 @@ Each build of `master` that changes the firmware becomes a
 [release](https://github.com/andykarpov/karabas-go-firmware/releases) with the three `.uf2` files.
 The same files go to the `firmware/` folders of
 [karabas-go](https://github.com/andykarpov/karabas-go) and
-[karabas-mini](https://github.com/andykarpov/karabas-mini), together with `karabas.ini`.
+[karabas-mini](https://github.com/andykarpov/karabas-mini), together with an example `karabas.ini`.
 
 ## Updating the firmware
 
@@ -74,7 +74,7 @@ The same files go to the `firmware/` folders of
 | --- | --- |
 | `/boot.kg1` (`.kg2`, `.kg3`) | the core browser, loaded at power on |
 | `/*.kg1` (`.kg2`, `.kg3`) | the cores of the board |
-| `/karabas.ini` | settings, see below |
+| `/karabas.ini` | settings, optional, see below |
 | `/drivers/*.ini` | USB gamepad drivers, optional ([format](drivers/example_ini.txt)) |
 
 The card can be FAT16, FAT32 or exFAT. The cores are built with
@@ -83,10 +83,12 @@ The card can be FAT16, FAT32 or exFAT. The cores are built with
 
 ### karabas.ini
 
-[`src/karabas.ini`](src/karabas.ini) is the default. Lines must be at most 79 characters long,
-or the whole file is ignored. Most of `[setup]` and `[autoload]`, and `enabled` / `video_mode`
-of `[ft812]`, can also be changed in Setup > Settings of the core browser; it writes only the
-changed keys and keeps the rest of the file.
+The file is optional: without it the firmware uses its defaults (the values of
+[`src/karabas.ini`](src/karabas.ini), except autoload, which is off). Every key can be changed
+in the menus: Setup > Settings of the text core browser (`[setup]`, `[autoload]`, `enabled` /
+`video_mode` of `[ft812]`) and the graphic setup (all of them). A save creates the file, or
+writes only the changed keys and keeps the rest of it. Lines must be at most 79 characters
+long, or the whole file is ignored.
 
 | Section | Key | Meaning |
 | --- | --- | --- |

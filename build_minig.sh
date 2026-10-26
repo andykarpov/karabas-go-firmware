@@ -12,7 +12,6 @@ pio run -e minig -t clean
 export PLATFORMIO_BUILD_FLAGS="-DBUILD_VER=$BUILD_VER"
 pio run -e minig
 cp .pio/build/minig/firmware.uf2 ../../karabas-mini/karabas-mini/firmware/firmware_g.uf2
-cp src/karabas.ini ../../karabas-mini/karabas-mini/cores/karabas.ini
 cp src/karabas.ini ../../karabas-mini/karabas-mini/firmware/karabas.ini
 
 pio run -e minig -t clean
