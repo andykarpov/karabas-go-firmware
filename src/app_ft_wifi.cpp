@@ -420,7 +420,14 @@ static void status_enter() {
 static bool key(uint8_t key, bool shift, bool joy) {
   bool enter = key == KEY_ENTER || key == KEY_KPENTER;
   if (key == KEY_ESC) { back(); return !closed; }
-  if (joy && (screen == W_SSID || screen == W_PASS)) return true; // the keyboard types there
+  if (joy && (screen == W_SSID || screen == W_PASS)) {
+    bool p = screen == W_PASS;
+    if (ui_joy_edit(p ? pass : ssid, p ? PASS_MAX : KG_WIFI_SSID_MAX, key)) {
+      if (p) show_pass = true; // the picked chars are seen
+      dirty = false;
+      return true;
+    }
+  }
 
   switch (screen) {
     case W_NO_ESP:
@@ -496,6 +503,7 @@ static const char *hint() {
   switch (screen) {
     case W_INIT: case W_SCAN: case W_JOIN: return "Please wait";
     case W_LIST: return "* password, joined in color";
+    case W_SSID: return "Pad: Up/Down: char   Right: add   Left: delete";
     case W_PASS: return show_pass ? "Tab: hide the password" : "Tab: show the password";
     default: return "";
   }

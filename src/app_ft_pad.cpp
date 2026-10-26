@@ -411,6 +411,10 @@ static bool list_key(uint8_t key) {
   return true;
 }
 
+bool ft_page_pad_mapping() {
+  return state != ST_LIST;
+}
+
 static bool key(uint8_t key, bool shift, bool joy) {
   if (state == ST_LIST) {
     bool r = list_key(key);

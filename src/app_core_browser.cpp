@@ -453,8 +453,8 @@ void app_core_browser_on_keyboard() {
           app_core_browser_ft_overlay();
         }
 
-        // enter setup mode
-        if (usb_keyboard_report.keycode[0] == KEY_S) {
+        // enter setup mode (S, joy start)
+        if (usb_keyboard_report.keycode[0] == KEY_S || (joyL & SC_BTN_START) || (joyR & SC_BTN_START)) {
           open_setup();
         }
 

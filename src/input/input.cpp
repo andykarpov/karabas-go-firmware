@@ -131,12 +131,31 @@ static void event_forward(const queue_spi_t &packet) {
   }
 }
 
+#define JOY_REPEAT_DELAY_MS 500
+#define JOY_REPEAT_MS 100
+#define JOY_DIRS (SC_BTN_UP | SC_BTN_DOWN | SC_BTN_LEFT | SC_BTN_RIGHT)
+
 // use repeat state to fire on_keyboard event for osd repeating navigation
 void input_tick_repeat() {
   if (is_osd && kb_repeat_key && kb_repeat_state && !prev_kb_repeat_state) {
     on_keyboard();
   }
   prev_kb_repeat_state = kb_repeat_state;
+
+  // a held joystick direction repeats in the OSD like a held key
+  static uint16_t joy_held = 0;
+  static bool joy_repeating = false;
+  static ElapsedTimer joy_timer;
+  uint16_t dirs = is_osd && ui_joy_repeats() ? (joyL | joyR) & JOY_DIRS : 0;
+  if (dirs != joy_held) {
+    joy_held = dirs;
+    joy_repeating = false;
+    joy_timer.reset();
+  } else if (dirs && joy_timer.elapsed() >= (joy_repeating ? JOY_REPEAT_MS : JOY_REPEAT_DELAY_MS)) {
+    joy_repeating = true;
+    joy_timer.reset();
+    on_keyboard();
+  }
 }
 
 

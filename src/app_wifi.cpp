@@ -463,14 +463,16 @@ void app_wifi_on_keyboard() {
   bool shift = usb_keyboard_report.modifier & (KEY_MOD_LSHIFT | KEY_MOD_RSHIFT);
   for (uint8_t i = 0; i < n && osd_state == state_wifi; i++) on_key(keys[i], shift);
 
-  // the joystick moves through the lists and buttons
-  uint16_t joy = joyL | joyR;
-  if (n == 0 && joy && osd_state == state_wifi && screen != W_SSID && screen != W_PASS) {
-    if (joy & SC_BTN_UP) on_key(KEY_UP, false);
-    else if (joy & SC_BTN_DOWN) on_key(KEY_DOWN, false);
-    else if (joy & SC_BTN_LEFT) on_key(KEY_LEFT, false);
-    else if (joy & SC_BTN_RIGHT) on_key(KEY_RIGHT, false);
-    else if (joy & (SC_BTN_A | SC_BTN_B)) on_key(KEY_ENTER, false);
-    else if (joy & SC_BTN_C) on_key(KEY_ESC, false);
+  // the joystick moves through the lists and buttons, picks the chars of the text fields
+  uint8_t key = n == 0 && osd_state == state_wifi ? ui_joy_key() : 0;
+  if (!key) return;
+  if (screen == W_SSID || screen == W_PASS) {
+    bool p = screen == W_PASS;
+    if (ui_joy_edit(p ? pass : ssid, p ? PASS_MAX : KG_WIFI_SSID_MAX, key)) {
+      if (p) show_pass = true; // the picked chars are seen
+      draw();
+      return;
+    }
   }
+  on_key(key, false);
 }

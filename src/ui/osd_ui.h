@@ -25,3 +25,10 @@ void on_time();
 // the keys pressed since prev (up to 6, in order), or the repeated key when the report did not
 // change; prev becomes the current report. For screens that read every key (text fields).
 uint8_t ui_pressed_keys(hid_keyboard_report_t *prev, uint8_t *keys);
+// the joystick (both ports) as a key: KEY_UP / DOWN / LEFT / RIGHT, KEY_ENTER (A, B), KEY_ESC (C); 0 if none
+uint8_t ui_joy_key();
+// a joystick key in a free text field: Up / Down turn the last char, Right adds one, Left
+// deletes it. false if the key is not one of these.
+bool ui_joy_edit(char *text, size_t max, uint8_t key);
+// false while a screen reads the joystick itself (the pad mapping): no repeat of the directions
+bool ui_joy_repeats();

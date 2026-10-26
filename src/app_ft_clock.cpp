@@ -145,7 +145,12 @@ static bool key(uint8_t key, bool shift, bool joy) {
   if (key == KEY_ESC) return false;
   if (digit || enter) message = nullptr;
 
-  if (key == KEY_UP) focus = (focus + F_COUNT - 1) % F_COUNT;
+  if (joy && field && (key == KEY_UP || key == KEY_DOWN)) {
+    // the joystick has no digits: Up / Down turn the one under the cursor
+    message = nullptr;
+    edited[focus] = true;
+    kg_field_turn(field, key == KEY_UP ? 1 : -1);
+  } else if (key == KEY_UP) focus = (focus + F_COUNT - 1) % F_COUNT;
   else if (key == KEY_DOWN || key == KEY_TAB) focus = (focus + 1) % F_COUNT;
   else if (field && digit) { edited[focus] = true; if (kg_field_type(field, digit)) focus++; }
   else if (field && (key == KEY_LEFT || key == KEY_BACKSPACE)) kg_field_left(field);
@@ -178,13 +183,6 @@ static bool click(int16_t id) {
   return true;
 }
 
-// the digit under the cursor + d, 0..9 round
-static void turn_digit(kg_field_t *f, int d) {
-  char &ch = f->text[f->pos];
-  if (ch < '0' || ch > '9') return;
-  ch = '0' + ((ch - '0' + d) % 10 + 10) % 10;
-}
-
 static void wheel(int16_t id, int d) {
   if (id >= HIT_CHAR && id < HIT_CHAR + 40) {
     focus = (id - HIT_CHAR) / 20;
@@ -196,11 +194,11 @@ static void wheel(int16_t id, int d) {
   }
   message = nullptr;
   edited[focus] = true;
-  turn_digit(&fields[focus], d);
+  kg_field_turn(&fields[focus], d);
 }
 
 static const char *hint() {
-  return focus == F_SET ? "Write the date and the time to the RTC" : "Digits: type   Left/Right: cursor";
+  return focus == F_SET ? "Write the date and the time to the RTC" : "Digits (pad: Up/Down): type   Left/Right: cursor";
 }
 
 static const char *keys() { return "Up/Down: select   Enter: next / set   Esc: back"; }

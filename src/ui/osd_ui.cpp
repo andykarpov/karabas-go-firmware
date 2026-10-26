@@ -1,5 +1,6 @@
 #include "main.h"
 #include "ps2kbd.h"
+#include "usb_hid_keys.h"
 #include "app_core.h"
 #include "app_core_browser.h"
 #include "app_file_loader.h"
@@ -10,6 +11,8 @@
 #include "app_wifi.h"
 #include "app_settings.h"
 #include "app_ft_setup.h"
+#include "app_ft_pages.h"
+#include "masked_input.h"
 
 // OSD state and the app screens (one per osd_state)
 
@@ -164,4 +167,26 @@ uint8_t ui_pressed_keys(hid_keyboard_report_t *prev, uint8_t *keys) {
   }
   *prev = r;
   return n;
+}
+
+uint8_t ui_joy_key() {
+  uint16_t joy = joyL | joyR;
+  return (joy & SC_BTN_UP) ? KEY_UP : (joy & SC_BTN_DOWN) ? KEY_DOWN :
+         (joy & SC_BTN_LEFT) ? KEY_LEFT : (joy & SC_BTN_RIGHT) ? KEY_RIGHT :
+         (joy & (SC_BTN_A | SC_BTN_B)) ? KEY_ENTER : (joy & SC_BTN_C) ? KEY_ESC : 0;
+}
+
+bool ui_joy_edit(char *text, size_t max, uint8_t key) {
+  size_t len = strlen(text);
+  if (key == KEY_UP || key == KEY_DOWN) kg_text_turn(text, max, key == KEY_UP ? 1 : -1);
+  else if (key == KEY_RIGHT) kg_text_add(text, max);
+  else if (key == KEY_LEFT) { if (len > 0) text[len - 1] = '\0'; }
+  else return false;
+  return true;
+}
+
+bool ui_joy_repeats() {
+  if (osd_state == state_pad_mapper) return app_pad_mapper_listing();
+  if (osd_state == state_ft_setup) return !ft_page_pad_mapping();
+  return true;
 }

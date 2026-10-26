@@ -510,11 +510,8 @@ static void custom_on_keyboard(const uint8_t *keys, uint8_t n) {
     ft_mouse_hide();
     custom_key(keys[i], shift, false);
   }
-  uint16_t joy = joyL | joyR;
-  if (n == 0 && joy) {
-    uint8_t key = (joy & SC_BTN_UP) ? KEY_UP : (joy & SC_BTN_DOWN) ? KEY_DOWN :
-                  (joy & SC_BTN_LEFT) ? KEY_LEFT : (joy & SC_BTN_RIGHT) ? KEY_RIGHT :
-                  (joy & (SC_BTN_A | SC_BTN_B)) ? KEY_ENTER : (joy & SC_BTN_C) ? KEY_ESC : 0;
+  if (n == 0) {
+    uint8_t key = ui_joy_key();
     if (!key) return;
     ft_mouse_hide();
     custom_key(key, false, true);

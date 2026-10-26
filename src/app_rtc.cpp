@@ -123,7 +123,11 @@ void app_rtc_on_keyboard() {
     osd_state = state_setup;
     return;
   }
-  if (up) {
+  if (field && !key && (up || down)) {
+    // the joystick has no digits: Up / Down turn the one under the cursor
+    error = nullptr;
+    kg_field_turn(field, up ? 1 : -1);
+  } else if (up) {
     focus = focus == F_DATE ? F_CANCEL : focus == F_CANCEL ? F_TIME : focus - 1;
   } else if (down) {
     focus = (focus + 1) % F_COUNT;
