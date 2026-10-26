@@ -134,7 +134,7 @@ static void draw_tabs() {
       ft.drawRect(TAB_X, tab_y(i), TAB_W, h, 2, s.color_active); // hovered: a 2 px frame (the corner radius)
     }
     ft.drawButton(TAB_X, tab_y(i), TAB_W, h, h < TAB_H ? FONT_SMALL : FONT, fg, bg, ft_opt(), tab_names[i]);
-    if (chosen && !lit) ft.drawRect(TAB_X, tab_y(i) + 4, 4, h - 8, 1, s.color_active);
+    if (chosen && !lit) ft_page_marker(TAB_X, tab_y(i), h, s.color_active, ft_opt());
   }
 }
 
@@ -185,7 +185,7 @@ static void draw_page() {
     }
     hovered |= ft_hit_add(PANEL_X, y, w, ROW_H, HIT_ROW + i);
     if (focused || hovered) ft.drawRect(PANEL_X, y, w, ROW_H, 4, s.color_button);
-    if (focused) ft.drawRect(PANEL_X, y + 4, 4, ROW_H - 8, 1, s.color_active);
+    if (focused) ft_page_marker(PANEL_X, y, ROW_H, s.color_active, ft_opt());
     const char *label = settings[p->ids[i]].label;
     if (p->ids[i] == SET_AUTOLOAD) label = "Autoload";
     ft.drawText(PANEL_X + 16, y + ROW_H / 2, FONT, s.color_text, FT81x_OPT_CENTERY, label);
@@ -230,7 +230,7 @@ static void draw_color() {
     bool hovered = ft_hit_add(PANEL_X + 40, y, w - 48 - 56, ROW_H, HIT_SLIDER + i);
     hovered |= ft_hit_add(PANEL_X, y, w, ROW_H, HIT_CHAN + i);
     if (i == color_ch || hovered) ft.drawRect(PANEL_X, y, w, ROW_H, 4, s.color_button);
-    if (i == color_ch) ft.drawRect(PANEL_X, y + 4, 4, ROW_H - 8, 1, s.color_active);
+    if (i == color_ch) ft_page_marker(PANEL_X, y, ROW_H, s.color_active, ft_opt());
     ft.drawText(PANEL_X + 16, y + ROW_H / 2, FONT, s.color_text, FT81x_OPT_CENTERY, names[i]);
     ft.drawSlider(PANEL_X + 48, y + ROW_H / 2 - 5, w - 48 - 72, 10, fills[i], s.color_text, s.color_copyright, ft_opt(), v, 255);
     snprintf(b, sizeof(b), "%u", v);
