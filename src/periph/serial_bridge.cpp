@@ -8,8 +8,10 @@
 //   list - the installed cores: "+KARABAS:<file>;<id>;<name>;<build>" lines, then OK
 //   boot - reboot into the RP2040 USB bootloader (BOOTSEL, firmware update)
 //   msc  - reboot with the SD card exposed as USB mass storage (core update)
+//   msc2 - the same with the second SD card (the slot of the FPGA, through the boot core)
 //   esp  - BOOT core only: the bridge goes to the ESP8266 uart (AT commands to the module)
 //   uart - back to the core UART (also when another core is loaded)
+//   sd2test - BOOT core only: reads the second SD card at a few SPI clocks (storage/sd2)
 
 static uint8_t uart_idx = 0;
 static uint8_t evo_rs232_dll = 0;
@@ -105,13 +107,15 @@ static void at_command(const char *arg) {
     hang_diag_stop();
     matrix_icon(MATRIX_ICON_BOOTSEL); // the bootloader leaves the matrix as it is
     rp2040.rebootToBootloader();
-  } else if (strcasecmp(arg, "msc") == 0) {
+  } else if (strcasecmp(arg, "msc") == 0 || strcasecmp(arg, "msc2") == 0) {
     Serial.print("OK\r\n"); Serial.flush(); delay(100);
     hang_diag_stop();
-    msc_reboot_to_msc();
+    msc_reboot_to_msc(strcasecmp(arg, "msc2") == 0 ? 2 : 1);
   } else if (strcasecmp(arg, "esp") == 0 && core.type == CORE_TYPE_BOOT) {
     esp_mode = true;
     Serial.print("OK\r\n");
+  } else if (strcasecmp(arg, "sd2test") == 0 && core.type == CORE_TYPE_BOOT) {
+    sd2_test(Serial);
   } else if (strcasecmp(arg, "uart") == 0) {
     esp_mode = false;
     Serial.print("OK\r\n");

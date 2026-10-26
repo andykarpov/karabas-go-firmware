@@ -9,14 +9,34 @@
 // the screen of the USB mass storage mode: the boot core shows it while the PC has the SD card
 // (msc_check_boot), nothing else runs until the card is ejected
 
-static const char *const lines[] = {
-  "The SD card is connected to the PC",
-  "as a USB drive.",
+#define MSC_LINES 5
+
+static const char *const lines[MSC_LINES] = {
+  "The SD card is connected to the",
+  "PC as a USB drive.",
   "",
   "Eject it on the PC to return",
   "to the menu.",
 };
-static const uint8_t lines_len = sizeof(lines) / sizeof(lines[0]);
+static const char *const lines2[MSC_LINES] = {
+  "The second SD card (FPGA slot)",
+  "is connected to the PC as a USB",
+  "drive.",
+  "Eject it on the PC to return",
+  "to the menu.",
+};
+static const char *const lines_failed[MSC_LINES] = {
+  "The second SD card (FPGA slot)",
+  "is not found.",
+  "",
+  "Back to the menu...",
+  "",
+};
+
+static const char *const *msc_lines() {
+  if (msc_failed()) return lines_failed;
+  return msc_card() == 2 ? lines2 : lines;
+}
 
 // the graphic screen; on_time() redraws it for the clock
 void app_msc_ft_draw() {
@@ -25,8 +45,9 @@ void app_msc_ft_draw() {
   app_core_browser_ft_decor(hw_setup, true);
   uint16_t y = ft.height() / 2 - 80;
   ft.drawText(ft.width() / 2, y, 30, hw_setup.color_text, FT81x_OPT_CENTER, "USB mass storage");
-  for (uint8_t i = 0; i < lines_len; i++) {
-    ft.drawText(ft.width() / 2, y + 50 + i * 24, 28, hw_setup.color_text, FT81x_OPT_CENTER, lines[i]);
+  const char *const *l = msc_lines();
+  for (uint8_t i = 0; i < MSC_LINES; i++) {
+    ft.drawText(ft.width() / 2, y + 50 + i * 24, 28, hw_setup.color_text, FT81x_OPT_CENTER, l[i]);
   }
   ft.swapScreen();
 }
@@ -45,8 +66,9 @@ void app_msc_overlay() {
   zxosd.print("USB mass storage");
   zxosd.line(6);
   zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_BLACK);
-  for (uint8_t i = 0; i < lines_len; i++) {
-    zxosd.setPos(0, 9 + i); zxosd.print(lines[i]);
+  const char *const *l = msc_lines();
+  for (uint8_t i = 0; i < MSC_LINES; i++) {
+    zxosd.setPos(0, 9 + i); zxosd.print(l[i]);
   }
   zxosd.update();
 }

@@ -70,6 +70,7 @@ enum btn_action_e {
 	BTN_ACTION_RELOAD,      // load the core again
 	BTN_ACTION_BOOTSEL,     // reboot the mcu into BOOTSEL
 	BTN_ACTION_MSC,         // reboot into USB mass storage
+	BTN_ACTION_MSC2,        // the same with the second SD card (the slot of the FPGA)
 	BTN_ACTION_COUNT
 };
 
