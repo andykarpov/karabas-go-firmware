@@ -227,7 +227,7 @@ void do_configure(const char* filename) {
 
 // the on-board button actions; FF (older core files): press goes to the core, no hold
 static void read_buttons() {
-  static const char *const names[BTN_ACTION_COUNT] = {"core", "none", "osd", "menu", "reload", "bootsel", "msc"};
+  static const char *const names[BTN_ACTION_COUNT] = {"core", "none", "osd", "menu", "reload", "bootsel", "msc", "msc2"};
   file_seek(FILE_POS_BUTTONS);
   for (uint8_t i=0; i<CORE_BUTTONS; i++) {
     uint8_t press = file_read();

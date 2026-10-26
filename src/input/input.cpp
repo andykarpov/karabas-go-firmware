@@ -98,8 +98,9 @@ static void btn_run(uint8_t i, uint8_t action) {
       rp2040.rebootToBootloader();
       break;
     case BTN_ACTION_MSC:
+    case BTN_ACTION_MSC2:
       hang_diag_stop();
-      msc_reboot_to_msc(); // flushes the backup RAM
+      msc_reboot_to_msc(action == BTN_ACTION_MSC2 ? 2 : 1); // flushes the backup RAM
       break;
   }
 }

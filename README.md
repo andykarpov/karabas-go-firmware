@@ -152,13 +152,17 @@ Each core sets what the buttons **BTN1** and **BTN2** do (`buttons` in its `core
 `make_core` in karabas-go-tools): pass them to the core (reset, NMI... as the core decides; the
 default), open the OSD, go back to the menu, reload the core, reboot into BOOTSEL or into USB mass
 storage, on a press or on a hold. In the boot menu BTN1 reboots into BOOTSEL and BTN2 into USB mass
-storage.
+storage (a hold of 2 s: with the second SD card).
 
 ## SD card as a USB drive
 
 Press **BTN2** in the boot menu, or send `AT+KARABAS=msc` to the serial port. The board then shows
 its SD card to the PC as a USB drive, and nothing else runs; the screen says so. Eject the drive on
 the PC to restart normally.
+
+The second SD card (the slot of the FPGA, used by the cores) works the same way: hold **BTN2** in
+the boot menu for 2 seconds, or send `AT+KARABAS=msc2`. The drive is named "SD Card 2" and is
+slower (about 300 KB/s). Without a card in the slot the board goes back to the menu.
 
 ## USB serial bridge
 
@@ -170,6 +174,8 @@ answered by the firmware:
 | `AT+KARABAS=list` | list the cores on the SD card with their builds |
 | `AT+KARABAS=boot` | restart into BOOTSEL mode, to update the firmware |
 | `AT+KARABAS=msc` | restart with the SD card as a USB drive |
+| `AT+KARABAS=msc2` | restart with the second SD card (the slot of the FPGA) as a USB drive |
+| `AT+KARABAS=sd2test` | core browser only: reads the second SD card at a few SPI clocks (a check of the card and the link) |
 | `AT+KARABAS=esp` | core browser only: the bridge goes to the ESP8266, for its own AT commands |
 | `AT+KARABAS=uart` | back to the UART of the core |
 

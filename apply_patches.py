@@ -14,6 +14,10 @@ patches = [
     [join("patches", "4-adafruit-tinyusb-rp2040-port.patch"), join(FRAMEWORK_DIR, "libraries", "Adafruit_TinyUSB_Arduino", "src", "arduino", "ports", "rp2040", "Adafruit_TinyUSB_rp2040.cpp")],
     # CFG_TUH_HUB / CFG_TUH_DEVICE_MAX / CFG_TUH_HID can be set in platformio.ini
     [join("patches", "5-adafruit-tusb-config-rp2040.patch"), join(FRAMEWORK_DIR, "libraries", "Adafruit_TinyUSB_Arduino", "src", "arduino", "ports", "rp2040", "tusb_config_rp2040.h")],
+    # USB mass storage callbacks get 4 KB at a time (CFG_TUD_MSC_EP_BUFSIZE, not a -D: the core's own
+    # tusb_config.h, which its sources include, defines it too). A later patch of the same file has
+    # a marker of its own, so a framework patched before it gets it as well
+    [join("patches", "6-adafruit-tusb-msc-bufsize.patch"), join(FRAMEWORK_DIR, "libraries", "Adafruit_TinyUSB_Arduino", "src", "arduino", "ports", "rp2040", "tusb_config_rp2040.h"), ".msc-patching-done"],
     [join("patches", "2-adafruit-sdfatconfig.patch"), join(LIBDEPS_DIR, env["PIOENV"], "SdFat - Adafruit Fork", "src", "SdFatConfig.h")],
 ]
 
@@ -21,7 +25,7 @@ for patch in patches:
 
     patch_file = patch[0]
     original_file = patch[1]
-    patchflag_path = original_file + ".patching-done"
+    patchflag_path = original_file + (patch[2] if len(patch) > 2 else ".patching-done")
 
     # patch file only if we didn't do it before
     if not isfile(patchflag_path):
