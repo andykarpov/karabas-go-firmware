@@ -141,6 +141,7 @@ uint32_t fpga_send(const char* filename) {
 
   // wait for INIT_B = 0
   delay(10);
+  bool init_ready = digitalRead(PIN_CONF_INIT_B); // the fpga has cleared its memory
 
   ElapsedTimer timer;
   timer.reset();
@@ -173,7 +174,11 @@ uint32_t fpga_send(const char* filename) {
   hang_step(0x94);
   while(digitalRead(PIN_CONF_DONE) == LOW) {
     if (timer.elapsed() >= 1000) {
-      halt("FPGA configuration failed: CONF_DONE timeout");
+      // INIT_B low after the bitstream: a CRC error
+      halt(!init_ready ? "FPGA configuration failed: CONF_DONE timeout, INIT_B low before the bitstream" :
+           sent < total ? "FPGA configuration failed: CONF_DONE timeout, bitstream truncated" :
+           digitalRead(PIN_CONF_INIT_B) ? "FPGA configuration failed: CONF_DONE timeout, INIT_B high" :
+           "FPGA configuration failed: CONF_DONE timeout, INIT_B low (CRC error)");
     }
     delay(10);
   }

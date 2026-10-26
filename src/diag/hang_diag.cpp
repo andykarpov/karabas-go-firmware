@@ -6,14 +6,16 @@
 #include <FreeRTOS.h>
 #include <task.h>
 
-// scratch 1: magic << 24 | APP mark; after a panic: panic magic << 24 | exception << 16 | mark
+// scratch 1: magic << 24 | APP mark; after a panic: panic magic << 24 | exception << 16 | mark;
+// after a halt(): halt magic << 24 | mark
 // scratch 2: SPI holder, SPI waiter, I2C holder, I2C waiter (task tags, one byte each);
-// after a panic: its message (the format string, in flash)
+// after a panic or a halt(): its message (in flash)
 // scratch 3: the second (since boot, mod 256) each one last ran: byte 0 the watchdog task,
 // 1 APP, 2 the USB loop on core1, 3 a timer irq on core0. Each byte is written with the atomic
 // clear / set aliases: the two cores write their own bytes.
 #define HANG_MAGIC 0x4bu // 'K'
 #define HANG_PANIC_MAGIC 0x50u // 'P'
+#define HANG_HALT_MAGIC 0x48u // 'H'
 #define HANG_APP_MS 8000  // a core load with big roms takes a few seconds
 #define HANG_WDT_MS 1500  // core0 does not run the watchdog task for this long
 #define HANG_TASK_PRIORITY (configMAX_PRIORITIES - 2)
@@ -83,7 +85,12 @@ void hang_diag_report() {
   uint32_t mark = watchdog_hw->scratch[1];
   uint32_t locks = watchdog_hw->scratch[2];
   uint32_t times = watchdog_hw->scratch[3];
-  if ((mark >> 24) == HANG_PANIC_MAGIC) {
+  if ((mark >> 24) == HANG_HALT_MAGIC) {
+    const char *msg = (const char *) locks;
+    bool in_flash = locks >= XIP_BASE && locks < XIP_BASE + PICO_FLASH_SIZE_BYTES;
+    d_printf("Last boot halted: \"%s\"; APP at %04lx", in_flash ? msg : "?", (unsigned long) (mark & 0xffff));
+    d_println();
+  } else if ((mark >> 24) == HANG_PANIC_MAGIC) {
     const char *msg = (const char *) locks;
     bool in_flash = locks >= XIP_BASE && locks < XIP_BASE + PICO_FLASH_SIZE_BYTES;
     d_printf("Last boot panicked: \"%s\" in %s %lu; APP at %04lx",
@@ -104,6 +111,12 @@ void hang_diag_report() {
   watchdog_hw->scratch[1] = 0;
   watchdog_hw->scratch[2] = 0;
   watchdog_hw->scratch[3] = 0;
+}
+
+// halt() (also with debug=0, before karabas.ini is read): the message for the next boot
+void hang_diag_halt(const char *msg) {
+  watchdog_hw->scratch[2] = (uint32_t) msg;
+  watchdog_hw->scratch[1] = ((uint32_t) HANG_HALT_MAGIC << 24) | (watchdog_hw->scratch[1] & 0xffff);
 }
 
 // every panic (-Wl,--wrap=panic): TinyUSB's driver panics in the USB irq, and so do FreeRTOS
