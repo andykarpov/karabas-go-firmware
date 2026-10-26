@@ -49,9 +49,11 @@ void diag_tick() {
   TaskHandle_t input = xTaskGetHandle("INPUT");
   TaskHandle_t matrix = xTaskGetHandle("MATRIX");
   TaskHandle_t oled = xTaskGetHandle("OLED");
-  d_printf(" | stack free APP %lu USB %lu INPUT %lu MATRIX %lu OLED %lu words",
+  TaskHandle_t usbd = xTaskGetHandle("USBD");
+  d_printf(" | stack free APP %lu USB %lu USBD %lu INPUT %lu MATRIX %lu OLED %lu words",
     (unsigned long) (app ? uxTaskGetStackHighWaterMark(app) : 0),
     (unsigned long) (usb ? uxTaskGetStackHighWaterMark(usb) : 0),
+    (unsigned long) (usbd ? uxTaskGetStackHighWaterMark(usbd) : 0),
     (unsigned long) (input ? uxTaskGetStackHighWaterMark(input) : 0),
     (unsigned long) (matrix ? uxTaskGetStackHighWaterMark(matrix) : 0),
     (unsigned long) (oled ? uxTaskGetStackHighWaterMark(oled) : 0));

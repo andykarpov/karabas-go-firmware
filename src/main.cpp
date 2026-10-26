@@ -299,6 +299,8 @@ static void usb_task(void *param) {
 }
 
 void setup() {
+  // first: until it exists, the USB irq runs the device stack itself
+  usb_device_task_start();
   link_os_init();
   // before the USB task: its hid callbacks push events into the link queue
   link_queue_init();

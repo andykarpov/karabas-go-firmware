@@ -4,11 +4,11 @@
  #define TINYUSB_API_VERSION 0
  #endif
  
-+// karabas: the USB irq (usb_task_irq in ports/rp2040) runs tud_task() unless __usb_mutex is
-+// taken. A read / write / flush from a task claims the endpoint with TinyUSB's own (sleeping)
-+// mutex; an irq that runs tud_task() then and claims it too waits forever for the task it
-+// interrupted, and core0 stops. So the task side takes __usb_mutex. When it is taken already,
-+// this runs inside tud_task() (a callback), where the irq cannot get in anyway.
++// karabas: tud_task() runs in the USBD task (src/usb/usb_device.cpp) under __usb_mutex, and so
++// does the task side. TinyUSB's own pico mutexes belong to a core, not a task, and a wait for
++// one is a wfe loop: USBD (above APP) waiting for an endpoint that APP claimed would never let
++// APP run again. When the mutex is taken already, this runs inside tud_task() (a callback) or
++// USBD is blocked in an MSC callback; the call then goes without it.
 +#ifdef ARDUINO_ARCH_RP2040
 +#include "pico/mutex.h"
 +extern mutex_t __usb_mutex;
