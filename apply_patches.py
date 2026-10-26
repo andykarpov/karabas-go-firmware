@@ -12,6 +12,8 @@ patches = [
     [join("patches", "3-adafruit-usbd-cdc.patch"), join(FRAMEWORK_DIR, "libraries", "Adafruit_TinyUSB_Arduino", "src", "arduino", "Adafruit_USBD_CDC.cpp")],
     # tud_task() runs in a task (src/usb/usb_device.cpp), the USB irq only wakes it
     [join("patches", "4-adafruit-tinyusb-rp2040-port.patch"), join(FRAMEWORK_DIR, "libraries", "Adafruit_TinyUSB_Arduino", "src", "arduino", "ports", "rp2040", "Adafruit_TinyUSB_rp2040.cpp")],
+    # CFG_TUH_HUB / CFG_TUH_DEVICE_MAX / CFG_TUH_HID can be set in platformio.ini
+    [join("patches", "5-adafruit-tusb-config-rp2040.patch"), join(FRAMEWORK_DIR, "libraries", "Adafruit_TinyUSB_Arduino", "src", "arduino", "ports", "rp2040", "tusb_config_rp2040.h")],
     [join("patches", "2-adafruit-sdfatconfig.patch"), join(LIBDEPS_DIR, env["PIOENV"], "SdFat - Adafruit Fork", "src", "SdFatConfig.h")],
 ]
 
