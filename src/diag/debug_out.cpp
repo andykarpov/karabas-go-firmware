@@ -87,6 +87,12 @@ void debug_drain() {
   }
 }
 
+void debug_discard() {
+  uint32_t save = spin_lock_blocking(debug_lock);
+  debug_tail = debug_head;
+  spin_unlock(debug_lock, save);
+}
+
 // everything goes through the buffer; the owner sends what fits right away
 class DebugOut : public Print {
 public:

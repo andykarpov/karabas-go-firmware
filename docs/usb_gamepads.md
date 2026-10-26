@@ -80,10 +80,10 @@ have vendor-defined collections cannot be mapped by default and need a driver in
 
 ## Diagnostics
 
-Set `debug=1` and `debug_hid=1` in `karabas.ini`. When a pad is plugged in, the log shows
-`DESC <vid>:<pid>` with the report descriptor in hex, then `uses its driver <file>` and / or
-`HID default map: N fields`. Each report is logged as `RAW <vid>:<pid>: ...`, and the resulting
-button word as `SEGA L` / `SEGA R`.
+Set `debug=1` in `karabas.ini`. When a pad is plugged in, the log shows `uses its driver <file>`
+and / or `HID default map: N fields`, and the resulting button word as `SEGA L` / `SEGA R`.
 
-A descriptor from the log is enough to add a test for a new pad to
-`test/test_hid_auto_map`.
+The raw reports of a pad are shown by the
+[browser mapper](https://andykarpov.github.io/karabas-go-firmware/hidmapper/) (WebHID). Its
+report descriptor can be read on a Linux PC with `usbhid-dump -d <vid>:<pid> -e descriptor`;
+it is enough to add a test for a new pad to `test/test_hid_auto_map`.

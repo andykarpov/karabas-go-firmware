@@ -319,4 +319,4 @@ Old cores do not answer and stay on classic frames (their load takes the 100 ms 
 
 Bursts use a second chip select. One 5-byte header (type + 32-bit address) is followed by up to 512 data bytes. They replace the bank + data frames of ROMs (`07`), the file loader (`0D`) and ioctl (`53`). The full specification is in [burst_protocol.md](burst_protocol.md).
 
-`burst=0` in `karabas.ini` turns bursts off (the query still goes, to wait for the core). With `debug=1` the log shows the caps answer and the transfer times.
+With `debug=1` the log shows the caps answer and the transfer times.

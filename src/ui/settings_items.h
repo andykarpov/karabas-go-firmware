@@ -8,7 +8,7 @@
 // draw them their own way; both edit a copy of hw_setup and save it with save_setup().
 
 enum {
-  SET_DEBUG, SET_DEBUG_HID, SET_BURST, SET_DVI,
+  SET_DEBUG, SET_DVI,
   SET_AUTOLOAD, SET_TIMEOUT, SET_CORE,
   SET_FT, SET_VIDEO_MODE, SET_3D, SET_TIME, SET_DATE, SET_CHAR, SET_MOUSE_SPEED,
   SET_SOUND, SET_CLICK,

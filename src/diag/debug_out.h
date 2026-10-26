@@ -11,4 +11,5 @@
 Print &debug_out();
 void debug_flush();
 void debug_drain();
+void debug_discard(); // drops what is buffered and not sent yet
 void debug_set_owner_task(void *task); // the task that owns Serial (APP)

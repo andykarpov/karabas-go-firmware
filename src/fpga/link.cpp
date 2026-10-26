@@ -268,10 +268,6 @@ bool link_caps_query() {
   }
   d_printf("FPGA caps: %02x, burst max %u MHz, core answered after %lu ms (%lu queries)", rx[1], rx[2],
     (unsigned long) timer.elapsed(), (unsigned long) tries); d_println();
-  if (!hw_setup.burst_enabled) {
-    d_println("FPGA caps: burst=0 in karabas.ini (classic link)");
-    return true;
-  }
   burst_caps = rx[1];
   burst_mhz = rx[2];
   if (burst_caps & CAPS_BURST_WRITE) {

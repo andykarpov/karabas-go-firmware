@@ -10,8 +10,6 @@
 // in the order of the SET_* ids
 const setting_t settings[SET_COUNT] = {
   { "Debug log",      "Log to the USB serial port",     SET_KIND_BOOL },
-  { "HID debug log",  "Log the USB HID reports",        SET_KIND_BOOL },
-  { "Burst link",     "Fast transfers, next core",      SET_KIND_BOOL },
   { "DVI only",       "No HDMI audio, next core",       SET_KIND_BOOL },
   { "Enabled",        "Start a core on power on",       SET_KIND_BOOL },
   { "Timeout",        "Seconds before the start",       SET_KIND_CHOICE },
@@ -84,8 +82,6 @@ void settings_begin(setup_t &s) {
 static bool *bool_ref(uint8_t id, setup_t &s) {
   switch (id) {
     case SET_DEBUG: return &s.debug_enabled;
-    case SET_DEBUG_HID: return &s.debug_hid;
-    case SET_BURST: return &s.burst_enabled;
     case SET_DVI: return &s.dvi_only;
     case SET_AUTOLOAD: return &s.autoload_enabled;
     case SET_FT: return &s.ft_enabled;

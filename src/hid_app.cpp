@@ -60,8 +60,6 @@ static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_r
 static void process_mouse_report_ext(uint8_t dev_addr, uint8_t instance, hid_mouse_report_ext_t const* report, uint16_t len);
 static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len);
 static void process_joy_report(uint8_t dev_addr, uint8_t instance, uint8_t report_id, uint8_t const* report, uint16_t len);
-static void dump_hid_report(uint8_t instance, uint8_t const* report, uint16_t len);
-static void dump_hid_descriptor(uint8_t instance, uint8_t const* desc, uint16_t len);
 static hid_auto_map_t *auto_map_build(uint8_t const* desc, uint16_t len);
 static void auto_map_free(hid_auto_map_t *m);
 static void capture_feed(uint8_t instance, uint8_t report_id, uint8_t const* report, uint16_t len);
@@ -190,7 +188,6 @@ void tuh_hid_mount_cb (uint8_t dev_addr, uint8_t instance, uint8_t const* desc_r
   {
     hid_info[instance].report_count = tuh_hid_parse_report_descriptor(hid_info[instance].report_info, MAX_REPORT, desc_report, desc_len);
     d_printf("HID has %u reports \r\n", hid_info[instance].report_count);
-    dump_hid_descriptor(instance, desc_report, desc_len);
     uint32_t gen = hid_drivers_gen;
     const hid_joy_config_t *driver = hid_driver_find(vid, pid);
     if (driver) d_printf("HID %04x:%04x uses its driver %s\r\n", vid, pid, hid_driver_file(driver));
@@ -477,7 +474,6 @@ static void capture_feed(uint8_t instance, uint8_t report_id, uint8_t const* rep
 // through the default map built from its report descriptor
 static void process_joy_report(uint8_t dev_addr, uint8_t instance, uint8_t report_id, uint8_t const* report, uint16_t len)
 {
-  dump_hid_report(instance, report, len);
   capture_feed(instance, report_id, report, len);
   uint32_t gen = hid_drivers_gen;
   if (hid_info[instance].driver_gen != gen) {
@@ -574,27 +570,6 @@ static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t c
   } else if (rpt_info->usage_page >= 0xFF00) {
     // vendor usage pages: some pads have no desktop collection at all
     process_joy_report(dev_addr, instance, rpt_info->report_id, report, len);
-  }
-}
-
-static void dump_hid_report(uint8_t instance, uint8_t const* report, uint16_t len) {
-  if (hw_setup.debug_hid) {
-    d_printf("RAW %04x:%04x: ", hid_info[instance].vid, hid_info[instance].pid);
-    for (uint16_t j=0; j<len; j++) {
-      d_printf("%02x ", report[j]);
-    }
-    d_println();
-  }
-}
-
-static void dump_hid_descriptor(uint8_t instance, uint8_t const* desc, uint16_t len) {
-  if (hw_setup.debug_hid) {
-    d_printf("DESC %04x:%04x, %u bytes:", hid_info[instance].vid, hid_info[instance].pid, len);
-    for (uint16_t j=0; j<len; j++) {
-      if ((j & 15) == 0) d_println();
-      d_printf("%02x ", desc[j]);
-    }
-    d_println();
   }
 }
 

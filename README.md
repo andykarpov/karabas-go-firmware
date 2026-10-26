@@ -52,7 +52,7 @@ Map USB gamepad (text and graphic menus), see [USB HID gamepads](docs/usb_gamepa
 - **Optional peripherals**, detected at boot: FT812, OLED display, LED matrix, I2C extender (Go),
   ESP8266, MIDI (Mini G).
 - **Fast transfers.** Cores that support it receive ROMs and files in bursts of up to 512 bytes
-  over a second chip select (`burst=0` in `karabas.ini` turns it off).
+  over a second chip select.
 
 ## Getting the firmware
 
@@ -94,8 +94,6 @@ long, or the whole file is ignored.
 | Section | Key | Meaning |
 | --- | --- | --- |
 | `[setup]` | `debug` | `1`: debug log on the USB serial port |
-| | `debug_hid` | `1`: also log raw USB HID reports and descriptors |
-| | `burst` | `0`: never use burst transfers |
 | | `dvi_only` | `1`: the cores drop the HDMI frames (audio, info) and output plain DVI |
 | `[ft812]` | `enabled` | `1`: graphical core browser on the FT812 |
 | | `video_mode` | FT812 video mode (0..14) |
