@@ -18,16 +18,19 @@ enum { F_DATE, F_TIME, F_SET, F_COUNT };
 // the clickable areas
 enum { HIT_FIELD = 0, HIT_SET = 2, HIT_CHAR = 10 }; // HIT_CHAR + 20 * field + char
 
-#define ROW_H 32
-#define ROW_STEP 44
+#define TOP_GAP 10 // under the title line
+#define ROW_H FT_PAGE_FIELD_H
+#define ROW_STEP 40
 #define FIELD_X 120
-#define CHAR_W 18
+#define CHAR_W 14
+#define MESSAGE_MS 5000
 #define CURSOR_COLOR 0x00d8d8
 
 static kg_field_t fields[2];
 static uint8_t focus;
 static const char *message;
 static bool message_ok;
+static ElapsedTimer message_timer;
 
 static void init_fields() {
   char buf[11];
@@ -53,8 +56,8 @@ static void draw_field(const ft_page_ctx_t &c, uint8_t i, int16_t y, const char 
   bool hovered = c.focused && ft_page_hit(c.x, y, c.w, ROW_H, HIT_FIELD + i);
   ft_page_row(c, c.x, y, c.w, ROW_H, focused, hovered);
   ft.drawText(c.x + 16, y + ROW_H / 2, FT_PAGE_FONT, c.s->color_text, FT81x_OPT_CENTERY, label);
-  if (focused) ft.drawRect(fx - 2, y - 2, fw + 4, ROW_H + 4, 4, c.s->color_active);
-  ft.drawRect(fx, y, fw, ROW_H, 4, c.s->color_bg);
+  if (focused) ft_page_rect(fx - 2, y - 2, fw + 4, ROW_H + 4, 4, c.s->color_active);
+  ft_page_rect(fx, y, fw, ROW_H, 4, c.s->color_bg);
   for (uint8_t j = 0; j < f->len; j++) {
     int16_t cx = fx + 8 + j * CHAR_W;
     uint32_t color = c.s->color_text;
@@ -63,16 +66,16 @@ static void draw_field(const ft_page_ctx_t &c, uint8_t i, int16_t y, const char 
       color = 0x000000;
     }
     char ch[2] = { f->text[j], '\0' };
-    ft.drawText(cx + CHAR_W / 2, y + ROW_H / 2, FT_PAGE_FONT, color, FT81x_OPT_CENTER, ch);
+    ft.drawText(cx + CHAR_W / 2, y + ROW_H / 2, FT_PAGE_FONT_SMALL, color, FT81x_OPT_CENTER, ch);
   }
   ft.drawText(fx + fw + 16, y + ROW_H / 2, FT_PAGE_FONT_SMALL, c.s->color_copyright, FT81x_OPT_CENTERY, hint);
 }
 
 static void draw(const ft_page_ctx_t &c) {
   if (!c.focused) init_fields(); // the RTC as it runs
-  draw_field(c, F_DATE, c.y, "Date", "DD.MM.YYYY");
-  draw_field(c, F_TIME, c.y + ROW_STEP, "Time", "HH:MM");
-  int16_t y = c.y + 2 * ROW_STEP + 8;
+  draw_field(c, F_DATE, c.y + TOP_GAP, "Date", "DD.MM.YYYY");
+  draw_field(c, F_TIME, c.y + TOP_GAP + ROW_STEP, "Time", "HH:MM");
+  int16_t y = c.y + TOP_GAP + 2 * ROW_STEP + 8;
   ft_page_button(c, c.x + 16, y, 140, "Set", focus == F_SET, HIT_SET);
   if (message && c.focused) {
     ft.drawText(c.x + 176, y + FT_PAGE_BTN_H / 2, FT_PAGE_FONT, message_ok ? FT_PAGE_OK : FT_PAGE_ERROR, FT81x_OPT_CENTERY, message);
@@ -101,6 +104,14 @@ static void set_clock() {
   zxrtc.save();
   message = "The clock is set";
   message_ok = true;
+  message_timer.reset();
+}
+
+// the message goes after a while
+static bool tick() {
+  if (!message || !message_ok || message_timer.elapsed() < MESSAGE_MS) return false;
+  message = nullptr;
+  return true;
 }
 
 // the digit of a key, 0 if it is not a digit key
@@ -158,4 +169,4 @@ static const char *hint() {
 
 static const char *keys() { return "Up/Down: select   Enter: next / set   Esc: back"; }
 
-const ft_page_t ft_page_clock = { open, close, draw, key, nullptr, click, nullptr, hint, keys };
+const ft_page_t ft_page_clock = { open, close, nullptr, nullptr, draw, key, tick, click, nullptr, hint, keys };

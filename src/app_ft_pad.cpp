@@ -35,8 +35,8 @@ enum { HIT_SKIP, HIT_BACK, HIT_SAVE, HIT_AGAIN };
 #define PRESS_TIMEOUT_MS 10000
 #define RELEASE_TIMEOUT_MS 3000
 
-#define PAD_W 400
-#define PAD_H 130
+#define PAD_W 300
+#define PAD_H 98
 #define BTN_W 110
 #define LIST_STEP 16
 #define LIST_FONT 26
@@ -113,37 +113,44 @@ static uint32_t label_color(const ft_page_ctx_t &c, uint8_t i) {
   return state >= ST_PRESS && !mapped[i] && (state >= ST_DONE || i < btn) ? PAD_LABEL_OFF : PAD_LABEL;
 }
 
+// the pad is drawn in units of a 400 x 130 picture, at 3/4
+#define K(v) ((v) * 3 / 4)
+
 static void draw_round(const ft_page_ctx_t &c, int16_t x, int16_t y, uint8_t r, uint8_t i) {
-  ft.drawCircle(x, y, r, key_color(c, lit(i)));
-  ft.drawText(x, y, r > 14 ? 28 : 27, label_color(c, i), FT81x_OPT_CENTER, btn_names[i]);
+  ft.drawCircle(x, y, K(r), key_color(c, lit(i)));
+  ft.drawText(x, y, r > 14 ? 27 : 26, label_color(c, i), FT81x_OPT_CENTER, btn_names[i]);
 }
 
 static void draw_small(const ft_page_ctx_t &c, int16_t x, int16_t y, uint8_t i, const char *label) {
-  ft.drawRect(x, y, 60, 18, 9, key_color(c, lit(i)));
-  ft.drawText(x + 30, y + 9, LIST_FONT, label_color(c, i), FT81x_OPT_CENTER, label);
+  ft_page_rect(x, y, K(60), K(18), 6, key_color(c, lit(i)));
+  ft.drawText(x + K(30), y + K(9), 20, label_color(c, i), FT81x_OPT_CENTER, label);
+}
+
+static void draw_key(const ft_page_ctx_t &c, int16_t x, int16_t y, int16_t w, int16_t h, uint8_t i) {
+  ft_page_rect(x, y, w, h, 2, key_color(c, lit(i)));
 }
 
 // a Mega Drive pad, PAD_W x PAD_H
 static void draw_pad(const ft_page_ctx_t &c, int16_t px, int16_t py) {
-  ft.drawRect(px, py, PAD_W, PAD_H, 30, PAD_EDGE);
-  ft.drawRect(px + 4, py + 4, PAD_W - 8, PAD_H - 8, 26, PAD_BODY);
+  ft_page_rect(px, py, PAD_W, PAD_H, K(30), PAD_EDGE);
+  ft_page_rect(px + 3, py + 3, PAD_W - 6, PAD_H - 6, K(30) - 3, PAD_BODY);
 
-  int16_t cx = px + 80, cy = py + PAD_H / 2;
-  ft.drawRect(cx - 12, cy - 42, 24, 30, 3, key_color(c, lit(B_UP)));
-  ft.drawRect(cx - 12, cy + 12, 24, 30, 3, key_color(c, lit(B_DOWN)));
-  ft.drawRect(cx - 42, cy - 12, 30, 24, 3, key_color(c, lit(B_LEFT)));
-  ft.drawRect(cx + 12, cy - 12, 30, 24, 3, key_color(c, lit(B_RIGHT)));
-  ft.drawRect(cx - 12, cy - 12, 24, 24, 1, PAD_EDGE);
+  int16_t cx = px + K(80), cy = py + PAD_H / 2;
+  draw_key(c, cx - K(12), cy - K(42), K(24), K(30), B_UP);
+  draw_key(c, cx - K(12), cy + K(12), K(24), K(30), B_DOWN);
+  draw_key(c, cx - K(42), cy - K(12), K(30), K(24), B_LEFT);
+  draw_key(c, cx + K(12), cy - K(12), K(30), K(24), B_RIGHT);
+  ft.drawRect(cx - K(12), cy - K(12), K(24), K(24), 0, PAD_EDGE);
 
-  draw_small(c, px + 170, py + 34, B_MODE, "MODE");
-  draw_small(c, px + 170, py + 70, B_START, "START");
+  draw_small(c, px + K(170), py + K(34), B_MODE, "MODE");
+  draw_small(c, px + K(170), py + K(70), B_START, "START");
 
-  draw_round(c, px + 282, py + 42, 13, B_X);
-  draw_round(c, px + 316, py + 36, 13, B_Y);
-  draw_round(c, px + 350, py + 30, 13, B_Z);
-  draw_round(c, px + 272, py + 90, 17, B_A);
-  draw_round(c, px + 314, py + 82, 17, B_B);
-  draw_round(c, px + 356, py + 74, 17, B_C);
+  draw_round(c, px + K(282), py + K(42), 13, B_X);
+  draw_round(c, px + K(316), py + K(36), 13, B_Y);
+  draw_round(c, px + K(350), py + K(30), 13, B_Z);
+  draw_round(c, px + K(272), py + K(90), 17, B_A);
+  draw_round(c, px + K(314), py + K(82), 17, B_B);
+  draw_round(c, px + K(356), py + K(74), 17, B_C);
 }
 
 // the learned sources, two columns
@@ -332,4 +339,4 @@ static const char *hint() {
 
 static const char *keys() { return "Esc: back (the keyboard or the mouse, not the pad)"; }
 
-const ft_page_t ft_page_pad = { open, close, draw, key, tick, click, nullptr, hint, keys };
+const ft_page_t ft_page_pad = { open, close, nullptr, nullptr, draw, key, tick, click, nullptr, hint, keys };

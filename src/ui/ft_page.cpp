@@ -17,6 +17,10 @@ void ft_page_button(const ft_page_ctx_t &c, int16_t x, int16_t y, int16_t w, con
     lit ? c.s->color_active : c.s->color_button, c.opt, label);
 }
 
+void ft_page_rect(int16_t x, int16_t y, int16_t w, int16_t h, uint8_t r, uint32_t color) {
+  ft.drawRect(x + r, y + r, w - 2 * r, h - 2 * r, r, color);
+}
+
 void ft_page_row(const ft_page_ctx_t &c, int16_t x, int16_t y, int16_t w, int16_t h, bool focused, bool hovered) {
   if (!c.focused) return;
   if (focused || hovered) ft.drawRect(x, y, w, h, 4, c.s->color_button);

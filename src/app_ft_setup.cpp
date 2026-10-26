@@ -101,6 +101,7 @@ static uint32_t color_old;
 static int16_t hover = FT_HIT_NONE; // under the pointer at the last draw
 static bool dragging;      // a slider follows the pointer
 static hid_keyboard_report_t prev_kbd; // for the keys of the custom pages
+static const ft_page_t *shown;  // the custom page whose tab is chosen (show / hide)
 
 static uint16_t ft_opt() { return s.ft_3d_buttons ? FT81x_OPT_3D : FT81x_OPT_FLAT; }
 
@@ -335,6 +336,7 @@ void app_ft_setup_overlay() {
   settings_begin(s);
   focus = F_TABS;
   tab = T_SYSTEM;
+  shown = nullptr;
   row = 0;
   error = nullptr;
   mode_cur = hw_setup.ft_video_mode;
@@ -342,6 +344,15 @@ void app_ft_setup_overlay() {
   hid_kbd_report_sync();
   prev_kbd = usb_keyboard_report; // the key that opened the setup is not a press here
   app_ft_setup_draw();
+}
+
+// show / hide of the custom pages as their tabs get chosen
+static void track_tab() {
+  const ft_page_t *p = osd_state == state_ft_setup ? custom_page() : nullptr;
+  if (p == shown) return;
+  if (shown && shown->hide) shown->hide();
+  shown = p;
+  if (shown && shown->show) shown->show();
 }
 
 // the keys go back from a custom page to the tabs
@@ -356,6 +367,8 @@ static void custom_key(uint8_t key, bool shift, bool joy) {
 
 static void leave() {
   to_tabs();
+  if (shown && shown->hide) shown->hide();
+  shown = nullptr;
   if (mode_cur != hw_setup.ft_video_mode) set_mode(hw_setup.ft_video_mode);
   osd_state = osd_return_state;
 }
@@ -369,7 +382,9 @@ void app_ft_setup_tick() {
     focus = F_PAGE;
     app_ft_setup_draw();
   }
-  if (focus == F_CUSTOM && custom_page()->tick && custom_page()->tick()) app_ft_setup_draw();
+  track_tab();
+  const ft_page_t *p = custom_page();
+  if (p && p->tick && (focus == F_CUSTOM || p->show) && p->tick()) app_ft_setup_draw();
   mouse_tick();
 }
 

@@ -14,8 +14,9 @@
 // The Wi-Fi page of the graphic setup (the core browser is the BOOT core, which bridges the
 // ESP8266 UART), as Setup Wi-Fi of the text menu: the module status, a scan, the password of
 // the chosen network, the join. The ESP keeps the network in its flash and joins it on start
-// (CWAUTOCONN); Forget turns that off and leaves the network. On open, the hardware flow control
-// of the ESP is turned on: the cores stop it with CTS when their receive fifo is nearly full.
+// (CWAUTOCONN); Forget turns that off and leaves the network. The status is asked as soon as the
+// tab is chosen, and the hardware flow control of the ESP is turned on then: the cores stop it
+// with CTS when their receive fifo is nearly full.
 
 enum { W_INIT, W_NO_ESP, W_STATUS, W_SCAN, W_LIST, W_SSID, W_PASS, W_JOIN, W_RESULT, W_FORGET };
 
@@ -35,7 +36,7 @@ enum { HIT_STATUS = 0, HIT_RETRY = 10, HIT_RESCAN, HIT_NEXT, HIT_CONNECT, HIT_SH
 #define BTN_W 220
 #define BTN_STEP 40
 #define LIST_ROW_H 30
-#define CHAR_W 15
+#define CHAR_W 13
 #define CURSOR_COLOR 0x00d8d8
 
 static uint8_t screen;
@@ -44,7 +45,6 @@ static bool step_started;
 static uint8_t tries;
 static bool joining;   // the status steps after a join end on the result screen
 static bool from_list; // the password screen was opened from the list (not for a typed ssid)
-static bool has_status; // the status was read once (shown while the page is not open)
 static bool dirty;     // the screen changed in the tick
 static bool closed;    // Esc left the page
 static uint8_t sel;
@@ -150,7 +150,6 @@ static void step_done(uint8_t r) {
       break;
     case S_IP_GET:
       run(S_NONE);
-      has_status = true;
       if (joining) {
         joining = false;
         result_error = nullptr;
@@ -221,17 +220,17 @@ static void draw_field(const ft_page_ctx_t &c, int16_t y, const char *text, bool
   uint8_t width = (fw - 16) / CHAR_W;
   size_t len = strlen(text);
   size_t from = len >= width ? len - width + 1 : 0;
-  ft.drawRect(fx - 2, y - 2, fw + 4, FT_PAGE_BTN_H + 4, 4, c.s->color_active);
-  ft.drawRect(fx, y, fw, FT_PAGE_BTN_H, 4, c.s->color_bg);
+  ft_page_rect(fx - 2, y - 2, fw + 4, FT_PAGE_FIELD_H + 4, 4, c.s->color_active);
+  ft_page_rect(fx, y, fw, FT_PAGE_FIELD_H, 4, c.s->color_bg);
   for (size_t i = from; i <= len; i++) {
     int16_t cx = fx + 8 + (i - from) * CHAR_W;
     if (i == len) {
-      ft.drawRect(cx, y + 4, CHAR_W, FT_PAGE_BTN_H - 8, 1, CURSOR_COLOR);
+      ft.drawRect(cx, y + 4, CHAR_W, FT_PAGE_FIELD_H - 8, 1, CURSOR_COLOR);
       break;
     }
     char ch[2] = { hidden ? '*' : text[i], '\0' };
     if (ch[0] < 32 || ch[0] >= 127) ch[0] = '?';
-    ft.drawText(cx + CHAR_W / 2, y + FT_PAGE_BTN_H / 2, FT_PAGE_FONT_SMALL, c.s->color_text, FT81x_OPT_CENTER, ch);
+    ft.drawText(cx + CHAR_W / 2, y + FT_PAGE_FIELD_H / 2, FT_PAGE_FONT_SMALL, c.s->color_text, FT81x_OPT_CENTER, ch);
   }
 }
 
@@ -280,12 +279,6 @@ static void draw(const ft_page_ctx_t &c) {
   int16_t x = c.x + 16;
   uint32_t text = c.s->color_text, dim = c.s->color_copyright;
   char buf[48];
-
-  if (!c.focused) {
-    if (has_status) draw_status(c, c.y);
-    else draw_message(c, c.y + INFO_STEP / 2, "Enter: ask the ESP8266", dim);
-    return;
-  }
 
   switch (screen) {
     case W_INIT:
@@ -356,12 +349,21 @@ static void start_init() {
   run(S_ECHO_OFF);
 }
 
-static void open() {
-  closed = false;
+// the tab is chosen: ask the module
+static void page_show() {
   start_init();
 }
 
-static void close() { run(S_NONE); }
+static void page_hide() { run(S_NONE); }
+
+// the keys: the status is there already (or on its way)
+static void open() {
+  closed = false;
+  sel = 0;
+  if (screen == W_NO_ESP) start_init();
+}
+
+static void close() {}
 
 static void back() {
   switch (screen) {
@@ -510,4 +512,4 @@ static const char *keys() {
   }
 }
 
-const ft_page_t ft_page_wifi = { open, close, draw, key, tick, click, wheel, hint, keys };
+const ft_page_t ft_page_wifi = { open, close, page_show, page_hide, draw, key, tick, click, wheel, hint, keys };
