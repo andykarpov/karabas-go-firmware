@@ -1,4 +1,5 @@
 #include "main.h"
+#include "ps2kbd.h"
 #include "app_core.h"
 #include "app_core_browser.h"
 #include "app_file_loader.h"
@@ -145,4 +146,22 @@ void on_time() {
       app_core_browser_ft_menu(0);
     }
   }
+}
+
+static bool in_report(const hid_keyboard_report_t &r, uint8_t key) {
+  for (uint8_t i = 0; i < 6; i++) if (r.keycode[i] == key) return true;
+  return false;
+}
+
+uint8_t ui_pressed_keys(hid_keyboard_report_t *prev, uint8_t *keys) {
+  const hid_keyboard_report_t &r = usb_keyboard_report;
+  uint8_t n = 0;
+  for (uint8_t i = 0; i < 6; i++) {
+    if (r.keycode[i] && !in_report(*prev, r.keycode[i])) keys[n++] = r.keycode[i];
+  }
+  if (n == 0 && memcmp(&r, prev, sizeof(r)) == 0 && kb_repeat_key && in_report(r, kb_repeat_key)) {
+    keys[n++] = kb_repeat_key;
+  }
+  *prev = r;
+  return n;
 }

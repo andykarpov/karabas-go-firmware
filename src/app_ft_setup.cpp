@@ -9,28 +9,31 @@
 #include "ui/settings_items.h"
 #include "app_core_browser.h"
 #include "ui/ft_mouse.h"
+#include "app_ft_pages.h"
 #include "app_ft_setup.h"
 
 // The graphic setup of the core browser (S on the FT812 menu): the sections on the left, the
 // settings of the chosen one on the right. Every change shows at once (the theme, the clock, the
 // buttons), Save writes karabas.ini, Cancel drops the changes (Esc asks first). A new video mode
 // is tried first and kept only when confirmed; it falls back after a timeout.
-// The setup of the clock, Wi-Fi and gamepads is still in the text menu ("Text setup").
+// The pages after the settings (Clock, Wi-Fi, Gamepad) are their own modules (ui/ft_page.h);
+// their changes are done at once, as in the text menu.
 // The mouse: a click on a section opens it, on a setting picks it (and does Enter when it is
 // picked), on a toggle or an arrow changes it; the wheel changes the setting under the pointer
 // or the section; the sliders of a color follow a drag; the right button is Esc.
 
-enum { T_SYSTEM, T_AUTOLOAD, T_DISPLAY, T_SOUND, T_THEME, T_PAGES = T_THEME + 1, T_TEXT = T_PAGES, T_SAVE, T_CANCEL, T_COUNT };
+// T_PAGES: the settings pages; then the pages of their own modules
+enum { T_SYSTEM, T_AUTOLOAD, T_DISPLAY, T_SOUND, T_THEME, T_PAGES, T_CLOCK = T_PAGES, T_WIFI, T_PAD, T_SAVE, T_CANCEL, T_COUNT };
 
 // where the keys go
-enum { F_TABS, F_PAGE, F_COLOR, F_DIALOG };
+enum { F_TABS, F_PAGE, F_COLOR, F_DIALOG, F_CUSTOM };
 
 // the dialogs: the left button does it, the right one (the default) is the safe way back
 enum { D_MODE, D_DROP };
 
 // the clickable areas: the base plus the index
 enum { HIT_TAB = 100, HIT_ROW = 200, HIT_TOGGLE = 300, HIT_LESS = 400, HIT_MORE = 500,
-  HIT_CHAN = 600, HIT_SLIDER = 700, HIT_DLG_LEFT = 800, HIT_DLG_RIGHT };
+  HIT_CHAN = 600, HIT_SLIDER = 700, HIT_DLG_LEFT = 800, HIT_DLG_RIGHT, HIT_PANEL = 900 };
 
 typedef struct {
   const char *name;
@@ -56,14 +59,17 @@ static const page_t pages[T_PAGES] = {
   PAGE("Theme", page_theme),
 };
 
-static const char *const tab_names[T_COUNT] = { "System", "Autoload", "Display", "Sound", "Theme", "Text setup", "Save", "Cancel" };
+static const ft_page_t *const custom_pages[T_SAVE - T_PAGES] = { &ft_page_clock, &ft_page_wifi, &ft_page_pad };
+
+static const char *const tab_names[T_COUNT] = { "System", "Autoload", "Display", "Sound", "Theme", "Clock", "Wi-Fi", "Gamepad", "Save", "Cancel" };
 
 #define TOP 88
 #define TAB_X 16
 #define TAB_W 160
-#define TAB_H 32
+#define TAB_H 32 // at most, as TAB_STEP: less where the tabs do not fit (640x480)
 #define TAB_STEP 40
-#define TAB_GAP 12 // before Text setup
+#define FOOTER_H 56
+#define TAB_GAP 12 // before Save
 #define PANEL_X (TAB_X + TAB_W + 16)
 #define PANEL_MAX_W 560
 #define ROW_H 32
@@ -94,6 +100,8 @@ static uint32_t color_old;
 
 static int16_t hover = FT_HIT_NONE; // under the pointer at the last draw
 static bool dragging;      // a slider follows the pointer
+static hid_keyboard_report_t prev_kbd; // for the keys of the custom pages
+static const ft_page_t *shown;  // the custom page whose tab is chosen (show / hide)
 
 static uint16_t ft_opt() { return s.ft_3d_buttons ? FT81x_OPT_3D : FT81x_OPT_FLAT; }
 
@@ -104,7 +112,16 @@ static uint16_t panel_w() {
 
 static uint8_t cur_id() { return pages[tab].ids[row]; }
 
-static int16_t tab_y(uint8_t i) { return TOP + i * TAB_STEP + (i >= T_TEXT ? TAB_GAP : 0); }
+static const ft_page_t *custom_page() { return tab >= T_PAGES && tab < T_SAVE ? custom_pages[tab - T_PAGES] : nullptr; }
+
+static int16_t tab_step() {
+  int16_t step = (ft.height() - FOOTER_H - TOP - TAB_GAP) / T_COUNT;
+  return step > TAB_STEP ? TAB_STEP : step;
+}
+
+static int16_t tab_h() { return tab_step() - (TAB_STEP - TAB_H); }
+
+static int16_t tab_y(uint8_t i) { return TOP + i * tab_step() + (i >= T_SAVE ? TAB_GAP : 0); }
 
 static void draw_tabs() {
   for (uint8_t i = 0; i < T_COUNT; i++) {
@@ -112,11 +129,12 @@ static void draw_tabs() {
     bool lit = chosen && focus == F_TABS;
     uint32_t bg = lit ? s.color_active : s.color_button;
     uint32_t fg = lit ? s.color_text_active : s.color_text;
-    if (ft_hit_add(TAB_X, tab_y(i), TAB_W, TAB_H, HIT_TAB + i)) {
-      ft.drawRect(TAB_X, tab_y(i), TAB_W, TAB_H, 2, s.color_active); // hovered: a 2 px frame (the corner radius)
+    int16_t h = tab_h();
+    if (ft_hit_add(TAB_X, tab_y(i), TAB_W, h, HIT_TAB + i)) {
+      ft.drawRect(TAB_X, tab_y(i), TAB_W, h, 2, s.color_active); // hovered: a 2 px frame (the corner radius)
     }
-    ft.drawButton(TAB_X, tab_y(i), TAB_W, TAB_H, FONT, fg, bg, ft_opt(), tab_names[i]);
-    if (chosen && !lit) ft.drawRect(TAB_X, tab_y(i) + 4, 4, TAB_H - 8, 1, s.color_active);
+    ft.drawButton(TAB_X, tab_y(i), TAB_W, h, h < TAB_H ? FONT_SMALL : FONT, fg, bg, ft_opt(), tab_names[i]);
+    if (chosen && !lit) ft.drawRect(TAB_X, tab_y(i) + 4, 4, h - 8, 1, s.color_active);
   }
 }
 
@@ -173,6 +191,22 @@ static void draw_page() {
     ft.drawText(PANEL_X + 16, y + ROW_H / 2, FONT, s.color_text, FT81x_OPT_CENTERY, label);
     draw_value(p->ids[i], y, focused, focused || hovered);
   }
+}
+
+static void draw_custom() {
+  int16_t w = panel_w();
+  ft.drawText(PANEL_X + 16, TOP + TAB_H / 2, 29, s.color_text, FT81x_OPT_CENTERY, tab_names[tab]);
+  ft.drawRect(PANEL_X + 16, TOP + TAB_H + 2, w - 32, 1, 1, s.color_copyright);
+  ft_page_ctx_t c;
+  c.s = &s;
+  c.x = PANEL_X;
+  c.y = TOP + 40;
+  c.w = w;
+  c.h = ft.height() - FOOTER_H - c.y;
+  c.opt = ft_opt();
+  c.focused = focus == F_CUSTOM;
+  if (!c.focused) ft_hit_add(c.x, c.y, c.w, c.h, HIT_PANEL); // a click opens it
+  custom_page()->draw(c);
 }
 
 // the editor of one color: R, G, B sliders
@@ -241,7 +275,7 @@ static void draw_footer() {
   const char *keys = "";
   switch (focus) {
     case F_TABS:
-      hint = tab == T_TEXT ? "Clock, Wi-Fi, gamepads (drops the changes)" :
+      hint = custom_page() ? "Enter: open" :
              tab == T_SAVE ? "Write the settings to karabas.ini" :
              tab == T_CANCEL ? "Drop the changes" : "";
       keys = "Up/Down: section   Enter: open   Esc: cancel";
@@ -257,6 +291,10 @@ static void draw_footer() {
     case F_DIALOG:
       keys = "Left/Right: choose   Enter: OK   Esc: back";
       break;
+    case F_CUSTOM:
+      hint = custom_page()->hint();
+      keys = custom_page()->keys();
+      break;
   }
   ft.drawText(TAB_X, ft.height() - 40, FONT_SMALL, error ? ERROR_COLOR : s.color_copyright, FT81x_OPT_CENTERY, error ? error : hint);
   ft.drawText(TAB_X, ft.height() - 20, FONT_SMALL, s.color_copyright, FT81x_OPT_CENTERY, keys);
@@ -269,11 +307,12 @@ void app_ft_setup_draw() {
   app_core_browser_ft_background(s);
   bool page = tab < T_PAGES;
   // the picture only where it does not cover the settings
-  bool show_char = !page || PANEL_X + panel_w() < ft.width() - BG_WIDTH - 8;
+  bool show_char = (!page && !custom_page()) || PANEL_X + panel_w() < ft.width() - BG_WIDTH - 8;
   app_core_browser_ft_decor(s, show_char);
   draw_tabs();
   if (focus == F_COLOR) draw_color();
   else if (page) draw_page();
+  else if (custom_page()) draw_custom();
   draw_footer();
   if (focus == F_DIALOG) draw_dialog();
   hover = ft_hover();
@@ -297,14 +336,39 @@ void app_ft_setup_overlay() {
   settings_begin(s);
   focus = F_TABS;
   tab = T_SYSTEM;
+  shown = nullptr;
   row = 0;
   error = nullptr;
   mode_cur = hw_setup.ft_video_mode;
   mode_pick = s.ft_video_mode;
+  hid_kbd_report_sync();
+  prev_kbd = usb_keyboard_report; // the key that opened the setup is not a press here
   app_ft_setup_draw();
 }
 
+// show / hide of the custom pages as their tabs get chosen
+static void track_tab() {
+  const ft_page_t *p = osd_state == state_ft_setup ? custom_page() : nullptr;
+  if (p == shown) return;
+  if (shown && shown->hide) shown->hide();
+  shown = p;
+  if (shown && shown->show) shown->show();
+}
+
+// the keys go back from a custom page to the tabs
+static void to_tabs() {
+  if (focus == F_CUSTOM) custom_page()->close();
+  focus = F_TABS;
+}
+
+static void custom_key(uint8_t key, bool shift, bool joy) {
+  if (!custom_page()->key(key, shift, joy)) to_tabs();
+}
+
 static void leave() {
+  to_tabs();
+  if (shown && shown->hide) shown->hide();
+  shown = nullptr;
   if (mode_cur != hw_setup.ft_video_mode) set_mode(hw_setup.ft_video_mode);
   osd_state = osd_return_state;
 }
@@ -318,17 +382,14 @@ void app_ft_setup_tick() {
     focus = F_PAGE;
     app_ft_setup_draw();
   }
+  track_tab();
+  const ft_page_t *p = custom_page();
+  if (p && p->tick && (focus == F_CUSTOM || p->show) && p->tick()) app_ft_setup_draw();
   mouse_tick();
 }
 
 static void open_tab() {
   switch (tab) {
-    case T_TEXT:
-      has_ft = false;
-      ft.vga(false);
-      ft.spi(false);
-      osd_state = state_setup;
-      break;
     case T_SAVE:
       if (save_setup(s)) { leave(); return; }
       error = "Can't save karabas.ini";
@@ -337,6 +398,11 @@ static void open_tab() {
       leave();
       break;
     default:
+      if (custom_page()) {
+        focus = F_CUSTOM;
+        custom_page()->open();
+        break;
+      }
       focus = F_PAGE;
       row = 0;
       mode_pick = s.ft_video_mode;
@@ -397,7 +463,7 @@ static void handle(const keys_t &k) {
     case F_TABS:
       if (up) tab = (tab + T_COUNT - 1) % T_COUNT;
       else if (down || k.tab) tab = (tab + 1) % T_COUNT;
-      else if (enter || (right && tab < T_PAGES)) open_tab();
+      else if (enter || (right && tab < T_SAVE)) open_tab();
       else if (esc && settings_differ(s, hw_setup)) { focus = F_DIALOG; dialog = D_DROP; dialog_left = false; }
       else if (esc) leave();
       break;
@@ -427,6 +493,9 @@ static void handle(const keys_t &k) {
       else if (dialog == D_DROP && enter && dialog_left) leave();
       else if (dialog == D_DROP && (enter || esc)) focus = F_TABS;
       break;
+    case F_CUSTOM: // the right mouse button
+      if (esc) custom_key(KEY_ESC, false, false);
+      break;
   }
 
   if (osd_state != state_ft_setup) return; // left the setup
@@ -434,7 +503,35 @@ static void handle(const keys_t &k) {
   app_ft_setup_draw();
 }
 
+// the keys of a custom page: every key pressed (text fields), the joystick as the arrows
+static void custom_on_keyboard(const uint8_t *keys, uint8_t n) {
+  bool shift = usb_keyboard_report.modifier & (KEY_MOD_LSHIFT | KEY_MOD_RSHIFT);
+  for (uint8_t i = 0; i < n && focus == F_CUSTOM && osd_state == state_ft_setup; i++) {
+    ft_mouse_hide();
+    custom_key(keys[i], shift, false);
+  }
+  uint16_t joy = joyL | joyR;
+  if (n == 0 && joy) {
+    uint8_t key = (joy & SC_BTN_UP) ? KEY_UP : (joy & SC_BTN_DOWN) ? KEY_DOWN :
+                  (joy & SC_BTN_LEFT) ? KEY_LEFT : (joy & SC_BTN_RIGHT) ? KEY_RIGHT :
+                  (joy & (SC_BTN_A | SC_BTN_B)) ? KEY_ENTER : (joy & SC_BTN_C) ? KEY_ESC : 0;
+    if (!key) return;
+    ft_mouse_hide();
+    custom_key(key, false, true);
+    n = 1;
+  }
+  if (n == 0 || osd_state != state_ft_setup) return;
+  if (s.ft_click) ft.playSound();
+  app_ft_setup_draw();
+}
+
 void app_ft_setup_on_keyboard() {
+  uint8_t keys[6];
+  uint8_t n = ui_pressed_keys(&prev_kbd, keys);
+  if (focus == F_CUSTOM) {
+    custom_on_keyboard(keys, n);
+    return;
+  }
   uint8_t key = usb_keyboard_report.keycode[0];
   keys_t k;
   k.up = key == KEY_UP || (joyL & SC_BTN_UP) || (joyR & SC_BTN_UP);
@@ -472,9 +569,13 @@ static void pick_row(uint8_t i) {
 // true if it went through handle(), which draws
 static bool click(int16_t id) {
   if (id >= HIT_TAB && id < HIT_TAB + T_COUNT) {
+    to_tabs();
     tab = id - HIT_TAB;
-    focus = F_TABS;
-    if (tab >= T_PAGES) open_tab();
+    if (tab >= T_SAVE) open_tab();
+  } else if (id == HIT_PANEL) {
+    open_tab();
+  } else if (id >= FT_PAGE_HIT && focus == F_CUSTOM) {
+    if (!custom_page()->click(id - FT_PAGE_HIT)) to_tabs();
   } else if (id >= HIT_ROW && id < HIT_ROW + 16) {
     uint8_t i = id - HIT_ROW;
     if (focus == F_PAGE && row == i) enter_row();
@@ -506,8 +607,10 @@ static bool click(int16_t id) {
 
 static void wheel(int16_t id, int d) {
   if (id >= HIT_TAB && id < HIT_TAB + T_COUNT) {
+    to_tabs();
     tab = (tab - d + T_COUNT) % T_COUNT; // up: the section above
-    focus = F_TABS;
+  } else if (focus == F_CUSTOM) {
+    if (custom_page()->wheel) custom_page()->wheel(id >= FT_PAGE_HIT ? id - FT_PAGE_HIT : FT_HIT_NONE, d);
   } else if (id >= HIT_ROW && id < HIT_MORE + 16) {
     pick_row((id - HIT_ROW) % 100);
     change(d);

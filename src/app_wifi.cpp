@@ -367,26 +367,6 @@ void app_wifi_overlay() {
   start_init();
 }
 
-static bool in_report(const hid_keyboard_report_t &r, uint8_t key) {
-  for (uint8_t i = 0; i < 6; i++) if (r.keycode[i] == key) return true;
-  return false;
-}
-
-// the keys pressed since the last report (up to 6, in order), or the repeated key when the
-// report did not change
-static uint8_t pressed_keys(uint8_t *keys) {
-  const hid_keyboard_report_t &r = usb_keyboard_report;
-  uint8_t n = 0;
-  for (uint8_t i = 0; i < 6; i++) {
-    if (r.keycode[i] && !in_report(prev_kbd, r.keycode[i])) keys[n++] = r.keycode[i];
-  }
-  if (n == 0 && memcmp(&r, &prev_kbd, sizeof(r)) == 0 && kb_repeat_key && in_report(r, kb_repeat_key)) {
-    keys[n++] = kb_repeat_key;
-  }
-  prev_kbd = r;
-  return n;
-}
-
 static void back() {
   switch (screen) {
     case W_LIST: case W_SSID: case W_RESULT: case W_FORGET: show(W_STATUS); break;
@@ -479,7 +459,7 @@ static void on_key(uint8_t key, bool shift) {
 
 void app_wifi_on_keyboard() {
   uint8_t keys[6];
-  uint8_t n = pressed_keys(keys);
+  uint8_t n = ui_pressed_keys(&prev_kbd, keys);
   bool shift = usb_keyboard_report.modifier & (KEY_MOD_LSHIFT | KEY_MOD_RSHIFT);
   for (uint8_t i = 0; i < n && osd_state == state_wifi; i++) on_key(keys[i], shift);
 

@@ -46,9 +46,10 @@ void app_core_browser_overlay() {
   zxosd.line(21);
   zxosd.setPos(0, 22); 
   zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_FLASH); zxosd.print("S");
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK); zxosd.print("etup ");
+  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK); zxosd.print("etup");
+  zxosd.setPos(29, 22); // right of the page number
   zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_FLASH); zxosd.print("G");
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK); zxosd.print("raphic menu");
+  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK); zxosd.print("UI");
   zxosd.line(23);
   zxosd.setPos(1,24); zxosd.print("Please use arrows to navigate");
   zxosd.setPos(1,25); zxosd.print("Press Enter to load selection");
