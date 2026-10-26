@@ -24,7 +24,28 @@ void ft_page_rect(int16_t x, int16_t y, int16_t w, int16_t h, uint8_t r, uint32_
 void ft_page_row(const ft_page_ctx_t &c, int16_t x, int16_t y, int16_t w, int16_t h, bool focused, bool hovered) {
   if (!c.focused) return;
   if (focused || hovered) ft.drawRect(x, y, w, h, 4, c.s->color_button);
-  if (focused) ft.drawRect(x, y + 4, 4, h - 8, 1, c.s->color_active);
+  if (focused) ft_page_marker(x, y, h, c.s->color_active, c.opt);
+}
+
+// a channel of the color scaled by num / 256, plus add (the light of the 3D dot)
+static uint32_t shade(uint32_t color, uint16_t num, uint8_t add) {
+  uint32_t r = 0;
+  for (uint8_t sh = 0; sh <= 16; sh += 8) {
+    uint16_t ch = (((color >> sh) & 0xff) * num >> 8) + add;
+    r |= (uint32_t)(ch > 0xff ? 0xff : ch) << sh;
+  }
+  return r;
+}
+
+void ft_page_marker(int16_t x, int16_t y, int16_t h, uint32_t color, uint16_t opt) {
+  int16_t cx = x + 9, cy = y + h / 2;
+  if (opt & FT81x_OPT_FLAT) {
+    ft.drawCircle(cx, cy, 3, color);
+    return;
+  }
+  ft.drawCircle(cx + 1, cy + 1, 4, shade(color, 96, 0)); // the shadow
+  ft.drawCircle(cx, cy, 3, color);
+  ft.drawCircle(cx - 1, cy - 1, 1, shade(color, 128, 128)); // the light
 }
 
 void ft_page_text(int16_t x, int16_t y, uint8_t font, uint32_t color, uint16_t opt, const char *text, uint8_t max) {

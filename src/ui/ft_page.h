@@ -42,6 +42,8 @@ void ft_page_button(const ft_page_ctx_t &c, int16_t x, int16_t y, int16_t w, con
 void ft_page_rect(int16_t x, int16_t y, int16_t w, int16_t h, uint8_t r, uint32_t color);
 // a row that can be picked (lists, fields): a band when focused or hovered
 void ft_page_row(const ft_page_ctx_t &c, int16_t x, int16_t y, int16_t w, int16_t h, bool focused, bool hovered);
+// the mark of the chosen row or tab: a dot near the left edge of x, y, h (raised when opt is 3D)
+void ft_page_marker(int16_t x, int16_t y, int16_t h, uint32_t color, uint16_t opt);
 // text in a font of the FT812, the chars it has no glyph for as '?'
 void ft_page_text(int16_t x, int16_t y, uint8_t font, uint32_t color, uint16_t opt, const char *text, uint8_t max = 40);
 
