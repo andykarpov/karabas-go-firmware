@@ -19,7 +19,7 @@ void load_setup() {
   hw_setup.debug_enabled = false;
   hw_setup.debug_hid = false;
   hw_setup.ft_enabled = true;
-  hw_setup.ft_video_mode = 0;
+  hw_setup.ft_video_mode = 3; // 800x600@60
   hw_setup.ft_sound = 1;
   hw_setup.ft_click = true;
   hw_setup.ft_time = true;

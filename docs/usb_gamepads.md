@@ -7,15 +7,25 @@ A pad takes the first free port when it is plugged in and keeps it until it is u
 A HID pad is mapped in one of two ways:
 
 1. **Driver ini.** If `/drivers/` on the SD card has an ini with the VID/PID of the pad, the
-   ini is used (format: [`drivers/example_ini.txt`](../drivers/example_ini.txt), made with the
-   [hidmapper](https://andykarpov.github.io/karabas-go-firmware/hidmapper/), source in [`tools/hidmapper`](../tools/hidmapper)).
+   ini is used (format: [`drivers/example_ini.txt`](../drivers/example_ini.txt)). It is made
+   by the OSD mapper below, or by hand, or with the browser
+   [hidmapper](https://andykarpov.github.io/karabas-go-firmware/hidmapper/) (source in
+   [`tools/hidmapper`](../tools/hidmapper)), which is rarely needed now.
 2. **Default map.** Otherwise the firmware builds a map from the HID report descriptor of the
    pad (`lib/KarabasCommon/src/hid_auto_map.cpp`). Most pads work this way without an ini.
+   The default map is built for a pad with a driver too: it takes over when the driver is
+   forgotten.
 
 ## OSD mapper
 
 If the default map does not suit a pad, map it in the OSD: open Setup (`S` in the core browser
-or in the core menu), then **Map USB gamepad**. A keyboard is needed to drive the screen.
+or in the core menu), then **Map USB gamepad**; in the graphic setup of the core browser it is
+the **Gamepad** tab. A keyboard (or, in the graphic setup, a mouse) drives the screen.
+
+The screen opens on the two joystick ports: the pad on each (VID:PID) and what maps it, its
+driver ini, `default map` or `XInput`. **Forget** renames the driver ini of the chosen pad (all
+of them for its VID/PID) to `*.ini.bak` and reloads the drivers: the pad goes on with its
+default map at once. **Map** learns a pad:
 
 1. Press a button on the pad. The first pad whose report changes is the one being mapped.
 2. Release everything and leave the pad alone for a moment: the mapper learns the idle report
@@ -23,7 +33,8 @@ or in the core menu), then **Map USB gamepad**. A keyboard is needed to drive th
 3. Press each MD2 button when asked and release it. `Enter` skips a button (it is also skipped
    after 10 s), `Backspace` goes back one.
 4. `Enter` saves `/drivers/<vid>_<pid>.ini`. Other ini files for the same VID/PID are renamed to
-   `*.ini.bak`. The drivers are reloaded, and the pad uses the new map right away.
+   `*.ini.bak`. The drivers are reloaded, and the pad uses the new map right away. In the graphic
+   setup the pad drawn on the screen then shows the buttons held through the new map.
 
 For each press the mapper takes a hat nibble first, then a single bit, then the axis that moved
 most, as an axis range from halfway between rest and pressed (`lib/KarabasCommon/src/hid_learn`).
@@ -70,8 +81,8 @@ have vendor-defined collections cannot be mapped by default and need a driver in
 ## Diagnostics
 
 Set `debug=1` and `debug_hid=1` in `karabas.ini`. When a pad is plugged in, the log shows
-`DESC <vid>:<pid>` with the report descriptor in hex, then `HID default map: N fields` or
-`uses its driver ini`. Each report is logged as `RAW <vid>:<pid>: ...`, and the resulting
+`DESC <vid>:<pid>` with the report descriptor in hex, then `uses its driver <file>` and / or
+`HID default map: N fields`. Each report is logged as `RAW <vid>:<pid>: ...`, and the resulting
 button word as `SEGA L` / `SEGA R`.
 
 A descriptor from the log is enough to add a test for a new pad to

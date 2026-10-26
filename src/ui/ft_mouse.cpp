@@ -145,6 +145,11 @@ static void draw_pointer() {
 
 void ft_frame_end() {
   uint16_t len = ft.displayListSize();
+  static uint16_t len_max = 0;
+  if (len > len_max) { // how close a screen gets to the 8 KB of the display list
+    len_max = len;
+    d_printf("FT display list: %u bytes (most so far)", len); d_println();
+  }
   if (len > 0 && len <= FRAME_MAX) {
     ft.cmdMemcpy(FRAME_OFFSET, FT81x_RAM_DL, len);
     frame_len = len;

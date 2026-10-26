@@ -18,3 +18,10 @@ bool usb_joy_set(uint8_t address, uint8_t instance, bool xinput, uint16_t button
 void usb_joy_remove(uint8_t address, uint8_t instance, bool xinput);
 // button words of both ports (0 for a free port)
 void usb_joy_snapshot(uint16_t buttons[2]);
+
+// the pads on the ports (address 0: a free port)
+typedef struct {
+  uint8_t address, instance;
+  bool xinput;
+} usb_joy_port_t;
+void usb_joy_ports(usb_joy_port_t ports[2]);

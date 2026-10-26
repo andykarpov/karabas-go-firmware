@@ -19,7 +19,8 @@ hid_mouse_report_t usb_mouse_report;
 #define MAX_REPORT  4 // Max USB reports per instance
 
 // Each HID instance can has multiple reports. Indexed by the TinyUSB HID index, which is unique
-// across devices. Used by core1 only.
+// across devices. Used by core1; vid, pid, driver and auto_map are written under usb_host_lock()
+// and read by APP (usb_pads_get).
 static struct
 {
   uint8_t report_count;
@@ -28,7 +29,7 @@ static struct
   uint16_t pid;
   const hid_joy_config_t *driver; // drivers/*.ini of the device
   uint32_t driver_gen; // hid_drivers_gen when driver was looked up
-  hid_auto_map_t *auto_map; // default map from the report descriptor, for pads without a driver
+  hid_auto_map_t *auto_map; // default map from the report descriptor, used when there is no driver
 } hid_info[CFG_TUH_HID];
 
 // a few default maps, enough for the two joystick ports and a spare
@@ -176,10 +177,12 @@ void tuh_hid_mount_cb (uint8_t dev_addr, uint8_t instance, uint8_t const* desc_r
 
   uint16_t vid, pid;
   tuh_vid_pid_get(dev_addr, &vid, &pid);
+  uint32_t save = spin_lock_blocking(usb_host_lock());
   hid_info[instance].vid = vid;
   hid_info[instance].pid = pid;
   hid_info[instance].driver = nullptr;
   hid_info[instance].auto_map = nullptr;
+  spin_unlock(usb_host_lock(), save);
 
   d_printf("HID VID/PID = %04x/%04x\r\n", vid, pid);
 
@@ -188,13 +191,16 @@ void tuh_hid_mount_cb (uint8_t dev_addr, uint8_t instance, uint8_t const* desc_r
     hid_info[instance].report_count = tuh_hid_parse_report_descriptor(hid_info[instance].report_info, MAX_REPORT, desc_report, desc_len);
     d_printf("HID has %u reports \r\n", hid_info[instance].report_count);
     dump_hid_descriptor(instance, desc_report, desc_len);
-    hid_info[instance].driver_gen = hid_drivers_gen;
-    hid_info[instance].driver = hid_driver_find(vid, pid);
-    if (hid_info[instance].driver) {
-      d_printf("HID %04x:%04x uses its driver ini\r\n", vid, pid);
-    } else {
-      hid_info[instance].auto_map = auto_map_build(desc_report, desc_len);
-    }
+    uint32_t gen = hid_drivers_gen;
+    const hid_joy_config_t *driver = hid_driver_find(vid, pid);
+    if (driver) d_printf("HID %04x:%04x uses its driver %s\r\n", vid, pid, hid_driver_file(driver));
+    // the default map also for a pad with a driver: it takes over when the driver is forgotten
+    hid_auto_map_t *map = auto_map_build(desc_report, desc_len);
+    save = spin_lock_blocking(usb_host_lock());
+    hid_info[instance].driver_gen = gen;
+    hid_info[instance].driver = driver;
+    hid_info[instance].auto_map = map;
+    spin_unlock(usb_host_lock(), save);
     // take a joystick port right away, so the ports follow the order the pads were plugged in
     if (hid_info[instance].driver || hid_info[instance].auto_map) {
       usb_joy_set(dev_addr, instance, false, SC_CTL_ON);
@@ -212,9 +218,12 @@ void tuh_hid_set_protocol_complete_cb(uint8_t dev_addr, uint8_t instance, uint8_
 /// Invoked when device is unmounted (bus reset/unplugged)
 void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
 {
+  uint32_t save = spin_lock_blocking(usb_host_lock());
+  hid_auto_map_t *map = hid_info[instance].auto_map;
   hid_info[instance].driver = nullptr;
-  auto_map_free(hid_info[instance].auto_map);
   hid_info[instance].auto_map = nullptr;
+  spin_unlock(usb_host_lock(), save);
+  auto_map_free(map);
   usb_joy_remove(dev_addr, instance, false);
 
   d_printf("HID device unmounted, address = %d, instance = %d\r\n", dev_addr, instance);
@@ -473,8 +482,11 @@ static void process_joy_report(uint8_t dev_addr, uint8_t instance, uint8_t repor
   uint32_t gen = hid_drivers_gen;
   if (hid_info[instance].driver_gen != gen) {
     // the drivers were (re)loaded after the device was mounted
+    const hid_joy_config_t *driver = hid_driver_find(hid_info[instance].vid, hid_info[instance].pid);
+    uint32_t save = spin_lock_blocking(usb_host_lock());
     hid_info[instance].driver_gen = gen;
-    hid_info[instance].driver = hid_driver_find(hid_info[instance].vid, hid_info[instance].pid);
+    hid_info[instance].driver = driver;
+    spin_unlock(usb_host_lock(), save);
   }
   const hid_joy_config_t *driver = hid_info[instance].driver;
   uint16_t res;
@@ -583,5 +595,35 @@ static void dump_hid_descriptor(uint8_t instance, uint8_t const* desc, uint16_t 
       d_printf("%02x ", desc[j]);
     }
     d_println();
+  }
+}
+
+void usb_pads_get(usb_pad_t pads[2])
+{
+  usb_joy_port_t ports[2];
+  usb_joy_ports(ports);
+  for (uint8_t i = 0; i < 2; i++) {
+    usb_pad_t &p = pads[i];
+    memset(&p, 0, sizeof(p)); // the padding too: the screens memcmp two snapshots
+    if (!ports[i].address) continue;
+    if (ports[i].xinput) {
+      p.source = USB_PAD_XINPUT;
+      tuh_vid_pid_get(ports[i].address, &p.vid, &p.pid);
+      continue;
+    }
+    uint8_t n = ports[i].instance;
+    if (n >= CFG_TUH_HID) continue;
+    uint32_t save = spin_lock_blocking(usb_host_lock());
+    p.vid = hid_info[n].vid;
+    p.pid = hid_info[n].pid;
+    const hid_joy_config_t *driver = hid_info[n].driver;
+    bool map = hid_info[n].auto_map != nullptr;
+    spin_unlock(usb_host_lock(), save);
+    if (driver) {
+      p.source = USB_PAD_DRIVER;
+      p.file = hid_driver_file(driver);
+    } else {
+      p.source = map ? USB_PAD_DEFAULT : USB_PAD_NONE;
+    }
   }
 }

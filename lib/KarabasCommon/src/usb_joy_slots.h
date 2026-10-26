@@ -23,6 +23,14 @@ public:
     for (auto &s : slots)
       if (s.address == address && s.instance == instance && s.xinput == xinput) s = {};
   }
+  // the pad on port i; false if the port is free
+  bool get(unsigned i, uint8_t &address, uint8_t &instance, bool &xinput) const {
+    if (i >= N || !slots[i].address) return false;
+    address = slots[i].address;
+    instance = slots[i].instance;
+    xinput = slots[i].xinput;
+    return true;
+  }
   uint8_t snapshot(uint16_t *buttons) const {
     uint8_t count = 0;
     for (unsigned i = 0; i < N; ++i) {

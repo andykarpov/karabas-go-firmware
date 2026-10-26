@@ -156,12 +156,14 @@ jobs:
           go=sib/karabas-go
           mini=sib/karabas-mini
           cp dist/karabas-go-firmware.uf2 $go/firmware/firmware.uf2
+          # karabas.ini is optional (the firmware has the defaults, Setup writes it): an
+          # example next to the firmware, none on the SD card template
           cp src/karabas.ini $go/firmware/karabas.ini
-          cp src/karabas.ini $go/cores/karabas.ini
+          git -C $go rm -q --ignore-unmatch cores/karabas.ini
           cp dist/karabas-mini-firmware.uf2 $mini/firmware/firmware.uf2
           cp dist/karabas-minig-firmware.uf2 $mini/firmware/firmware_g.uf2
           cp src/karabas.ini $mini/firmware/karabas.ini
-          cp src/karabas.ini $mini/cores/karabas.ini
+          git -C $mini rm -q --ignore-unmatch cores/karabas.ini
           for repo in $go $mini; do
             git -C $repo config user.name "github-actions[bot]"
             git -C $repo config user.email "41898282+github-actions[bot]@users.noreply.github.com"

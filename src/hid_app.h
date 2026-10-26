@@ -34,6 +34,15 @@ typedef struct {
   uint32_t seq;
 } hid_capture_t;
 
+// The pads on the two USB joystick ports and what maps them (APP)
+enum { USB_PAD_NONE, USB_PAD_DRIVER, USB_PAD_DEFAULT, USB_PAD_XINPUT };
+typedef struct {
+  uint8_t source;   // USB_PAD_*; NONE: a free port
+  uint16_t vid, pid;
+  const char *file; // the driver ini (USB_PAD_DRIVER)
+} usb_pad_t;
+void usb_pads_get(usb_pad_t pads[2]);
+
 void hid_capture_start();
 void hid_capture_stop();
 bool hid_capture_get(hid_capture_t *out); // false until the pad is found

@@ -13,7 +13,6 @@ export PLATFORMIO_BUILD_FLAGS="-DBUILD_VER=$BUILD_VER"
 pio run -e go
 cp .pio/build/go/firmware.uf2 ../karabas-go/firmware/firmware.uf2
 cp src/karabas.ini ../karabas-go/firmware/karabas.ini
-cp src/karabas.ini ../karabas-go/cores/karabas.ini
 
 pio run -e go -t clean
 

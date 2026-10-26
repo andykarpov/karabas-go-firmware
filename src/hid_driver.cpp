@@ -13,8 +13,13 @@
 // never changed afterwards. An old table is not freed: core1 may still point into it. That
 // leaks a few hundred bytes per save, which is rare.
 typedef struct {
+  hid_joy_config_t cfg; // first: hid_driver_find() hands out &cfg
+  char file[32];
+} driver_t;
+
+typedef struct {
   uint8_t len;
-  hid_joy_config_t *list;
+  driver_t *list;
 } driver_table_t;
 
 static driver_table_t *volatile drivers = nullptr;
@@ -81,14 +86,18 @@ void hid_drivers_load()
 
   driver_table_t *t = new driver_table_t;
   t->len = 0;
-  t->list = count ? new hid_joy_config_t[count] : nullptr;
+  t->list = count ? new driver_t[count] : nullptr;
   dir.rewind();
   while (t->len < count && f.openNext(&dir, O_RDONLY)) {
     bool ok = is_driver_file(f, filename, sizeof(filename));
     f.close();
     if (!ok) continue;
     hid_joy_config_t cfg = hid_driver_load(filename);
-    if (cfg.vid || cfg.pid) t->list[t->len++] = cfg;
+    if (cfg.vid || cfg.pid) {
+      t->list[t->len].cfg = cfg;
+      strlcpy(t->list[t->len].file, filename, sizeof(t->list[t->len].file));
+      t->len++;
+    }
   }
   dir.close();
 
@@ -103,11 +112,53 @@ const hid_joy_config_t *hid_driver_find(uint16_t vid, uint16_t pid)
   __dmb();
   if (!t) return nullptr;
   for (uint8_t i = 0; i < t->len; i++) {
-    if (t->list[i].vid == vid && t->list[i].pid == pid) {
-      return &t->list[i];
+    if (t->list[i].cfg.vid == vid && t->list[i].cfg.pid == pid) {
+      return &t->list[i].cfg;
     }
   }
   return nullptr;
+}
+
+const char *hid_driver_file(const hid_joy_config_t *cfg)
+{
+  return reinterpret_cast<const driver_t *>(cfg)->file;
+}
+
+// the driver files of a pad other than keep become *.ini.bak; the count of them
+static uint8_t backup_drivers(uint16_t vid, uint16_t pid, const char *keep)
+{
+  char others[4][32];
+  uint8_t n_others = 0;
+  FsFile dir, f;
+  if (dir.open(&sd1, "/drivers")) {
+    char filename[32];
+    while (n_others < 4 && f.openNext(&dir, O_RDONLY)) {
+      bool ok = is_driver_file(f, filename, sizeof(filename)) && (!keep || strcasecmp(filename, keep) != 0);
+      f.close();
+      if (!ok) continue;
+      hid_joy_config_t old = hid_driver_load(filename);
+      if (old.vid == vid && old.pid == pid) strcpy(others[n_others++], filename);
+    }
+    dir.close();
+  }
+  for (uint8_t i = 0; i < n_others; i++) {
+    char from[64], to[64];
+    snprintf(from, sizeof(from), "/drivers/%s", others[i]);
+    snprintf(to, sizeof(to), "/drivers/%s.bak", others[i]);
+    if (sd1.exists(to)) sd1.remove(to);
+    d_printf("Driver %s renamed to %s", from, to); d_println();
+    sd1.rename(from, to);
+  }
+  return n_others;
+}
+
+bool hid_driver_forget(uint16_t vid, uint16_t pid)
+{
+  if (!has_sd || msc_active()) return false;
+  sd1.chvol();
+  bool any = backup_drivers(vid, pid, nullptr) > 0;
+  hid_drivers_load();
+  return any;
 }
 
 bool hid_driver_save(const hid_joy_config_t *cfg, char *path, size_t path_size)
@@ -120,29 +171,9 @@ bool hid_driver_save(const hid_joy_config_t *cfg, char *path, size_t path_size)
   if (!sd1.exists("/drivers") && !sd1.mkdir("/drivers")) return false;
 
   // other drivers for this pad would be ambiguous: keep them as *.ini.bak
-  char others[4][32];
-  uint8_t n_others = 0;
-  FsFile dir, f;
-  if (dir.open(&sd1, "/drivers")) {
-    char filename[32];
-    while (n_others < 4 && f.openNext(&dir, O_RDONLY)) {
-      bool ok = is_driver_file(f, filename, sizeof(filename)) && strcasecmp(filename, name) != 0;
-      f.close();
-      if (!ok) continue;
-      hid_joy_config_t old = hid_driver_load(filename);
-      if (old.vid == cfg->vid && old.pid == cfg->pid) strcpy(others[n_others++], filename);
-    }
-    dir.close();
-  }
-  for (uint8_t i = 0; i < n_others; i++) {
-    char from[64], to[64];
-    snprintf(from, sizeof(from), "/drivers/%s", others[i]);
-    snprintf(to, sizeof(to), "/drivers/%s.bak", others[i]);
-    if (sd1.exists(to)) sd1.remove(to);
-    d_printf("Driver %s renamed to %s", from, to); d_println();
-    sd1.rename(from, to);
-  }
+  backup_drivers(cfg->vid, cfg->pid, name);
 
+  FsFile f;
   if (!f.open(&sd1, path, O_WRONLY | O_CREAT | O_TRUNC)) return false;
   f.printf("[info]\nvid = %04x\npid = %04x\nname = mapped in the OSD\n", cfg->vid, cfg->pid);
   if (cfg->report_id >= 0) f.printf("report_id = %d\n", cfg->report_id);
@@ -174,8 +205,8 @@ void hid_drivers_dump()
   }
   d_printf("Loaded %d drivers", t->len); d_println();
   for (uint8_t i=0; i<t->len; i++) {
-    const hid_joy_config_t &d = t->list[i];
-    d_printf("Driver for %04x:%04x, report id %d, %u rules:", d.vid, d.pid, d.report_id, d.count); d_println();
+    const hid_joy_config_t &d = t->list[i].cfg;
+    d_printf("Driver %s for %04x:%04x, report id %d, %u rules:", t->list[i].file, d.vid, d.pid, d.report_id, d.count); d_println();
     for (uint8_t j=0; j<d.count; j++) {
       const hid_joy_rule_t &r = d.rules[j];
       d_printf("Button %d byte %d type %d value %d arg %d", r.btn, r.pos, r.type, r.val, r.arg);

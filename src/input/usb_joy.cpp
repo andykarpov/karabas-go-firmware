@@ -29,3 +29,11 @@ void usb_joy_snapshot(uint16_t buttons[2]) {
   slots.snapshot(buttons);
   spin_unlock(joy_lock, save);
 }
+
+void usb_joy_ports(usb_joy_port_t ports[2]) {
+  uint32_t save = spin_lock_blocking(joy_lock);
+  for (uint8_t i = 0; i < 2; i++) {
+    if (!slots.get(i, ports[i].address, ports[i].instance, ports[i].xinput)) ports[i] = {};
+  }
+  spin_unlock(joy_lock, save);
+}
