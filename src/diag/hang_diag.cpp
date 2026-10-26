@@ -42,7 +42,7 @@ void hang_mark(uint16_t where) {
   beat(1);
 }
 
-void hang_beat_core1() { beat(2); }
+void hang_beat_core1() { if (armed) beat(2); } // the USB task starts before the report is read
 
 static repeating_timer_t irq_timer;
 static bool irq_beat(repeating_timer_t *t) { beat(3); return true; }
