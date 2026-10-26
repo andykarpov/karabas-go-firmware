@@ -94,6 +94,7 @@ static void btn_run(uint8_t i, uint8_t action) {
     case BTN_ACTION_BOOTSEL:
       bk_flush();
       hang_diag_stop();
+      matrix_icon(MATRIX_ICON_BOOTSEL); // the bootloader leaves the matrix as it is
       rp2040.rebootToBootloader();
       break;
     case BTN_ACTION_MSC:

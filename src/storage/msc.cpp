@@ -30,6 +30,7 @@ void msc_init() {
 
 void msc_reboot_to_msc() {
   bk_flush();
+  matrix_icon(MATRIX_ICON_MSC);
   watchdog_hw->scratch[0] = MSC_REQUEST_MAGIC;
   rp2040.reboot();
 }
@@ -45,6 +46,7 @@ void msc_check_boot() {
 void msc_start() {
 #if ENABLE_MSC
   if (!expose_msc) return;
+  matrix_icon(MATRIX_ICON_MSC);
   ejected = false;
   uint32_t block_count = sd1.card()->sectorCount();
   usb_msc.setCapacity(0, block_count, 512);
@@ -86,6 +88,7 @@ bool msc_tick() {
 // return number of copied bytes (must be multiple of block size)
 int32_t msc_read_cb_sd (uint32_t lba, void* buffer, uint32_t bufsize)
 {
+  if (!expose_msc) return -1; // ejected: the card is being handed back to the firmware
   bool rc;
   rc = sd1.card()->readSectors(lba, (uint8_t*) buffer, bufsize/512);
   return rc ? bufsize : -1;
@@ -96,6 +99,7 @@ int32_t msc_read_cb_sd (uint32_t lba, void* buffer, uint32_t bufsize)
 // return number of written bytes (must be multiple of block size)
 int32_t msc_write_cb_sd (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
 {
+  if (!expose_msc) return -1;
   bool rc;
   rc = sd1.card()->writeSectors(lba, buffer, bufsize/512);
   return rc ? bufsize : -1;
@@ -123,7 +127,12 @@ bool msc_start_stop_cb_sd(uint8_t power_condition, bool start, bool load_eject) 
     {
       // unload disk storage
       if (expose_msc) {
+        // DEDICATED_SPI keeps a multi-sector read / write open between the calls: end it, or
+        // the card is still in it after the reboot and the bitstream read of the boot core
+        // stops half way (CONF_DONE timeout). The read / write callbacks run in this task too.
         expose_msc = false;
+        usb_msc.setUnitReady(0, false);
+        sd1.card()->syncDevice();
         ejected = true;
       }
     }

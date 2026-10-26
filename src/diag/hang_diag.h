@@ -14,6 +14,7 @@
 
 void hang_diag_report();   // at boot: logs the last hang, if any, and clears the box
 void hang_diag_start();    // with debug=1: the watchdog and its task
+void hang_diag_halt(const char *msg); // halt(): keeps its message (a literal) for the next boot
 void hang_diag_stop();     // before a reboot into BOOTSEL: the bootloader must not be reset
 void hang_mark(uint16_t where); // APP only: (tick << 8) | step
 void hang_step(uint8_t step);    // APP only: a step inside the current tick

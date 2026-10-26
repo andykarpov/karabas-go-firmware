@@ -330,6 +330,7 @@ void loop() {
 }
 
 void halt(const char* msg) {
+  hang_diag_halt(msg);
   d_println(msg);
   d_flush();
   bool blink = false;

@@ -10,6 +10,7 @@
 #define MATRIX_MODE_DRAW 1
 #define MATRIX_MODE_AUDIO 2
 #define MATRIX_MODE_LOADING 3 // core load in progress: the loader draws its progress bar
+#define MATRIX_MODE_ICON 4    // a static icon (msc, bootsel): nothing is redrawn
 
 #define MATRIX_FRAME_MS 20      // frame period
 #define MATRIX_SCROLL_FRAMES 5  // scroll text one pixel every 5 frames (100 ms)
@@ -168,6 +169,46 @@ void matrix_on_configure_done(uint8_t core_type) {
     audio_l = 32000;
     audio_r = 32000;
   }
+}
+
+// 16x8 icons: G green, R red, Y yellow, anything else off
+static const char *const matrix_icons[][8] = {
+  { // MATRIX_ICON_MSC: the SD card goes to the PC
+    "GGGGG...........",
+    "G.G.GG......Y...",
+    "G.G.G.G.....YY..",
+    "G.....G.YYYYYYY.",
+    "G.....G.YYYYYYY.",
+    "G.....G.....YY..",
+    "G.....G.....Y...",
+    "GGGGGGG.........",
+  },
+  { // MATRIX_ICON_BOOTSEL: the firmware goes into the chip
+    ".........R.R.R..",
+    "....Y...RRRRRRR.",
+    "....YY..R.....R.",
+    "YYYYYYY.R.....R.",
+    "YYYYYYY.R.....R.",
+    "....YY..R.....R.",
+    "....Y...RRRRRRR.",
+    ".........R.R.R..",
+  },
+};
+
+void matrix_icon(uint8_t icon) {
+  if (!has_matrix || icon >= sizeof(matrix_icons) / sizeof(matrix_icons[0])) return;
+  I2cGuard i2c;
+  matrix_mode = MATRIX_MODE_ICON;
+  matrix.clear();
+  for (uint8_t y=0; y<8; y++) {
+    for (uint8_t x=0; x<16; x++) {
+      char c = matrix_icons[icon][y][x];
+      if (c == 'G') matrix.drawPixel(x, y, LED_GREEN);
+      else if (c == 'R') matrix.drawPixel(x, y, LED_RED);
+      else if (c == 'Y') matrix.drawPixel(x, y, LED_YELLOW);
+    }
+  }
+  matrix.writeDisplay();
 }
 
 bool matrix_present() {
