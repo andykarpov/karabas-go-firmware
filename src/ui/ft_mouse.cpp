@@ -9,7 +9,7 @@
 #define POINTER_H 17
 #define FRAME_OFFSET (POINTER_OFFSET + 0x400)
 #define FRAME_MAX 8192 // the display list RAM
-static_assert(KEY4_OFFSET + KEY4_SIZE <= POINTER_OFFSET, "the pointer overlaps the sounds in GRAM");
+static_assert(KEY4_OFFSET + KEY4_PCM_SIZE <= POINTER_OFFSET, "the pointer overlaps the sounds in GRAM");
 static_assert(FRAME_OFFSET + FRAME_MAX <= 0x100000, "the kept frame is past the GRAM");
 
 #define HIDE_MS 5000

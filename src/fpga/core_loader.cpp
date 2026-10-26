@@ -380,7 +380,8 @@ void read_core(const char* filename) {
             (unsigned long) (ft.initClockHz() / 1000), ft.initAttempts()); d_println();
           ft.vga(true);
         } else {
-          d_printf("FT81x IC did not found (%u attempts)", ft.initAttempts()); d_println();
+          d_printf("FT81x IC did not found (%u attempts, last system clock %lu kHz)", ft.initAttempts(),
+            (unsigned long) (ft.initClockHz() / 1000)); d_println();
           ft.vga(false);
           ft.spi(false);
         }

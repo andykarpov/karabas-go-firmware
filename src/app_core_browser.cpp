@@ -105,14 +105,19 @@ void app_core_browser_menu(uint8_t vpos) {
   zxosd.update();
 }
 
+static_assert(KEY1_PCM_START + KEY1_PCM_SIZE <= sizeof(key1Data), "sound 1 is past its array");
+static_assert(KEY2_PCM_START + KEY2_PCM_SIZE <= sizeof(key2Data), "sound 2 is past its array");
+static_assert(KEY3_PCM_START + KEY3_PCM_SIZE <= sizeof(key3Data), "sound 3 is past its array");
+static_assert(KEY4_PCM_START + KEY4_PCM_SIZE <= sizeof(key4Data), "sound 4 is past its array");
+
 void app_core_browser_ft_load() {
   ft.setSound(FT81x_SOUND_COWBELL, 60);
   ft.loadImage(LOGO_OFFSET, LOGO_SIZE, logoData, false); // karabas logo, starts from 0 in GRAM
   ft.loadImage(BG_OFFSET, BG_SIZE, bgData, false); // karabas bg, starts after logo in GRAM
-  ft.writeGRAM(KEY1_OFFSET, KEY1_SIZE, key1Data); // pcm sound, starts from after logo and bg in GRAM
-  ft.writeGRAM(KEY2_OFFSET, KEY2_SIZE, key2Data); // pcm sound, starts from after logo and bg in GRAM
-  ft.writeGRAM(KEY3_OFFSET, KEY3_SIZE, key3Data); // pcm sound, starts from after logo and bg in GRAM
-  ft.writeGRAM(KEY4_OFFSET, KEY4_SIZE, key4Data); // pcm sound, starts from after logo and bg in GRAM
+  ft.writeGRAM(KEY1_OFFSET, KEY1_PCM_SIZE, key1Data + KEY1_PCM_START); // pcm sound, starts from after logo and bg in GRAM
+  ft.writeGRAM(KEY2_OFFSET, KEY2_PCM_SIZE, key2Data + KEY2_PCM_START); // pcm sound, starts from after logo and bg in GRAM
+  ft.writeGRAM(KEY3_OFFSET, KEY3_PCM_SIZE, key3Data + KEY3_PCM_START); // pcm sound, starts from after logo and bg in GRAM
+  ft.writeGRAM(KEY4_OFFSET, KEY4_PCM_SIZE, key4Data + KEY4_PCM_START); // pcm sound, starts from after logo and bg in GRAM
   ft_mouse_load();
 }
 
@@ -148,33 +153,34 @@ void app_core_browser_ft_sound(uint8_t sound, bool wait) {
   uint32_t key_size, key_samplerate, key_duration, key_offset;
   switch (sound) {
     case 2:
-      key_size = KEY2_SIZE;
+      key_size = KEY2_PCM_SIZE;
       key_samplerate = KEY2_SAMPLERATE;
       key_duration = KEY2_DURATION;
       key_offset = KEY2_OFFSET;
       break;
     case 3:
-      key_size = KEY3_SIZE;
+      key_size = KEY3_PCM_SIZE;
       key_samplerate = KEY3_SAMPLERATE;
       key_duration = KEY3_DURATION;
       key_offset = KEY3_OFFSET;
       break;
     case 4:
-      key_size = KEY4_SIZE;
+      key_size = KEY4_PCM_SIZE;
       key_samplerate = KEY4_SAMPLERATE;
       key_duration = KEY4_DURATION;
       key_offset = KEY4_OFFSET;
       break;
     default:
-      key_size = KEY1_SIZE;
+      key_size = KEY1_PCM_SIZE;
       key_samplerate = KEY1_SAMPLERATE;
       key_duration = KEY1_DURATION;
       key_offset = KEY1_OFFSET;
   }
-  ft.playAudio(key_offset, key_size, key_samplerate, FT81x_AUDIO_FORMAT_ULAW, false);
+  // a length that is not a multiple of 8 plays on past the sound (the last few samples go)
+  ft.playAudio(key_offset, key_size & ~7u, key_samplerate, FT81x_AUDIO_FORMAT_ULAW, false);
   if (wait) {
     delay(key_duration);
-    ft.stopSound();
+    ft.stopAudio(); // not stopSound(): that silences the click effect (REG_SOUND) instead
   }
 }
 
