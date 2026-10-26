@@ -16,14 +16,14 @@
 // settings of the chosen one on the right. Every change shows at once (the theme, the clock, the
 // buttons), Save writes karabas.ini, Cancel drops the changes (Esc asks first). A new video mode
 // is tried first and kept only when confirmed; it falls back after a timeout.
-// The pages after the settings (Clock, Wi-Fi) are their own modules (ui/ft_page.h); their changes
-// are done at once. The gamepad mapper is still in the text menu ("Text setup").
+// The pages after the settings (Clock, Wi-Fi, Gamepad) are their own modules (ui/ft_page.h);
+// their changes are done at once, as in the text menu.
 // The mouse: a click on a section opens it, on a setting picks it (and does Enter when it is
 // picked), on a toggle or an arrow changes it; the wheel changes the setting under the pointer
 // or the section; the sliders of a color follow a drag; the right button is Esc.
 
 // T_PAGES: the settings pages; then the pages of their own modules
-enum { T_SYSTEM, T_AUTOLOAD, T_DISPLAY, T_SOUND, T_THEME, T_PAGES, T_CLOCK = T_PAGES, T_WIFI, T_TEXT, T_SAVE, T_CANCEL, T_COUNT };
+enum { T_SYSTEM, T_AUTOLOAD, T_DISPLAY, T_SOUND, T_THEME, T_PAGES, T_CLOCK = T_PAGES, T_WIFI, T_PAD, T_SAVE, T_CANCEL, T_COUNT };
 
 // where the keys go
 enum { F_TABS, F_PAGE, F_COLOR, F_DIALOG, F_CUSTOM };
@@ -59,9 +59,9 @@ static const page_t pages[T_PAGES] = {
   PAGE("Theme", page_theme),
 };
 
-static const ft_page_t *const custom_pages[T_TEXT - T_PAGES] = { &ft_page_clock, &ft_page_wifi };
+static const ft_page_t *const custom_pages[T_SAVE - T_PAGES] = { &ft_page_clock, &ft_page_wifi, &ft_page_pad };
 
-static const char *const tab_names[T_COUNT] = { "System", "Autoload", "Display", "Sound", "Theme", "Clock", "Wi-Fi", "Text setup", "Save", "Cancel" };
+static const char *const tab_names[T_COUNT] = { "System", "Autoload", "Display", "Sound", "Theme", "Clock", "Wi-Fi", "Gamepad", "Save", "Cancel" };
 
 #define TOP 88
 #define TAB_X 16
@@ -69,7 +69,7 @@ static const char *const tab_names[T_COUNT] = { "System", "Autoload", "Display",
 #define TAB_H 32 // at most, as TAB_STEP: less where the tabs do not fit (640x480)
 #define TAB_STEP 40
 #define FOOTER_H 56
-#define TAB_GAP 12 // before Text setup
+#define TAB_GAP 12 // before Save
 #define PANEL_X (TAB_X + TAB_W + 16)
 #define PANEL_MAX_W 560
 #define ROW_H 32
@@ -111,7 +111,7 @@ static uint16_t panel_w() {
 
 static uint8_t cur_id() { return pages[tab].ids[row]; }
 
-static const ft_page_t *custom_page() { return tab >= T_PAGES && tab < T_TEXT ? custom_pages[tab - T_PAGES] : nullptr; }
+static const ft_page_t *custom_page() { return tab >= T_PAGES && tab < T_SAVE ? custom_pages[tab - T_PAGES] : nullptr; }
 
 static int16_t tab_step() {
   int16_t step = (ft.height() - FOOTER_H - TOP - TAB_GAP) / T_COUNT;
@@ -120,7 +120,7 @@ static int16_t tab_step() {
 
 static int16_t tab_h() { return tab_step() - (TAB_STEP - TAB_H); }
 
-static int16_t tab_y(uint8_t i) { return TOP + i * tab_step() + (i >= T_TEXT ? TAB_GAP : 0); }
+static int16_t tab_y(uint8_t i) { return TOP + i * tab_step() + (i >= T_SAVE ? TAB_GAP : 0); }
 
 static void draw_tabs() {
   for (uint8_t i = 0; i < T_COUNT; i++) {
@@ -275,7 +275,6 @@ static void draw_footer() {
   switch (focus) {
     case F_TABS:
       hint = custom_page() ? "Enter: open" :
-             tab == T_TEXT ? "Gamepads (drops the changes)" :
              tab == T_SAVE ? "Write the settings to karabas.ini" :
              tab == T_CANCEL ? "Drop the changes" : "";
       keys = "Up/Down: section   Enter: open   Esc: cancel";
@@ -376,12 +375,6 @@ void app_ft_setup_tick() {
 
 static void open_tab() {
   switch (tab) {
-    case T_TEXT:
-      has_ft = false;
-      ft.vga(false);
-      ft.spi(false);
-      osd_state = state_setup;
-      break;
     case T_SAVE:
       if (save_setup(s)) { leave(); return; }
       error = "Can't save karabas.ini";
@@ -455,7 +448,7 @@ static void handle(const keys_t &k) {
     case F_TABS:
       if (up) tab = (tab + T_COUNT - 1) % T_COUNT;
       else if (down || k.tab) tab = (tab + 1) % T_COUNT;
-      else if (enter || (right && tab < T_TEXT)) open_tab();
+      else if (enter || (right && tab < T_SAVE)) open_tab();
       else if (esc && settings_differ(s, hw_setup)) { focus = F_DIALOG; dialog = D_DROP; dialog_left = false; }
       else if (esc) leave();
       break;
@@ -563,7 +556,7 @@ static bool click(int16_t id) {
   if (id >= HIT_TAB && id < HIT_TAB + T_COUNT) {
     to_tabs();
     tab = id - HIT_TAB;
-    if (tab >= T_TEXT) open_tab();
+    if (tab >= T_SAVE) open_tab();
   } else if (id == HIT_PANEL) {
     open_tab();
   } else if (id >= FT_PAGE_HIT && focus == F_CUSTOM) {
