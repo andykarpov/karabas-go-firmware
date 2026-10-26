@@ -1,5 +1,7 @@
 #include "main.h"
 #include "i2c_bus.h"
+#include "kg_matrix.h"
+#include "matrix_fx.h"
 
 // Optional dot matrix addon (2x HT16K33 bi-color 8x8), see MATRIX.md
 //
@@ -7,37 +9,63 @@
 // matrix_frame() (MATRIX task): every access to `matrix` holds the I2C lock.
 
 #define MATRIX_MODE_SCROLL 0
-#define MATRIX_MODE_DRAW 1
-#define MATRIX_MODE_AUDIO 2
+#define MATRIX_MODE_DRAW 1    // the core draws (CMD_MATRIX_PIXEL / BITPLAN)
+#define MATRIX_MODE_AUDIO 2   // the audio meters of the core
 #define MATRIX_MODE_LOADING 3 // core load in progress: the loader draws its progress bar
 #define MATRIX_MODE_ICON 4    // a static icon (msc, bootsel): nothing is redrawn
+#define MATRIX_MODE_EFFECT 5
+#define MATRIX_MODE_IMAGE 6
+#define MATRIX_MODE_BLANK 7
 
 #define MATRIX_FRAME_MS 20      // frame period
-#define MATRIX_SCROLL_FRAMES 5  // scroll text one pixel every 5 frames (100 ms)
+#define MATRIX_SCROLL_FRAMES 5  // default: scroll text one pixel every 5 frames (100 ms)
+#define MATRIX_IMAGE_FRAMES 10  // default: next image frame every 10 frames (200 ms)
 #define MATRIX_POLL_FRAMES 5    // poll the buttons every 5 frames (100 ms)
 
 static MultiMatrixDisplay matrix = MultiMatrixDisplay();
 static bool has_matrix = false;
 static volatile uint8_t matrix_mode = MATRIX_MODE_SCROLL;
 static volatile uint16_t audio_l, audio_r; // peak meters: raised by APP, decayed by matrix_frame
-static const String matrix_msg = "KARABAS GO ";
-static const int matrix_msg_width = matrix_msg.length() * 6; // 6 pixels per character width
-static int matrix_msg_scrollpos = 16;
+
+// the settings of the core (core.json "matrix", FILE_POS_MATRIX), set by read_core()
+static kg_matrix_cfg_t cfg;
+static char cfg_name[32+1], cfg_build[8+1];
+static uint8_t cfg_core_type;
+
+// the boot core without settings: the scroll of old
+static const char *const matrix_boot_text = "KARABAS GO ";
+
+// the running mode: steps every `step_frames` frames, `repeat` passes / loops (0 = forever)
+static uint16_t step_frames, step_count;
+static uint8_t passes;
+
+static GFXcanvas1 text_canvas(16, 8);
+static const char *scroll_src;
+static uint8_t scroll_color, scroll_repeat;
+static char scroll_text[128];
+static int scroll_width;
+static int scroll_pos;
+
+static matrix_fx_t fx;
+static uint8_t image_frame;
 
 void matrix_init()
 {
   if (has_matrix) {
-    // todo: get from global config ?
-    matrix.setTextWrap(false);
-    matrix.setTextSize(1);
-    matrix.setTextColor(LED_YELLOW);
-    matrix.setBrightness(4); // safe enough
+    matrix.setBrightness(cfg.brightness); // KG_MATRIX_DEFAULT_BRIGHTNESS (4) is safe enough
+    text_canvas.setTextWrap(false);
   }
+}
+
+// the core draws or shows its meters only in the "core" mode of its settings
+static bool core_owns_matrix() {
+  return matrix_mode == MATRIX_MODE_AUDIO || matrix_mode == MATRIX_MODE_DRAW;
 }
 
 void matrix_ctl_data(uint8_t addr, uint8_t data) {
   if (has_matrix) {
     I2cGuard i2c;
+    if (!core_owns_matrix()) return;
     if (bitRead(data, 0)) matrix.clear(); 
     if (bitRead(data, 1)) matrix.writeDisplay();
     if (bitRead(data, 2)) matrix.setBrightness(data >> 4);
@@ -57,12 +85,17 @@ void matrix_ctl_data(uint8_t addr, uint8_t data) {
 void matrix_pixel_data(uint8_t x, uint8_t y, uint8_t color) {
   if (has_matrix) {
     I2cGuard i2c;
+    if (!core_owns_matrix()) return;
+    matrix_mode = MATRIX_MODE_DRAW;
     matrix.drawPixel(x, y, color);
   }
 }
 
 void matrix_bitplan_data(uint8_t addr, uint8_t data) {
   if (has_matrix) {
+    I2cGuard i2c;
+    if (!core_owns_matrix()) return;
+    matrix_mode = MATRIX_MODE_DRAW;
     // todo:
     // addr 0-7:   matrix1, red
     // addr 8-15:  matrix1, green
@@ -108,16 +141,114 @@ void matrix_draw_audio() {
   audio_r = (audio_r > decay_r) ? audio_r - decay_r : 0;
 }
 
-void matrix_scroll_text()
+static const uint8_t led_colors[4] = {LED_OFF, LED_RED, LED_GREEN, LED_YELLOW}; // by KG_MX_*
+
+// the text of the next pass, with {time} etc. of now
+static void scroll_pass_start() {
+  kg_matrix_vars_t vars = {cfg_name, cfg_build, zxrtc.getHour(), zxrtc.getMinute(), zxrtc.getDay(), zxrtc.getMonth(), (uint16_t) (2000 + zxrtc.getYear())};
+  kg_matrix_expand(scroll_src, &vars, scroll_text, sizeof(scroll_text));
+  scroll_width = strlen(scroll_text) * 6; // 6 pixels per character width
+  scroll_pos = 16;
+}
+
+// one pixel to the left; true after the last pixel of a pass
+static bool matrix_scroll_text()
 {
+  text_canvas.fillScreen(0);
+  text_canvas.setCursor(scroll_pos, 0);
+  text_canvas.print(scroll_text);
   matrix.clear();
-  matrix.setCursor(matrix_msg_scrollpos, 0);
-  matrix.print(matrix_msg);
+  for (uint8_t y=0; y<8; y++) {
+    for (uint8_t x=0; x<16; x++) {
+      if (text_canvas.getPixel(x, y)) {
+        int ch = (x - scroll_pos) / 6;
+        matrix.drawPixel(x, y, led_colors[kg_matrix_text_color(scroll_color, x, ch)]);
+      }
+    }
+  }
   matrix.writeDisplay();
-  if (matrix_msg_scrollpos >= -matrix_msg_width) {
-    matrix_msg_scrollpos--;
-  } else {
-    matrix_msg_scrollpos = 16;
+  if (scroll_pos >= -scroll_width) {
+    scroll_pos--;
+    return false;
+  }
+  return true;
+}
+
+static void matrix_draw_image() {
+  matrix.clear();
+  for (uint8_t y=0; y<8; y++) {
+    for (uint8_t x=0; x<16; x++) {
+      matrix.drawPixel(x, y, led_colors[kg_matrix_frame_pixel(cfg.frames[image_frame], x, y)]);
+    }
+  }
+  matrix.writeDisplay();
+}
+
+static void matrix_draw_fx() {
+  matrix_fx_time_t t = {zxrtc.getHour(), zxrtc.getMinute(), zxrtc.getSecond()};
+  matrix_fx_step(&fx, &t);
+  matrix.clear();
+  for (uint8_t y=0; y<8; y++) {
+    for (uint8_t x=0; x<16; x++) {
+      if (fx.fb[y][x]) matrix.drawPixel(x, y, led_colors[fx.fb[y][x]]);
+    }
+  }
+  matrix.writeDisplay();
+}
+
+static void matrix_start(uint8_t mode);
+
+// a pass of the scroll / a loop of the animation is over: after `repeat` of them, `then`
+static void matrix_pass_done(uint8_t repeat) {
+  passes++;
+  if (repeat > 0 && passes >= repeat) {
+    matrix_start(cfg.then);
+  }
+}
+
+// start a mode of the settings (KG_MATRIX_MODE_*); with the I2C lock held
+static void matrix_start(uint8_t mode) {
+  matrix.clear();
+  matrix.writeDisplay();
+  passes = 0;
+  step_count = 0;
+  switch (mode) {
+    case KG_MATRIX_MODE_SCROLL:
+      scroll_src = cfg.text;
+      scroll_color = cfg.color;
+      scroll_repeat = cfg.repeat;
+      step_frames = cfg.speed ? cfg.speed : MATRIX_SCROLL_FRAMES;
+      scroll_pass_start();
+      matrix_mode = MATRIX_MODE_SCROLL;
+      break;
+    case KG_MATRIX_MODE_EFFECT:
+      matrix_fx_init(&fx, cfg.effect, cfg.color < KG_MATRIX_COLOR_RAINBOW ? cfg.color : KG_MX_OFF, time_us_32());
+      step_frames = cfg.speed ? cfg.speed : matrix_fx_default_speed(cfg.effect);
+      step_count = step_frames - 1; // the first step at the next frame
+      matrix_mode = MATRIX_MODE_EFFECT;
+      break;
+    case KG_MATRIX_MODE_IMAGE:
+      image_frame = 0;
+      step_frames = cfg.speed ? cfg.speed : MATRIX_IMAGE_FRAMES;
+      matrix_draw_image();
+      matrix_mode = MATRIX_MODE_IMAGE;
+      break;
+    case KG_MATRIX_MODE_BLANK:
+      matrix_mode = MATRIX_MODE_BLANK;
+      break;
+    default: // core
+      if (cfg_core_type == CORE_TYPE_BOOT) {
+        scroll_src = matrix_boot_text;
+        scroll_color = KG_MATRIX_COLOR_DEFAULT;
+        scroll_repeat = 0;
+        step_frames = MATRIX_SCROLL_FRAMES;
+        scroll_pass_start();
+        matrix_mode = MATRIX_MODE_SCROLL;
+      } else {
+        matrix_mode = MATRIX_MODE_AUDIO;
+        audio_l = 32000;
+        audio_r = 32000;
+      }
   }
 }
 
@@ -130,13 +261,17 @@ void matrix_begin() {
     d_println("Matrix display was not found");
   }
 
+  // until the first core is loaded: the boot scroll
+  cfg.brightness = KG_MATRIX_DEFAULT_BRIGHTNESS;
+  cfg_core_type = CORE_TYPE_BOOT;
   matrix_init();
+  if (has_matrix) matrix_start(KG_MATRIX_MODE_CORE);
 }
 
 void matrix_register_handlers() {
   link_on(CMD_MATRIX_CTL, matrix_ctl_data);
-  link_on(CMD_MATRIX_PIXEL, [](uint8_t addr, uint8_t data) { matrix_mode = MATRIX_MODE_DRAW; matrix_pixel_data(addr & 0x0F, addr >> 4, data & 0x03); });
-  link_on(CMD_MATRIX_BITPLAN, [](uint8_t addr, uint8_t data) { matrix_mode = MATRIX_MODE_DRAW; matrix_bitplan_data(addr & 0x1F, data); });
+  link_on(CMD_MATRIX_PIXEL, [](uint8_t addr, uint8_t data) { matrix_pixel_data(addr & 0x0F, addr >> 4, data & 0x03); });
+  link_on(CMD_MATRIX_BITPLAN, [](uint8_t addr, uint8_t data) { matrix_bitplan_data(addr & 0x1F, data); });
   link_on(CMD_AUDIO_PEAKS_L, [](uint8_t addr, uint8_t data) { uint16_t new_audio = ((uint16_t)(addr) << 8) | (uint16_t)data; if (new_audio > audio_l) audio_l = new_audio; });
   link_on(CMD_AUDIO_PEAKS_R, [](uint8_t addr, uint8_t data) { uint16_t new_audio = ((uint16_t)(addr) << 8) | (uint16_t)data; if (new_audio > audio_r) audio_r = new_audio; });
 }
@@ -148,6 +283,13 @@ void matrix_progress(uint32_t val, uint32_t max) {
     matrix.drawLine(0, 1, map(val, 0, max, 0, 15), 1, LED_GREEN);
     matrix.writeDisplay();
   }
+}
+
+void matrix_set_config(const kg_matrix_cfg_t *c, const char *name, const char *build) {
+  I2cGuard i2c;
+  cfg = *c;
+  strlcpy(cfg_name, name, sizeof(cfg_name));
+  strlcpy(cfg_build, build, sizeof(cfg_build));
 }
 
 void matrix_on_configure_start() {
@@ -163,11 +305,8 @@ void matrix_on_configure_done(uint8_t core_type) {
   if (has_matrix) {
     I2cGuard i2c;
     matrix_init();
-    matrix.clear();
-    matrix.writeDisplay();
-    matrix_mode = (core_type == CORE_TYPE_BOOT) ? MATRIX_MODE_SCROLL : MATRIX_MODE_AUDIO;
-    audio_l = 32000;
-    audio_r = 32000;
+    cfg_core_type = core_type;
+    matrix_start(cfg.mode);
   }
 }
 
@@ -215,8 +354,8 @@ bool matrix_present() {
   return has_matrix;
 }
 
-// one display frame, called every MATRIX_FRAME_MS (scroll and button poll are counted in
-// frames, so they stay evenly spaced however the frames are scheduled)
+// one display frame, called every MATRIX_FRAME_MS (the steps of the modes and the button poll
+// are counted in frames, so they stay evenly spaced however the frames are scheduled)
 void matrix_frame() {
   if (!has_matrix) return;
   static uint32_t frame = 0;
@@ -231,8 +370,26 @@ void matrix_frame() {
         matrix_draw_audio();
         break;
       case MATRIX_MODE_SCROLL:
-        if (frame % MATRIX_SCROLL_FRAMES == 0) {
-          matrix_scroll_text();
+        if (++step_count >= step_frames) {
+          step_count = 0;
+          if (matrix_scroll_text()) {
+            scroll_pass_start();
+            matrix_pass_done(scroll_repeat);
+          }
+        }
+        break;
+      case MATRIX_MODE_EFFECT:
+        if (++step_count >= step_frames) {
+          step_count = 0;
+          matrix_draw_fx();
+        }
+        break;
+      case MATRIX_MODE_IMAGE:
+        if (++step_count >= step_frames) {
+          step_count = 0;
+          image_frame = (image_frame + 1) % cfg.frame_count;
+          if (cfg.frame_count > 1) matrix_draw_image();
+          if (image_frame == 0) matrix_pass_done(cfg.repeat);
         }
         break;
     }

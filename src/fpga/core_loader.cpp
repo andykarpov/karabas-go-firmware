@@ -242,6 +242,23 @@ static void read_buttons() {
   }
 }
 
+// the LED matrix settings; zeros (older core files): the core draws
+static void read_matrix() {
+  static const char *const modes[KG_MATRIX_MODE_COUNT] = {"core", "scroll", "effect", "image", "blank"};
+  static uint8_t block[KG_MATRIX_BLOCK_SIZE];
+  static kg_matrix_cfg_t cfg;
+  file_seek(FILE_POS_MATRIX);
+  file_read_bytes((char *) block, sizeof(block));
+  kg_matrix_parse(block, &cfg);
+  matrix_set_config(&cfg, core.name, core.build);
+  d_printf("Matrix: %s", modes[cfg.mode]);
+  if (cfg.mode == KG_MATRIX_MODE_SCROLL) d_printf(" \"%s\"", cfg.text);
+  if (cfg.mode == KG_MATRIX_MODE_EFFECT) d_printf(" %u", cfg.effect);
+  if (cfg.mode == KG_MATRIX_MODE_IMAGE) d_printf(" %u frame(s)", cfg.frame_count);
+  if (cfg.repeat) d_printf(", %u times, then %s", cfg.repeat, modes[cfg.then]);
+  d_println();
+}
+
 void read_core(const char* filename) {
 
   sd1.chvol();
@@ -286,6 +303,7 @@ void read_core(const char* filename) {
   for (uint8_t i=0; i<32; i++) { if ((uint8_t) core.save_dir[i] == 0xFF) { core.save_dir[i] = '\0'; break; } }
   link_set_freq(core.spi_freq);
   read_buttons();
+  read_matrix();
   uint32_t roms_len = file_read32(FILE_POS_ROM_LEN);
   uint32_t offset = FILE_POS_BITSTREAM_START + core.bitstream_length + roms_len;
   //d_print("OSD section: "); d_println(offset);
