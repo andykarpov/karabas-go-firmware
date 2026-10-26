@@ -43,6 +43,7 @@ private:
   osd_cb event;
   bool is_started = false;
   bool has_eeprom = false;
+  bool has_clock = false;
 
   uint8_t rtc_year = 0;
   uint8_t rtc_month = 0;
@@ -89,6 +90,8 @@ public:
 
   void begin(spi_cb act, osd_cb evt);
   bool started();
+  bool hasClock(); // the DS3231 answered at begin()
+  bool now(DateTime &dt); // the last time read, false without a clock
   void handle();
 
   void save();

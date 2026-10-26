@@ -82,6 +82,7 @@ extern "C" void ft812_bus_unlock(void);
 // KTOME addition
 #define BLEND_FUNC(src, dst) ((0x0BL << 24) | (src << 3) | (dst))
 #define VERTEX_FORMAT(frac) ((0x27L << 24) | ((frac) & 7)) ///< Fraction bits of VERTEX2F (4, 1/16 px, by default)
+#define BITMAP_SIZE_H(w, h) ((0x29L << 24) | (((uint32_t)(w) & 3) << 2) | ((uint32_t)(h) & 3)) ///< Bits 9-10 of the BITMAP_SIZE width / height
 #define CMD_ROTATE()         0xffffff29
 #define CMD_TRANSLATE()      0xffffff27
 
@@ -105,32 +106,23 @@ const uint8_t ADDR_CONTROL_REGISTER = 0x00;
 // the clock the FT812 gets, f_mul multiplies it (6 -> 48 MHz)
 #define FT81x_REF_CLOCK_HZ 8000000UL
 
+// Only the two modes that monitors take as standard, with the FT812 within its 60 MHz:
+// at 80 MHz (800x600 at 1:2) it dropped pixels and drew stray rectangles. The 8 MHz input gives
+// no 25.175 MHz for 640x480: it runs at 24 MHz with the VESA line (800 clocks) and a shorter
+// vertical blanking (500 lines), 60 Hz; a monitor took none of the longer lines or 26.67 MHz.
+// 800x600 is VESA exactly, at 1:1: the system clock is the pixel clock, so the frames must stay
+// light (the background gradient is a bitmap, CMD_GRADIENT left busy lines unfinished).
 const ft_mode_t ft_modes[] =
 {
   // f_mul, f_div, h_fporch, h_sync, h_bporch, h_visible, v_fporch, v_sync, v_bporch, v_visible
-  {6,  2, 16, 96,  48,  640,  11, 2, 31, 480},   //  0: 640x480@57Hz (48MHz) pclk 24
-  {8,  2, 24, 40,  128, 640,  9,  3, 28, 480},   //  1: 640x480@74Hz (64MHz) pclk 32
-  {8,  2, 16, 96,  48,  640,  11, 2, 31, 480},   //  2: 640x480@76Hz (64MHz) pclk 32
-  {5,  1, 40, 128, 88,  800,  1,  4, 23, 600},   //  3: 800x600@60Hz (40MHz) pclk 40
-  {10, 2, 40, 128, 88,  800,  1,  4, 23, 600},   //  4: 800x600@60Hz (80MHz) pclk 40
-  {6,  1, 56, 120, 64,  800,  37, 6, 23, 600},   //  5: 800x600@69Hz (48MHz) pclk 48
-  {7,  1, 32, 64,  152, 800,  1,  3, 27, 600},   //  6: 800x600@85Hz (56MHz) pclk 56
-  {8,  1, 24, 136, 160, 1024, 3,  6, 29, 768},   //  7: 1024x768@59Hz (64MHz) pclk 64
-  {9,  1, 24, 136, 144, 1024, 3,  6, 29, 768},   //  8: 1024x768@67Hz (72MHz) pclk 72
-  {10, 1, 16, 96,  176, 1024, 1,  3, 28, 768},   //  9: 1024x768@76Hz (80MHz) pclk 80
-  {7,  1, 24, 56,  124, 640,  1,  3, 38, 1024},  // 10: 1280/2x1024@60Hz (56MHz) pclk 56
-  {9, 1, 110, 40,  220, 1280, 5,  5, 20, 720},   // 11: 1280x720@58Hz (72MHz) pclk 72
-  {9,  1, 93, 40,  187, 1280, 5,  5, 20, 720},   // 12: 1280x720@60Hz (72MHz) pclk 72
-  {5,  1, 40, 128, 88,  800,  1,  4, 23, 748},   // 13: 800x600@48.7Hz (40MHz)  - for ZX-Evo sync pclk 40
-  {8,  1, 24, 136, 160, 1024, 3,  6, 29, 938},   // 14: 1024x768@48.7Hz (64MHz) - for ZX-Evo sync pclk 64
+  {6,  2, 16, 96,  48,  640, 2,  2, 16, 480},   //  0: 640x480@60Hz (48MHz) pclk 24, 800x500
+  {5,  1, 40, 128, 88,  800, 1,  4, 23, 600},   //  1: 800x600@60Hz (40MHz) pclk 40, 1056x628
 };
 
 // in the order of ft_modes
 static const char *const ft_mode_names[] =
 {
-  "640x480@57", "640x480@74", "640x480@76", "800x600@60", "800x600@60/80", "800x600@69",
-  "800x600@85", "1024x768@59", "1024x768@67", "1024x768@76", "640x1024@60", "1280x720@58",
-  "1280x720@60", "800x600@48.7", "1024x768@48.7",
+  "640x480@60", "800x600@60",
 };
 
 static_assert(sizeof(ft_mode_names) / sizeof(ft_mode_names[0]) == sizeof(ft_modes) / sizeof(ft_modes[0]),
@@ -600,6 +592,20 @@ void FT812::drawBitmapARGB4(const uint32_t offset, const int16_t x, const int16_
     intermediateCmd(VERTEX2F(x, y));
     intermediateCmd(VERTEX_FORMAT(4));
     endCmd(END());
+}
+
+void FT812::drawBitmapRGB565RepeatX(const uint32_t offset, const int16_t x, const int16_t y, const uint16_t bitmapWidth, const uint16_t height, const uint16_t width) {
+    startCmd(COLOR(FT81x_COLOR_RGB(255, 255, 255)));
+    intermediateCmd(BITMAP_SOURCE(FT81x_RAM_G + offset));
+    intermediateCmd(BITMAP_LAYOUT(FT81x_BITMAP_LAYOUT_RGB565, (uint32_t)bitmapWidth * 2, (uint32_t)height));
+    intermediateCmd(BITMAP_SIZE(FT81x_BITMAP_SIZE_NEAREST, 1, 0, (uint32_t)width, (uint32_t)height)); // repeat in x
+    intermediateCmd(BITMAP_SIZE_H((uint32_t)width >> 9, (uint32_t)height >> 9));
+    intermediateCmd(BEGIN(BITMAPS));
+    intermediateCmd(VERTEX_FORMAT(0));
+    intermediateCmd(VERTEX2F(x, y));
+    intermediateCmd(VERTEX_FORMAT(4));
+    intermediateCmd(END());
+    endCmd(BITMAP_SIZE_H(0, 0)); // the other bitmaps of the handle set only the low bits
 }
 
 void FT812::cmdMemcpy(const uint32_t dest, const uint32_t src, const uint32_t size) {

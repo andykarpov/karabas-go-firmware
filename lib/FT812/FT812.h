@@ -648,6 +648,12 @@ public:
     void drawBitmapARGB4(const uint32_t offset, const int16_t x, const int16_t y, const uint16_t width, const uint16_t height);
 
     /*!
+        @brief  Draw an RGB565 bitmap from GRAM (bitmapWidth a power of 2, height up to 511)
+                repeated across width pixels; with the identity bitmap transform
+    */
+    void drawBitmapRGB565RepeatX(const uint32_t offset, const int16_t x, const int16_t y, const uint16_t bitmapWidth, const uint16_t height, const uint16_t width);
+
+    /*!
         @brief  Keeping a frame: displayListSize() waits for the coprocessor and gives the bytes of
                 the display list built so far; cmdMemcpy(dest, FT81x_RAM_DL, size) copies it to GRAM,
                 cmdAppend() puts it into a later display list
