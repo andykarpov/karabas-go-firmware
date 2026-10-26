@@ -9,13 +9,19 @@
 #define MSC_REQUEST_MAGIC 0x4B47534D  // "MSGK": the first card
 #define MSC2_REQUEST_MAGIC 0x4B47324D // "M2GK": the second card
 #define MSC_FAILED_REBOOT_MS 5000     // no second card: the screen says so, then back to the menu
+#define MSC_EJECT_REBOOT_MS 5000      // after an eject, at the latest
 
 static Adafruit_USBD_MSC usb_msc;
 static bool expose_msc = false;
 static uint8_t card = 1;
 static bool failed = false;
 static ElapsedTimer failed_timer;
-static bool ejected = false;
+// The reboot after an eject waits until the host lets the device go (unmounted or suspended:
+// Windows "Safely Remove" ends with the port disabled), or MSC_EJECT_REBOOT_MS (Linux, the
+// Eject of the drive in Explorer). Gone at once, the device hung the Windows 10 removal (msc2).
+static volatile bool ejected = false;   // set by the USBD task
+static volatile uint32_t eject_ms = 0;
+static volatile bool host_gone = false; // the host let the device go after the eject (USBD task)
 static bool msc_blink = false;
 static ElapsedTimer msc_blink_timer;
 
@@ -89,8 +95,12 @@ bool msc_failed() {
 // returns true while in msc mode (the rest of the main loop is skipped)
 bool msc_tick() {
   // if eject event registered - reboot rp2040
-  if (ejected || (failed && failed_timer.elapsed() >= MSC_FAILED_REBOOT_MS)) {
-    ejected = false;
+  if (ejected && (host_gone || millis() - eject_ms >= MSC_EJECT_REBOOT_MS)) {
+    d_println(host_gone ? "MSC: the host let the device go, reboot" : "MSC: reboot after the eject");
+    d_flush();
+    rp2040.reboot();
+  }
+  if (failed && failed_timer.elapsed() >= MSC_FAILED_REBOOT_MS) {
     rp2040.reboot();
   }
 
@@ -106,6 +116,7 @@ bool msc_tick() {
     // do not process other loop things until exit from msc mode
     return true;
   }
+  if (ejected) return true; // waits for the reboot
 #endif
   return false;
 }
@@ -145,9 +156,8 @@ void msc_flush_cb_sd (void)
 }
 
 bool msc_start_stop_cb_sd(uint8_t power_condition, bool start, bool load_eject) {
-  //d_printf("Start stop msc %d %d %d", power_condition, start, load_eject);
-  //d_println(); d_flush();
-  (void) power_condition;
+  d_printf("MSC: start/stop, power condition %u, start %u, eject %u", power_condition, start, load_eject);
+  d_println();
 
   if ( load_eject )
   {
@@ -165,12 +175,25 @@ bool msc_start_stop_cb_sd(uint8_t power_condition, bool start, bool load_eject) 
         usb_msc.setUnitReady(0, false);
         if (card == 2) sd2_sync();
         else sd1.card()->syncDevice();
+        eject_ms = millis();
         ejected = true;
       }
     }
   }
 
   return true;
+}
+
+// TinyUSB, in the USBD task: the host let the device go
+extern "C" void tud_umount_cb(void) {
+  d_println("USB: unmounted by the host");
+  if (ejected) host_gone = true;
+}
+
+extern "C" void tud_suspend_cb(bool remote_wakeup_en) {
+  (void) remote_wakeup_en;
+  d_println("USB: suspended by the host");
+  if (ejected) host_gone = true;
 }
 #endif
 
