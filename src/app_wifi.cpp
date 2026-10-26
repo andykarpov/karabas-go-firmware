@@ -14,9 +14,11 @@
 // Setup > Setup Wi-Fi (BOOT core only, it bridges the ESP8266 UART): the module status, a scan,
 // the password of the chosen network, the join. The ESP keeps the network in its flash and joins
 // it on start (CWAUTOCONN); Forget turns that off and leaves the network. On the way in, the hardware flow control of the ESP is turned on:
-// the cores stop it with CTS when their receive fifo is nearly full.
+// the cores stop it with CTS when their receive fifo is nearly full. Update module (when joined):
+// the AT firmware from Espressif's server (periph/esp_update); Reset module: AT+RESTORE,
+// for modules whose saved settings got broken. The status is asked again after both.
 
-enum { W_INIT, W_NO_ESP, W_STATUS, W_SCAN, W_LIST, W_SSID, W_PASS, W_JOIN, W_RESULT, W_FORGET };
+enum { W_INIT, W_NO_ESP, W_STATUS, W_SCAN, W_LIST, W_SSID, W_PASS, W_JOIN, W_RESULT, W_FORGET, W_UPD_ASK, W_UPD, W_UPD_END };
 
 // the AT steps, run one after the other from the tick
 enum { S_NONE, S_ECHO_OFF, S_VERSION, S_FLOW_GET, S_FLOW_SET, S_MODE_GET, S_MODE_SET, S_JAP_GET, S_IP_GET, S_SCAN, S_JOIN, S_AUTOCONN, S_UNAUTO, S_QAP };
@@ -41,7 +43,15 @@ static bool from_list; // the password screen was opened from the list (not for 
 static uint8_t sel;
 static uint8_t top;
 
+// the buttons of the status screen; Forget and Update only when joined
+enum { M_SCAN, M_HIDDEN, M_FORGET, M_UPDATE, M_RESET, M_COUNT };
+static const char *const menu_names[M_COUNT] = { "Scan networks", "Hidden network", "Forget network", "Update module", "Reset module" };
+static bool restoring;       // the reset screens, not the update ones
+
 static char version[16];
+static char old_version[16]; // before the update
+static uint8_t upd_percent;  // drawn last
+static const char *upd_message;
 static uint8_t cts;
 static int mode;
 static int flow;
@@ -71,6 +81,15 @@ static void on_join(const char *line) { int e = kg_esp_join_error(line); if (e >
 static void on_scan(const char *line) {
   kg_wifi_ap_t ap;
   if (kg_esp_parse_cwlap(line, &ap)) kg_wifi_ap_add(aps, &aps_len, AP_MAX, &ap);
+}
+
+static uint8_t menu_items(uint8_t *ids) {
+  uint8_t n = 0;
+  ids[n++] = M_SCAN;
+  ids[n++] = M_HIDDEN;
+  if (cur_ssid[0]) { ids[n++] = M_FORGET; ids[n++] = M_UPDATE; }
+  ids[n++] = M_RESET;
+  return n;
 }
 
 static void run(uint8_t s) {
@@ -185,7 +204,18 @@ static void step_done(uint8_t r) {
   }
 }
 
+static void update_tick() {
+  uint8_t r = esp_update_poll();
+  if (r == ESP_UPD_BUSY) {
+    uint8_t p = esp_update_progress();
+    if (p != upd_percent || esp_update_message() != upd_message) draw();
+    return;
+  }
+  show(W_UPD_END);
+}
+
 void app_wifi_tick() {
+  if (screen == W_UPD) { update_tick(); return; }
   if (step == S_NONE) return;
   if (!step_started) { start_step(); return; }
   uint8_t r = esp_at_poll();
@@ -288,9 +318,10 @@ static void draw() {
                 cts == CTS_ON ? OSD::COLOR_CYAN_I : OSD::COLOR_RED_I);
       draw_info(10, "Network", cur_ssid[0] ? cur_ssid : "not connected", cur_ssid[0] ? OSD::COLOR_CYAN_I : OSD::COLOR_GREY);
       draw_info(11, "IP", ip[0] && strcmp(ip, "0.0.0.0") != 0 ? ip : "-");
-      ui_button(1, 14, MENU_WIDTH, "Scan networks", sel == 0);
-      ui_button(1, 16, MENU_WIDTH, "Hidden network", sel == 1);
-      if (cur_ssid[0]) ui_button(1, 18, MENU_WIDTH, "Forget network", sel == 2);
+      {
+        uint8_t ids[M_COUNT], n = menu_items(ids);
+        for (uint8_t i = 0; i < n; i++) ui_button(1, 14 + 2 * i, MENU_WIDTH, menu_names[ids[i]], sel == i);
+      }
       draw_footer("Enter: select", "Esc: back");
       break;
     case W_SCAN:
@@ -342,6 +373,46 @@ static void draw() {
       ui_button(12, 15, BTN_WIDTH, "Cancel", sel == 1);
       draw_footer("Left/Right: select", "Enter: OK, Esc: back");
       break;
+    case W_UPD_ASK:
+      if (restoring) {
+        draw_message(8, "Erase the ESP8266 settings?", OSD::COLOR_YELLOW_I);
+        draw_message(10, "For modules that do not keep", OSD::COLOR_GREY);
+        draw_message(11, "their settings. It forgets", OSD::COLOR_GREY);
+        draw_message(12, "the network: join it again.", OSD::COLOR_GREY);
+      } else {
+        draw_message(8, "Update the ESP8266 firmware?", OSD::COLOR_YELLOW_I);
+        draw_info(10, "Module", version[0] ? version : "?");
+        draw_message(12, "From the Espressif server,", OSD::COLOR_GREY);
+        draw_message(13, "about half a minute.", OSD::COLOR_GREY);
+        draw_message(14, "Do not power off the board.", OSD::COLOR_GREY);
+      }
+      ui_button(1, 17, BTN_WIDTH, restoring ? "Erase" : "Update", sel == 0);
+      ui_button(12, 17, BTN_WIDTH, "Cancel", sel == 1);
+      draw_footer("Left/Right: select", "Enter: OK, Esc: back");
+      break;
+    case W_UPD:
+      upd_percent = esp_update_progress();
+      upd_message = esp_update_message();
+      draw_message(8, upd_message ? upd_message : "", OSD::COLOR_YELLOW_I);
+      zxosd.progress(1, 10, 26, upd_percent, 100, OSD::COLOR_CYAN_I, OSD::COLOR_BLACK);
+      zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+      zxosd.setPos(28, 10); zxosd.printf("%3u%%", upd_percent);
+      draw_message(12, "Do not power off the board", OSD::COLOR_GREY);
+      draw_footer("Please wait", "");
+      break;
+    case W_UPD_END: {
+      bool ok = esp_update_poll() == ESP_UPD_OK;
+      draw_message(8, esp_update_message(), ok ? OSD::COLOR_GREEN_I : OSD::COLOR_RED_I);
+      if (!restoring) {
+        draw_info(10, ok ? "Was" : "Module", old_version[0] ? old_version : "?");
+        if (ok) draw_info(11, "Now", esp_update_version()[0] ? esp_update_version() : "?");
+      } else if (ok) {
+        draw_message(10, "Join the network again", OSD::COLOR_GREY);
+      }
+      ui_button(1, 14, BTN_WIDTH, "OK", true);
+      draw_footer("Enter: back", "");
+      break;
+    }
   }
   zxosd.update();
 }
@@ -373,9 +444,10 @@ void app_wifi_overlay() {
 
 static void back() {
   switch (screen) {
-    case W_LIST: case W_SSID: case W_RESULT: case W_FORGET: show(W_STATUS); break;
+    case W_LIST: case W_SSID: case W_RESULT: case W_FORGET: case W_UPD_ASK: show(W_STATUS); break;
     case W_PASS: show(from_list ? W_LIST : W_SSID); break;
-    case W_JOIN: break; // the join finishes or times out
+    case W_JOIN: case W_UPD: break; // the join / the update finishes or times out
+    case W_UPD_END: esp_update_cancel(); start_init(); break; // the new firmware may have lost the CTS
     default:
       run(S_NONE);
       osd_state = state_setup;
@@ -418,15 +490,31 @@ static void on_key(uint8_t key, bool shift) {
       if (enter) start_init();
       break;
     case W_STATUS: {
-      uint8_t items = cur_ssid[0] ? 3 : 2;
+      uint8_t ids[M_COUNT], items = menu_items(ids);
+      uint8_t id = ids[sel < items ? sel : 0];
       if (key == KEY_UP) sel = sel ? sel - 1 : items - 1;
       else if (key == KEY_DOWN || key == KEY_TAB) sel = (sel + 1) % items;
-      else if (enter && sel == 0) { show(W_SCAN); run(S_SCAN); return; }
-      else if (enter && sel == 1) { ssid[0] = '\0'; show(W_SSID); return; }
-      else if (enter && sel == 2) { screen = W_FORGET; sel = 1; } // Cancel first
+      else if (enter && id == M_SCAN) { show(W_SCAN); run(S_SCAN); return; }
+      else if (enter && id == M_HIDDEN) { ssid[0] = '\0'; show(W_SSID); return; }
+      else if (enter && id == M_FORGET) { screen = W_FORGET; sel = 1; } // Cancel first
+      else if (enter) { restoring = id == M_RESET; screen = W_UPD_ASK; sel = 1; }
       draw();
       break;
     }
+    case W_UPD_ASK:
+      if (key == KEY_LEFT || key == KEY_RIGHT || key == KEY_TAB) sel ^= 1;
+      else if (enter && sel == 0) {
+        strlcpy(old_version, version, sizeof(old_version));
+        if (restoring) esp_restore_start(); else esp_update_start();
+        show(W_UPD);
+        return;
+      }
+      else if (enter) { show(W_STATUS); return; }
+      draw();
+      break;
+    case W_UPD_END:
+      if (enter) back();
+      break;
     case W_FORGET:
       if (key == KEY_LEFT || key == KEY_RIGHT || key == KEY_TAB) sel ^= 1;
       else if (enter && sel == 0) { show(W_INIT); run(S_UNAUTO); return; }

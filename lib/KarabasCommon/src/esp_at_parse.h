@@ -49,6 +49,17 @@ bool kg_esp_parse_version(const char *line, char *version, size_t size);
 // 1970.
 bool kg_esp_parse_sntptime(const char *line, kg_datetime_t *t);
 
+// +CIPUPDATE:3 (the stages of AT+CIUPDATE: 1 server found, 2 connected, 3 got the version,
+// 4 downloading) -> true and the stage, also a negative one (an error of some versions)
+bool kg_esp_parse_ciupdate(const char *line, int *stage);
+
+// The stages of a module update for the progress bar: the command sent, the stages of
+// +CIPUPDATE 1..4, the restart after its OK, done.
+enum { KG_ESP_UPD_SENT = 0, KG_ESP_UPD_DOWNLOAD = 4, KG_ESP_UPD_RESTART, KG_ESP_UPD_DONE };
+// 0..100 for a stage reached ms ago. The module says nothing while it downloads (about 20 s on
+// a module tried): that part goes by the time, slower and slower, and stays below 90 until OK.
+uint8_t kg_esp_update_progress(uint8_t stage, uint32_t ms);
+
 // s quoted for an AT string argument: '"', ',' and '\' get a '\' before them. out must hold
 // 2 * strlen(s) + 1 bytes to never cut it.
 void kg_esp_quote(const char *s, char *out, size_t size);
