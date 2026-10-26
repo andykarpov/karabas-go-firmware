@@ -6,17 +6,31 @@ Implemented features:
 
 - Draw an audio volume meters for the audio data from the fpga side
 - Draw a custom pixels from ZX Spectrum side
+- Per core settings (`"matrix"` of the `core.json`, see below): a scrolling text, effects, pictures and animations
 
-Expected features:
+## Modes of a core
 
-- Send text characters and run the "scroll" mode with a desired speed
+What the matrix shows is set by the `"matrix"` key of the `core.json` of a core (`make_core` in `karabas-go-tools`, the 256 bytes at 768 of the core file, `FILE_POS_MATRIX`):
 
+- `core` (the default, and the core files made before): the core draws on the matrix or shows its audio meters, as described below. The boot core scrolls `KARABAS GO`.
+- `scroll`: a text of up to 64 chars with `{name}`, `{build}`, `{time}`, `{date}`; colors `yellow`, `red`, `green`, `rainbow` (by char), `gradient` (by column); `step_ms`, `repeat`.
+- `effect`: `clock` (HH:MM, the seconds run along the bottom row), `fire`, `life` (Conway's Game of Life), `scanner`.
+- `image`: a 16x8 picture, or an animation of up to 4 frames.
+- `blank`: off.
+
+After `repeat` passes of the scroll (or loops of the animation) the matrix goes to `then`: `core`, `effect` or `blank`.
+
+```json
+"matrix": {"mode": "scroll", "text": "NES {build}", "color": "rainbow", "repeat": 2, "then": "core"}
+```
+
+The core can draw on the matrix (the registers below, `CMD_MATRIX_*`) only in the `core` mode; otherwise its writes are ignored.
 
 ## ZX Spectrum Support
 
 On the ZX Spectrum side (implemnted for TS-Conf and ZX Spectrum Next cores yet) the matrix is assessible via ZX UNO control / data ports #FC3B (64571) / #FD3B (64827) and their free registers F0, F1, F2.
 
-The defautlt mode for the dot matrix display is the Audio Volume Meter.
+In the `core` mode the dot matrix display starts with the Audio Volume Meter.
 On first data write to the control or data registers, the matrix will be switched to the custom draw mode.
 
 ### Control register 0xF0
