@@ -16,9 +16,11 @@
 // the chosen network, the join. The ESP keeps the network in its flash and joins it on start
 // (CWAUTOCONN); Forget turns that off and leaves the network. The status is asked as soon as the
 // tab is chosen, and the hardware flow control of the ESP is turned on then: the cores stop it
-// with CTS when their receive fifo is nearly full.
+// with CTS when their receive fifo is nearly full. Update module (when joined): the AT firmware
+// from Espressif's server (periph/esp_update); Reset module: AT+RESTORE,
+// for modules whose saved settings got broken. The status is asked again after both.
 
-enum { W_INIT, W_NO_ESP, W_STATUS, W_SCAN, W_LIST, W_SSID, W_PASS, W_JOIN, W_RESULT, W_FORGET };
+enum { W_INIT, W_NO_ESP, W_STATUS, W_SCAN, W_LIST, W_SSID, W_PASS, W_JOIN, W_RESULT, W_FORGET, W_UPD_ASK, W_UPD, W_UPD_END };
 
 // the AT steps, run one after the other from the tick
 enum { S_NONE, S_ECHO_OFF, S_VERSION, S_FLOW_GET, S_FLOW_SET, S_MODE_GET, S_MODE_SET, S_JAP_GET, S_IP_GET, S_SCAN, S_JOIN, S_AUTOCONN, S_UNAUTO, S_QAP };
@@ -26,7 +28,7 @@ enum { S_NONE, S_ECHO_OFF, S_VERSION, S_FLOW_GET, S_FLOW_SET, S_MODE_GET, S_MODE
 enum { CTS_UNKNOWN, CTS_ON, CTS_OFF };
 
 // the clickable areas
-enum { HIT_STATUS = 0, HIT_RETRY = 10, HIT_RESCAN, HIT_NEXT, HIT_CONNECT, HIT_SHOW, HIT_OK, HIT_FORGET, HIT_CANCEL, HIT_AP = 100 };
+enum { HIT_STATUS = 0, HIT_RETRY = 10, HIT_RESCAN, HIT_NEXT, HIT_CONNECT, HIT_SHOW, HIT_OK, HIT_FORGET, HIT_CANCEL, HIT_UPDATE, HIT_AP = 100 };
 
 #define AP_MAX 32
 #define PASS_MAX 64
@@ -38,6 +40,7 @@ enum { HIT_STATUS = 0, HIT_RETRY = 10, HIT_RESCAN, HIT_NEXT, HIT_CONNECT, HIT_SH
 #define LIST_ROW_H 30
 #define CHAR_W 13
 #define CURSOR_COLOR 0x00d8d8
+#define BAR_H 20
 
 static uint8_t screen;
 static uint8_t step;
@@ -52,7 +55,15 @@ static uint8_t top;
 static uint8_t list_rows = 8; // the rows that fit, from the last draw
 static bool on_rescan; // the list: the Rescan button has the focus (above the first network)
 
+// the buttons of the status screen; Forget and Update only when joined
+enum { M_SCAN, M_HIDDEN, M_FORGET, M_UPDATE, M_RESET, M_COUNT };
+static const char *const menu_names[M_COUNT] = { "Scan networks", "Hidden network", "Forget network", "Update module", "Reset module" };
+static bool restoring;       // the reset screens, not the update ones
+
 static char version[16];
+static char old_version[16]; // before the update
+static uint8_t upd_percent;  // drawn last
+static const char *upd_message;
 static uint8_t cts;
 static int mode;
 static int flow;
@@ -79,6 +90,15 @@ static void on_join(const char *line) { int e = kg_esp_join_error(line); if (e >
 static void on_scan(const char *line) {
   kg_wifi_ap_t ap;
   if (kg_esp_parse_cwlap(line, &ap)) kg_wifi_ap_add(aps, &aps_len, AP_MAX, &ap);
+}
+
+static uint8_t menu_items(uint8_t *ids) {
+  uint8_t n = 0;
+  ids[n++] = M_SCAN;
+  ids[n++] = M_HIDDEN;
+  if (cur_ssid[0]) { ids[n++] = M_FORGET; ids[n++] = M_UPDATE; }
+  ids[n++] = M_RESET;
+  return n;
 }
 
 static void run(uint8_t s) {
@@ -192,7 +212,10 @@ static void step_done(uint8_t r) {
 }
 
 static bool tick() {
-  if (step != S_NONE) {
+  if (screen == W_UPD) {
+    if (esp_update_poll() != ESP_UPD_BUSY) dirty = true, screen = W_UPD_END;
+    else if (esp_update_progress() != upd_percent || esp_update_message() != upd_message) dirty = true;
+  } else if (step != S_NONE) {
     if (!step_started) start_step();
     else {
       uint8_t r = esp_at_poll();
@@ -293,9 +316,12 @@ static void draw(const ft_page_ctx_t &c) {
     case W_STATUS: {
       draw_status(c, c.y);
       int16_t y = c.y + 4 * INFO_STEP + 16;
-      ft_page_button(c, x, y, BTN_W, "Scan networks", sel == 0, HIT_STATUS + 0);
-      ft_page_button(c, x, y + BTN_STEP, BTN_W, "Hidden network", sel == 1, HIT_STATUS + 1);
-      if (cur_ssid[0]) ft_page_button(c, x, y + 2 * BTN_STEP, BTN_W, "Forget network", sel == 2, HIT_STATUS + 2);
+      // two columns: five buttons do not fit one under the other in 640x480
+      uint8_t ids[M_COUNT], n = menu_items(ids), rows = (n + 1) / 2;
+      int16_t bw = (c.w - 32 - 16) / 2 < BTN_W ? (c.w - 32 - 16) / 2 : BTN_W;
+      for (uint8_t i = 0; i < n; i++) {
+        ft_page_button(c, x + (i / rows) * (bw + 16), y + (i % rows) * BTN_STEP, bw, menu_names[ids[i]], sel == i, HIT_STATUS + i);
+      }
       break;
     }
     case W_SCAN:
@@ -338,6 +364,46 @@ static void draw(const ft_page_ctx_t &c) {
       ft_page_button(c, x, c.y + 3 * INFO_STEP + 16, 140, "Forget", sel == 0, HIT_FORGET);
       ft_page_button(c, x + 156, c.y + 3 * INFO_STEP + 16, 140, "Cancel", sel == 1, HIT_CANCEL);
       break;
+    case W_UPD_ASK:
+      if (restoring) {
+        draw_message(c, c.y + INFO_STEP / 2, "Erase the ESP8266 settings?", text);
+        draw_message(c, c.y + INFO_STEP * 3 / 2, "For modules that lose settings", dim);
+        draw_message(c, c.y + INFO_STEP * 5 / 2, "The network is forgotten too,", dim);
+        draw_message(c, c.y + INFO_STEP * 7 / 2, "join it again after it", dim);
+      } else {
+        draw_message(c, c.y + INFO_STEP / 2, "Update the ESP8266 firmware?", text);
+        draw_info(c, c.y + INFO_STEP * 3 / 2, "Module", version[0] ? version : "?", text);
+        draw_message(c, c.y + INFO_STEP * 5 / 2, "From the Espressif server, ~30 s", dim);
+        draw_message(c, c.y + INFO_STEP * 7 / 2, "Do not power off the board", dim);
+      }
+      ft_page_button(c, x, c.y + 4 * INFO_STEP + 16, 140, restoring ? "Erase" : "Update", sel == 0, HIT_UPDATE);
+      ft_page_button(c, x + 156, c.y + 4 * INFO_STEP + 16, 140, "Cancel", sel == 1, HIT_CANCEL);
+      break;
+    case W_UPD: {
+      upd_percent = esp_update_progress();
+      upd_message = esp_update_message();
+      draw_message(c, c.y + INFO_STEP / 2, upd_message ? upd_message : "", text);
+      int16_t bw = c.w - 32 - 64, by = c.y + INFO_STEP + 8;
+      ft_page_rect(x, by, bw, BAR_H, 4, dim);
+      ft_page_rect(x + 2, by + 2, bw - 4, BAR_H - 4, 3, c.s->color_bg);
+      if (upd_percent > 0) ft_page_rect(x + 2, by + 2, (bw - 4) * upd_percent / 100, BAR_H - 4, 3, c.s->color_active);
+      snprintf(buf, sizeof(buf), "%u%%", upd_percent);
+      ft.drawText(x + bw + 56, by + BAR_H / 2, FT_PAGE_FONT, text, FT81x_OPT_RIGHTX | FT81x_OPT_CENTERY, buf);
+      draw_message(c, c.y + INFO_STEP * 3 + 4, "Do not power off the board", dim);
+      break;
+    }
+    case W_UPD_END: {
+      bool ok = esp_update_poll() == ESP_UPD_OK;
+      draw_message(c, c.y + INFO_STEP / 2, esp_update_message(), ok ? FT_PAGE_OK : FT_PAGE_ERROR);
+      if (!restoring) {
+        draw_info(c, c.y + INFO_STEP * 3 / 2, ok ? "Was" : "Module", old_version[0] ? old_version : "?", text);
+        if (ok) draw_info(c, c.y + INFO_STEP * 5 / 2, "Now", esp_update_version()[0] ? esp_update_version() : "?", text);
+      } else if (ok) {
+        draw_message(c, c.y + INFO_STEP * 3 / 2, "Join the network again", dim);
+      }
+      ft_page_button(c, x, c.y + 4 * INFO_STEP + 16, 140, "OK", true, HIT_OK);
+      break;
+    }
   }
 }
 
@@ -356,7 +422,8 @@ static void page_show() {
   start_init();
 }
 
-static void page_hide() { run(S_NONE); }
+// the module goes on with an update by itself
+static void page_hide() { run(S_NONE); esp_update_cancel(); }
 
 // the keys: the status is there already (or on its way)
 static void open() {
@@ -369,9 +436,10 @@ static void close() {}
 
 static void back() {
   switch (screen) {
-    case W_LIST: case W_SSID: case W_RESULT: case W_FORGET: show(W_STATUS); break;
+    case W_LIST: case W_SSID: case W_RESULT: case W_FORGET: case W_UPD_ASK: show(W_STATUS); break;
     case W_PASS: show(from_list ? W_LIST : W_SSID); break;
-    case W_JOIN: break; // the join finishes or times out
+    case W_JOIN: case W_UPD: break; // the join / the update finishes or times out
+    case W_UPD_END: esp_update_cancel(); start_init(); break; // the new firmware may have lost the CTS
     default:
       closed = true;
   }
@@ -414,9 +482,18 @@ static void edit(char *text, size_t max, uint8_t key, bool shift) {
 }
 
 static void status_enter() {
-  if (sel == 0) scan();
-  else if (sel == 1) { ssid[0] = '\0'; show(W_SSID); }
-  else if (sel == 2) { screen = W_FORGET; sel = 1; } // Cancel first
+  uint8_t ids[M_COUNT], n = menu_items(ids);
+  uint8_t id = ids[sel < n ? sel : 0];
+  if (id == M_SCAN) scan();
+  else if (id == M_HIDDEN) { ssid[0] = '\0'; show(W_SSID); }
+  else if (id == M_FORGET) { screen = W_FORGET; sel = 1; } // Cancel first
+  else { restoring = id == M_RESET; screen = W_UPD_ASK; sel = 1; }
+}
+
+static void update() {
+  strlcpy(old_version, version, sizeof(old_version));
+  if (restoring) esp_restore_start(); else esp_update_start();
+  show(W_UPD);
 }
 
 static bool key(uint8_t key, bool shift, bool joy) {
@@ -438,7 +515,7 @@ static bool key(uint8_t key, bool shift, bool joy) {
       if (enter) start_init();
       break;
     case W_STATUS: {
-      uint8_t items = cur_ssid[0] ? 3 : 2;
+      uint8_t ids[M_COUNT], items = menu_items(ids);
       if (key == KEY_UP) sel = sel ? sel - 1 : items - 1;
       else if (key == KEY_DOWN || key == KEY_TAB) sel = (sel + 1) % items;
       else if (enter) status_enter();
@@ -447,6 +524,11 @@ static bool key(uint8_t key, bool shift, bool joy) {
     case W_FORGET:
       if (key == KEY_LEFT || key == KEY_RIGHT || key == KEY_TAB) sel ^= 1;
       else if (enter && sel == 0) { show(W_INIT); run(S_UNAUTO); }
+      else if (enter) show(W_STATUS);
+      break;
+    case W_UPD_ASK:
+      if (key == KEY_LEFT || key == KEY_RIGHT || key == KEY_TAB) sel ^= 1;
+      else if (enter && sel == 0) update();
       else if (enter) show(W_STATUS);
       break;
     case W_LIST:
@@ -471,6 +553,9 @@ static bool key(uint8_t key, bool shift, bool joy) {
     case W_RESULT:
       if (enter) show(W_STATUS);
       break;
+    case W_UPD_END:
+      if (enter) back();
+      break;
   }
   dirty = false; // the setup draws after a key
   return true;
@@ -482,7 +567,7 @@ static bool click(int16_t id) {
     on_rescan = false;
     if (i == sel) join_ap(i);
     else sel = i;
-  } else if (id >= HIT_STATUS && id < HIT_STATUS + 3) {
+  } else if (id >= HIT_STATUS && id < HIT_STATUS + M_COUNT) {
     sel = id - HIT_STATUS;
     status_enter();
   } else {
@@ -492,7 +577,9 @@ static bool click(int16_t id) {
       case HIT_NEXT: if (ssid[0]) open_pass(ssid, false); break;
       case HIT_CONNECT: join(); break;
       case HIT_SHOW: show_pass = !show_pass; break;
-      case HIT_OK: case HIT_CANCEL: show(W_STATUS); break;
+      case HIT_OK: if (screen == W_UPD_END) back(); else show(W_STATUS); break;
+      case HIT_CANCEL: show(W_STATUS); break;
+      case HIT_UPDATE: update(); break;
       case HIT_FORGET: show(W_INIT); run(S_UNAUTO); break;
     }
   }
@@ -510,6 +597,8 @@ static void wheel(int16_t id, int d) {
 static const char *hint() {
   switch (screen) {
     case W_INIT: case W_SCAN: case W_JOIN: return "Please wait";
+    case W_UPD: return "Please wait, do not power off the board";
+    case W_UPD_ASK: return restoring ? "AT+RESTORE: the network, the mode and the UART settings" : "The module keeps its old firmware if the download fails";
     case W_LIST: return "* password, joined in color";
     case W_SSID: return "Pad: Up/Down: char   Right: add   Left: delete";
     case W_PASS: return show_pass ? "Tab: hide the password" : "Tab: show the password";
@@ -522,8 +611,9 @@ static const char *keys() {
     case W_LIST: return "Up/Down: select   Enter: connect   R: rescan   Esc: back";
     case W_SSID: return "Enter: next   Esc: back";
     case W_PASS: return "Enter: connect   Esc: back";
-    case W_FORGET: return "Left/Right: select   Enter: OK   Esc: back";
-    case W_JOIN: return "";
+    case W_FORGET: case W_UPD_ASK: return "Left/Right: select   Enter: OK   Esc: back";
+    case W_JOIN: case W_UPD: return "";
+    case W_UPD_END: return "Enter: OK";
     default: return "Up/Down: select   Enter: OK   Esc: back";
   }
 }

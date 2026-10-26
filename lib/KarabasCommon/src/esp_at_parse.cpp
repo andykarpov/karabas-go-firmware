@@ -129,6 +129,34 @@ bool kg_esp_parse_version(const char *line, char *version, size_t size) {
   return true;
 }
 
+bool kg_esp_parse_ciupdate(const char *line, int *stage) {
+  if (!starts_with(line, "+CIPUPDATE:")) return false;
+  const char *p = line + 11;
+  if (!is_digit(*p) && !(*p == '-' && is_digit(p[1]))) return false;
+  *stage = atoi(p);
+  return true;
+}
+
+#define UPD_SERVER_MS 10000   // the command to stage 1 (8 s on the module tried)
+#define UPD_DOWNLOAD_MS 20000 // stage 4 to OK (17 s)
+#define UPD_RESTART_MS 8000   // OK to the module answering again (4 s)
+
+uint8_t kg_esp_update_progress(uint8_t stage, uint32_t ms) {
+  switch (stage) {
+    case KG_ESP_UPD_SENT: return ms >= UPD_SERVER_MS ? 10 : ms * 10 / UPD_SERVER_MS;
+    case 1: return 12;
+    case 2: return 16;
+    case 3: return 20;
+    case KG_ESP_UPD_DOWNLOAD:
+      if (ms < UPD_DOWNLOAD_MS) return 20 + ms * 65 / UPD_DOWNLOAD_MS;
+      // past the guess: towards 90, never there
+      return 85 + (uint32_t) 5 * (ms - UPD_DOWNLOAD_MS) / (ms - UPD_DOWNLOAD_MS + UPD_DOWNLOAD_MS);
+    case KG_ESP_UPD_RESTART: return ms >= UPD_RESTART_MS ? 98 : 90 + ms * 8 / UPD_RESTART_MS;
+    case KG_ESP_UPD_DONE: return 100;
+  }
+  return 0;
+}
+
 bool kg_esp_parse_sntptime(const char *line, kg_datetime_t *t) {
   static const char *const months = "JanFebMarAprMayJunJulAugSepOctNovDec";
   const char *prefix = "+CIPSNTPTIME:";

@@ -125,6 +125,42 @@ static void test_quote() {
   TEST_ASSERT_EQUAL_STRING("abc", out);
 }
 
+static void test_ciupdate() {
+  int st = 0;
+  TEST_ASSERT_TRUE(kg_esp_parse_ciupdate("+CIPUPDATE:1", &st));
+  TEST_ASSERT_EQUAL(1, st);
+  TEST_ASSERT_TRUE(kg_esp_parse_ciupdate("+CIPUPDATE:4", &st));
+  TEST_ASSERT_EQUAL(4, st);
+  TEST_ASSERT_TRUE(kg_esp_parse_ciupdate("+CIPUPDATE:-1", &st));
+  TEST_ASSERT_EQUAL(-1, st);
+  TEST_ASSERT_FALSE(kg_esp_parse_ciupdate("+CIPUPDATE:", &st));
+  TEST_ASSERT_FALSE(kg_esp_parse_ciupdate("AT+CIUPDATE", &st));
+  TEST_ASSERT_FALSE(kg_esp_parse_ciupdate("OK", &st));
+}
+
+static void test_update_progress() {
+  TEST_ASSERT_EQUAL(0, kg_esp_update_progress(KG_ESP_UPD_SENT, 0));
+  TEST_ASSERT_EQUAL(5, kg_esp_update_progress(KG_ESP_UPD_SENT, 5000));
+  TEST_ASSERT_EQUAL(10, kg_esp_update_progress(KG_ESP_UPD_SENT, 60000));
+  TEST_ASSERT_EQUAL(12, kg_esp_update_progress(1, 0));
+  TEST_ASSERT_EQUAL(20, kg_esp_update_progress(3, 100));
+  TEST_ASSERT_EQUAL(20, kg_esp_update_progress(KG_ESP_UPD_DOWNLOAD, 0));
+  TEST_ASSERT_EQUAL(52, kg_esp_update_progress(KG_ESP_UPD_DOWNLOAD, 10000));
+  TEST_ASSERT_EQUAL(85, kg_esp_update_progress(KG_ESP_UPD_DOWNLOAD, 20000));
+  TEST_ASSERT_EQUAL(87, kg_esp_update_progress(KG_ESP_UPD_DOWNLOAD, 40000));
+  TEST_ASSERT_EQUAL(89, kg_esp_update_progress(KG_ESP_UPD_DOWNLOAD, 300000));
+  // it only grows while downloading
+  uint8_t prev = 0;
+  for (uint32_t ms = 0; ms <= 300000; ms += 500) {
+    uint8_t p = kg_esp_update_progress(KG_ESP_UPD_DOWNLOAD, ms);
+    TEST_ASSERT_TRUE(p >= prev && p < 90);
+    prev = p;
+  }
+  TEST_ASSERT_EQUAL(90, kg_esp_update_progress(KG_ESP_UPD_RESTART, 0));
+  TEST_ASSERT_EQUAL(98, kg_esp_update_progress(KG_ESP_UPD_RESTART, 30000));
+  TEST_ASSERT_EQUAL(100, kg_esp_update_progress(KG_ESP_UPD_DONE, 0));
+}
+
 static void test_hid_ascii() {
   TEST_ASSERT_EQUAL('a', kg_hid_ascii(0x04, false));
   TEST_ASSERT_EQUAL('Z', kg_hid_ascii(0x1d, true));
@@ -151,6 +187,8 @@ int main() {
   RUN_TEST(test_status_lines);
   RUN_TEST(test_sntptime);
   RUN_TEST(test_quote);
+  RUN_TEST(test_ciupdate);
+  RUN_TEST(test_update_progress);
   RUN_TEST(test_hid_ascii);
   return UNITY_END();
 }
