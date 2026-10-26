@@ -10,8 +10,9 @@ on-screen menus, handles the keyboards, mice and joysticks and the real-time clo
 the running core over SPI.
 
 **[USB gamepad mapper](https://andykarpov.github.io/karabas-go-firmware/hidmapper/)**: map a USB
-HID gamepad in the browser and download its driver ini for `/drivers/` on the SD card. Most pads
-work without one, see [USB HID gamepads](docs/usb_gamepads.md).
+HID gamepad in the browser and download its driver ini for `/drivers/` on the SD card. It is
+rarely needed now: most pads work without an ini, and the board maps a pad itself in Setup >
+Map USB gamepad (text and graphic menus), see [USB HID gamepads](docs/usb_gamepads.md).
 
 ## Boards
 
@@ -34,7 +35,7 @@ work without one, see [USB HID gamepads](docs/usb_gamepads.md).
 - **Input.**
   - USB keyboards (including NKRO) and mice.
   - USB HID gamepads: mapped by default from their HID descriptor, or with a driver ini
-    from the [mapper](https://andykarpov.github.io/karabas-go-firmware/hidmapper/) or the OSD.
+    learned in the OSD (or from the [browser mapper](https://andykarpov.github.io/karabas-go-firmware/hidmapper/)).
   - XInput pads (the Xbox 360 wired protocol, e.g. 8BitDo M30 2.4G).
   - PS/2 keyboards.
   - Sega joysticks on the joystick ports (Karabas Go).
