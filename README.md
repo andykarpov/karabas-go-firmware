@@ -118,6 +118,7 @@ long, or the whole file is ignored.
 | --- | --- | --- |
 | `[setup]` | `debug` | `1`: debug log on the USB serial port |
 | | `dvi_only` | `1`: the cores drop the HDMI frames (audio, info) and output plain DVI |
+| | `tz` | UTC offset for NTP sync, set in Setup RTC / the Clock page, e.g. `+03:00`, `-04:30`; no daylight saving |
 | `[ft812]` | `enabled` | `1`: graphical core browser on the FT812 |
 | | `video_mode` | FT812 video mode: `0` 640x480@60, `1` 800x600@60 |
 | | `sound`, `click` | menu sounds |

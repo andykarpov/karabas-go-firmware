@@ -94,6 +94,29 @@ static void test_status_lines() {
   TEST_ASSERT_EQUAL_STRING("2.2.0.0", s);
 }
 
+static void test_sntptime() {
+  kg_datetime_t t;
+  TEST_ASSERT_TRUE(kg_esp_parse_sntptime("+CIPSNTPTIME:Mon Oct 26 18:46:23 2026", &t));
+  TEST_ASSERT_EQUAL(2026, t.year); TEST_ASSERT_EQUAL(10, t.month); TEST_ASSERT_EQUAL(26, t.day);
+  TEST_ASSERT_EQUAL(18, t.hour); TEST_ASSERT_EQUAL(46, t.minute); TEST_ASSERT_EQUAL(23, t.second);
+  // AT 1.x pads the day with a space
+  TEST_ASSERT_TRUE(kg_esp_parse_sntptime("+CIPSNTPTIME:Thu Aug  4 04:08:05 2016", &t));
+  TEST_ASSERT_EQUAL(2016, t.year); TEST_ASSERT_EQUAL(8, t.month); TEST_ASSERT_EQUAL(4, t.day);
+  TEST_ASSERT_EQUAL(4, t.hour); TEST_ASSERT_EQUAL(8, t.minute); TEST_ASSERT_EQUAL(5, t.second);
+  TEST_ASSERT_TRUE(kg_esp_parse_sntptime("+CIPSNTPTIME:Sat Jan 01 00:00:00 2000", &t));
+  TEST_ASSERT_EQUAL(1, t.month);
+  TEST_ASSERT_TRUE(kg_esp_parse_sntptime("+CIPSNTPTIME:Fri Dec 31 23:59:59 2099", &t));
+  TEST_ASSERT_EQUAL(12, t.month);
+  // not synced yet
+  TEST_ASSERT_FALSE(kg_esp_parse_sntptime("+CIPSNTPTIME:Thu Jan 01 00:00:03 1970", &t));
+  TEST_ASSERT_FALSE(kg_esp_parse_sntptime("+CIPSNTPTIME:Mon Foo 26 18:46:23 2026", &t));
+  TEST_ASSERT_FALSE(kg_esp_parse_sntptime("+CIPSNTPTIME:Mon ctN 26 18:46:23 2026", &t));
+  TEST_ASSERT_FALSE(kg_esp_parse_sntptime("+CIPSNTPTIME:Mon Oct 26 24:46:23 2026", &t));
+  TEST_ASSERT_FALSE(kg_esp_parse_sntptime("+CIPSNTPTIME:Mon Oct 26 18:46", &t));
+  TEST_ASSERT_FALSE(kg_esp_parse_sntptime("AT+CIPSNTPTIME?", &t));
+  TEST_ASSERT_FALSE(kg_esp_parse_sntptime("+TIME_UPDATED", &t));
+}
+
 static void test_quote() {
   char out[32];
   kg_esp_quote("pa\"ss,w\\d", out, sizeof(out));
@@ -126,6 +149,7 @@ int main() {
   RUN_TEST(test_cwlap);
   RUN_TEST(test_ap_list);
   RUN_TEST(test_status_lines);
+  RUN_TEST(test_sntptime);
   RUN_TEST(test_quote);
   RUN_TEST(test_hid_ascii);
   return UNITY_END();

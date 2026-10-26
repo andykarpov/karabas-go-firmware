@@ -18,18 +18,23 @@ static const char *const lines[] = {
 };
 static const uint8_t lines_len = sizeof(lines) / sizeof(lines[0]);
 
+// the graphic screen; on_time() redraws it for the clock
+void app_msc_ft_draw() {
+  ft.beginDisplayList();
+  app_core_browser_ft_background(hw_setup);
+  app_core_browser_ft_decor(hw_setup, true);
+  uint16_t y = ft.height() / 2 - 80;
+  ft.drawText(ft.width() / 2, y, 30, hw_setup.color_text, FT81x_OPT_CENTER, "USB mass storage");
+  for (uint8_t i = 0; i < lines_len; i++) {
+    ft.drawText(ft.width() / 2, y + 50 + i * 24, 28, hw_setup.color_text, FT81x_OPT_CENTER, lines[i]);
+  }
+  ft.swapScreen();
+}
+
 void app_msc_overlay() {
   if (has_ft) {
     app_core_browser_ft_load();
-    ft.beginDisplayList();
-    app_core_browser_ft_background(hw_setup);
-    app_core_browser_ft_decor(hw_setup, true);
-    uint16_t y = ft.height() / 2 - 80;
-    ft.drawText(ft.width() / 2, y, 30, hw_setup.color_text, FT81x_OPT_CENTER, "USB mass storage");
-    for (uint8_t i = 0; i < lines_len; i++) {
-      ft.drawText(ft.width() / 2, y + 50 + i * 24, 28, hw_setup.color_text, FT81x_OPT_CENTER, lines[i]);
-    }
-    ft.swapScreen();
+    app_msc_ft_draw();
     return;
   }
 

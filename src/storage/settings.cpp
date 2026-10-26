@@ -1,6 +1,7 @@
 #include "main.h"
 #include <IniFile.h>
 #include "ini_update.h"
+#include "time_zone.h"
 
 // karabas.ini
 
@@ -39,6 +40,7 @@ void load_setup() {
   hw_setup.color_copyright = 0x00787878;  
 
   hw_setup.dvi_only = false;
+  hw_setup.tz = 0;
 
   hw_setup.matrix_enabled = true;
   hw_setup.matrix_brightness = 0;
@@ -65,6 +67,8 @@ void load_setup() {
 
     ini.getValue("setup", "debug", buffer, bufferLen, hw_setup.debug_enabled);
     ini.getValue("setup", "dvi_only", buffer, bufferLen, hw_setup.dvi_only);
+    int tz;
+    if (ini.getValue("setup", "tz", buffer, bufferLen) && kg_tz_parse(buffer, &tz)) hw_setup.tz = tz;
 
     
     ini.getValue("ft812", "enabled", buffer, bufferLen, hw_setup.ft_enabled);
@@ -103,6 +107,7 @@ void load_setup() {
     d_println("Setup:");
     d_print("Debug enabled: "); d_println(hw_setup.debug_enabled ? "yes" : "no"); 
     d_print("DVI only: "); d_println(hw_setup.dvi_only ? "yes" : "no"); 
+    d_print("Time zone (minutes): "); d_println(hw_setup.tz);
     d_print("FT812 enabled: "); d_println(hw_setup.ft_enabled ? "yes" : "no"); 
     d_print("FT812 video mode: "); d_println(hw_setup.ft_video_mode);
     d_print("FT812 sound: "); d_println(hw_setup.ft_sound); 
@@ -162,11 +167,16 @@ static void add_color(kg_ini_item_t *items, uint8_t &count, const char *key, uin
 }
 
 bool save_setup(const setup_t &s) {
-  kg_ini_item_t items[28];
+  kg_ini_item_t items[29];
   uint8_t count = 0;
   const setup_t &o = hw_setup;
   add_bool(items, count, "setup", "debug", s.debug_enabled, o.debug_enabled);
   add_bool(items, count, "setup", "dvi_only", s.dvi_only, o.dvi_only);
+  if (s.tz != o.tz) {
+    char buf[8];
+    kg_tz_format(s.tz, buf, sizeof(buf));
+    add_item(items, count, "setup", "tz", buf);
+  }
   add_bool(items, count, "ft812", "enabled", s.ft_enabled, o.ft_enabled);
   add_uint(items, count, "ft812", "video_mode", s.ft_video_mode, o.ft_video_mode);
   add_uint(items, count, "ft812", "sound", s.ft_sound, o.ft_sound);

@@ -1,6 +1,7 @@
 #include "esp_at_parse.h"
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 static bool starts_with(const char *s, const char *prefix) {
   return strncmp(s, prefix, strlen(prefix)) == 0;
@@ -125,6 +126,27 @@ bool kg_esp_parse_version(const char *line, char *version, size_t size) {
   size_t n = 0;
   while (s[n] && s[n] != '(' && s[n] != ' ') n++;
   copy(version, size, s, n);
+  return true;
+}
+
+bool kg_esp_parse_sntptime(const char *line, kg_datetime_t *t) {
+  static const char *const months = "JanFebMarAprMayJunJulAugSepOctNovDec";
+  const char *prefix = "+CIPSNTPTIME:";
+  if (!starts_with(line, prefix)) return false;
+  char mon[4];
+  kg_datetime_t v;
+  // the day is padded with a space in AT 1.x ("Aug  4")
+  if (sscanf(line + strlen(prefix), "%*3s %3s %d %d:%d:%d %d", mon, &v.day, &v.hour, &v.minute, &v.second, &v.year) != 6) {
+    return false;
+  }
+  const char *p = strstr(months, mon);
+  if (strlen(mon) != 3 || !p || (p - months) % 3 != 0) return false;
+  v.month = (p - months) / 3 + 1;
+  if (v.year < 2000 || v.year > 2099 || v.day < 1 || v.day > 31 || v.hour > 23 || v.minute > 59 || v.second > 59) {
+    return false;
+  }
+  if (v.hour < 0 || v.minute < 0 || v.second < 0) return false;
+  *t = v;
   return true;
 }
 
