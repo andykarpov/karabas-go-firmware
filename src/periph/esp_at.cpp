@@ -10,7 +10,7 @@ static char line[160]; // a longer line is cut
 static uint8_t line_len;
 
 void esp_at_start(const char *cmd, uint32_t timeout_ms, esp_at_line_cb on_line) {
-  esp_serial.rx_fifo.clear();
+  esp_serial_clear_rx();
   line_len = 0;
   line_cb = on_line;
   timeout = timeout_ms;
@@ -19,8 +19,8 @@ void esp_at_start(const char *cmd, uint32_t timeout_ms, esp_at_line_cb on_line) 
   // the password stays out of the log
   if (strncmp(cmd, "AT+CWJAP=", 9) == 0) { d_println("ESP >> AT+CWJAP=..."); }
   else { d_printf("ESP >> %s", cmd); d_println(); }
-  esp_serial.print(cmd);
-  esp_serial.print("\r\n");
+  esp_serial_print(cmd);
+  esp_serial_print("\r\n");
 }
 
 bool esp_at_busy() {
@@ -44,8 +44,8 @@ static void on_line() {
 }
 
 uint8_t esp_at_poll() {
-  while (state == ESP_AT_BUSY && esp_serial.available() > 0) {
-    char c = (char) esp_serial.read();
+  while (state == ESP_AT_BUSY && esp_serial_available() > 0) {
+    char c = (char) esp_serial_read();
     if (c == '\r' || c == '\n') {
       on_line();
     } else if (c != '\0' && line_len < sizeof(line) - 1) {
