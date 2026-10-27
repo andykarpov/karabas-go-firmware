@@ -64,6 +64,19 @@ static struct UsbPioReserve {
   }
 } usb_pio_reserve;
 
+// fpga commands handled here (link_on)
+static void on_flashboot(uint8_t addr, uint8_t data) {
+  flashboot(data);
+}
+
+static void on_esp_uart(uint8_t addr, uint8_t data) {
+  esp_serial.rx_queue_push(data);
+}
+
+static void on_rtc(uint8_t addr, uint8_t data) {
+  zxrtc.setData(addr, data);
+}
+
 // firmware init, runs on core0
 static void karabas_setup()
 {
@@ -81,10 +94,10 @@ static void karabas_setup()
 
   // SPI0 to FPGA, incoming fpga commands
   link_begin();
-  link_on(CMD_FLASHBOOT, [](uint8_t addr, uint8_t data) { flashboot(data); });
+  link_on(CMD_FLASHBOOT, on_flashboot);
   link_on(CMD_UART, serial_data);
-  link_on(CMD_ESP_UART, [](uint8_t addr, uint8_t data) { esp_serial.rx_queue_push(data); });
-  link_on(CMD_RTC, [](uint8_t addr, uint8_t data) { zxrtc.setData(addr, data); });
+  link_on(CMD_ESP_UART, on_esp_uart);
+  link_on(CMD_RTC, on_rtc);
   link_on(CMD_PS2_SCANCODE, ps2_command_receive);
   matrix_register_handlers();
   img_register_handlers();

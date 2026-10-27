@@ -65,48 +65,56 @@ static uint16_t img_sum(const uint8_t *buf) {
   return sum;
 }
 
-void img_register_handlers() {
-  link_on(CMD_IMG_LBA, [](uint8_t addr, uint8_t data) {
-    if (addr == 0) {
-      req_started = true;
-      req_start_us = micros();
-      lba_mask = 0;
-    }
-    if (addr < 4) {
-      req_lba = (req_lba & ~(0xFFUL << (8 * addr))) | ((uint32_t) data << (8 * addr));
-      lba_mask |= 1 << addr;
-    }
-  });
-  link_on(CMD_IMG_SEC, [](uint8_t addr, uint8_t data) {
-    req_slot = addr;
-    req_op = data;
-    if (data == IMG_REQ_WRITE) wr_reset();
-    req_complete = (lba_mask == 0x0F);
+static void on_img_lba(uint8_t addr, uint8_t data) {
+  if (addr == 0) {
+    req_started = true;
+    req_start_us = micros();
     lba_mask = 0;
-    req_pending = true;
-    req_started = false;
-  });
-  link_on(CMD_IMG_BUF_BANK, [](uint8_t addr, uint8_t data) {
-    if (addr == 0) {
-      wr_bank = data;
-    } else if (addr == 0x10) {
-      wr_sum = (wr_sum & 0xFF00) | data;
-      wr_sum_seen |= 1;
-    } else if (addr == 0x11) {
-      wr_sum = (wr_sum & 0x00FF) | (data << 8);
-      wr_sum_seen |= 2;
+  }
+  if (addr < 4) {
+    req_lba = (req_lba & ~(0xFFUL << (8 * addr))) | ((uint32_t) data << (8 * addr));
+    lba_mask |= 1 << addr;
+  }
+}
+
+static void on_img_sec(uint8_t addr, uint8_t data) {
+  req_slot = addr;
+  req_op = data;
+  if (data == IMG_REQ_WRITE) wr_reset();
+  req_complete = (lba_mask == 0x0F);
+  lba_mask = 0;
+  req_pending = true;
+  req_started = false;
+}
+
+static void on_img_buf_bank(uint8_t addr, uint8_t data) {
+  if (addr == 0) {
+    wr_bank = data;
+  } else if (addr == 0x10) {
+    wr_sum = (wr_sum & 0xFF00) | data;
+    wr_sum_seen |= 1;
+  } else if (addr == 0x11) {
+    wr_sum = (wr_sum & 0x00FF) | (data << 8);
+    wr_sum_seen |= 2;
+  }
+}
+
+static void on_img_buf_data(uint8_t addr, uint8_t data) {
+  uint16_t pos = (wr_bank << 8) | addr;
+  if (pos < IMG_SECTOR_SIZE) {
+    img_buf[pos] = data;
+    if (!(wr_seen[pos >> 3] & (1 << (pos & 7)))) {
+      wr_seen[pos >> 3] |= 1 << (pos & 7);
+      wr_count++;
     }
-  });
-  link_on(CMD_IMG_BUF_DATA, [](uint8_t addr, uint8_t data) {
-    uint16_t pos = (wr_bank << 8) | addr;
-    if (pos < IMG_SECTOR_SIZE) {
-      img_buf[pos] = data;
-      if (!(wr_seen[pos >> 3] & (1 << (pos & 7)))) {
-        wr_seen[pos >> 3] |= 1 << (pos & 7);
-        wr_count++;
-      }
-    }
-  });
+  }
+}
+
+void img_register_handlers() {
+  link_on(CMD_IMG_LBA, on_img_lba);
+  link_on(CMD_IMG_SEC, on_img_sec);
+  link_on(CMD_IMG_BUF_BANK, on_img_buf_bank);
+  link_on(CMD_IMG_BUF_DATA, on_img_buf_data);
 }
 
 void img_close_all() {

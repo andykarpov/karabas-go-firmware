@@ -20,20 +20,24 @@ static char game_name[256] = "";
 #define BK_FLUSH_TIMEOUT_MS 3000 // 64 sectors: ~5 ms each on the link, plus the sd card
 #define BK_MAX_SECTORS 2048      // 1 MB: a sane limit for a request
 
+static void on_bk_mount(uint8_t addr, uint8_t data) {
+  if (addr < 4) {
+    req_size = (req_size & ~(0xFFUL << (8 * addr))) | ((uint32_t) data << (8 * addr));
+  } else if (addr == 0x10) {
+    req_slot = data;
+  } else if (addr == 0x80) {
+    req_kind = data;
+    req_pending = true;
+  }
+}
+
+static void on_img_flush(uint8_t addr, uint8_t data) {
+  if (bk_slot >= 0 && addr == (uint8_t) bk_slot) flush_result = data;
+}
+
 void bk_register_handlers() {
-  link_on(CMD_BK_MOUNT, [](uint8_t addr, uint8_t data) {
-    if (addr < 4) {
-      req_size = (req_size & ~(0xFFUL << (8 * addr))) | ((uint32_t) data << (8 * addr));
-    } else if (addr == 0x10) {
-      req_slot = data;
-    } else if (addr == 0x80) {
-      req_kind = data;
-      req_pending = true;
-    }
-  });
-  link_on(CMD_IMG_FLUSH, [](uint8_t addr, uint8_t data) {
-    if (bk_slot >= 0 && addr == (uint8_t) bk_slot) flush_result = data;
-  });
+  link_on(CMD_BK_MOUNT, on_bk_mount);
+  link_on(CMD_IMG_FLUSH, on_img_flush);
 }
 
 void bk_set_game(const char *dir, const char *name) {

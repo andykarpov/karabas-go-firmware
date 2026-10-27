@@ -93,6 +93,16 @@ void link_dispatch_pending() {
   }
 }
 
+static void on_debug_address(uint8_t addr, uint8_t data) {
+  uint16_t val = addr*256+data;
+  if (val != debug_address) { debug_address = val; d_printf("Debug Address: %04x", debug_address); d_println(); }
+}
+
+static void on_debug_data(uint8_t addr, uint8_t data) {
+  uint16_t val = addr*256+data;
+  if (val != debug_data) { debug_data = val; d_printf("Debug Data: %04x", debug_data); d_println(); }
+}
+
 void link_begin() {
   SPI.setSCK(PIN_MCU_SPI_SCK);
   SPI.setRX(PIN_MCU_SPI_RX);
@@ -100,14 +110,8 @@ void link_begin() {
   //SPI.setCS(PIN_MCU_SPI_CS);
   SPI.begin(false);
 
-  link_on(CMD_DEBUG_ADDRESS, [](uint8_t addr, uint8_t data) {
-    uint16_t val = addr*256+data;
-    if (val != debug_address) { debug_address = val; d_printf("Debug Address: %04x", debug_address); d_println(); }
-  });
-  link_on(CMD_DEBUG_DATA, [](uint8_t addr, uint8_t data) {
-    uint16_t val = addr*256+data;
-    if (val != debug_data) { debug_data = val; d_printf("Debug Data: %04x", debug_data); d_println(); }
-  });
+  link_on(CMD_DEBUG_ADDRESS, on_debug_address);
+  link_on(CMD_DEBUG_DATA, on_debug_data);
 }
 
 void link_on(uint8_t cmd, link_handler_t handler) {
