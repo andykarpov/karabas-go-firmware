@@ -1,5 +1,7 @@
 # USB Printer Host
 
+[Русская версия](usb_printer.ru.md)
+
 The initial target is Epson LX-300+II connected directly to the board's USB host
 with a USB-A to USB-B cable. Hardware validation on Go confirmed enumeration,
 Device ID, port status and printing `Hello from Karabas Go!` via Bulk OUT:

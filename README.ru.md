@@ -11,8 +11,7 @@ Karabas Go. Микроконтроллер работает в паре с ПЛ�
 
 **[Маппер USB-геймпадов](https://andykarpov.github.io/karabas-go-firmware/hidmapper/)**: настройка
 USB HID геймпада в браузере и загрузка его ini-драйвера для папки `/drivers/` на SD-карте.
-Большинство геймпадов работает и без драйвера, см. [USB HID геймпады](docs/usb_gamepads.md)
-(на английском).
+Большинство геймпадов работает и без драйвера, см. [USB HID геймпады](docs/usb_gamepads.ru.md).
 
 ## Платы
 
@@ -99,7 +98,7 @@ CI собирает прошивку для каждого PR. Скачать е
 | `/boot.kg1` (`.kg2`, `.kg3`) | браузер ядер, загружается при включении |
 | `/*.kg1` (`.kg2`, `.kg3`) | ядра платы |
 | `/karabas.ini` | настройки, см. ниже |
-| `/drivers/*.ini` | драйверы USB-геймпадов, необязательно ([формат](docs/usb_gamepads.md#driver-ini)) |
+| `/drivers/*.ini` | драйверы USB-геймпадов, необязательно ([формат](docs/usb_gamepads.ru.md#ini-драйвер)) |
 
 Файловая система: FAT16, FAT32 или exFAT. Ядра собираются утилитой
 [make_core](https://github.com/andykarpov/karabas-go-tools/tree/master/make_core) из
@@ -125,7 +124,7 @@ CI собирает прошивку для каждого PR. Скачать е
 | | `color_bg`, `color_gradient`, `color_button`, `color_active`, `color_text`, `color_text_active`, `color_copyright` | `010101`, `0000c8`, `202026`, `0000c8`, `ffffff`, `ffffff`, `787878` | цвета (hex RGB) |
 | | `3d_buttons` | `0` | `1`: кнопки с тенью и светлым краем |
 | | `mouse_speed` | `3` | скорость указателя мыши в графическом меню, 1..5 |
-| `[matrix]` | `enabled`, `brightness`, `clock_*`, `meter_*` | `1`, `0`, ... | LED-матрица, см. [docs/matrix.md](docs/matrix.md) |
+| `[matrix]` | `enabled`, `brightness`, `clock_*`, `meter_*` | `1`, `0`, ... | LED-матрица, см. [docs/matrix.ru.md](docs/matrix.ru.md) |
 | `[autoload]` | `enabled`, `timeout`, `core` | `0`, `15`, нет | запуск ядра `core` через `timeout` секунд |
 
 Пример:
@@ -221,18 +220,18 @@ cmake -S test -B build-test -G Ninja && ninja -C build-test && ctest --test-dir 
 
 ## Документация
 
-- [USB HID геймпады](docs/usb_gamepads.md): раскладка по умолчанию, маппер в OSD и ini-драйверы.
-- [XInput-контроллеры / 8BitDo M30 2.4G](docs/xinput.md).
-- [USB-принтер / Epson LX-300+II](docs/usb_printer.md) (драйвер и очередь на 2048 байт;
+- [USB HID геймпады](docs/usb_gamepads.ru.md): раскладка по умолчанию, маппер в OSD и ini-драйверы.
+- [XInput-контроллеры / 8BitDo M30 2.4G](docs/xinput.ru.md).
+- [USB-принтер / Epson LX-300+II](docs/usb_printer.ru.md) (драйвер и очередь на 2048 байт;
   интеграция с ПЛИС ещё не сделана).
 - [Протокол MCU ↔ FPGA](docs/protocol.ru.md) ([in English](docs/protocol.md)): SPI-кадры, все
   команды, последовательности загрузки.
-- [Пакетная передача](docs/burst_protocol.md): быстрый режим передачи ПЗУ и файлов.
-- [LED-матрица](docs/matrix.md).
+- [Пакетная передача](docs/burst_protocol.ru.md): быстрый режим передачи ПЗУ и файлов.
+- [LED-матрица](docs/matrix.ru.md).
 - Файлы ядер (`.kg1` / `.kg2` / `.kg3`) и `core.json`:
   [karabas-go-tools/make_core](https://github.com/andykarpov/karabas-go-tools/tree/master/make_core).
 
-Документы без пометки написаны на английском.
+У каждого документа есть английская версия (ссылка в его начале).
 
 ## Лицензия
 

@@ -1,5 +1,7 @@
 # USB HID gamepads
 
+[Русская версия](usb_gamepads.ru.md)
+
 USB gamepads and joysticks reach the cores as a Sega MD2 pad (`CMD_JOYSTICK`): directions,
 A B C X Y Z, Start and Mode. HID pads and [XInput pads](xinput.md) share the two USB ports.
 A pad takes the first free port when it is plugged in and keeps it until it is unplugged.

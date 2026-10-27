@@ -1,5 +1,7 @@
 # MCU → FPGA burst transfers
 
+[Русская версия](burst_protocol.ru.md)
+
 Status: draft v1. The firmware side is implemented. Cores that do not implement it keep working unchanged.
 
 ## Why
@@ -41,7 +43,7 @@ During every core load the MCU asks the core what it supports, using the classic
    - `caps` bit 2: burst read supported (see "Burst read" below; requires bit 1).
    - `caps` bits 7..3: reserved, 0.
    - `max_mhz`: the highest SCK frequency during bursts, in MHz. 0 means the normal link clock (16 MHz, or the core's `spi_freq`). Boards before Mini Rev.G do not have MCU_SCK on a global clock pin, so a core there that samples SCK with its system clock must report a frequency it can oversample safely.
-3. Without an answer the MCU sends the query and the polls again, until the core answers or 100 ms have passed. The answers to the repeated queries that come later are ignored.
+3. Without an answer the MCU sends the query and polls again, until the core answers or 100 ms have passed. The answers to the repeated queries that come later are ignored.
 4. No answer means classic transfers only. Old cores ignore the unknown command 0xF7.
 
 ## Burst write transaction
