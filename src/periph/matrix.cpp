@@ -3,11 +3,14 @@
 #include "kg_matrix.h"
 #include "matrix_fx.h"
 #include "matrix_meter.h"
+#include "font5x7.h"
+#include "ht16k33.h"
 
 // Optional dot matrix addon (2x HT16K33 bi-color 8x8), see MATRIX.md
 //
-// The display buffer and the mode are shared by the fpga command handlers (APP) and
-// matrix_frame() (MATRIX task): every access to `matrix` holds the I2C lock.
+// The display buffer (lib/I2cDevices ht16k33) and the mode are shared by the fpga command
+// handlers (APP) and matrix_frame() (MATRIX task): every access to the display holds the I2C
+// lock.
 
 #define MATRIX_MODE_SCROLL 0
 #define MATRIX_MODE_DRAW 1    // the core draws (CMD_MATRIX_PIXEL / BITPLAN)
@@ -23,7 +26,6 @@
 #define MATRIX_IMAGE_FRAMES 10  // default: next image frame every 10 frames (200 ms)
 #define MATRIX_POLL_FRAMES 5    // poll the buttons every 5 frames (100 ms)
 
-static MultiMatrixDisplay matrix = MultiMatrixDisplay();
 static bool has_matrix = false;
 static volatile uint8_t matrix_mode = MATRIX_MODE_SCROLL;
 static volatile uint16_t audio_l, audio_r; // peak meters: raised by APP, decayed by matrix_frame
@@ -49,7 +51,6 @@ static const char *const matrix_boot_text = "KARABAS GO ";
 static uint16_t step_frames, step_count;
 static uint8_t passes;
 
-static GFXcanvas1 text_canvas(16, 8);
 static const char *scroll_src;
 static uint8_t scroll_color, scroll_repeat;
 static char scroll_text[128];
@@ -67,8 +68,7 @@ void matrix_init()
 {
   if (has_matrix) {
     // karabas.ini over the core; KG_MATRIX_DEFAULT_BRIGHTNESS (4) is safe enough
-    matrix.setBrightness(mx_brightness ? mx_brightness - 1 : cfg.brightness);
-    text_canvas.setTextWrap(false);
+    ht16k33_brightness(mx_brightness ? mx_brightness - 1 : cfg.brightness);
   }
 }
 
@@ -81,18 +81,18 @@ void matrix_ctl_data(uint8_t addr, uint8_t data) {
   if (has_matrix) {
     I2cGuard i2c;
     if (!core_owns_matrix()) return;
-    if (data & 0x01) matrix.clear();
-    if (data & 0x02) matrix.writeDisplay();
-    if (data & 0x04) matrix.setBrightness(data >> 4);
+    if (data & 0x01) ht16k33_clear();
+    if (data & 0x02) ht16k33_show();
+    if (data & 0x04) ht16k33_brightness(data >> 4);
     if ((data & 0x08) && matrix_mode == MATRIX_MODE_DRAW) {
       matrix_mode = MATRIX_MODE_AUDIO;
-      matrix.clear();
-      matrix.writeDisplay();
+      ht16k33_clear();
+      ht16k33_show();
     }
     if (!(data & 0x08) && matrix_mode == MATRIX_MODE_AUDIO) {
       matrix_mode = MATRIX_MODE_DRAW;
-      matrix.clear();
-      matrix.writeDisplay();
+      ht16k33_clear();
+      ht16k33_show();
     }
   }
 }
@@ -102,7 +102,7 @@ void matrix_pixel_data(uint8_t x, uint8_t y, uint8_t color) {
     I2cGuard i2c;
     if (!core_owns_matrix()) return;
     matrix_mode = MATRIX_MODE_DRAW;
-    matrix.drawPixel(x, y, color);
+    ht16k33_pixel(x, y, color);
   }
 }
 
@@ -116,21 +116,21 @@ void matrix_bitplan_data(uint8_t addr, uint8_t data) {
     // addr 8-15:  matrix1, green
     // addr 16-23: matrix2, red
     // addr 24-31: matrix2, green
-    //matrix.drawBitmap()
+    //ht16k33 bitmap
   }
 }
 
-static const uint8_t led_colors[4] = {LED_OFF, LED_RED, LED_GREEN, LED_YELLOW}; // by KG_MX_*
+static const uint8_t led_colors[4] = {HT16K33_OFF, HT16K33_RED, HT16K33_GREEN, HT16K33_YELLOW}; // by KG_MX_*
 
 // a 16x8 picture of KG_MX_* colors
 static void matrix_draw_fb(const uint8_t fb[KG_MATRIX_H][KG_MATRIX_W]) {
-  matrix.clear();
+  ht16k33_clear();
   for (uint8_t y=0; y<8; y++) {
     for (uint8_t x=0; x<16; x++) {
-      if (fb[y][x]) matrix.drawPixel(x, y, led_colors[fb[y][x] & 3]);
+      if (fb[y][x]) ht16k33_pixel(x, y, led_colors[fb[y][x] & 3]);
     }
   }
-  matrix.writeDisplay();
+  ht16k33_show();
 }
 
 // the preview of the meters in Settings: beats of random strength, each channel on its own
@@ -158,26 +158,23 @@ void matrix_draw_audio() {
 static void scroll_pass_start() {
   kg_matrix_vars_t vars = {cfg_name, cfg_build, zxrtc.getHour(), zxrtc.getMinute(), zxrtc.getDay(), zxrtc.getMonth(), (uint16_t) (2000 + zxrtc.getYear())};
   kg_matrix_expand(scroll_src, &vars, scroll_text, sizeof(scroll_text));
-  scroll_width = strlen(scroll_text) * 6; // 6 pixels per character width
+  scroll_width = strlen(scroll_text) * KG_FONT_ADVANCE;
   scroll_pos = 16;
 }
 
 // one pixel to the left; true after the last pixel of a pass
 static bool matrix_scroll_text()
 {
-  text_canvas.fillScreen(0);
-  text_canvas.setCursor(scroll_pos, 0);
-  text_canvas.print(scroll_text);
-  matrix.clear();
+  ht16k33_clear();
   for (uint8_t y=0; y<8; y++) {
     for (uint8_t x=0; x<16; x++) {
-      if (text_canvas.getPixel(x, y)) {
-        int ch = (x - scroll_pos) / 6;
-        matrix.drawPixel(x, y, led_colors[kg_matrix_text_color(scroll_color, x, ch)]);
+      if (kg_text_pixel(scroll_text, scroll_pos, x, y)) {
+        int ch = (x - scroll_pos) / KG_FONT_ADVANCE;
+        ht16k33_pixel(x, y, led_colors[kg_matrix_text_color(scroll_color, x, ch)]);
       }
     }
   }
-  matrix.writeDisplay();
+  ht16k33_show();
   if (scroll_pos >= -scroll_width) {
     scroll_pos--;
     return false;
@@ -186,13 +183,13 @@ static bool matrix_scroll_text()
 }
 
 static void matrix_draw_image() {
-  matrix.clear();
+  ht16k33_clear();
   for (uint8_t y=0; y<8; y++) {
     for (uint8_t x=0; x<16; x++) {
-      matrix.drawPixel(x, y, led_colors[kg_matrix_frame_pixel(cfg.frames[image_frame], x, y)]);
+      ht16k33_pixel(x, y, led_colors[kg_matrix_frame_pixel(cfg.frames[image_frame], x, y)]);
     }
   }
-  matrix.writeDisplay();
+  ht16k33_show();
 }
 
 static void matrix_draw_fx() {
@@ -226,8 +223,8 @@ static void matrix_start_audio() {
 
 // the plugin whose options Settings edits, instead of the mode of the core
 static void matrix_start_preview() {
-  matrix.clear();
-  matrix.writeDisplay();
+  ht16k33_clear();
+  ht16k33_show();
   passes = 0;
   if (preview == MATRIX_PREVIEW_CLOCK) {
     matrix_fx_init(&fx, KG_MATRIX_FX_CLOCK, KG_MX_OFF, time_us_32());
@@ -247,8 +244,8 @@ static void matrix_start(uint8_t mode) {
 }
 
 static void matrix_start_mode(uint8_t mode) {
-  matrix.clear();
-  matrix.writeDisplay();
+  ht16k33_clear();
+  ht16k33_show();
   passes = 0;
   step_count = 0;
   switch (mode) {
@@ -293,7 +290,7 @@ static void matrix_start_mode(uint8_t mode) {
 
 void matrix_begin() {
   I2cGuard i2c;
-  has_matrix = matrix.begin();
+  has_matrix = ht16k33_begin();
   if (has_matrix) {
     d_println("Found a matrix display");
   } else {
@@ -338,9 +335,11 @@ void matrix_progress(uint32_t val, uint32_t max) {
   if (has_matrix && mx_enabled) {
     I2cGuard i2c;
     int16_t x = max ? (int16_t) ((uint64_t) val * 15 / max) : 0; // val 0..max -> x 0..15
-    matrix.drawLine(0, 0, x, 0, LED_GREEN);
-    matrix.drawLine(0, 1, x, 1, LED_GREEN);
-    matrix.writeDisplay();
+    for (int16_t i = 0; i <= x; i++) {
+      ht16k33_pixel(i, 0, HT16K33_GREEN);
+      ht16k33_pixel(i, 1, HT16K33_GREEN);
+    }
+    ht16k33_show();
   }
 }
 
@@ -389,8 +388,8 @@ void matrix_on_configure_start() {
   matrix_mode = MATRIX_MODE_LOADING;
   if (has_matrix) {
     I2cGuard i2c;
-    matrix.clear();
-    matrix.writeDisplay();
+    ht16k33_clear();
+    ht16k33_show();
   }
 }
 
@@ -435,16 +434,16 @@ void matrix_icon(uint8_t icon) {
   if (!has_matrix || !mx_enabled || icon >= sizeof(matrix_icons) / sizeof(matrix_icons[0])) return;
   I2cGuard i2c;
   matrix_mode = MATRIX_MODE_ICON;
-  matrix.clear();
+  ht16k33_clear();
   for (uint8_t y=0; y<8; y++) {
     for (uint8_t x=0; x<16; x++) {
       char c = matrix_icons[icon][y][x];
-      if (c == 'G') matrix.drawPixel(x, y, LED_GREEN);
-      else if (c == 'R') matrix.drawPixel(x, y, LED_RED);
-      else if (c == 'Y') matrix.drawPixel(x, y, LED_YELLOW);
+      if (c == 'G') ht16k33_pixel(x, y, HT16K33_GREEN);
+      else if (c == 'R') ht16k33_pixel(x, y, HT16K33_RED);
+      else if (c == 'Y') ht16k33_pixel(x, y, HT16K33_YELLOW);
     }
   }
-  matrix.writeDisplay();
+  ht16k33_show();
 }
 
 bool matrix_present() {
@@ -493,7 +492,7 @@ void matrix_frame() {
 
     // poll HT16k33 for buttons
     if (frame % MATRIX_POLL_FRAMES == 0) {
-      btns = matrix.readKeys() & 0x0F;
+      btns = ht16k33_keys() & 0x0F;
     }
   }
 

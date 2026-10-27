@@ -17,7 +17,6 @@
 #include "hid_app.h"
 #include "ms_time.h"
 #include "file.h"
-#include "MultiMatrixDisplay.h"
 #include "board/board.h"
 #include "board/pin.h"
 #include "board/chip.h"
