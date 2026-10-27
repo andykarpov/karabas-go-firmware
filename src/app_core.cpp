@@ -6,7 +6,6 @@
 #include "SegaController.h"
 #include "SdFat.h"
 #include "app_core.h"
-#include <SPI.h>
 #include <algorithm>
 #include <tuple>
 #include "sorts.h"

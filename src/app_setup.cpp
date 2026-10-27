@@ -10,7 +10,6 @@
 #include <tuple>
 #include "app_setup.h"
 #include "app_core.h"
-#include <SPI.h>
 #include "sorts.h"
 // the Setup screen: a list of the setup apps; Wi-Fi and Settings only in the BOOT core
 typedef struct {

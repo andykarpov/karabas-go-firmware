@@ -10,7 +10,6 @@
 #include <algorithm>
 #include <tuple>
 #include "app_file_loader.h"
-#include <SPI.h>
 #include "sorts.h"
 #include "file_name.h"
 

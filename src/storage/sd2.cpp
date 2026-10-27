@@ -1,10 +1,12 @@
 #include "main.h"
 #include "diag/hang_diag.h"
 #include "crc32.h"
-#include <hardware/spi.h>
+#include "spi0_bus.h"
 
-// The card shares SPI0 with the link and the FT812, which use their own clocks: every access
-// sets the clock again (SPI.beginTransaction re-inits the SPI block when the clock changes).
+// The card shares SPI0 with the link and the FT812, which use their own clocks (spi0_bus).
+// SdFat still goes through Arduino's SPI, which keeps its own copy of the clock: every access
+// sets the card's clock with spi0_bus first (so that copy is right) and makes spi0_bus forget
+// its clock after (SdFat may have changed it, the next user sets its own).
 // USER_SPI_BEGIN: SdFat must not call SPI.begin() (the link set up SPI0), and sd2.end() must
 // never be called (SPI.end() would stop the link).
 // The pass-through of the FPGA works up to 12 MHz (SPI0 runs at 48 MHz / an even divider: a
@@ -16,9 +18,18 @@
 #define SD2_HANG_STEP 0xD2
 
 static SdSpiCard sd2;
+static uint32_t sd2_hz = SD2_MHZ * 1000000UL;
+
+// the bus for one SdFat call: locked, at the card's clock
+struct Sd2Bus {
+  SpiBusGuard lock;
+  Sd2Bus() { spi0_bus_clock(sd2_hz); }
+  ~Sd2Bus() { spi0_bus_forget_clock(); }
+};
 
 static bool sd2_begin_mhz(uint8_t mhz) {
-  SpiBusGuard g;
+  sd2_hz = mhz * 1000000UL;
+  Sd2Bus g;
   return sd2.begin(SdSpiConfig(PIN_MCU_SD2_CS, SHARED_SPI | USER_SPI_BEGIN, SD_SCK_MHZ(mhz), &SPI));
 }
 
@@ -27,17 +38,17 @@ bool sd2_begin() {
 }
 
 uint32_t sd2_sector_count() {
-  SpiBusGuard g;
+  Sd2Bus g;
   return sd2.sectorCount();
 }
 
 static bool read_once(uint32_t sector, uint8_t *dst, uint32_t count) {
-  SpiBusGuard g;
+  Sd2Bus g;
   return count == 1 ? sd2.readSector(sector, dst) : sd2.readSectors(sector, dst, count);
 }
 
 static bool write_once(uint32_t sector, const uint8_t *src, uint32_t count) {
-  SpiBusGuard g;
+  Sd2Bus g;
   return count == 1 ? sd2.writeSector(sector, src) : sd2.writeSectors(sector, src, count);
 }
 
@@ -70,7 +81,7 @@ bool sd2_write(uint32_t sector, const uint8_t *src, uint32_t count) {
 }
 
 void sd2_sync() {
-  SpiBusGuard g;
+  Sd2Bus g;
   sd2.syncDevice();
 }
 
@@ -118,7 +129,7 @@ void sd2_test(Print &out) {
   cid_t cid;
   bool cid_ok;
   {
-    SpiBusGuard g;
+    Sd2Bus g;
     cid_ok = sd2.readCID(&cid);
   }
   static const char *types[] = { "?", "SD1", "SD2", "SDHC" };

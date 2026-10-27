@@ -25,7 +25,8 @@
  SOFTWARE.
  */
 
-#include <SPI.h>
+#include "spi0_bus.h"
+#include "hardware/gpio.h"
 #include <FT812.h>
 #include <Arduino.h>
 #include <stdarg.h>
@@ -138,9 +139,9 @@ const char *FT812::modeName(uint8_t m) { return m < modeCount() ? ft_mode_names[
 void FT812::begin(m_cb act)
 {
     action = act;
-    pinMode(pin_cs, OUTPUT); digitalWrite(pin_cs, HIGH);
+    gpio_init(pin_cs); gpio_set_dir(pin_cs, GPIO_OUT); gpio_put(pin_cs, 1);
     if (has_reset) {
-        pinMode(pin_reset, OUTPUT); digitalWrite(pin_reset, HIGH);
+        gpio_init(pin_reset); gpio_set_dir(pin_reset, GPIO_OUT); gpio_put(pin_reset, 1);
     }
 }
 
@@ -174,14 +175,14 @@ void FT812::reset()
     spi(true);
     if (has_reset) {
         // hard reset by MCU side
-        digitalWrite(pin_reset, LOW); 
-        delay(10);
-        digitalWrite(pin_reset, HIGH);
+        gpio_put(pin_reset, 0); 
+        ms_delay(10);
+        gpio_put(pin_reset, 1);
     } else {
         // hard reset by FPGA side
         ctrl_reg = bitWrite(ctrl_reg, 4, 1);
         action(CMD_SPI_CONTROL, ADDR_CONTROL_REGISTER, ctrl_reg);
-        delay(10);
+        ms_delay(10);
         ctrl_reg = bitWrite(ctrl_reg, 4, 0);
         action(CMD_SPI_CONTROL, ADDR_CONTROL_REGISTER, ctrl_reg);
     }
@@ -197,18 +198,18 @@ void FT812::reset()
 // SLEEP with the internal oscillator selected). Keeps the spi / vga switches as they are.
 void FT812::powerCycle() {
     if (has_reset) {
-        digitalWrite(pin_reset, LOW);
-        delay(20);
-        digitalWrite(pin_reset, HIGH);
+        gpio_put(pin_reset, 0);
+        ms_delay(20);
+        gpio_put(pin_reset, 1);
     } else {
         // PD_N driven by the FPGA (ctrl register bit 4)
         ctrl_reg = bitWrite(ctrl_reg, 4, 1);
         action(CMD_SPI_CONTROL, ADDR_CONTROL_REGISTER, ctrl_reg);
-        delay(20);
+        ms_delay(20);
         ctrl_reg = bitWrite(ctrl_reg, 4, 0);
         action(CMD_SPI_CONTROL, ADDR_CONTROL_REGISTER, ctrl_reg);
     }
-    delay(50); // internal regulator and oscillator start-up
+    ms_delay(50); // internal regulator and oscillator start-up
 }
 
 // Clock setup and wake-up, as in the FT81x programmers guide (host commands at the low SPI clock,
@@ -218,28 +219,28 @@ void FT812::powerCycle() {
 bool FT812::powerUp() {
     slow_spi = true;
     sendCommand(FT81x_CMD_SLEEP);
-    delay(20);
+    ms_delay(20);
     sendCommand(FT81x_CMD_CLKEXT); // may reset the chip when the clock source changes
-    delay(20);
+    ms_delay(20);
     // Byte2 [7:6] is the PLL range: 0 for 24..36 MHz, 1 for 48..60 MHz (the datasheet gives it by
     // multiplier, for a 12 MHz input; ours is 8 MHz). It was 3, which the datasheet does not define.
     uint32_t pll_hz = (uint32_t) mode.f_mul * FT81x_REF_CLOCK_HZ;
     uint8_t pll_range = pll_hz <= 42000000UL ? 0 : 1;
     sendCommand(FT81x_CMD_CLKSEL + ((mode.f_mul | (pll_range << 6)) << 8)); // f_mul
-    delay(20);
+    ms_delay(20);
     sendCommand(FT81x_CMD_ACTIVE);
-    delay(50); // PLL lock
+    ms_delay(50); // PLL lock
 
     init_timer = ms_now();
     uint8_t id;
     while ((id = read8(FT81x_REG_ID)) != 0x7C) {
         if (ms_since(init_timer) > 1000) { initFailed("REG_ID %02x", id); return false; }
-        delay(1);
+        ms_delay(1);
     }
     uint16_t cpureset;
     while ((cpureset = read16(FT81x_REG_CPURESET)) != 0x00) {
         if (ms_since(init_timer) > 1000) { initFailed("REG_CPURESET %x", cpureset); return false; }
-        delay(1);
+        ms_delay(1);
     }
 
     // the PLL must run at the clock of the mode: count REG_CLOCK (system clock cycles) over 20 ms.
@@ -247,7 +248,7 @@ bool FT812::powerUp() {
     // and the read made a good clock look 5 % off
     uint32_t t0, c0, t1, c1;
     if (!sampleClock(t0, c0)) { initFailed("REG_CLOCK read too slow"); return false; }
-    delay(20);
+    ms_delay(20);
     if (!sampleClock(t1, c1)) { initFailed("REG_CLOCK read too slow"); return false; }
     clock_hz = (uint32_t) ((uint64_t) (c1 - c0) * 1000000ULL / (t1 - t0));
     uint32_t want_hz = pll_hz;
@@ -287,7 +288,7 @@ void FT812::initFailed(const char *fmt, ...) {
 
 uint32_t FT812::framesIn(uint32_t ms) {
     uint32_t f0 = read32(FT81x_REG_FRAMES);
-    delay(ms);
+    ms_delay(ms);
     return read32(FT81x_REG_FRAMES) - f0;
 }
 
@@ -836,25 +837,24 @@ void FT812::writeGRAM(const uint32_t offset, const uint32_t size, const uint8_t 
     uint32_t cmd = (FT81x_RAM_G + offset) | WRITE;
 
     ft812_bus_lock();
-    SPI.beginTransaction(spiSettings());
-    digitalWrite(pin_cs, LOW);
+    spi0_bus_clock(spiHz());
+    gpio_put(pin_cs, 0);
 
-    SPI.transfer((cmd >> 16) & 0xFF);
-    SPI.transfer((cmd >> 8) & 0xFF);
-    SPI.transfer(cmd & 0xFF);
+    spi0_bus_byte((cmd >> 16) & 0xFF);
+    spi0_bus_byte((cmd >> 8) & 0xFF);
+    spi0_bus_byte(cmd & 0xFF);
 
     if (useProgmem) {
         for (uint32_t i = 0; i < size; i++) {
-            SPI.transfer(DATA(data, i));
+            spi0_bus_byte(DATA(data, i));
         }
     } else {
         for (uint32_t i = 0; i < size; i++) {
-            SPI.transfer(data[i]);
+            spi0_bus_byte(data[i]);
         }
     }
 
-    digitalWrite(pin_cs, HIGH);
-    SPI.endTransaction();
+    gpio_put(pin_cs, 1);
     ft812_bus_unlock();
 }
 
@@ -862,39 +862,38 @@ void FT812::startCmd(const uint32_t cmd) {
     uint32_t addr = (FT81x_RAM_CMD + cmdWriteAddress) | WRITE;
 
     ft812_bus_lock();
-    SPI.beginTransaction(spiSettings());
-    digitalWrite(pin_cs, LOW);
+    spi0_bus_clock(spiHz());
+    gpio_put(pin_cs, 0);
 
-    SPI.transfer(addr >> 16);
-    SPI.transfer(addr >> 8);
-    SPI.transfer(addr);
-    SPI.transfer(cmd);
-    SPI.transfer(cmd >> 8);
-    SPI.transfer(cmd >> 16);
-    SPI.transfer(cmd >> 24);
+    spi0_bus_byte(addr >> 16);
+    spi0_bus_byte(addr >> 8);
+    spi0_bus_byte(addr);
+    spi0_bus_byte(cmd);
+    spi0_bus_byte(cmd >> 8);
+    spi0_bus_byte(cmd >> 16);
+    spi0_bus_byte(cmd >> 24);
 
     increaseCmdWriteAddress(4);
 }
 
 void FT812::intermediateCmd(const uint32_t cmd) {
 
-    SPI.transfer(cmd);
-    SPI.transfer(cmd >> 8);
-    SPI.transfer(cmd >> 16);
-    SPI.transfer(cmd >> 24);
+    spi0_bus_byte(cmd);
+    spi0_bus_byte(cmd >> 8);
+    spi0_bus_byte(cmd >> 16);
+    spi0_bus_byte(cmd >> 24);
 
     increaseCmdWriteAddress(4);
 }
 
 void FT812::endCmd(const uint32_t cmd) {
 
-    SPI.transfer(cmd);
-    SPI.transfer(cmd >> 8);
-    SPI.transfer(cmd >> 16);
-    SPI.transfer(cmd >> 24);
+    spi0_bus_byte(cmd);
+    spi0_bus_byte(cmd >> 8);
+    spi0_bus_byte(cmd >> 16);
+    spi0_bus_byte(cmd >> 24);
 
-    digitalWrite(pin_cs, HIGH);
-    SPI.endTransaction();
+    gpio_put(pin_cs, 1);
     ft812_bus_unlock();
 
     increaseCmdWriteAddress(4);
@@ -905,30 +904,28 @@ void FT812::endCmd(const uint32_t cmd) {
 void FT812::sendCommand(const uint32_t cmd) {
 
     ft812_bus_lock();
-    SPI.beginTransaction(FT81x_SPI_LOW_SETTINGS);
-    digitalWrite(pin_cs, LOW);
-    SPI.transfer(cmd >> 16);
-    SPI.transfer(cmd >> 8);
-    uint8_t res = SPI.transfer(cmd);
-    digitalWrite(pin_cs, HIGH);
-    SPI.endTransaction();
+    spi0_bus_clock(FT81x_SPI_LOW_CLOCK_SPEED);
+    gpio_put(pin_cs, 0);
+    spi0_bus_byte(cmd >> 16);
+    spi0_bus_byte(cmd >> 8);
+    uint8_t res = spi0_bus_byte(cmd);
+    gpio_put(pin_cs, 1);
     ft812_bus_unlock();
-    //delay(200);
+    //ms_delay(200);
     //Serial.printf("Command %d result %d", cmd, res); Serial.println();
 }
 
 uint8_t FT812::read8(const uint32_t address) {
     uint32_t cmd = address | READ;
     ft812_bus_lock();
-    SPI.beginTransaction(spiSettings());
-    digitalWrite(pin_cs, LOW);
-    SPI.transfer(cmd >> 16);
-    SPI.transfer(cmd >> 8);
-    SPI.transfer(cmd);
-    SPI.transfer(0x00);  // dummy byte
-    uint8_t result = SPI.transfer(0x00);
-    digitalWrite(pin_cs, HIGH);
-    SPI.endTransaction();
+    spi0_bus_clock(spiHz());
+    gpio_put(pin_cs, 0);
+    spi0_bus_byte(cmd >> 16);
+    spi0_bus_byte(cmd >> 8);
+    spi0_bus_byte(cmd);
+    spi0_bus_byte(0x00);  // dummy byte
+    uint8_t result = spi0_bus_byte(0x00);
+    gpio_put(pin_cs, 1);
     ft812_bus_unlock();
     return result;
 }
@@ -936,16 +933,15 @@ uint8_t FT812::read8(const uint32_t address) {
 uint16_t FT812::read16(const uint32_t address) {
     uint32_t cmd = address | READ;
     ft812_bus_lock();
-    SPI.beginTransaction(spiSettings());
-    digitalWrite(pin_cs, LOW);
-    SPI.transfer(cmd >> 16);
-    SPI.transfer(cmd >> 8);
-    SPI.transfer(cmd);
-    SPI.transfer(0x00);  // dummy byte
-    uint16_t result = SPI.transfer(0x00);
-    result |= (SPI.transfer(0x00) << 8);
-    digitalWrite(pin_cs, HIGH);
-    SPI.endTransaction();
+    spi0_bus_clock(spiHz());
+    gpio_put(pin_cs, 0);
+    spi0_bus_byte(cmd >> 16);
+    spi0_bus_byte(cmd >> 8);
+    spi0_bus_byte(cmd);
+    spi0_bus_byte(0x00);  // dummy byte
+    uint16_t result = spi0_bus_byte(0x00);
+    result |= (spi0_bus_byte(0x00) << 8);
+    gpio_put(pin_cs, 1);
     ft812_bus_unlock();
     return result;
 }
@@ -953,18 +949,17 @@ uint16_t FT812::read16(const uint32_t address) {
 uint32_t FT812::read32(const uint32_t address) {
     uint32_t cmd = address | READ;
     ft812_bus_lock();
-    SPI.beginTransaction(spiSettings());
-    digitalWrite(pin_cs, LOW);
-    SPI.transfer(cmd >> 16);
-    SPI.transfer(cmd >> 8);
-    SPI.transfer(cmd);
-    SPI.transfer(0x00);  // dummy byte
-    uint32_t result = SPI.transfer(0x00);
-    result |= (SPI.transfer(0x00) << 8);
-    result |= ((uint32_t)SPI.transfer(0x00) << 16);
-    result |= ((uint32_t)SPI.transfer(0x00) << 24);
-    digitalWrite(pin_cs, HIGH);
-    SPI.endTransaction();
+    spi0_bus_clock(spiHz());
+    gpio_put(pin_cs, 0);
+    spi0_bus_byte(cmd >> 16);
+    spi0_bus_byte(cmd >> 8);
+    spi0_bus_byte(cmd);
+    spi0_bus_byte(0x00);  // dummy byte
+    uint32_t result = spi0_bus_byte(0x00);
+    result |= (spi0_bus_byte(0x00) << 8);
+    result |= ((uint32_t)spi0_bus_byte(0x00) << 16);
+    result |= ((uint32_t)spi0_bus_byte(0x00) << 24);
+    gpio_put(pin_cs, 1);
     ft812_bus_unlock();
     return result;
 }
@@ -972,45 +967,42 @@ uint32_t FT812::read32(const uint32_t address) {
 void FT812::write8(const uint32_t address, const uint8_t data) {
     uint32_t cmd = address | WRITE;
     ft812_bus_lock();
-    SPI.beginTransaction(spiSettings());
-    digitalWrite(pin_cs, LOW);
-    SPI.transfer(cmd >> 16);
-    SPI.transfer(cmd >> 8);
-    SPI.transfer(cmd);
-    SPI.transfer(data);
-    digitalWrite(pin_cs, HIGH);
-    SPI.endTransaction();
+    spi0_bus_clock(spiHz());
+    gpio_put(pin_cs, 0);
+    spi0_bus_byte(cmd >> 16);
+    spi0_bus_byte(cmd >> 8);
+    spi0_bus_byte(cmd);
+    spi0_bus_byte(data);
+    gpio_put(pin_cs, 1);
     ft812_bus_unlock();
 }
 
 void FT812::write16(const uint32_t address, const uint16_t data) {
     uint32_t cmd = address | WRITE;
     ft812_bus_lock();
-    SPI.beginTransaction(spiSettings());
-    digitalWrite(pin_cs, LOW);
-    SPI.transfer(cmd >> 16);
-    SPI.transfer(cmd >> 8);
-    SPI.transfer(cmd);
-    SPI.transfer(data);
-    SPI.transfer(data >> 8);
-    digitalWrite(pin_cs, HIGH);
-    SPI.endTransaction();
+    spi0_bus_clock(spiHz());
+    gpio_put(pin_cs, 0);
+    spi0_bus_byte(cmd >> 16);
+    spi0_bus_byte(cmd >> 8);
+    spi0_bus_byte(cmd);
+    spi0_bus_byte(data);
+    spi0_bus_byte(data >> 8);
+    gpio_put(pin_cs, 1);
     ft812_bus_unlock();
 }
 
 void FT812::write32(const uint32_t address, const uint32_t data) {
     uint32_t cmd = address | WRITE;
     ft812_bus_lock();
-    SPI.beginTransaction(spiSettings());
-    digitalWrite(pin_cs, LOW);
-    SPI.transfer(cmd >> 16);
-    SPI.transfer(cmd >> 8);
-    SPI.transfer(cmd);
-    SPI.transfer(data);
-    SPI.transfer(data >> 8);
-    SPI.transfer(data >> 16);
-    SPI.transfer(data >> 24);
-    digitalWrite(pin_cs, HIGH);
-    SPI.endTransaction();
+    spi0_bus_clock(spiHz());
+    gpio_put(pin_cs, 0);
+    spi0_bus_byte(cmd >> 16);
+    spi0_bus_byte(cmd >> 8);
+    spi0_bus_byte(cmd);
+    spi0_bus_byte(data);
+    spi0_bus_byte(data >> 8);
+    spi0_bus_byte(data >> 16);
+    spi0_bus_byte(data >> 24);
+    gpio_put(pin_cs, 1);
     ft812_bus_unlock();
 }

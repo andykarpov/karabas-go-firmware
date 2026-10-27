@@ -10,7 +10,6 @@
 #include <tuple>
 #include "app_about.h"
 #include "app_core.h"
-#include <SPI.h>
 #include "sorts.h"
 
 void app_about_overlay() {
