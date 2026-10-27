@@ -4,13 +4,12 @@
 #include "main.h"
 #include "OSD.h"
 #include "usb_hid_keys.h"
-#include "SegaController.h"
+#include "input/sega.h"
 #include "SdFat.h"
 #include <algorithm>
 #include <tuple>
 #include "app_setup.h"
 #include "app_core.h"
-#include <SPI.h>
 #include "sorts.h"
 // the Setup screen: a list of the setup apps; Wi-Fi and Settings only in the BOOT core
 typedef struct {

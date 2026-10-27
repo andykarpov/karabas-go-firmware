@@ -4,6 +4,7 @@
 #include "config.h"
 #include "fpga/link.h"
 #include "storage/settings.h"
+#include "ms_time.h"
 
 namespace {
 void trace_rx(uint32_t offset, const char *hex) {
@@ -76,7 +77,7 @@ void printer_link_reset() {
   active = reply = pending = false;
   received = rejected = last_log = 0;
   last_status = 0x80;
-  last_status_sent = millis();
+  last_status_sent = ms_now();
   const auto s = printer_snapshot();
   if (s.queued || s.fault) printer_reset();
 }
@@ -86,7 +87,7 @@ void printer_link_tick() {
   flush_pending();
   const auto s = printer_snapshot();
   const uint8_t status = busy(s) ? 0x80 : 0x00;
-  const uint32_t now = millis();
+  const uint32_t now = ms_now();
   if (status != last_status || uint32_t(now - last_log) >= 1000) {
     last_log = now;
     d_printf("Printer link busy=%u queue=%u flight=%u free=%u pending=%u rx=%lu rejected=%lu usb=%lu connected=%u valid=%u port=%02x fault=%u reset=%u\r\n",
@@ -98,7 +99,7 @@ void printer_link_tick() {
   }
   if (reply || status != last_status || uint32_t(now - last_status_sent) >= STATUS_REPEAT_MS) {
     rx_trace.flush(); // also expose a short final line when the source stops
-    // Unsigned subtraction handles millis() wraparound. Update before spi_send:
+    // Unsigned subtraction handles ms_now() wraparound. Update before spi_send:
     // SPI dispatch may re-enter the handlers and set a new reply request.
     reply = false;
     last_status = status;

@@ -45,7 +45,7 @@ void msc_reboot_to_msc(uint8_t sd_card) {
   bk_flush();
   matrix_icon(MATRIX_ICON_MSC);
   watchdog_hw->scratch[0] = sd_card == 2 ? MSC2_REQUEST_MAGIC : MSC_REQUEST_MAGIC;
-  rp2040.reboot();
+  chip_reboot();
 }
 
 void msc_check_boot() {
@@ -95,13 +95,13 @@ bool msc_failed() {
 // returns true while in msc mode (the rest of the main loop is skipped)
 bool msc_tick() {
   // if eject event registered - reboot rp2040
-  if (ejected && (host_gone || millis() - eject_ms >= MSC_EJECT_REBOOT_MS)) {
+  if (ejected && (host_gone || ms_now() - eject_ms >= MSC_EJECT_REBOOT_MS)) {
     d_println(host_gone ? "MSC: the host let the device go, reboot" : "MSC: reboot after the eject");
     d_flush();
-    rp2040.reboot();
+    chip_reboot();
   }
   if (failed && ms_since(failed_timer) >= MSC_FAILED_REBOOT_MS) {
-    rp2040.reboot();
+    chip_reboot();
   }
 
 #if ENABLE_MSC
@@ -175,7 +175,7 @@ bool msc_start_stop_cb_sd(uint8_t power_condition, bool start, bool load_eject) 
         usb_msc.setUnitReady(0, false);
         if (card == 2) sd2_sync();
         else sd1.card()->syncDevice();
-        eject_ms = millis();
+        eject_ms = ms_now();
         ejected = true;
       }
     }

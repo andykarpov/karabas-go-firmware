@@ -15,25 +15,25 @@ FT812 ft(PIN_MCU_FT_CS);
 
 void board_init_pins() {
   // unused MCU-FPGA pins (yet)
-  pinMode(PIN_MCU_SPI_IO0, INPUT);
-  pinMode(PIN_MCU_SPI_IO1, INPUT_PULLDOWN); // burst READY from the fpga (undriven reads as not ready)
-  pinMode(PIN_MCU_SPI_IO4, INPUT);
+  pin_input(PIN_MCU_SPI_IO0);
+  pin_input_pulldown(PIN_MCU_SPI_IO1); // burst READY from the fpga (undriven reads as not ready)
+  pin_input(PIN_MCU_SPI_IO4);
 #if HW_ID == HW_ID_MINIG
-  pinMode(PIN_MCU_SPI_IO5, INPUT);
-  pinMode(PIN_FT_RESET, OUTPUT);
-  pinMode(PIN_ESP_RESET, OUTPUT);
-  pinMode(PIN_MIDI_RESET, OUTPUT);
-  digitalWrite(PIN_FT_RESET, HIGH);
-  digitalWrite(PIN_ESP_RESET, HIGH);
-  digitalWrite(PIN_MIDI_RESET, HIGH);
+  pin_input(PIN_MCU_SPI_IO5);
+  pin_output(PIN_FT_RESET);
+  pin_output(PIN_ESP_RESET);
+  pin_output(PIN_MIDI_RESET);
+  gpio_put(PIN_FT_RESET, 1);
+  gpio_put(PIN_ESP_RESET, 1);
+  gpio_put(PIN_MIDI_RESET, 1);
 #endif
 }
 
 void board_init_io() {
-  pinMode(PIN_BTN1, INPUT_PULLUP);
-  pinMode(PIN_BTN2, INPUT_PULLUP);
-  pinMode(PIN_LED1, OUTPUT); digitalWrite(PIN_LED1, HIGH);
-  pinMode(PIN_LED2, OUTPUT); digitalWrite(PIN_LED2, HIGH);
+  pin_input_pullup(PIN_BTN1);
+  pin_input_pullup(PIN_BTN2);
+  pin_output(PIN_LED1); gpio_put(PIN_LED1, 1);
+  pin_output(PIN_LED2); gpio_put(PIN_LED2, 1);
 }
 
 uint8_t board_usb_pinout() {
@@ -47,11 +47,11 @@ void board_joy_read(uint16_t &left, uint16_t &right) {
 
 void board_reset_peripherals() {
 #if HW_ID == HW_ID_MINIG
-  digitalWrite(PIN_MIDI_RESET, LOW);
-  digitalWrite(PIN_ESP_RESET, LOW);
-  delay(50);
-  digitalWrite(PIN_MIDI_RESET, HIGH);
-  digitalWrite(PIN_ESP_RESET, HIGH);
+  gpio_put(PIN_MIDI_RESET, 0);
+  gpio_put(PIN_ESP_RESET, 0);
+  ms_delay(50);
+  gpio_put(PIN_MIDI_RESET, 1);
+  gpio_put(PIN_ESP_RESET, 1);
 #endif
 }
 
@@ -60,11 +60,11 @@ bool board_has_floppy() {
 }
 
 bool btn_read(uint8_t num) {
-  return !digitalRead(num == 0 ? PIN_BTN1 : PIN_BTN2);
+  return !gpio_get(num == 0 ? PIN_BTN1 : PIN_BTN2);
 }
 
 void led_write(uint8_t num, bool on) {
-  digitalWrite(num == 0 ? PIN_LED1 : PIN_LED2, !on);
+  gpio_put(num == 0 ? PIN_LED1 : PIN_LED2, !on);
 }
 
 #endif // HW_ID_MINI || HW_ID_MINIG

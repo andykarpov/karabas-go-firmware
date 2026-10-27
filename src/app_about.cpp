@@ -4,13 +4,12 @@
 #include "main.h"
 #include "OSD.h"
 #include "usb_hid_keys.h"
-#include "SegaController.h"
+#include "input/sega.h"
 #include "SdFat.h"
 #include <algorithm>
 #include <tuple>
 #include "app_about.h"
 #include "app_core.h"
-#include <SPI.h>
 #include "sorts.h"
 
 void app_about_overlay() {

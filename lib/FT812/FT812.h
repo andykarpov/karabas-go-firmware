@@ -29,7 +29,6 @@
 #define __FT812_H__
 
 #include <Arduino.h>
-#include <SPI.h>
 #include "ms_time.h"
 
 // Library headers
@@ -49,13 +48,6 @@
 #define FT81x_SPI_CLOCK_SPEED 12000000  ///< FT SPI clock speed
 #define FT81x_SPI_LOW_CLOCK_SPEED 1000000  ///< FT SPI low clock speed
 
-#ifndef FT81x_SPI_SETTINGS
-#define FT81x_SPI_SETTINGS SPISettings(FT81x_SPI_CLOCK_SPEED, MSBFIRST, SPI_MODE0)  ///< Default SPI settings, can be overwritten
-#endif
-
-#ifndef FT81x_SPI_LOW_SETTINGS
-#define FT81x_SPI_LOW_SETTINGS SPISettings(FT81x_SPI_LOW_CLOCK_SPEED, MSBFIRST, SPI_MODE0)  ///< Default SPI settings, can be overwritten
-#endif
 
 #define FT81x_CMD_ACTIVE    0x000000  ///< Switch from Standby/Sleep/PWRDOWN modes to active mode.
 #define FT81x_CMD_STANDBY   0x410000  ///< Put FT81x core to standby mode. Clock gate STANDBY off, PLL and Oscillator remain on (default). ACTIVE command to wake up.
@@ -267,7 +259,7 @@ private:
   bool powerUp();                    ///< one clock setup + wake-up attempt, false if the chip did not come up
   bool sampleClock(uint32_t &us, uint32_t &cycles); ///< REG_CLOCK with the time it was read at
   void initFailed(const char *fmt, ...);
-  SPISettings spiSettings() { return slow_spi ? FT81x_SPI_LOW_SETTINGS : FT81x_SPI_SETTINGS; }
+  uint32_t spiHz() { return slow_spi ? FT81x_SPI_LOW_CLOCK_SPEED : FT81x_SPI_CLOCK_SPEED; }
 
 protected:
 

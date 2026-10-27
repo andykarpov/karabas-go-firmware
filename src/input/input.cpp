@@ -83,7 +83,7 @@ static void btn_run(uint8_t i, uint8_t action) {
       break;
     case BTN_ACTION_MENU:
       bk_flush();
-      rp2040.reboot();
+      chip_reboot();
       break;
     case BTN_ACTION_RELOAD: {
       char filename[sizeof(core.filename)];
@@ -95,7 +95,7 @@ static void btn_run(uint8_t i, uint8_t action) {
       bk_flush();
       hang_diag_stop();
       matrix_icon(MATRIX_ICON_BOOTSEL); // the bootloader leaves the matrix as it is
-      rp2040.rebootToBootloader();
+      chip_reboot_bootsel();
       break;
     case BTN_ACTION_MSC:
     case BTN_ACTION_MSC2:
@@ -170,12 +170,12 @@ static void joy_poll(bool &changedL, bool &changedR) {
 static void joy_send(bool changedL, bool changedR) {
   uint16_t l = joyL, r = joyR;
   if (changedL) {
-    spi_send(CMD_JOYSTICK, 0, lowByte(l));
-    spi_send(CMD_JOYSTICK, 1, highByte(l));
+    spi_send(CMD_JOYSTICK, 0, (uint8_t) l);
+    spi_send(CMD_JOYSTICK, 1, (uint8_t) (l >> 8));
   }
   if (changedR) {
-    spi_send(CMD_JOYSTICK, 2, lowByte(r));
-    spi_send(CMD_JOYSTICK, 3, highByte(r));
+    spi_send(CMD_JOYSTICK, 2, (uint8_t) r);
+    spi_send(CMD_JOYSTICK, 3, (uint8_t) (r >> 8));
   }
 }
 
@@ -323,7 +323,7 @@ bool on_global_hotkeys() {
 
   if (hotkey == HOTKEY_REBOOT) {
      bk_flush();
-     rp2040.reboot();
+     chip_reboot();
      return true;
   }
 

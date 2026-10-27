@@ -4,7 +4,6 @@
 #include <algorithm>
 #include <tuple>
 #include "types.h"
-#include <SPI.h>
 #include "config.h"
 #include <strings.h>
 

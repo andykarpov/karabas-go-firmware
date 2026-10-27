@@ -5,12 +5,11 @@
 #include "main.h"
 #include "OSD.h"
 #include "usb_hid_keys.h"
-#include "SegaController.h"
+#include "input/sega.h"
 #include "SdFat.h"
 #include <algorithm>
 #include <tuple>
 #include "app_file_loader.h"
-#include <SPI.h>
 #include "sorts.h"
 #include "file_name.h"
 
@@ -34,7 +33,7 @@ void app_file_loader_read_list(bool forceIndex = false) {
   zxosd.setPos(9,10);
   zxosd.print("Please wait...");
   zxosd.update();
-  delay(100);
+  ms_delay(100);
 
   // files from sd1 card
 
@@ -57,7 +56,7 @@ void app_file_loader_read_list(bool forceIndex = false) {
         sprintf(b, "Bad dir %s", d); 
         zxosd.print(b);
         zxosd.update();
-        delay(1000);
+        ms_delay(1000);
         app_file_loader_read_list(forceIndex);
         return;
     }
@@ -92,7 +91,7 @@ void app_file_loader_read_list(bool forceIndex = false) {
     zxosd.setPos(9,10);
     zxosd.print("Check SD card");
     zxosd.update();
-    delay(1000);
+    ms_delay(1000);
     app_file_loader_read_list(forceIndex);
     return;
   }
@@ -319,7 +318,7 @@ uint32_t c1 = 0;
   file1.close();
   d_printf("Sent %u bytes in %lu ms (%s), crc32 %08x", cnt, (unsigned long) ms_since(send_timer),
     link_burst_available() ? "burst" : "classic", kg_crc32_final(crc)); d_println();
-  delay(100);
+  ms_delay(100);
 
   // reload menu
   app_file_loader_overlay(false, false);

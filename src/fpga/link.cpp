@@ -4,6 +4,7 @@
 #include <FreeRTOS.h>
 #include <task.h>
 #include <semphr.h>
+#include "spi0_bus.h"
 
 // MCU <-> FPGA link over SPI0: 3-byte frames (cmd, addr, data). The FPGA answers
 // with its own frame in the same transfer; non-zero answers go to registered handlers.
@@ -12,7 +13,6 @@
 // recursive spi bus lock. Incoming commands are always handled in the dispatch task (APP):
 // frames received by other tasks are queued and handled by link_dispatch_pending().
 
-static SPISettings settingsA(SD_SCK_MHZ(16), MSBFIRST, SPI_MODE0); // default MCU SPI settings
 static uint8_t link_freq = 0; // core spi frequency in MHz, 0 or 255 = default
 static bool link_rx_enabled = true;
 static link_handler_t handlers[256] = { nullptr };
@@ -104,11 +104,7 @@ static void on_debug_data(uint8_t addr, uint8_t data) {
 }
 
 void link_begin() {
-  SPI.setSCK(PIN_MCU_SPI_SCK);
-  SPI.setRX(PIN_MCU_SPI_RX);
-  SPI.setTX(PIN_MCU_SPI_TX);
-  //SPI.setCS(PIN_MCU_SPI_CS);
-  SPI.begin(false);
+  spi0_bus_init(PIN_MCU_SPI_SCK, PIN_MCU_SPI_TX, PIN_MCU_SPI_RX);
 
   link_on(CMD_DEBUG_ADDRESS, on_debug_address);
   link_on(CMD_DEBUG_DATA, on_debug_data);
@@ -175,21 +171,20 @@ void link_report_drops() {
   }
 }
 
-static SPISettings link_settings() {
+static uint32_t link_hz() {
   // default (16 MHz) or custom spi freq from the core config
-  return (link_freq == 0 || link_freq == 255) ? settingsA : SPISettings(SD_SCK_MHZ(link_freq), MSBFIRST, SPI_MODE0);
+  return (link_freq == 0 || link_freq == 255) ? 16000000UL : link_freq * 1000000UL;
 }
 
 // one classic frame: send cmd/addr/data, receive the fpga's frame of the same transfer
 static void spi_xfer(uint8_t cmd, uint8_t addr, uint8_t data, uint8_t rx[3]) {
   spi_bus_lock();
-  SPI.beginTransaction(link_settings());
+  spi0_bus_clock(link_hz());
   // one 3-byte transfer keeps the SPI FIFO busy instead of 3 separate blocking calls
   const uint8_t tx[3] = {cmd, addr, data};
-  gpio_put(PIN_MCU_SPI_CS, LOW);
-  SPI.transfer(tx, rx, 3);
-  gpio_put(PIN_MCU_SPI_CS, HIGH);
-  SPI.endTransaction();
+  gpio_put(PIN_MCU_SPI_CS, 0);
+  spi0_bus_xfer(tx, rx, 3);
+  gpio_put(PIN_MCU_SPI_CS, 1);
   link_tx_frames++;
   spi_bus_unlock();
 }
@@ -246,7 +241,7 @@ void link_burst_reset() {
   burst_caps = 0;
   burst_mhz = 0;
   core_caps = 0;
-  pinMode(PIN_BURST_CS, INPUT_PULLUP); // only driven for cores that support bursts; idle high, so
+  pin_input_pullup(PIN_BURST_CS); // only driven for cores that support bursts; idle high, so
                                        // the burst receiver of a core never sees a floating chip select
 }
 
@@ -278,8 +273,8 @@ bool link_caps_query() {
   burst_caps = rx[1];
   burst_mhz = rx[2];
   if (burst_caps & CAPS_BURST_WRITE) {
-    pinMode(PIN_BURST_CS, OUTPUT);
-    digitalWrite(PIN_BURST_CS, HIGH);
+    pin_output(PIN_BURST_CS);
+    gpio_put(PIN_BURST_CS, 1);
   }
   return true;
 }
@@ -295,7 +290,7 @@ bool link_burst_available() {
 static bool burst_wait_ready() {
   if (!(burst_caps & CAPS_BURST_READY)) return true;
   uint32_t start = time_us_32();
-  while (!digitalRead(PIN_BURST_READY)) {
+  while (!gpio_get(PIN_BURST_READY)) {
     if (time_us_32() - start >= BURST_READY_TIMEOUT_US) return false;
   }
   return true;
@@ -304,12 +299,7 @@ static bool burst_wait_ready() {
 size_t link_burst_write(uint8_t type, uint32_t addr, const uint8_t *data, size_t len) {
   if (!link_burst_available()) return 0;
   SpiBusGuard bus;
-  // Begin with the classic link settings and switch only the baud rate: a different SPISettings
-  // clock makes arduino-pico deinit/init the SPI block, twice per burst when classic frames
-  // (OSD progress etc.) come in between.
-  SPISettings settings = link_settings();
-  SPI.beginTransaction(settings);
-  if (burst_mhz) spi_set_baudrate(spi0, burst_mhz * 1000000UL);
+  spi0_bus_clock(burst_mhz ? burst_mhz * 1000000UL : link_hz());
   size_t sent = 0;
   while (sent < len) {
     size_t n = len - sent;
@@ -320,14 +310,12 @@ size_t link_burst_write(uint8_t type, uint32_t addr, const uint8_t *data, size_t
     }
     uint32_t a = addr + sent;
     const uint8_t hdr[5] = { type, (uint8_t)(a >> 24), (uint8_t)(a >> 16), (uint8_t)(a >> 8), (uint8_t) a };
-    gpio_put(PIN_BURST_CS, LOW);
-    SPI.transfer(hdr, nullptr, sizeof(hdr));
-    SPI.transfer(data + sent, nullptr, n);
-    gpio_put(PIN_BURST_CS, HIGH);
+    gpio_put(PIN_BURST_CS, 0);
+    spi0_bus_xfer(hdr, NULL, sizeof(hdr));
+    spi0_bus_xfer(data + sent, NULL, n);
+    gpio_put(PIN_BURST_CS, 1);
     link_tx_frames++;
     sent += n;
   }
-  if (burst_mhz) spi_set_baudrate(spi0, settings.getClockFreq());
-  SPI.endTransaction();
   return sent;
 }

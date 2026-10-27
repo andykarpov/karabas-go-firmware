@@ -108,16 +108,16 @@ static void karabas_setup()
   printer_link_begin();
 
   // FPGA bitstream loader
-  pinMode(PIN_CONF_INIT_B, INPUT_PULLUP);
-  pinMode(PIN_CONF_PRG_B, OUTPUT);
-  pinMode(PIN_CONF_DONE, INPUT);
-  pinMode(PIN_CONF_CLK, INPUT);
-  pinMode(PIN_CONF_IO1, INPUT);
+  pin_input_pullup(PIN_CONF_INIT_B);
+  pin_output(PIN_CONF_PRG_B);
+  pin_input(PIN_CONF_DONE);
+  pin_input(PIN_CONF_CLK);
+  pin_input(PIN_CONF_IO1);
 
   // FT, SD2, MCU CS lines 
-  pinMode(PIN_MCU_SPI_CS, OUTPUT); digitalWrite(PIN_MCU_SPI_CS, HIGH);
-  pinMode(PIN_MCU_SD2_CS, OUTPUT); digitalWrite(PIN_MCU_SD2_CS, HIGH);
-  pinMode(PIN_MCU_FT_CS, OUTPUT); digitalWrite(PIN_MCU_FT_CS, HIGH);
+  pin_output(PIN_MCU_SPI_CS); gpio_put(PIN_MCU_SPI_CS, 1);
+  pin_output(PIN_MCU_SD2_CS); gpio_put(PIN_MCU_SD2_CS, 1);
+  pin_output(PIN_MCU_FT_CS); gpio_put(PIN_MCU_FT_CS, 1);
 
   // unused MCU-FPGA pins, peripheral reset lines
   board_init_pins();
@@ -284,7 +284,7 @@ static void usb_host_loop()
   hang_beat_core1();
   usb_diag_tick();
   tuh_task();
-  printer_host_tick(millis());
+  printer_host_tick(ms_now());
   printer_usb_tick();
 }
 
@@ -309,7 +309,7 @@ static void app_task(void *param) {
   // let PIO-USB claim its PIO memory, state machines and DMA channel first:
   // the SD card driver (PioSPI) would otherwise take PIO memory that the usb programs need (all of pio1)
   uint32_t wait = ms_now();
-  while (!usb_host_ready && ms_since(wait) < 2000) { delay(1); }
+  while (!usb_host_ready && ms_since(wait) < 2000) { ms_delay(1); }
   karabas_setup();
   // usb / ps2 / joystick events are forwarded by their own task from now on
   input_task_start();
@@ -361,7 +361,7 @@ void halt(const char* msg) {
       blink = !blink;
       led_write(0, blink);
       led_write(1, !blink);
-      delay(100);
+      ms_delay(100);
   }
-  rp2040.reboot();
+  chip_reboot();
 }

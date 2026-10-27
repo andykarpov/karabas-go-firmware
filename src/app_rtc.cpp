@@ -4,7 +4,7 @@
 #include "main.h"
 #include "OSD.h"
 #include "usb_hid_keys.h"
-#include "SegaController.h"
+#include "input/sega.h"
 #include "masked_input.h"
 #include "time_zone.h"
 #include "app_rtc.h"

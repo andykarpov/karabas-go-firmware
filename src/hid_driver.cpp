@@ -4,7 +4,7 @@
 #include "main.h"
 #include "hid_driver.h"
 #include "hid_learn.h"
-#include <SegaController.h>
+#include "input/sega.h"
 #include "IniFile.h"
 #include "hardware/sync.h"
 

@@ -6,7 +6,7 @@
 #include "bitmaps.h"
 #include "OSD.h"
 #include "SdFat.h"
-#include "SegaController.h"
+#include "input/sega.h"
 #include "usb_hid_keys.h"
 #include <algorithm>
 #include <tuple>
@@ -230,7 +230,7 @@ void app_core_browser_ft_sound(uint8_t sound, bool wait) {
   // a length that is not a multiple of 8 plays on past the sound (the last few samples go)
   ft.playAudio(key_offset, key_size & ~7u, key_samplerate, FT81x_AUDIO_FORMAT_ULAW, false);
   if (wait) {
-    delay(key_duration);
+    ms_delay(key_duration);
     ft.stopAudio(); // not stopSound(): that silences the click effect (REG_SOUND) instead
   }
 }
