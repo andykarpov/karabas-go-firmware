@@ -15,7 +15,7 @@
 extern "C" {
 #endif
 
-#define KG_INI_LINE_MAX 79 // chars of a line, the read buffer of load_setup() is 80 bytes
+#define KG_INI_LINE_MAX 78 // chars of a line: kg_ini_valid() with the 80-byte buffer of load_setup()
 #define KG_INI_NAME_MAX 15
 #define KG_INI_VALUE_MAX 32
 
