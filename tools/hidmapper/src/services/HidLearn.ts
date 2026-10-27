@@ -51,6 +51,18 @@ export class RestState {
     this.last = data.slice();
   }
 
+  // true if a report left the rest collected so far by more than REST_MARGIN in a byte (as
+  // unsigned and as signed): the pad was touched while resting, start the rest again
+  moved(reportId: number, data: Uint8Array): boolean {
+    if (!this.sameReport(reportId, data)) return false;
+    const beyond = (lo: number, hi: number, v: number) => v < lo ? lo - v : v > hi ? v - hi : 0;
+    for (let i = 0; i < this.len; i++) {
+      if (beyond(this.umin[i], this.umax[i], data[i]) > REST_MARGIN &&
+          beyond(this.smin[i], this.smax[i], s8(data[i])) > REST_MARGIN) return true;
+    }
+    return false;
+  }
+
   sameReport(reportId: number, data: Uint8Array): boolean {
     return this.len > 0 && reportId === this.reportId && Math.min(data.length, MAX_REPORT) === this.len;
   }

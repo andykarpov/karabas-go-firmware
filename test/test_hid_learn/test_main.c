@@ -146,6 +146,27 @@ static void test_format() {
   TEST_ASSERT_EQUAL_STRING("0,2,2,4", buf);
 }
 
+// a direction pressed while the pad rests (the press that picked the pad, held or repeated)
+static void test_rest_moved() {
+  const uint8_t idle[8] = {0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x0f, 0x00, 0x00};
+  hid_learn_rest_reset(&rest);
+  hid_learn_rest_add(&rest, 0, idle, 8);
+  uint8_t p[8];
+  memcpy(p, idle, 8); p[1] = 0x00; // up
+  TEST_ASSERT_TRUE(hid_learn_rest_moved(&rest, 0, p, 8));
+  memcpy(p, idle, 8); p[1] = 0x84; // jitter
+  TEST_ASSERT_FALSE(hid_learn_rest_moved(&rest, 0, p, 8));
+  TEST_ASSERT_FALSE(hid_learn_rest_moved(&rest, 1, p, 8)); // another report
+  // a stick that jitters around 0 is not moved by 0xff / 0x01
+  const uint8_t zero[2] = {0x00, 0x00};
+  hid_learn_rest_reset(&rest);
+  hid_learn_rest_add(&rest, 0, zero, 2);
+  const uint8_t jit[2] = {0xff, 0x01};
+  TEST_ASSERT_FALSE(hid_learn_rest_moved(&rest, 0, jit, 2));
+  const uint8_t push[2] = {0x80, 0x00};
+  TEST_ASSERT_TRUE(hid_learn_rest_moved(&rest, 0, push, 2));
+}
+
 static void test_long_report_clamped() {
   hid_learn_rest_reset(&rest);
   uint8_t big[100];
@@ -164,6 +185,7 @@ int main() {
   RUN_TEST(test_active_low_button);
   RUN_TEST(test_detected_rule_maps_back);
   RUN_TEST(test_format);
+  RUN_TEST(test_rest_moved);
   RUN_TEST(test_long_report_clamped);
   return UNITY_END();
 }

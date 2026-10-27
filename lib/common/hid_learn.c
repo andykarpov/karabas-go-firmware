@@ -37,6 +37,19 @@ static bool same_report(const hid_learn_rest_t *rest, uint8_t report_id, uint16_
   return rest->len && report_id == rest->report_id && len == rest->len;
 }
 
+static int beyond(int lo, int hi, int v) {
+  return v < lo ? lo - v : v > hi ? v - hi : 0;
+}
+
+bool hid_learn_rest_moved(const hid_learn_rest_t *rest, uint8_t report_id, const uint8_t *data, uint16_t len) {
+  if (!same_report(rest, report_id, len)) return false;
+  for (uint16_t i = 0; i < rest->len; i++) {
+    if (beyond(rest->umin[i], rest->umax[i], data[i]) > REST_MARGIN &&
+        beyond(rest->smin[i], rest->smax[i], (int8_t) data[i]) > REST_MARGIN) return true;
+  }
+  return false;
+}
+
 // a byte that jitters around 0 has a small signed range and a huge unsigned one
 static bool is_signed(const hid_learn_rest_t *rest, uint16_t i) {
   return (rest->smax[i] - rest->smin[i]) < (rest->umax[i] - rest->umin[i]);

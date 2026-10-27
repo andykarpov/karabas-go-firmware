@@ -28,6 +28,7 @@ enum {
 
 #define SETTLE_MS 700
 #define REST_MS 700
+#define REST_GIVE_UP_MS 3000 // a pad that never rests (a counter byte): take what there is
 #define PRESS_TIMEOUT_MS 10000
 #define RELEASE_TIMEOUT_MS 3000
 #define LIST_REFRESH_MS 500
@@ -38,6 +39,7 @@ static const char *const btn_names[HID_JOY_BUTTONS] = {"Up", "Down", "Left", "Ri
 static uint8_t state = ST_IDLE;
 static uint8_t btn;
 static uint32_t timer = 0;
+static uint32_t rest_start = 0;
 static uint32_t last_seq;
 static hid_capture_t rep;
 static hid_learn_rest_t rest;
@@ -311,9 +313,17 @@ void app_pad_mapper_tick() {
       if (fresh) { set_state(ST_SETTLE); draw(); }
       break;
     case ST_SETTLE:
-      if (ms_since(timer) >= SETTLE_MS) { hid_learn_rest_reset(&rest); set_state(ST_REST); }
+      if (ms_since(timer) >= SETTLE_MS) { hid_learn_rest_reset(&rest); rest_start = ms_now(); set_state(ST_REST); }
       break;
     case ST_REST:
+      // touched while resting (a direction pressed again): it would become the rest, and its
+      // press would be learned as the opposite one. Start the rest again
+      if (fresh && hid_learn_rest_moved(&rest, rep.report_id, rep.data, rep.len) &&
+          ms_since(rest_start) < REST_GIVE_UP_MS) {
+        hid_learn_rest_reset(&rest);
+        timer = ms_now();
+        break;
+      }
       if (fresh) hid_learn_rest_add(&rest, rep.report_id, rep.data, rep.len);
       // a pad may only report on changes: the last report is the idle one then
       if (ms_since(timer) >= REST_MS) {

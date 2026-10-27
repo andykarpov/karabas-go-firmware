@@ -36,6 +36,10 @@ void hid_learn_rest_reset(hid_learn_rest_t *rest);
 // add a report of the resting pad; reports with another id or length than the first are ignored
 void hid_learn_rest_add(hid_learn_rest_t *rest, uint8_t report_id, const uint8_t *data, uint16_t len);
 
+// true if a report left the rest state collected so far by more than its margin in a byte
+// (as unsigned and as signed): the pad was touched while resting, start the rest again
+bool hid_learn_rest_moved(const hid_learn_rest_t *rest, uint8_t report_id, const uint8_t *data, uint16_t len);
+
 // the source that changed in a report against the rest state; false if nothing did
 bool hid_learn_detect(const hid_learn_rest_t *rest, uint8_t report_id, const uint8_t *data, uint16_t len, hid_joy_rule_t *out);
 

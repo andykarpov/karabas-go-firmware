@@ -98,7 +98,9 @@ const handleInputReport = (event: HIDInputReportEvent) => {
     Array.from(bytes, b => b.toString(16).padStart(2, '0').toUpperCase()).join(' ');
 
   if (calibrating.value) {
-    rest.add(reportId, bytes);
+    // touched while resting: start the rest again (as the OSD mapper of the firmware)
+    if (rest.moved(reportId, bytes)) rest = new RestState();
+    else rest.add(reportId, bytes);
     return;
   }
   if (recording.value) record(reportId, bytes);
