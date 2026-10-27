@@ -45,13 +45,16 @@ static void app_core_browser_show() {
   }
 }
 
+static void app_core_show() { app_core_overlay(true); }
+static void app_file_loader_show() { app_file_loader_overlay(true, false); }
+
 // indexed by osd_state_e
 static const app_t apps[] = {
-  { []() { app_core_overlay(true); },                 app_core_on_keyboard },         // state_main
+  { app_core_show,                                     app_core_on_keyboard },         // state_main
   { app_setup_overlay,                                 app_setup_on_keyboard },        // state_setup
   { app_about_overlay,                                 app_about_on_keyboard },        // state_about
   { app_core_browser_show,                             app_core_browser_on_keyboard,   app_core_browser_tick }, // state_core_browser
-  { []() { app_file_loader_overlay(true, false); },   app_file_loader_on_keyboard },  // state_file_loader
+  { app_file_loader_show,                              app_file_loader_on_keyboard },  // state_file_loader
   { app_pad_mapper_overlay,                            app_pad_mapper_on_keyboard,     app_pad_mapper_tick }, // state_pad_mapper
   { app_rtc_overlay,                                   app_rtc_on_keyboard,            app_rtc_tick }, // state_rtc
   { app_wifi_overlay,                                  app_wifi_on_keyboard,           app_wifi_tick }, // state_wifi

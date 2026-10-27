@@ -308,12 +308,30 @@ void matrix_begin() {
   if (has_matrix) matrix_start_mode(KG_MATRIX_MODE_CORE); // karabas.ini is not read yet
 }
 
+static void on_matrix_pixel(uint8_t addr, uint8_t data) {
+  matrix_pixel_data(addr & 0x0F, addr >> 4, data & 0x03);
+}
+
+static void on_matrix_bitplan(uint8_t addr, uint8_t data) {
+  matrix_bitplan_data(addr & 0x1F, data);
+}
+
+static void on_audio_peaks_l(uint8_t addr, uint8_t data) {
+  uint16_t new_audio = ((uint16_t)(addr) << 8) | (uint16_t)data;
+  if (new_audio > audio_l) audio_l = new_audio;
+}
+
+static void on_audio_peaks_r(uint8_t addr, uint8_t data) {
+  uint16_t new_audio = ((uint16_t)(addr) << 8) | (uint16_t)data;
+  if (new_audio > audio_r) audio_r = new_audio;
+}
+
 void matrix_register_handlers() {
   link_on(CMD_MATRIX_CTL, matrix_ctl_data);
-  link_on(CMD_MATRIX_PIXEL, [](uint8_t addr, uint8_t data) { matrix_pixel_data(addr & 0x0F, addr >> 4, data & 0x03); });
-  link_on(CMD_MATRIX_BITPLAN, [](uint8_t addr, uint8_t data) { matrix_bitplan_data(addr & 0x1F, data); });
-  link_on(CMD_AUDIO_PEAKS_L, [](uint8_t addr, uint8_t data) { uint16_t new_audio = ((uint16_t)(addr) << 8) | (uint16_t)data; if (new_audio > audio_l) audio_l = new_audio; });
-  link_on(CMD_AUDIO_PEAKS_R, [](uint8_t addr, uint8_t data) { uint16_t new_audio = ((uint16_t)(addr) << 8) | (uint16_t)data; if (new_audio > audio_r) audio_r = new_audio; });
+  link_on(CMD_MATRIX_PIXEL, on_matrix_pixel);
+  link_on(CMD_MATRIX_BITPLAN, on_matrix_bitplan);
+  link_on(CMD_AUDIO_PEAKS_L, on_audio_peaks_l);
+  link_on(CMD_AUDIO_PEAKS_R, on_audio_peaks_r);
 }
 
 void matrix_progress(uint32_t val, uint32_t max) {
