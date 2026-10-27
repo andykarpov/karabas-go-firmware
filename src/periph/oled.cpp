@@ -1,25 +1,20 @@
 #include "main.h"
-#define SSD1306_NO_SPLASH
-#include "Adafruit_SSD1306.h"
+#include "ssd1306.h"
 #include "bitmaps.h"
 #include "i2c_bus.h"
 
-// Optional SSD1306 128x32 I2C OLED with a scrolling logo
+// Optional SSD1306 128x32 I2C OLED with a scrolling logo (lib/I2cDevices ssd1306)
 
-// the library switches the bus clock around each transfer (default: 400 kHz during, 100 kHz
-// after); keep the global 400 kHz set in setup()
-static Adafruit_SSD1306 oled(128, 32, &Wire, -1, 400000UL, 400000UL);
 static bool has_oled = false;
 static int oled_scrollpos = -128;
 
 void oled_begin() {
   I2cGuard i2c;
-  has_oled = oled.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  has_oled = ssd1306_begin();
   if (has_oled) {
     d_println("Found SSD1306 OLED display");
-    oled.clearDisplay();
-    oled.drawBitmap(8, 0, logoBw, 112, 32, WHITE); // karabas go logo 112x32 bw
-    oled.display(); // show default adafruit buffer
+    ssd1306_bitmap(8, 0, logoBw, 112, 32); // karabas go logo 112x32 bw
+    ssd1306_show();
   } else {
     d_println("SSD1306 OLED display was not found");
   }
@@ -38,7 +33,7 @@ void oled_frame() {
   } else {
     oled_scrollpos = 128;
   }
-  oled.clearDisplay();
-  oled.drawBitmap(oled_scrollpos, 0, logoBw, 112, 32, WHITE); // karabas go logo 112x32 bw
-  oled.display(); // show default adafruit buffer
+  ssd1306_clear();
+  ssd1306_bitmap(oled_scrollpos, 0, logoBw, 112, 32); // karabas go logo 112x32 bw
+  ssd1306_show();
 }

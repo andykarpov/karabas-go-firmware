@@ -123,10 +123,8 @@ static void karabas_setup()
   board_init_pins();
 
   // I2C
-  Wire.setSDA(PIN_I2C_SDA);
-  Wire.setSCL(PIN_I2C_SCL);
-  Wire.setClock(400000); // all devices on the bus are fast-mode (SSD1306, HT16K33, DS3231, 24xx EEPROM, PCA9536)
-  Wire.begin();
+  // all devices on the bus are fast-mode (SSD1306, HT16K33, DS3231, 24xx EEPROM, PCA9536)
+  i2c_dev_begin(PIN_I2C_SDA, PIN_I2C_SCL, 400000);
 
 #if WAIT_SERIAL
   while ( !Serial ) yield();   // wait for native usb

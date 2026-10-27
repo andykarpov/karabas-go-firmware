@@ -5,7 +5,7 @@
 
 #include <Arduino.h>
 #include <SPI.h>
-#include <Wire.h>
+#include "i2c_dev.h"
 #include <PioSPI.h>
 #include "config.h"
 #include "types.h"
