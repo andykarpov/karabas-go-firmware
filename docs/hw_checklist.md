@@ -87,16 +87,16 @@ Set `debug=1` in `karabas.ini` and keep a terminal on the USB serial port: most 
 
 ## Baseline
 
-Measured on master before the rewrite, to compare against. Mini G, `debug=1`, the same SD card.
+Measured on master before the rewrite, to compare against: 2026-10-27, master 3d1d797 (Pico-PIO-USB 0.7.3), Mini G, `debug=1`, the same SD cards.
 
 | What | How | Value |
 |---|---|---|
 | Firmware size | `arm-none-eabi-size` of the minig elf | 618296 text, 12032 data, 140840 bss (3d1d797) |
-| Boot to the BOOT core | USB enumeration to `Core type: Boot` in the log | |
-| BOOT core bitstream | `Elapsed time` in the log | |
-| nanomig load | bitstream + ROMs + Kickstart | |
-| File loader | a NES game, ms and KB/s in the log | |
-| MSC SD1 read / write | `dd` of 64 MB | 454 KB/s in #50 (one direction, not noted) |
-| MSC SD2 read / write | the same with `msc2` | 249 KB/s in #50 |
+| Boot to the BOOT core | the USB disconnect of the reboot to `Core type: Boot` in the log | ~1.6 s (after an MSC eject) |
+| BOOT core bitstream | `Elapsed time` in the log | 504..506 ms (693096 bytes) |
+| nanomig load | bitstream + ROMs + Kickstart | bitstream 619 ms (746600 bytes); Kickstart 512 KB in 1117 ms (burst); the core runs ~2.6 s after the choice. Booting from a 14 GB HDF: ~700 sector reads in 10 s, the longest wait 4.9 ms |
+| File loader | a NES game, ms and KB/s in the log | NES bitstream 605 ms; a 256 KB game in 1093 ms (burst); `.sav` mounted |
+| MSC SD1 read / write | `dd` with `iflag=direct` / `oflag=direct`, exFAT 32 GB | read 469 kB/s (64 MB), write 399 kB/s (32 MB) |
+| MSC SD2 read | the same with `msc2`, mounted read-only (no writes to the second card) | read 375 kB/s (25 MB) |
 | `DIAG` | loops per core, max gaps, heap, the lowest stacks, SOF | BOOT core, FT browser idle: core0 ~2200 loops/s, max gap 10..15 ms; core1 ~85000, max gap ~440 us; heap free 50080; stack free APP 3523, USB 1745, USBD 942, INPUT 817, MATRIX 902, OLED 928 words; SOF 1000/s, max gap ~1015 us, max frame ~210 us (low-speed pad behind the hub) |
-| Host resets of the USB device port | `reset full-speed USB device` in `journalctl -k` | already there with `debug=1` before the rewrite: from a few to 200+ an hour |
+| Host resets of the USB device port | `reset full-speed USB device` in `journalctl -k` | already there with `debug=1` before the rewrite: from a few to 200+ an hour, also once while nanomig booted from its HDF |
