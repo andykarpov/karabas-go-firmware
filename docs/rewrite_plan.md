@@ -66,7 +66,7 @@ arduino-pico exposes the pico-sdk `hardware_*` libraries, so most of the port ca
    - `IniFile` -> `kg_ini_read`.
    - **File ids:** `last_file_id` is written into the core file header (`FILE_POS_FILELOADER_FILE`) and is SdFat's `dirIndex` (+1 on exFAT). FatFs has no index, but `DIR.dptr` has the entry offset: id = `dptr / 32` (+1 on exFAT), and `sd_open_id` reads the dir with `f_readdir` up to that offset. Check on FAT32 and exFAT that the numbers match the old ones (otherwise the loader forgets the last file once).
    - Check the writes back into core files, `.sav`, `karabas.new` -> rename, and the eject (`syncDevice` -> `disk_ioctl(CTRL_SYNC)`).
-6. **All `.cpp` to `.c`:** `FT812`, `OSD`, `RTC`, the apps, `hid_app`, `printer_*`. The singletons (`zxosd`, `ft`, `zxrtc`) become modules with `osd_*` / `ft_*` / `rtc_*` functions.
+6. **All `.cpp` to `.c`:** `FT812`, `OSD`, `RTC`, the apps, `hid_app`, `printer_*`. The singletons (`zxosd`, `ft`, `zxrtc`) become modules with `osd_*` / `ft_*` / `rtc_*` functions. Done: `lib/OSD`, `lib/RTC`, `lib/FT812` (only the functions in use) are C modules; the debug output is a C API (`debug_printf`); C++ references and `std::sort` are gone (`qsort`); `SpiBusGuard` / `I2cGuard` became explicit lock / unlock calls; 52 modules of `src/` are `.c`. Left C++ for phase 2: `main.cpp`, `serial_bridge.cpp` and `msc.cpp` (`Serial`, the Adafruit USB classes).
 
 After phase 1 Arduino is left only in `main.cpp` (`setup()`, task creation) and in the Adafruit TinyUSB wrappers.
 
