@@ -52,45 +52,45 @@ typedef struct {
   bool has_x, has_y, has_hat;
 } parser_t;
 
-static uint32_t *offset_of(parser_t &p, uint8_t id) {
-  for (uint8_t i = 0; i < p.n_offsets; i++)
-    if (p.offsets[i].id == id) return &p.offsets[i].bits;
-  if (p.n_offsets == MAX_REPORT_IDS) return nullptr;
-  p.offsets[p.n_offsets].id = id;
-  p.offsets[p.n_offsets].bits = 0;
-  return &p.offsets[p.n_offsets++].bits;
+static uint32_t *offset_of(parser_t *p, uint8_t id) {
+  for (uint8_t i = 0; i < p->n_offsets; i++)
+    if (p->offsets[i].id == id) return &p->offsets[i].bits;
+  if (p->n_offsets == MAX_REPORT_IDS) return NULL;
+  p->offsets[p->n_offsets].id = id;
+  p->offsets[p->n_offsets].bits = 0;
+  return &p->offsets[p->n_offsets++].bits;
 }
 
-static void clear_locals(parser_t &p) {
-  p.n_usages = 0;
-  p.has_min = p.has_max = false;
+static void clear_locals(parser_t *p) {
+  p->n_usages = 0;
+  p->has_min = p->has_max = false;
 }
 
 // usage of the i-th field of a main item
-static uint32_t usage_at(const parser_t &p, uint32_t i) {
-  if (p.n_usages) return p.usages[i < p.n_usages ? i : p.n_usages - 1];
-  if (p.has_min) {
-    uint32_t u = p.usage_min + i;
-    if (p.has_max && u > p.usage_max) u = p.usage_max;
+static uint32_t usage_at(const parser_t *p, uint32_t i) {
+  if (p->n_usages) return p->usages[i < p->n_usages ? i : (uint32_t) p->n_usages - 1];
+  if (p->has_min) {
+    uint32_t u = p->usage_min + i;
+    if (p->has_max && u > p->usage_max) u = p->usage_max;
     return u;
   }
   return 0;
 }
 
-static void add_field(parser_t &p, uint8_t kind, uint16_t btn, uint32_t offset) {
-  hid_auto_map_t *m = p.out;
+static void add_field(parser_t *p, uint8_t kind, uint16_t btn, uint32_t offset) {
+  hid_auto_map_t *m = p->out;
   if (m->count == HID_AUTO_MAX_FIELDS || offset > 0xffff) return;
-  hid_auto_field_t &f = m->fields[m->count++];
-  f.report_id = p.g.report_id;
-  f.kind = kind;
-  f.size = (uint8_t) p.g.report_size;
-  f.offset = (uint16_t) offset;
-  f.btn = btn;
-  f.min = p.g.log_min;
-  f.max = p.g.log_max;
+  hid_auto_field_t *f = &m->fields[m->count++];
+  f->report_id = p->g.report_id;
+  f->kind = kind;
+  f->size = (uint8_t) p->g.report_size;
+  f->offset = (uint16_t) offset;
+  f->btn = btn;
+  f->min = p->g.log_min;
+  f->max = p->g.log_max;
 }
 
-static void classify(parser_t &p, uint32_t usage, uint32_t offset) {
+static void classify(parser_t *p, uint32_t usage, uint32_t offset) {
   uint16_t page = usage >> 16, id = usage & 0xffff;
   if (page == PAGE_BUTTON) {
     if (id >= 1 && id <= sizeof(button_map) / sizeof(button_map[0]))
@@ -99,9 +99,9 @@ static void classify(parser_t &p, uint32_t usage, uint32_t offset) {
   }
   if (page != PAGE_DESKTOP) return;
   switch (id) {
-    case DESKTOP_X:   if (!p.has_x)   { p.has_x = true;   add_field(p, HID_AUTO_AXIS_X, 0, offset); } break;
-    case DESKTOP_Y:   if (!p.has_y)   { p.has_y = true;   add_field(p, HID_AUTO_AXIS_Y, 0, offset); } break;
-    case DESKTOP_HAT: if (!p.has_hat) { p.has_hat = true; add_field(p, HID_AUTO_HAT, 0, offset); } break;
+    case DESKTOP_X:   if (!p->has_x)   { p->has_x = true;   add_field(p, HID_AUTO_AXIS_X, 0, offset); } break;
+    case DESKTOP_Y:   if (!p->has_y)   { p->has_y = true;   add_field(p, HID_AUTO_AXIS_Y, 0, offset); } break;
+    case DESKTOP_HAT: if (!p->has_hat) { p->has_hat = true; add_field(p, HID_AUTO_HAT, 0, offset); } break;
     case DESKTOP_DPAD_UP:    add_field(p, HID_AUTO_BUTTON, HID_SC_UP, offset); break;
     case DESKTOP_DPAD_DOWN:  add_field(p, HID_AUTO_BUTTON, HID_SC_DOWN, offset); break;
     case DESKTOP_DPAD_RIGHT: add_field(p, HID_AUTO_BUTTON, HID_SC_RIGHT, offset); break;
@@ -117,22 +117,23 @@ static bool is_pad(uint32_t app_usage) {
      (app_usage & 0xffff) == DESKTOP_MULTI_AXIS);
 }
 
-static void input_item(parser_t &p, uint32_t flags) {
-  uint32_t *offset = offset_of(p, p.g.report_id);
+static void input_item(parser_t *p, uint32_t flags) {
+  uint32_t *offset = offset_of(p, p->g.report_id);
   if (!offset) return;
   bool constant = flags & 1, variable = flags & 2;
-  uint32_t size = p.g.report_size, count = p.g.report_count;
-  if (!constant && variable && size >= 1 && size <= 32 && is_pad(p.app_usage)) {
+  uint32_t size = p->g.report_size, count = p->g.report_count;
+  if (!constant && variable && size >= 1 && size <= 32 && is_pad(p->app_usage)) {
     for (uint32_t i = 0; i < count; i++) classify(p, usage_at(p, i), *offset + i * size);
   }
   *offset += size * count;
 }
 
 bool hid_auto_map_build(const uint8_t *desc, uint16_t desc_len, hid_auto_map_t *out) {
-  static parser_t p; // kept off the task stack; called from the USB task only
-  memset(&p, 0, sizeof(p));
+  static parser_t parser; // kept off the task stack; called from the USB task only
+  parser_t *p = &parser;
+  memset(p, 0, sizeof(*p));
   memset(out, 0, sizeof(*out));
-  p.out = out;
+  p->out = out;
 
   uint16_t i = 0;
   while (i < desc_len) {
@@ -157,33 +158,33 @@ bool hid_auto_map_build(const uint8_t *desc, uint16_t desc_len, hid_auto_map_t *
       switch (tag) {
         case 0x8: input_item(p, udata); break;
         case 0xA: // collection
-          if (p.depth == 0 && udata == 1) p.app_usage = p.n_usages ? p.usages[0] : 0;
-          p.depth++;
+          if (p->depth == 0 && udata == 1) p->app_usage = p->n_usages ? p->usages[0] : 0;
+          p->depth++;
           break;
         case 0xC: // end collection
-          if (p.depth) p.depth--;
-          if (p.depth == 0) p.app_usage = 0;
+          if (p->depth) p->depth--;
+          if (p->depth == 0) p->app_usage = 0;
           break;
       }
       clear_locals(p);
     } else if (type == 1) { // global
       switch (tag) {
-        case 0x0: p.g.usage_page = (uint16_t) udata; break;
-        case 0x1: p.g.log_min = sdata; break;
+        case 0x0: p->g.usage_page = (uint16_t) udata; break;
+        case 0x1: p->g.log_min = sdata; break;
         // a max written as one byte 0xff means 255 to most devices, not -1
-        case 0x2: p.g.log_max = (sdata < p.g.log_min) ? (int32_t) udata : sdata; break;
-        case 0x7: p.g.report_size = udata; break;
-        case 0x8: p.g.report_id = (uint8_t) udata; break;
-        case 0x9: p.g.report_count = udata; break;
-        case 0xA: if (p.sp < MAX_PUSH) p.stack[p.sp++] = p.g; break;
-        case 0xB: if (p.sp) p.g = p.stack[--p.sp]; break;
+        case 0x2: p->g.log_max = (sdata < p->g.log_min) ? (int32_t) udata : sdata; break;
+        case 0x7: p->g.report_size = udata; break;
+        case 0x8: p->g.report_id = (uint8_t) udata; break;
+        case 0x9: p->g.report_count = udata; break;
+        case 0xA: if (p->sp < MAX_PUSH) p->stack[p->sp++] = p->g; break;
+        case 0xB: if (p->sp) p->g = p->stack[--p->sp]; break;
       }
     } else if (type == 2) { // local
-      uint32_t usage = (size == 4) ? udata : ((uint32_t) p.g.usage_page << 16) | udata;
+      uint32_t usage = (size == 4) ? udata : ((uint32_t) p->g.usage_page << 16) | udata;
       switch (tag) {
-        case 0x0: if (p.n_usages < MAX_USAGES) p.usages[p.n_usages++] = usage; break;
-        case 0x1: p.usage_min = usage; p.has_min = true; break;
-        case 0x2: p.usage_max = usage; p.has_max = true; break;
+        case 0x0: if (p->n_usages < MAX_USAGES) p->usages[p->n_usages++] = usage; break;
+        case 0x1: p->usage_min = usage; p->has_min = true; break;
+        case 0x2: p->usage_max = usage; p->has_max = true; break;
       }
     }
   }
@@ -191,12 +192,12 @@ bool hid_auto_map_build(const uint8_t *desc, uint16_t desc_len, hid_auto_map_t *
 }
 
 // read size bits at a bit offset, lsb first; false if the field is beyond the data
-static bool read_bits(const uint8_t *data, uint16_t len, uint32_t offset, uint8_t size, uint32_t &out) {
+static bool read_bits(const uint8_t *data, uint16_t len, uint32_t offset, uint8_t size, uint32_t *out) {
   if ((offset + size + 7) / 8 > len) return false;
-  out = 0;
+  *out = 0;
   for (uint8_t b = 0; b < size; b++) {
     uint32_t bit = offset + b;
-    if ((data[bit >> 3] >> (bit & 7)) & 1) out |= (uint32_t) 1 << b;
+    if ((data[bit >> 3] >> (bit & 7)) & 1) *out |= (uint32_t) 1 << b;
   }
   return true;
 }
@@ -216,30 +217,30 @@ bool hid_auto_map_has_report(const hid_auto_map_t *m, uint8_t report_id) {
 uint16_t hid_auto_map_report(const hid_auto_map_t *m, uint8_t report_id, const uint8_t *data, uint16_t len, uint16_t base) {
   uint16_t res = base;
   for (uint8_t i = 0; i < m->count; i++) {
-    const hid_auto_field_t &f = m->fields[i];
+    const hid_auto_field_t *f = &m->fields[i];
     uint32_t raw;
-    if (f.report_id != report_id || !read_bits(data, len, f.offset, f.size, raw)) continue;
+    if (f->report_id != report_id || !read_bits(data, len, f->offset, f->size, &raw)) continue;
     int64_t v = raw;
-    if (f.min < 0 && f.size < 32 && (raw >> (f.size - 1)) & 1) v -= (int64_t) 1 << f.size; // sign-extend
-    else if (f.min < 0 && f.size == 32) v = (int32_t) raw;
-    switch (f.kind) {
+    if (f->min < 0 && f->size < 32 && (raw >> (f->size - 1)) & 1) v -= (int64_t) 1 << f->size; // sign-extend
+    else if (f->min < 0 && f->size == 32) v = (int32_t) raw;
+    switch (f->kind) {
       case HID_AUTO_BUTTON:
-        if (v) res |= f.btn;
+        if (v) res |= f->btn;
         break;
       case HID_AUTO_AXIS_X:
       case HID_AUTO_AXIS_Y: {
-        int64_t range = (int64_t) f.max - f.min;
+        int64_t range = (int64_t) f->max - f->min;
         if (range <= 0) break;
         // compare doubled values: center is (min + max) / 2, the dead zone a quarter of the range
-        int64_t center2 = (int64_t) f.min + f.max, v2 = 2 * v, dead2 = range / 2;
-        bool x = (f.kind == HID_AUTO_AXIS_X);
+        int64_t center2 = (int64_t) f->min + f->max, v2 = 2 * v, dead2 = range / 2;
+        bool x = (f->kind == HID_AUTO_AXIS_X);
         if (v2 < center2 - dead2) res |= x ? HID_SC_LEFT : HID_SC_UP;
         else if (v2 > center2 + dead2) res |= x ? HID_SC_RIGHT : HID_SC_DOWN;
         break;
       }
       case HID_AUTO_HAT: {
-        if (v < f.min || v > f.max) break; // out of range: centered (null state)
-        int64_t n = (int64_t) f.max - f.min + 1, pos = v - f.min;
+        if (v < f->min || v > f->max) break; // out of range: centered (null state)
+        int64_t n = (int64_t) f->max - f->min + 1, pos = v - f->min;
         if (n == 8) res |= hat_dirs[pos];
         else if (n == 4) res |= hat_dirs[pos * 2];
         break;

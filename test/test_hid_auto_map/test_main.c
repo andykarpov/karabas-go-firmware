@@ -47,22 +47,26 @@ static void test_dragonrise_rest() {
 // same bits as drivers/retrolink.ini
 static void test_dragonrise_matches_retrolink_ini() {
   hid_auto_map_build(dragonrise, sizeof(dragonrise), &m);
-  struct { uint8_t byte, value; uint16_t btn; } cases[] = {
+  typedef struct { uint8_t byte, value; uint16_t btn; } value_case_t;
+  const value_case_t cases[] = {
     {1, 0x00, HID_SC_UP}, {1, 0xff, HID_SC_DOWN}, {0, 0x00, HID_SC_LEFT}, {0, 0xff, HID_SC_RIGHT},
   };
-  for (auto &c : cases) {
+  for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+    const value_case_t *c = &cases[i];
     uint8_t r[8] = {0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x0f, 0x00, 0x00};
-    r[c.byte] = c.value;
-    TEST_ASSERT_EQUAL_UINT16(c.btn, hid_auto_map_report(&m, 0, r, sizeof(r), 0));
+    r[c->byte] = c->value;
+    TEST_ASSERT_EQUAL_UINT16(c->btn, hid_auto_map_report(&m, 0, r, sizeof(r), 0));
   }
-  struct { uint8_t byte, bit; uint16_t btn; } bits[] = {
+  typedef struct { uint8_t byte, bit; uint16_t btn; } bit_case_t;
+  const bit_case_t bits[] = {
     {5, 5, HID_SC_A}, {5, 6, HID_SC_B}, {5, 4, HID_SC_X}, {5, 7, HID_SC_Y},
     {6, 5, HID_SC_START}, {6, 4, HID_SC_MODE}, {6, 0, HID_SC_C}, {6, 1, HID_SC_Z},
   };
-  for (auto &c : bits) {
+  for (size_t i = 0; i < sizeof(bits) / sizeof(bits[0]); i++) {
+    const bit_case_t *c = &bits[i];
     uint8_t r[8] = {0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x0f, 0x00, 0x00};
-    r[c.byte] |= 1 << c.bit;
-    TEST_ASSERT_EQUAL_UINT16(c.btn, hid_auto_map_report(&m, 0, r, sizeof(r), 0));
+    r[c->byte] |= 1 << c->bit;
+    TEST_ASSERT_EQUAL_UINT16(c->btn, hid_auto_map_report(&m, 0, r, sizeof(r), 0));
   }
 }
 

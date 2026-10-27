@@ -1,7 +1,12 @@
 #pragma once
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 // A masked input field of the OSD: "25.10.2026", "14:37". The digits are typed over, the
 // cursor stays on the digits and skips the separators.
@@ -36,3 +41,7 @@ int kg_days_in_month(int month, int year);
 bool kg_date_parse(const char *text, int *day, int *month, int *year);
 // "HH:MM" -> true if it is a valid time
 bool kg_time_parse(const char *text, int *hour, int *minute);
+
+#ifdef __cplusplus
+}
+#endif

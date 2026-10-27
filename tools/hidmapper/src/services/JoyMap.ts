@@ -1,5 +1,5 @@
 // The Karabas drivers/*.ini format (v2) and its mapping of a report to MD2 buttons.
-// A port of lib/KarabasCommon/src/hid_joy_map.cpp in karabas-go-firmware: keep them in sync.
+// A port of lib/KarabasCommon/src/hid_joy_map.c in karabas-go-firmware: keep them in sync.
 //
 // A button is mapped by one or more sources separated by '|'. A source is
 // "pos,type,value[,arg]", pos being the byte in the report (after the report id byte):

@@ -116,7 +116,8 @@ static void test_detected_rule_maps_back() {
   const uint8_t idle[3] = {0x80, 0x0f, 0x00};
   hid_learn_rest_add(&rest, 0, idle, 3);
   const uint8_t presses[][3] = {{0x00, 0x0f, 0x00}, {0xff, 0x0f, 0x00}, {0x80, 0x06, 0x00}, {0x80, 0x0f, 0x80}};
-  for (auto &p : presses) {
+  for (size_t i = 0; i < sizeof(presses) / sizeof(presses[0]); i++) {
+    const uint8_t *p = presses[i];
     hid_joy_config_t cfg;
     memset(&cfg, 0, sizeof(cfg));
     cfg.report_id = -1;

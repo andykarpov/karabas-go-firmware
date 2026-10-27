@@ -1,8 +1,13 @@
 #pragma once
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include "time_zone.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 // Parsing of the ESP8266 AT firmware replies (AT 1.x and 2.x), one line at a time without the
 // CR LF, and quoting of the command arguments.
@@ -63,3 +68,7 @@ uint8_t kg_esp_update_progress(uint8_t stage, uint32_t ms);
 // s quoted for an AT string argument: '"', ',' and '\' get a '\' before them. out must hold
 // 2 * strlen(s) + 1 bytes to never cut it.
 void kg_esp_quote(const char *s, char *out, size_t size);
+
+#ifdef __cplusplus
+}
+#endif

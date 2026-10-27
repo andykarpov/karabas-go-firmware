@@ -50,7 +50,7 @@ size_t kg_matrix_expand(const char *text, const kg_matrix_vars_t *vars, char *ou
   size_t len = 0;
   char buf[16];
   while (*text) {
-    const char *value = nullptr;
+    const char *value = NULL;
     size_t skip = 0;
     if (*text == '{') {
       if (strncmp(text, "{name}", 6) == 0) { value = vars->name; skip = 6; }

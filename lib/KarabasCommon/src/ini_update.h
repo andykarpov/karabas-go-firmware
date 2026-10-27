@@ -8,7 +8,12 @@
 // and keys are matched ignoring case and the spaces around them, as IniFile reads them; every
 // line of the section with the key gets the new value.
 
+#include <stdbool.h>
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define KG_INI_LINE_MAX 79 // chars of a line, the read buffer of load_setup() is 80 bytes
 #define KG_INI_NAME_MAX 15
@@ -36,3 +41,7 @@ typedef struct {
 void kg_ini_update_begin(kg_ini_update_t *u, kg_ini_item_t *items, uint8_t count, kg_ini_out_t out, void *ctx);
 void kg_ini_update_line(kg_ini_update_t *u, const char *line);
 void kg_ini_update_end(kg_ini_update_t *u);
+
+#ifdef __cplusplus
+}
+#endif

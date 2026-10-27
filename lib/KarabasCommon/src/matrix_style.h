@@ -2,9 +2,14 @@
 
 // The look of the LED matrix plugins that karabas.ini [matrix] sets for all cores: the clock
 // effect and the audio meters. The options have names for the ini (lowercase) and the OSD.
-// Pure C++, no Arduino dependencies.
+// Pure C, no Arduino dependencies.
 
+#include <stdbool.h>
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 enum {
   KG_MX_OPT_CLOCK_HOURS,         // the color of the hours
@@ -52,3 +57,7 @@ const char *kg_mx_opt_key(uint8_t opt);
 int kg_mx_opt_parse(uint8_t opt, const char *s);
 // a KG_MX_CLR_* as a KG_MX_* color
 uint8_t kg_mx_color(uint8_t clr);
+
+#ifdef __cplusplus
+}
+#endif

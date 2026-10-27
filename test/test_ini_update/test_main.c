@@ -16,7 +16,7 @@ static void collect(void *, const char *line) {
 static void run(const char *text, kg_ini_item_t *items, uint8_t count) {
   out[0] = '\0';
   kg_ini_update_t u;
-  kg_ini_update_begin(&u, items, count, collect, nullptr);
+  kg_ini_update_begin(&u, items, count, collect, NULL);
   char line[KG_INI_LINE_MAX + 1];
   const char *p = text;
   while (*p) {
@@ -138,7 +138,7 @@ static void test_duplicates() {
 }
 
 static void test_no_items() {
-  run(ini, nullptr, 0);
+  run(ini, NULL, 0);
   TEST_ASSERT_EQUAL_STRING(ini, out);
 }
 

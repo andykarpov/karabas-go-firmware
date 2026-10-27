@@ -1,7 +1,7 @@
 #pragma once
 
 // Learning a drivers/*.ini mapping from raw HID reports (the OSD gamepad mapper).
-// Pure C++, no Arduino dependencies.
+// Pure C, no Arduino dependencies.
 //
 // First the pad rests while hid_learn_rest_add() collects reports: the last one and the range
 // each byte jitters in. Then for each button hid_learn_detect() compares a report with the
@@ -12,9 +12,14 @@
 //     -> type 3, a range from halfway between the rest and the pressed value to the end.
 //     A byte that jitters around 0 (0xff..0x01) is read as signed.
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include "hid_joy_map.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define HID_LEARN_MAX_REPORT 64
 #define HID_LEARN_AXIS_MIN 0x30
@@ -39,3 +44,7 @@ bool hid_learn_is_rest(const hid_learn_rest_t *rest, uint8_t report_id, const ui
 
 // "pos,type,value[,arg]" as in the ini; returns the length written (snprintf style)
 int hid_learn_format_rule(const hid_joy_rule_t *r, char *buf, size_t size);
+
+#ifdef __cplusplus
+}
+#endif

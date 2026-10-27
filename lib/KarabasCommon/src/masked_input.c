@@ -37,9 +37,9 @@ bool kg_field_type(kg_field_t *f, char digit) {
 
 void kg_field_turn(kg_field_t *f, int d) {
   if (f->pos >= f->len) return;
-  char &ch = f->text[f->pos];
-  if (!is_digit(ch)) return;
-  ch = '0' + ((ch - '0' + d) % 10 + 10) % 10;
+  char *ch = &f->text[f->pos];
+  if (!is_digit(*ch)) return;
+  *ch = '0' + ((*ch - '0' + d) % 10 + 10) % 10;
 }
 
 void kg_text_add(char *text, size_t max) {

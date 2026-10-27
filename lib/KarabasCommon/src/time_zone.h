@@ -1,7 +1,12 @@
 #pragma once
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 // The time zone of the NTP sync (karabas.ini [setup] tz): an offset from UTC in minutes, in
 // 15 minute steps, no daylight saving time. The RTC keeps the local time.
@@ -22,3 +27,7 @@ void kg_tz_format(int minutes, char *out, size_t size);
 int kg_tz_step(int minutes, int d);
 // t + minutes, over days, months and years
 void kg_datetime_add_minutes(kg_datetime_t *t, int minutes);
+
+#ifdef __cplusplus
+}
+#endif
