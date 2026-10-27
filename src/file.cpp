@@ -5,56 +5,53 @@
 #include "main.h"
 #include "kg_format.h"
 
+// the open core file (file1)
+
 void file_seek(uint32_t pos) {
-    file1.seek(pos);
+    f_lseek(&file1, pos);
 }
 
 uint8_t file_read() {
-    return file1.read();
+    uint8_t b = 0xFF;
+    sd_read(&file1, &b, 1);
+    return b;
 }
 
 size_t file_read_bytes(char *buf, size_t len) {
-    // not Stream::readBytes(): SdFat does not override it, so it reads byte by byte with a
-    // timeout check per byte (~2 ms per 256 bytes)
-    int n = file1.read(buf, len);
-    return (n > 0) ? (size_t) n : 0;
+    return sd_read(&file1, buf, len);
 }
 
 int file_read_buf(char *buf, size_t len) {
-    return file1.read(buf, len);
+    return sd_read(&file1, buf, len);
 }
 
 int file_write_buf(char *buf, size_t len) {
-    return file1.write(buf, len);
+    return sd_write(&file1, buf, len);
 }
 
 uint16_t file_read16(uint32_t pos) {
   file_seek(pos);
   uint8_t buf[2] = {0};
-  file1.readBytes(buf, sizeof(buf));
+  sd_read(&file1, buf, sizeof(buf));
   return kg_be16(buf);
 }
 
 uint32_t file_read24(uint32_t pos) {
   file_seek(pos);
   uint8_t buf[3] = {0};
-  file1.readBytes(buf, sizeof(buf));
+  sd_read(&file1, buf, sizeof(buf));
   return kg_be24(buf);
 }
 
 uint32_t file_read32(uint32_t pos) {
   file_seek(pos);
   uint8_t buf[4] = {0};
-  file1.readBytes(buf, sizeof(buf));
+  sd_read(&file1, buf, sizeof(buf));
   return kg_be32(buf);
-}
-
-void file_get_name(char *buf, size_t len) {
-  file1.getName(buf, len);
 }
 
 void file_write16(uint32_t pos, uint16_t val) {
   file_seek(pos);
-  file1.write((uint8_t) (val >> 8));
-  file1.write((uint8_t) val);
+  uint8_t buf[2] = { (uint8_t) (val >> 8), (uint8_t) val };
+  sd_write(&file1, buf, sizeof(buf));
 }

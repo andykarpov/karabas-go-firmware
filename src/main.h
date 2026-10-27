@@ -4,15 +4,12 @@
 // that defines it; the declarations live in the module headers included below.
 
 #include <Arduino.h>
-#include <SPI.h>
 #include "i2c_dev.h"
-#include <PioSPI.h>
 #include "config.h"
 #include "types.h"
 #include "FT812.h"
 #include "OSD.h"
 #include "RTC.h"
-#include "SdFat.h"
 #include "input/sega.h"
 #include "hid_app.h"
 #include "ms_time.h"

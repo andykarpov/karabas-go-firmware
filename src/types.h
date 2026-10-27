@@ -1,7 +1,7 @@
 #pragma once
 
 #include "config.h"
-#include "SdFat.h"
+#include "ff.h"
 #include "matrix_style.h"
 
 typedef struct {
@@ -33,7 +33,7 @@ typedef struct {
 	char filename[256];
 	uint32_t offset_dir; // core file pos to write dir name
 	uint32_t offset_filename; // core file pos to write file name
-	FsFile file;
+	FIL file;
 } core_file_slot_t;
 
 typedef struct {

@@ -1,5 +1,5 @@
 #include "main.h"
-#include <IniFile.h>
+#include "ini_read.h"
 #include "ini_update.h"
 #include "time_zone.h"
 #include "matrix_style.h"
@@ -8,6 +8,21 @@
 
 #define INI_FILE "/karabas.ini"
 #define INI_NEW "/karabas.new" // save_setup() writes it, then replaces karabas.ini with it
+#define INI_MAX 16384 // the most of karabas.ini that is read
+
+// karabas.ini as read by load_setup()
+static const char *ini_text;
+static size_t ini_len;
+
+static bool ini_get(const char *section, const char *key, char *buf, size_t len) {
+  return kg_ini_get(ini_text, ini_len, section, key, buf, len);
+}
+
+// the value only when it is one of the bool words (the default stays otherwise)
+static void ini_bool(const char *section, const char *key, bool &val) {
+  bool v;
+  if (kg_ini_get_bool(ini_text, ini_len, section, key, &v)) val = v;
+}
 
 setup_t hw_setup;
 
@@ -15,7 +30,6 @@ void load_setup() {
 
   const size_t bufferLen = 80;
   char buffer[bufferLen];
-  IniFile ini("karabas.ini");
   
   // defaults
   hw_setup.debug_enabled = false;
@@ -48,67 +62,70 @@ void load_setup() {
   kg_mx_style_default(&hw_setup.matrix_style);
 
   if (!has_sd) return;
-  sd1.chvol();
 
   // a save was cut off between the remove and the rename
-  if (!sd1.exists(INI_FILE) && sd1.exists(INI_NEW)) {
-    sd1.rename(INI_NEW, INI_FILE);
+  if (!sd_exists(INI_FILE) && sd_exists(INI_NEW)) {
+    f_rename(INI_NEW, INI_FILE);
   }
 
-  if (ini.open()) {
+  size_t len;
+  char *text = sd_read_all(INI_FILE, INI_MAX, &len);
+  if (text) {
     // validate file (every line, comments included, must fit into the buffer)
-    if (!ini.validate(buffer, bufferLen)) {
+    if (!kg_ini_valid(text, len, bufferLen)) {
       // always report it: the defaults are used and debug= is not read either
       hw_setup.debug_enabled = true;
-      d_printf("karabas.ini is invalid (error %d, lines are limited to %u chars), using the defaults",
-        (int) ini.getError(), (unsigned) (bufferLen - 1)); d_println();
+      d_printf("karabas.ini is invalid (lines are limited to %u chars), using the defaults",
+        (unsigned) (bufferLen - 2)); d_println();
       hw_setup.debug_enabled = false;
-      ini.close();
+      free(text);
       return;
     }
+    ini_text = text;
+    ini_len = len;
 
-    ini.getValue("setup", "debug", buffer, bufferLen, hw_setup.debug_enabled);
-    ini.getValue("setup", "dvi_only", buffer, bufferLen, hw_setup.dvi_only);
+    ini_bool("setup", "debug", hw_setup.debug_enabled);
+    ini_bool("setup", "dvi_only", hw_setup.dvi_only);
     int tz;
-    if (ini.getValue("setup", "tz", buffer, bufferLen) && kg_tz_parse(buffer, &tz)) hw_setup.tz = tz;
+    if (ini_get("setup", "tz", buffer, bufferLen) && kg_tz_parse(buffer, &tz)) hw_setup.tz = tz;
 
     
-    ini.getValue("ft812", "enabled", buffer, bufferLen, hw_setup.ft_enabled);
-    if (ini.getValue("ft812", "video_mode", buffer, bufferLen)) {
+    ini_bool("ft812", "enabled", hw_setup.ft_enabled);
+    if (ini_get("ft812", "video_mode", buffer, bufferLen)) {
       hw_setup.ft_video_mode = strtoul(buffer, 0, 10);
       // 0 640x480@60, 1 800x600@60; the other modes of older firmware are gone
       if (hw_setup.ft_video_mode >= FT812::modeCount()) hw_setup.ft_video_mode = 0;
     }
-    hw_setup.ft_sound = (ini.getValue("ft812", "sound", buffer, bufferLen)) ? strtoul(buffer, 0, 10) : 0;
+    hw_setup.ft_sound = (ini_get("ft812", "sound", buffer, bufferLen)) ? strtoul(buffer, 0, 10) : 0;
     if (hw_setup.ft_sound > 4) hw_setup.ft_sound = 1;
-    ini.getValue("ft812", "click", buffer, bufferLen, hw_setup.ft_click);
-    ini.getValue("ft812", "time", buffer, bufferLen, hw_setup.ft_time);
-    ini.getValue("ft812", "date", buffer, bufferLen, hw_setup.ft_date);
-    ini.getValue("ft812", "char", buffer, bufferLen, hw_setup.ft_char);
-    ini.getValue("ft812", "3d_buttons", buffer, bufferLen, hw_setup.ft_3d_buttons);
-    if (ini.getValue("ft812", "mouse_speed", buffer, bufferLen)) hw_setup.ft_mouse_speed = strtoul(buffer, 0, 10);
+    ini_bool("ft812", "click", hw_setup.ft_click);
+    ini_bool("ft812", "time", hw_setup.ft_time);
+    ini_bool("ft812", "date", hw_setup.ft_date);
+    ini_bool("ft812", "char", hw_setup.ft_char);
+    ini_bool("ft812", "3d_buttons", hw_setup.ft_3d_buttons);
+    if (ini_get("ft812", "mouse_speed", buffer, bufferLen)) hw_setup.ft_mouse_speed = strtoul(buffer, 0, 10);
     if (hw_setup.ft_mouse_speed < 1 || hw_setup.ft_mouse_speed > 5) hw_setup.ft_mouse_speed = 3;
-    hw_setup.color_bg = (ini.getValue("ft812", "color_bg", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_bg;
-    hw_setup.color_gradient = (ini.getValue("ft812", "color_gradient", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_gradient;
-    hw_setup.color_button = (ini.getValue("ft812", "color_button", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_button;
-    hw_setup.color_active = (ini.getValue("ft812", "color_active", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_active;
-    hw_setup.color_text = (ini.getValue("ft812", "color_text", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_text;
-    hw_setup.color_text_active = (ini.getValue("ft812", "color_text_active", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_text_active;
-    hw_setup.color_copyright = (ini.getValue("ft812", "color_copyright", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_copyright;
+    hw_setup.color_bg = (ini_get("ft812", "color_bg", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_bg;
+    hw_setup.color_gradient = (ini_get("ft812", "color_gradient", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_gradient;
+    hw_setup.color_button = (ini_get("ft812", "color_button", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_button;
+    hw_setup.color_active = (ini_get("ft812", "color_active", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_active;
+    hw_setup.color_text = (ini_get("ft812", "color_text", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_text;
+    hw_setup.color_text_active = (ini_get("ft812", "color_text_active", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_text_active;
+    hw_setup.color_copyright = (ini_get("ft812", "color_copyright", buffer, bufferLen)) ? strtoul(buffer, 0, 16) : hw_setup.color_copyright;
 
-    ini.getValue("matrix", "enabled", buffer, bufferLen, hw_setup.matrix_enabled);
-    if (ini.getValue("matrix", "brightness", buffer, bufferLen)) hw_setup.matrix_brightness = strtoul(buffer, 0, 10);
+    ini_bool("matrix", "enabled", hw_setup.matrix_enabled);
+    if (ini_get("matrix", "brightness", buffer, bufferLen)) hw_setup.matrix_brightness = strtoul(buffer, 0, 10);
     if (hw_setup.matrix_brightness > 16) hw_setup.matrix_brightness = 0;
     for (uint8_t i = 0; i < KG_MX_OPT_COUNT; i++) {
-      if (!ini.getValue("matrix", kg_mx_opt_key(i), buffer, bufferLen)) continue;
+      if (!ini_get("matrix", kg_mx_opt_key(i), buffer, bufferLen)) continue;
       int v = kg_mx_opt_parse(i, buffer);
       if (v >= 0) hw_setup.matrix_style.opt[i] = v;
     }
-    ini.getValue("matrix", "meter_peak", buffer, bufferLen, hw_setup.matrix_style.meter_peak);
+    ini_bool("matrix", "meter_peak", hw_setup.matrix_style.meter_peak);
 
-    ini.getValue("autoload", "enabled", buffer, bufferLen, hw_setup.autoload_enabled);
-    hw_setup.autoload_timeout = (ini.getValue("autoload", "timeout", buffer, bufferLen)) ? strtoul(buffer, 0, 10) : 0;
-    if (ini.getValue("autoload", "core", buffer, bufferLen)) {
+    ini_bool("autoload", "enabled", hw_setup.autoload_enabled);
+    hw_setup.autoload_timeout = (ini_get("autoload", "timeout", buffer, bufferLen)) ? strtoul(buffer, 0, 10) : 0;
+    if (ini_get("autoload", "core", buffer, bufferLen)) {
           strcpy(hw_setup.autoload_core, buffer);
     }
 
@@ -134,13 +151,14 @@ void load_setup() {
     d_print("Autoload timeout: "); d_println(hw_setup.autoload_timeout); 
     d_print("Autoload core: "); d_println(hw_setup.autoload_core); 
 
-    ini.close();
+    free(text);
+    ini_text = nullptr;
     return;
   }
 }
 
 typedef struct {
-  FsFile *file;
+  FIL *file;
   bool crlf;
   bool ok;
 } ini_writer_t;
@@ -148,9 +166,9 @@ typedef struct {
 static void write_line(void *ctx, const char *line) {
   ini_writer_t *w = (ini_writer_t *) ctx;
   size_t len = strlen(line);
-  if (w->file->write(line, len) != len) w->ok = false;
-  if (w->crlf && w->file->write('\r') != 1) w->ok = false;
-  if (w->file->write('\n') != 1) w->ok = false;
+  if (sd_write(w->file, line, len) != len) w->ok = false;
+  if (w->crlf && sd_write(w->file, "\r", 1) != 1) w->ok = false;
+  if (sd_write(w->file, "\n", 1) != 1) w->ok = false;
 }
 
 static void add_item(kg_ini_item_t *items, uint8_t &count, const char *section, const char *key, const char *value) {
@@ -220,48 +238,48 @@ bool save_setup(const setup_t &s) {
   if (count == 0) return true;
 
   if (!has_sd || msc_active()) return false;
-  sd1.chvol();
 
-  FsFile old, f;
-  bool has_old = old.open(&sd1, INI_FILE, O_RDONLY);
-  if (!f.open(&sd1, INI_NEW, O_WRONLY | O_CREAT | O_TRUNC)) {
-    if (has_old) old.close();
+  size_t old_len = 0;
+  char *old = sd_read_all(INI_FILE, INI_MAX, &old_len);
+  bool has_old = old != nullptr;
+  static FIL f; // not on the stack: a FIL has its own sector buffer
+  if (!sd_open(&f, INI_NEW, FA_WRITE | FA_CREATE_ALWAYS)) {
+    free(old);
     d_println("karabas.ini: can't create " INI_NEW);
     return false;
   }
 
-  ini_writer_t w = { &f, false, true };
+  // keep the line ends of the file
+  ini_writer_t w = { &f, has_old && memchr(old, '\r', old_len) != nullptr, true };
   kg_ini_update_t u;
   kg_ini_update_begin(&u, items, count, write_line, &w);
-  char line[KG_INI_LINE_MAX + 2]; // the line, its '\n' and the null
-  if (has_old) {
-    // keep the line ends of the file (fgets drops the CRs)
-    int n = old.read(line, sizeof(line) - 1);
-    w.crlf = n > 0 && memchr(line, '\r', n) != nullptr;
-    old.rewind();
-    int len = 0;
-    while (w.ok && (len = old.fgets(line, sizeof(line))) > 0) {
-      if (line[len - 1] == '\n') {
-        line[--len] = '\0';
-      } else if (old.available()) {
-        d_printf("karabas.ini: a line is longer than %u chars", KG_INI_LINE_MAX); d_println();
-        w.ok = false;
-        break;
-      }
-      kg_ini_update_line(&u, line);
+  for (size_t pos = 0; has_old && w.ok && pos < old_len; ) {
+    char *line = old + pos;
+    char *nl = (char *) memchr(line, '\n', old_len - pos);
+    size_t len = nl ? (size_t) (nl - line) : old_len - pos;
+    pos += len + (nl ? 1 : 0);
+    line[len] = '\0';
+    // the CRs go (the line ends of the file are written back by write_line)
+    size_t k = 0;
+    for (size_t i = 0; i < len; i++) if (line[i] != '\r') line[k++] = line[i];
+    line[k] = '\0';
+    if (k > KG_INI_LINE_MAX) {
+      d_printf("karabas.ini: a line is longer than %u chars", KG_INI_LINE_MAX); d_println();
+      w.ok = false;
+      break;
     }
-    if (len < 0) w.ok = false;
-    old.close();
+    kg_ini_update_line(&u, line);
   }
+  free(old);
   if (w.ok) kg_ini_update_end(&u);
-  if (!f.close()) w.ok = false;
+  if (f_close(&f) != FR_OK) w.ok = false;
 
   if (!w.ok) {
-    sd1.remove(INI_NEW);
+    f_unlink(INI_NEW);
     d_println("karabas.ini: save failed");
     return false;
   }
-  if ((has_old && !sd1.remove(INI_FILE)) || !sd1.rename(INI_NEW, INI_FILE)) {
+  if ((has_old && f_unlink(INI_FILE) != FR_OK) || f_rename(INI_NEW, INI_FILE) != FR_OK) {
     d_println("karabas.ini: can't replace the file");
     return false;
   }

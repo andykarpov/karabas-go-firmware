@@ -6,7 +6,6 @@
 #include "OSD.h"
 #include "usb_hid_keys.h"
 #include "input/sega.h"
-#include "SdFat.h"
 #include <algorithm>
 #include <tuple>
 #include "app_file_loader.h"
@@ -40,10 +39,7 @@ void app_file_loader_read_list(bool forceIndex = false) {
   if (has_sd) {
     char d[256];
     core_dir_path(d, sizeof(d));
-    if (root1.isOpen()) {
-      root1.close();
-    }
-    if (!root1.open(d)) {
+    if (!sd_opendir(&root1, d)) {
 
         zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
         zxosd.frame(8,8,24,12, 1);
@@ -60,25 +56,23 @@ void app_file_loader_read_list(bool forceIndex = false) {
         app_file_loader_read_list(forceIndex);
         return;
     }
-    root1.rewind();
-
     d_println("Read file list");
     files_clear();
     file_sel = 0;
     char e[sizeof(core.file_extensions)];
     strcpy(e, core.file_extensions);
     kg_str_lower(e); kg_trim(e);
-    while (file1.openNext(&root1, O_RDONLY)) {
-      char filename[256]; file1.getName(filename, sizeof(filename));
+    FILINFO fi;
+    while (f_readdir(&root1, &fi) == FR_OK && fi.fname[0]) {
+      const char *filename = fi.fname;
       uint16_t id;
-      if (!file1.isDirectory() && sd_file_id(file1, id) && kg_name_has_ext(filename, e)) {
+      if (!(fi.fattrib & AM_DIR) && sd_file_id(&fi, &id) && kg_name_has_ext(filename, e)) {
         file_list_sort_item_t *item = files_append();
         if (item) {
           memcpy(item->hash, filename, SORT_HASH_LEN);
           item->file_id = id;
         }
       }
-      file1.close();
     }
 
   } else {
@@ -113,9 +107,9 @@ void app_file_loader_read_list(bool forceIndex = false) {
       if (core.last_file_id == files[i].file_id) {
           file_sel = i;
           //d_printf("Found %d pos", i); d_println();
-          if (sd_open_id(file1, &root1, core.last_file_id)) {
+          FILINFO fi;
+          if (sd_find_id(&root1, core.last_file_id, &fi)) {
             app_file_loader_send_file(core.last_file_id);
-            file1.close();
           }
           // hide osd
           if (!is_osd_hiding) {
@@ -155,13 +149,11 @@ void app_file_loader_menu(uint8_t vpos) {
       // get name from filename and put into cache
       else {
 
-        if (sd_open_id(file1, &root1, files[i].file_id)) {
-          char filename[255];
-          file1.getName(filename, sizeof(filename));
-          snprintf(name, sizeof(name), "%s", filename);
-          snprintf(cached_names[j].name, sizeof(cached_names[j].name), "%s", filename);
+        FILINFO fi;
+        if (sd_find_id(&root1, files[i].file_id, &fi)) {
+          snprintf(name, sizeof(name), "%s", fi.fname);
+          snprintf(cached_names[j].name, sizeof(cached_names[j].name), "%s", fi.fname);
           cached_names[j].name[32] = '\0';
-          file1.close();
         }
       }
 
@@ -219,18 +211,13 @@ void app_file_loader_overlay(bool initSD = true, bool recreateIndex = false) {
 
 void app_file_loader_save()
 {
-    sd1.chvol();
-    if (!file1.open(core.filename, FILE_WRITE)) {
+    if (!sd_open(&file1, core.filename, FA_READ | FA_WRITE)) {
       d_println("Unable to open bitstream file to write");
-      return;
-    }
-    if (!file1.isWritable()) {
-      d_println("File is not writable");
       return;
     }
     core.last_file_id = files[file_sel].file_id;
     file_write16(FILE_POS_FILELOADER_FILE, core.last_file_id);
-    file1.close();
+    sd_close(&file1);
 }
 
 void app_file_loader_send_file(uint16_t file_id) {
@@ -242,34 +229,27 @@ void app_file_loader_send_file(uint16_t file_id) {
   bk_flush();
   bk_close();
 
-  if (root1.isOpen()) {
-    root1.close();
+  char dirname[255];
+  core_dir_path(dirname, sizeof(dirname));
+  if (!sd_opendir(&root1, dirname)) {
+    d_printf("Unable to open dir %s", dirname); d_println();
+    return;
   }
 
-  if (!root1.isOpen()) {
-    char dirname[255];
-    core_dir_path(dirname, sizeof(dirname));
-    if (!root1.open(&sd1, dirname)) {
-      d_printf("Unable to open dir %s", dirname); d_println();
-      return;
-    } else {
-      //d_printf("Dir %s open", dirname); d_println();
-    }
-  }
+  sd_close(&file1);
 
-  if (file1.isOpen()) {
-    file1.close();
-  }
-
-  if (!sd_open_id(file1, &root1, file_id, FILE_READ)) {
+  FILINFO fi;
+  char path[KG_PATH_MAX];
+  bool found = sd_find_id(&root1, file_id, &fi);
+  if (found) kg_path_join(path, sizeof(path), dirname, fi.fname);
+  if (!found || !sd_open(&file1, path, FA_READ)) {
     d_printf("Unable to open file %d", file_id); d_println();
     d_flush();
     app_file_loader_overlay(false, false);
     return;
   }
 
-  char game_name[256];
-  file1.getName(game_name, sizeof(game_name));
+  const char *game_name = fi.fname;
   bk_set_game(core.dir, game_name); // its save, if the core asks for one after the load
 
   uint8_t buf[512];
@@ -282,7 +262,7 @@ void app_file_loader_send_file(uint16_t file_id) {
   spi_send(CMD_FILELOADER, 0, 3); // 11 - active = 1, reset = 1
   spi_send(CMD_FILELOADER, 0, 2); // 10 - active = 1, reset = 0
 
-  uint64_t file_size = file1.size();
+  uint64_t file_size = f_size(&file1);
 
   d_printf("Sending file %d (%d bytes)", file_id, (uint32_t)((file_size))); d_println();
   d_flush();
@@ -293,7 +273,7 @@ uint32_t c1 = 0;
   send_timer = ms_now();
   uint32_t crc = KG_CRC32_INIT; // debug: compare with the crc32 of the file on a pc
 
-  while((c = file1.read(buf, sizeof(buf))) > 0) {
+  while((c = sd_read(&file1, buf, sizeof(buf))) > 0) {
     if (hw_setup.debug_enabled) crc = kg_crc32_update(crc, buf, c);
     // bursts if the core supports them; classic frames for whatever they did not send
     size_t done = link_burst_write(CMD_FILEDATA, cnt, buf, c);
@@ -315,7 +295,7 @@ uint32_t c1 = 0;
   spi_send(CMD_FILELOADER, 0, 0);
   spi_bus_unlock();
 
-  file1.close();
+  sd_close(&file1);
   d_printf("Sent %u bytes in %lu ms (%s), crc32 %08x", cnt, (unsigned long) ms_since(send_timer),
     link_burst_available() ? "burst" : "classic", kg_crc32_final(crc)); d_println();
   ms_delay(100);

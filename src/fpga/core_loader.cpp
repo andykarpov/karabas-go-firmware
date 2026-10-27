@@ -53,11 +53,12 @@ void core_ioctl_send(uint8_t slot, bool popup)
   char fname[KG_PATH_MAX];
   kg_path_join(fname, sizeof(fname), file_slots[slot].dir, file_slots[slot].filename);
   kg_path_collapse(fname);
-  FsFile file = sd1.open(fname);
-  if (!file) {
+  static FIL file; // not on the stack: a FIL has its own sector buffer
+  bool open = sd_open(&file, fname, FA_READ);
+  if (!open) {
     d_printf("Ioctl slot %d: unable to open %s", slot, fname); d_println();
   }
-  fsize = file ? file.size() : 0;
+  fsize = open ? f_size(&file) : 0;
   spi_send64(CMD_IOCTL_SIZE, fsize);
 
   const char *dot = strrchr(fname, '.');
@@ -71,7 +72,7 @@ void core_ioctl_send(uint8_t slot, bool popup)
   int c;
   uint32_t send_timer = ms_now();
   send_timer = ms_now();
-  while (i < fsize && (c = file.read(buf, sizeof(buf))) > 0) {
+  while (i < fsize && (c = sd_read(&file, buf, sizeof(buf))) > 0) {
     if (popup && i % 8192 == 0) {
       zxosd.loadingPopup(i, fsize);
       zxosd.update();
@@ -86,7 +87,7 @@ void core_ioctl_send(uint8_t slot, bool popup)
       spi_send(CMD_IOCTL_DATA, (uint8_t)((i & 0x00000000000000FF)), buf[j]);
     }
   }
-  file.close();
+  sd_close(&file);
   spi_send(CMD_IOCTL_STATE, 0, 0); // finish
   d_printf("Ioctl slot %d: %s, %lu bytes in %lu ms (%s)", slot, fname, (unsigned long) i,
     (unsigned long) ms_since(send_timer), link_burst_available() ? "burst" : "classic");
@@ -261,14 +262,16 @@ static void read_matrix() {
 
 void read_core(const char* filename) {
 
-  sd1.chvol();
-  if (!file1.open(filename, FILE_READ)) {
+  if (!sd_open(&file1, filename, FA_READ)) {
     halt("Unable to open bitstream file to read");
   }
 
   core.flash = false;
-  file1.getName(core.filename, sizeof(core.filename));
-  core.filename[32] = '\0';
+  {
+    FILINFO fi; // the name as it is on the card
+    snprintf(core.filename, sizeof(core.filename), "%s", f_stat(filename, &fi) == FR_OK ? fi.fname : filename);
+    core.filename[32] = '\0';
+  }
   file_seek(FILE_POS_CORE_NAME); file_read_bytes(core.name, 32); core.name[32] = '\0';
   uint8_t visible; file_seek(FILE_POS_CORE_VISIBLE); visible = file_read(); core.visible = (visible > 0);
   file_seek(FILE_POS_CORE_ORDER); core.order = file_read();
@@ -334,19 +337,19 @@ void read_core(const char* filename) {
       file_slots[core.osd[i].slot_id].is_autoload = (slot_byte & 0x80) != 0;
       file_slots[core.osd[i].slot_id].is_mounted = false;
       file_read_bytes(file_slots[core.osd[i].slot_id].ext, 256); file_slots[core.osd[i].slot_id].ext[255] = '\0';
-      file_slots[core.osd[i].slot_id].offset_dir = file1.curPosition();
+      file_slots[core.osd[i].slot_id].offset_dir = f_tell(&file1);
       file_read_bytes(file_slots[core.osd[i].slot_id].dir, 256); file_slots[core.osd[i].slot_id].dir[255] = '\0';
       char *dir = file_slots[core.osd[i].slot_id].dir;
       kg_trim(dir); // make_core pads with spaces
       kg_path_root(dir, sizeof(file_slots[0].dir));
-      file_slots[core.osd[i].slot_id].offset_filename = file1.curPosition();
+      file_slots[core.osd[i].slot_id].offset_filename = f_tell(&file1);
       file_read_bytes(file_slots[core.osd[i].slot_id].filename, 256); file_slots[core.osd[i].slot_id].filename[255] = '\0';
       char *sfilename = file_slots[core.osd[i].slot_id].filename;
       kg_trim(sfilename);
       char sfullname[KG_PATH_MAX];
       kg_path_join(sfullname, sizeof(sfullname), dir, sfilename);
-      if (sfilename[0] && (sd1.exists(sfullname) || core_osd_phys(i, sfilename))) {
-        file_slots[core.osd[i].slot_id].is_mounted = true; //file_slots[core.osd[i].slot_id].file = sd1.open(sfullname, O_READ);
+      if (sfilename[0] && (sd_exists(sfullname) || core_osd_phys(i, sfilename))) {
+        file_slots[core.osd[i].slot_id].is_mounted = true;
         // autoload: FL items below, after the switches (F items are always mounted)
       }
     }
@@ -448,7 +451,7 @@ void read_core(const char* filename) {
     d_print(core.osd[i].hotkey); d_println();
   }
 
-  file1.close();
+  sd_close(&file1);
 
   // mount slots
   for(uint8_t i=0; i<core.osd_len; i++) {
@@ -459,7 +462,7 @@ void read_core(const char* filename) {
       char sfullname[KG_PATH_MAX];
       kg_path_join(sfullname, sizeof(sfullname), dir, sfilename);
       file_slots[core.osd[i].slot_id].is_mounted = sfilename[0] &&
-        (sd1.exists(sfullname) || core_osd_phys(i, sfilename));
+        (sd_exists(sfullname) || core_osd_phys(i, sfilename));
       core_send(i); // opens the image and sends its size (or the physical drive)
     }
     // FL items with autoload: the file goes to the core before it starts (a Kickstart rom)
@@ -517,8 +520,7 @@ static uint8_t rom_buf[ROM_CHUNK];
 
 void read_roms(const char* filename) {
 
-  sd1.chvol();
-  if (!file1.open(filename, FILE_READ)) {
+  if (!sd_open(&file1, filename, FA_READ)) {
     halt("Unable to open bitstream file to read");
   }
 
@@ -562,11 +564,10 @@ void read_roms(const char* filename) {
       rom_filename[name_len] = '\0';
       d_print("External ROM "); d_println(rom_filename);
 
-      if (sd1.exists(rom_filename)) {
-        file2 = sd1.open(rom_filename, FILE_READ);
+      if (sd_open(&file2, rom_filename, FA_READ)) {
         uint32_t sent = 0;
         int c;
-        while ((c = file2.read(buf, ROM_CHUNK)) > 0) {
+        while ((c = sd_read(&file2, buf, ROM_CHUNK)) > 0) {
           rom_send(rom_addr + sent, buf, c);
           sent += c;
           rom_bytes += c;
@@ -576,7 +577,7 @@ void read_roms(const char* filename) {
           }
         }
         rom_progress(rom_idx, sent);
-        file2.close();
+        sd_close(&file2);
       } else {
         zxosd.setPos(4,5+rom_idx);
         zxosd.print(rom_idx+1); zxosd.print(": ");
@@ -618,5 +619,5 @@ void read_roms(const char* filename) {
     d_println();
   }
 
-  file1.close();
+  sd_close(&file1);
 }

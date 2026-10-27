@@ -15,9 +15,7 @@ void spi0_bus_init(unsigned sck, unsigned tx, unsigned rx);
 void spi0_bus_clock(uint32_t hz);  // before a transfer: the clock of this device
 void spi0_bus_xfer(const uint8_t *tx, uint8_t *rx, size_t len); // rx NULL: write only
 uint8_t spi0_bus_byte(uint8_t tx);
-// after SPI0 was used past this module (SdFat on Arduino's SPI): the next spi0_bus_clock sets
-// the baud again whatever it is
-void spi0_bus_forget_clock(void);
+void spi0_bus_read(uint8_t *rx, size_t len); // sends 0xFF
 
 #ifdef __cplusplus
 }

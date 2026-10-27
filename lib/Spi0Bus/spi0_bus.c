@@ -19,13 +19,13 @@ void spi0_bus_clock(uint32_t hz) {
   clock_hz = hz;
 }
 
-void spi0_bus_forget_clock(void) {
-  clock_hz = 0;
-}
-
 void spi0_bus_xfer(const uint8_t *tx, uint8_t *rx, size_t len) {
   if (rx) spi_write_read_blocking(spi0, tx, rx, len);
   else spi_write_blocking(spi0, tx, len);
+}
+
+void spi0_bus_read(uint8_t *rx, size_t len) {
+  spi_read_blocking(spi0, 0xFF, rx, len);
 }
 
 uint8_t spi0_bus_byte(uint8_t tx) {

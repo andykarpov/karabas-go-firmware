@@ -18,7 +18,6 @@ patches = [
     # tusb_config.h, which its sources include, defines it too). A later patch of the same file has
     # a marker of its own, so a framework patched before it gets it as well
     [join("patches", "6-adafruit-tusb-msc-bufsize.patch"), join(FRAMEWORK_DIR, "libraries", "Adafruit_TinyUSB_Arduino", "src", "arduino", "ports", "rp2040", "tusb_config_rp2040.h"), ".msc-patching-done"],
-    [join("patches", "2-adafruit-sdfatconfig.patch"), join(LIBDEPS_DIR, env["PIOENV"], "SdFat - Adafruit Fork", "src", "SdFatConfig.h")],
 ]
 
 for patch in patches:

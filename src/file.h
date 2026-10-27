@@ -13,5 +13,4 @@ int file_write_buf(char *buf, size_t len);
 uint16_t file_read16(uint32_t pos);
 uint32_t file_read24(uint32_t pos);
 uint32_t file_read32(uint32_t pos);
-void file_get_name(char *buf, size_t len);
 void file_write16(uint32_t pos, uint16_t val);
