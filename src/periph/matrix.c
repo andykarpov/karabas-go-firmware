@@ -8,7 +8,7 @@
 
 // Optional dot matrix addon (2x HT16K33 bi-color 8x8), see docs/matrix.md
 //
-// The display buffer (lib/I2cDevices ht16k33) and the mode are shared by the fpga command
+// The display buffer (lib/i2c ht16k33) and the mode are shared by the fpga command
 // handlers (APP) and matrix_frame() (MATRIX task): every access to the display holds the I2C
 // lock.
 

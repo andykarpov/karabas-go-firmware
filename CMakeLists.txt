@@ -30,7 +30,7 @@ set(PICO_BOARD pico)
 # TinyUSB of the pico-sdk on FreeRTOS, its PIO-USB host driver with our copy of Pico-PIO-USB
 # (upstream 0.7.3 with our diagnostics)
 set(TINYUSB_OPT_OS OPT_OS_FREERTOS)
-set(PICO_PIO_USB_PATH ${CMAKE_CURRENT_LIST_DIR}/lib/Pico-PIO-USB CACHE PATH "Pico-PIO-USB sources")
+set(PICO_PIO_USB_PATH ${CMAKE_CURRENT_LIST_DIR}/third_party/pico_pio_usb CACHE PATH "Pico-PIO-USB sources")
 
 include(cmake/pico_sdk_import.cmake)
 include(cmake/FreeRTOS_Kernel_import.cmake)
@@ -42,20 +42,17 @@ pico_sdk_init()
 # BUILD_VER: the date stamp of a release (build*.sh, CI), shown in About
 set(BUILD_VER "" CACHE STRING "firmware version")
 
-file(GLOB_RECURSE KG_SOURCES CONFIGURE_DEPENDS
-  ${CMAKE_CURRENT_LIST_DIR}/src/*.c
-  ${CMAKE_CURRENT_LIST_DIR}/lib/KarabasCommon/src/*.c)
-foreach(dir FatFs FT812 I2cDevices OSD RTC SdSpi Spi0Bus tusb_xinput)
-  file(GLOB dir_sources CONFIGURE_DEPENDS ${CMAKE_CURRENT_LIST_DIR}/lib/${dir}/*.c)
-  list(APPEND KG_SOURCES ${dir_sources})
-endforeach()
+# lib/: our libraries; third_party/: upstream code (with our changes marked `karabas`)
+set(KG_LIB_DIRS
+  lib/common lib/ft812 lib/i2c lib/ms_time lib/osd lib/rtc lib/sd lib/spi0
+  third_party/fatfs third_party/tusb_xinput)
 
-set(KG_INCLUDES
-  ${CMAKE_CURRENT_LIST_DIR}/src
-  ${CMAKE_CURRENT_LIST_DIR}/lib/KarabasCommon/src
-  ${CMAKE_CURRENT_LIST_DIR}/lib/MsTime)
-foreach(dir FatFs FT812 I2cDevices OSD RTC SdSpi Spi0Bus tusb_xinput)
-  list(APPEND KG_INCLUDES ${CMAKE_CURRENT_LIST_DIR}/lib/${dir})
+file(GLOB_RECURSE KG_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_LIST_DIR}/src/*.c)
+set(KG_INCLUDES ${CMAKE_CURRENT_LIST_DIR}/src)
+foreach(dir ${KG_LIB_DIRS})
+  file(GLOB dir_sources CONFIGURE_DEPENDS ${CMAKE_CURRENT_LIST_DIR}/${dir}/*.c)
+  list(APPEND KG_SOURCES ${dir_sources})
+  list(APPEND KG_INCLUDES ${CMAKE_CURRENT_LIST_DIR}/${dir})
 endforeach()
 
 function(karabas_firmware target hw_id)
@@ -65,7 +62,7 @@ function(karabas_firmware target hw_id)
     HW_ID=${hw_id}
     # loop rates, worst loop gaps, stack headroom and the flash cache every 10 s (debug=1)
     DIAG_STATS=1
-    # one XInput interface per USB device (lib/tusb_xinput)
+    # one XInput interface per USB device (third_party/tusb_xinput)
     CFG_TUH_XINPUT=1
     # the pico-sdk's stdio is not used: the log is src/diag/debug_out on the CDC
     PICO_STDIO_ENABLE_CRLF_SUPPORT=0

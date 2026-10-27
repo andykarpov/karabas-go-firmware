@@ -1,5 +1,5 @@
 #pragma once
-// The DS3231 real time clock (0x68): the time registers through rtc_regs (KarabasCommon).
+// The DS3231 real time clock (0x68): the time registers through rtc_regs (lib/common).
 // The caller holds the I2C bus lock. Pure C.
 
 #include <stdbool.h>

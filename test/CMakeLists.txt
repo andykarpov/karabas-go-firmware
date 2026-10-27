@@ -1,4 +1,4 @@
-# Host unit tests of lib/KarabasCommon (the hardware-independent logic), with Unity:
+# Host unit tests of lib/common (the hardware-independent logic), with Unity:
 #
 #   cmake -S test -B build-test -G Ninja && ninja -C build-test && ctest --test-dir build-test
 #
@@ -16,7 +16,7 @@ FetchContent_Declare(unity
   GIT_SHALLOW ON)
 FetchContent_MakeAvailable(unity)
 
-set(KG_COMMON ${CMAKE_CURRENT_LIST_DIR}/../lib/KarabasCommon/src)
+set(KG_COMMON ${CMAKE_CURRENT_LIST_DIR}/../lib/common)
 file(GLOB KG_COMMON_SOURCES CONFIGURE_DEPENDS ${KG_COMMON}/*.c)
 add_library(karabas_common STATIC ${KG_COMMON_SOURCES})
 target_include_directories(karabas_common PUBLIC ${KG_COMMON})

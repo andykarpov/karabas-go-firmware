@@ -49,5 +49,5 @@ npm run build         # dist/index.html, a single self-contained file
 ```
 
 `src/services/JoyMap.ts`, `HidLearn.ts` and `AutoMap.ts` are ports of `hid_joy_map`, `hid_learn`
-and `hid_auto_map` in `lib/KarabasCommon`. Change both sides together; the tests use the same
+and `hid_auto_map` in `lib/common`. Change both sides together; the tests use the same
 cases.

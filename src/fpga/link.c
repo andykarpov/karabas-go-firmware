@@ -73,10 +73,10 @@ void spi_bus_unlock() {
   xSemaphoreGive(spi_bus_mutex);
 }
 
-// hooks called by lib/FT812 around its own SPI0 transactions
+// hooks called by lib/ft812 around its own SPI0 transactions
 void ft812_bus_lock(void) { spi_bus_lock(); }
 void ft812_bus_unlock(void) { spi_bus_unlock(); }
-// and by lib/OSD around a redraw
+// and by lib/osd around a redraw
 void osd_bus_lock(void) { spi_bus_lock(); }
 void osd_bus_unlock(void) { spi_bus_unlock(); }
 

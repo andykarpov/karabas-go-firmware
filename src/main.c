@@ -295,7 +295,7 @@ static void app_task(void *param) {
   // and only this task writes to the usb serial port
   debug_set_owner_task(xTaskGetCurrentTaskHandle());
   // let PIO-USB claim its PIO memory, state machines and DMA channel first:
-  // the SD card driver (lib/SdSpi sd_pio) would otherwise take PIO memory that the usb programs need (all of pio1)
+  // the SD card driver (lib/sd sd_pio) would otherwise take PIO memory that the usb programs need (all of pio1)
   uint32_t wait = ms_now();
   while (!usb_host_ready && ms_since(wait) < 2000) { ms_delay(1); }
   karabas_setup();

@@ -1,6 +1,6 @@
 // The default map the firmware builds for a pad without an ini, computed here from the parsed
 // descriptor WebHID gives (device.collections). A port of the rules of
-// lib/KarabasCommon/src/hid_auto_map.c in karabas-go-firmware: keep them in sync.
+// lib/common/hid_auto_map.c in karabas-go-firmware: keep them in sync.
 //
 // Only top-level Joystick / Gamepad / Multi-axis collections (Generic Desktop) are used:
 // the first X / Y axis and the hat switch -> directions, D-pad / Start / Select usages, and

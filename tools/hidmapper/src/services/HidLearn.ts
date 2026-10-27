@@ -1,4 +1,4 @@
-// Learning a mapping from raw reports. A port of lib/KarabasCommon/src/hid_learn.c in
+// Learning a mapping from raw reports. A port of lib/common/hid_learn.c in
 // karabas-go-firmware (the OSD gamepad mapper does the same): keep them in sync.
 //
 // First the pad rests while RestState.add() collects reports: the last one and the range each

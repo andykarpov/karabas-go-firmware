@@ -7,7 +7,7 @@
  */
 #pragma once
 
-// The RTC of the cores: the DS3231 and the 24C08 EEPROM (lib/I2cDevices) seen through the
+// The RTC of the cores: the DS3231 and the 24C08 EEPROM (lib/i2c) seen through the
 // registers of the clock chip a core expects (MC146818A, ZX Evo, DS1307, MSM6242B), CMD_RTC
 // frames both ways. The I2C bus lock is taken around the I2C calls only, never around the
 // send / event callbacks. Pure C.

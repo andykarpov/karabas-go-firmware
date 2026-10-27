@@ -1,7 +1,7 @@
 # USB XInput controllers
 
 The firmware uses [Ryzee119/tusb_xinput](https://github.com/Ryzee119/tusb_xinput),
-copied into `lib/tusb_xinput` (with its license), as an additional TinyUSB host class driver.
+copied into `third_party/tusb_xinput` (with its license), as an additional TinyUSB host class driver.
 The copy keeps the `bool open()` API that the class drivers of TinyUSB 0.18 (pico-sdk 2.2.0)
 have; the newer upstream `uint16_t open()` API is for a later TinyUSB.
 The target device is an **8BitDo M30 2.4G connected by a USB data cable**.

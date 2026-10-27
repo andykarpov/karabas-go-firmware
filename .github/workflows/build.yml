@@ -37,7 +37,7 @@ jobs:
             if ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
               release=true
             elif git diff --name-only "$BEFORE" "$GITHUB_SHA" -- \
-                src lib cmake CMakeLists.txt | grep -q .; then
+                src lib third_party cmake CMakeLists.txt | grep -q .; then
               release=true
             fi
           fi
