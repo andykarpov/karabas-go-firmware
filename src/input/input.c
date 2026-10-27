@@ -62,6 +62,14 @@ static int hotkey_find(const hid_keyboard_report_t *kbd, uint16_t jl, uint16_t j
   return HOTKEY_NONE;
 }
 
+// the backup RAM first, then the log (the result of the flush) gets to the port before the reboot
+static void flush_and_reboot() {
+  bk_flush();
+  d_flush();
+  ms_delay(100);
+  chip_reboot();
+}
+
 // the osd of a core with one (Menu+Esc, the osd button action)
 static void osd_toggle() {
   if (core.type == CORE_TYPE_BOOT || core.type == CORE_TYPE_HIDDEN) return;
@@ -82,8 +90,7 @@ static void btn_run(uint8_t i, uint8_t action) {
       osd_toggle();
       break;
     case BTN_ACTION_MENU:
-      bk_flush();
-      chip_reboot();
+      flush_and_reboot();
       break;
     case BTN_ACTION_RELOAD: {
       char filename[sizeof(core.filename)];
@@ -322,9 +329,8 @@ bool on_global_hotkeys() {
   }
 
   if (hotkey == HOTKEY_REBOOT) {
-     bk_flush();
-     chip_reboot();
-     return true;
+    flush_and_reboot();
+    return true;
   }
 
   if (hotkey >= 0) {
