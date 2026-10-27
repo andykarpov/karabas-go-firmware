@@ -75,11 +75,54 @@ static void test_add() {
   kg_datetime_add_minutes(&t, 0); check(&t, 2026, 5, 10, 12, 0, 0);
 }
 
+static void test_valid() {
+  kg_datetime_t t = { 2026, 10, 27, 23, 59, 59 };
+  TEST_ASSERT_TRUE(kg_datetime_valid(&t));
+  t = (kg_datetime_t) { 2028, 2, 29, 0, 0, 0 }; TEST_ASSERT_TRUE(kg_datetime_valid(&t));
+  t = (kg_datetime_t) { 2000, 2, 29, 0, 0, 0 }; TEST_ASSERT_TRUE(kg_datetime_valid(&t));
+  t = (kg_datetime_t) { 2027, 2, 29, 0, 0, 0 }; TEST_ASSERT_FALSE(kg_datetime_valid(&t));
+  t = (kg_datetime_t) { 2026, 4, 31, 0, 0, 0 }; TEST_ASSERT_FALSE(kg_datetime_valid(&t));
+  t = (kg_datetime_t) { 2026, 13, 1, 0, 0, 0 }; TEST_ASSERT_FALSE(kg_datetime_valid(&t));
+  t = (kg_datetime_t) { 2026, 0, 1, 0, 0, 0 }; TEST_ASSERT_FALSE(kg_datetime_valid(&t));
+  t = (kg_datetime_t) { 2026, 1, 0, 0, 0, 0 }; TEST_ASSERT_FALSE(kg_datetime_valid(&t));
+  t = (kg_datetime_t) { 2026, 1, 1, 24, 0, 0 }; TEST_ASSERT_FALSE(kg_datetime_valid(&t));
+  t = (kg_datetime_t) { 2026, 1, 1, 0, 60, 0 }; TEST_ASSERT_FALSE(kg_datetime_valid(&t));
+  t = (kg_datetime_t) { 2026, 1, 1, 0, 0, 60 }; TEST_ASSERT_FALSE(kg_datetime_valid(&t));
+  t = (kg_datetime_t) { 1999, 12, 31, 0, 0, 0 }; TEST_ASSERT_FALSE(kg_datetime_valid(&t));
+  t = (kg_datetime_t) { 2100, 1, 1, 0, 0, 0 }; TEST_ASSERT_FALSE(kg_datetime_valid(&t));
+}
+
+static void test_weekday() {
+  kg_datetime_t t = { 2026, 10, 27, 12, 0, 0 }; // Tuesday
+  TEST_ASSERT_EQUAL(2, kg_datetime_weekday(&t));
+  t = (kg_datetime_t) { 2000, 1, 1, 0, 0, 0 }; TEST_ASSERT_EQUAL(6, kg_datetime_weekday(&t)); // Saturday
+  t = (kg_datetime_t) { 2026, 11, 1, 0, 0, 0 }; TEST_ASSERT_EQUAL(0, kg_datetime_weekday(&t)); // Sunday
+  t = (kg_datetime_t) { 2028, 2, 29, 0, 0, 0 }; TEST_ASSERT_EQUAL(2, kg_datetime_weekday(&t)); // Tuesday
+  t = (kg_datetime_t) { 1970, 1, 1, 0, 0, 0 }; TEST_ASSERT_EQUAL(4, kg_datetime_weekday(&t)); // Thursday
+}
+
+static void test_parse_build() {
+  kg_datetime_t t = { 1, 1, 1, 1, 1, 1 };
+  TEST_ASSERT_TRUE(kg_datetime_parse_build("Oct 27 2026", "17:05:09", &t));
+  check(&t, 2026, 10, 27, 17, 5, 9);
+  TEST_ASSERT_TRUE(kg_datetime_parse_build("Feb  3 2027", "00:00:00", &t));
+  check(&t, 2027, 2, 3, 0, 0, 0);
+  TEST_ASSERT_FALSE(kg_datetime_parse_build("Foo  3 2027", "00:00:00", &t));
+  TEST_ASSERT_FALSE(kg_datetime_parse_build("Feb 30 2027", "00:00:00", &t));
+  TEST_ASSERT_FALSE(kg_datetime_parse_build("Feb  3 2027", "25:00:00", &t));
+  TEST_ASSERT_FALSE(kg_datetime_parse_build("Feb  3 27", "00:00:00", &t));
+  TEST_ASSERT_FALSE(kg_datetime_parse_build("Feb  3 2027", "0:00:00", &t));
+  check(&t, 2027, 2, 3, 0, 0, 0); // left as it was
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_parse);
   RUN_TEST(test_format);
   RUN_TEST(test_step);
   RUN_TEST(test_add);
+  RUN_TEST(test_valid);
+  RUN_TEST(test_weekday);
+  RUN_TEST(test_parse_build);
   return UNITY_END();
 }
