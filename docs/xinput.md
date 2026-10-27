@@ -1,5 +1,7 @@
 # USB XInput controllers
 
+[Русская версия](xinput.ru.md)
+
 The firmware uses [Ryzee119/tusb_xinput](https://github.com/Ryzee119/tusb_xinput),
 copied into `third_party/tusb_xinput` (with its license), as an additional TinyUSB host class driver.
 The copy keeps the `bool open()` API that the class drivers of TinyUSB 0.18 (pico-sdk 2.2.0)

@@ -1,5 +1,7 @@
 # Dot Matrix Display
 
+[Русская версия](matrix.ru.md)
+
 A dot matrix display is an optional addon board that contains 2 bi-color 8x8 dot matrices, connected via I2C bus to the RP2040 chip and accessible via ports 0x70, 0x71.
 
 Implemented features:
@@ -42,7 +44,7 @@ The core can draw on the matrix (the registers below, `CMD_MATRIX_*`) only in th
 
 ## ZX Spectrum Support
 
-On the ZX Spectrum side (implemnted for TS-Conf and ZX Spectrum Next cores yet) the matrix is assessible via ZX UNO control / data ports #FC3B (64571) / #FD3B (64827) and their free registers F0, F1, F2.
+On the ZX Spectrum side (implemented for TS-Conf and ZX Spectrum Next cores yet) the matrix is accessible via ZX UNO control / data ports #FC3B (64571) / #FD3B (64827) and their free registers F0, F1, F2.
 
 In the `core` mode the dot matrix display starts with the Audio Volume Meter.
 On first data write to the control or data registers, the matrix will be switched to the custom draw mode.
@@ -53,7 +55,7 @@ Write to this register will execute some action as described below.
 
 Bit description for the control register:
 - bit 0: value=1 will clear the matrix
-- bit 1: vaule=1 will update the matrix from the virtual framebuffer
+- bit 1: value=1 will update the matrix from the virtual framebuffer
 - bit 2: value=1 will set the display brightness level from bits 7-4
 - bit 3: value=1 will switch the matrix mode to the audio volume meter, value=0 will switch the matrix to the custom draw mode
 - bit 7-4: will set the matrix brightness when bit2 = 1
