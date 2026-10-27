@@ -2,13 +2,13 @@
 #include "types.h"
 #include "main.h"
 #include "ft812.h"
-#include "usb_hid_keys.h"
+#include "input/usb_hid_keys.h"
 #include "esp_at_parse.h"
 #include "hid_ascii.h"
 #include "periph/esp_at.h"
 #include "ui/ft_mouse.h"
 #include "ui/ft_page.h"
-#include "app_ft_pages.h"
+#include "apps/app_ft_pages.h"
 
 // The Wi-Fi page of the graphic setup (the core browser is the BOOT core, which bridges the
 // ESP8266 UART), as Setup Wi-Fi of the text menu: the module status, a scan, the password of

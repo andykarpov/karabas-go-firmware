@@ -7,7 +7,7 @@
 #include "types.h"
 #include "main.h"
 #include "ft812.h"
-#include "bitmaps.h"
+#include "ui/bitmaps.h"
 #include "osd.h"
 
 #ifdef __cplusplus

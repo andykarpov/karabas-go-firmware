@@ -1,6 +1,6 @@
 #include "config.h"
 #include "types.h"
-#include "file.h"
+#include "storage/file.h"
 #include "main.h"
 #include "kg_format.h"
 

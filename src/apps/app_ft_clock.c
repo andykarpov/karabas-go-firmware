@@ -2,13 +2,13 @@
 #include "types.h"
 #include "main.h"
 #include "ft812.h"
-#include "usb_hid_keys.h"
+#include "input/usb_hid_keys.h"
 #include "masked_input.h"
 #include "time_zone.h"
 #include "ui/ft_mouse.h"
 #include "ui/ft_page.h"
-#include "app_ft_pages.h"
-#include "app_ft_setup.h"
+#include "apps/app_ft_pages.h"
+#include "apps/app_ft_setup.h"
 
 // The Clock page of the graphic setup: the date and the time typed into masked fields (as in
 // Setup RTC of the text menu), Set writes them to the RTC, Sync sets it from NTP (ntp_sync) with

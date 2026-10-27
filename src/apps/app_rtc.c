@@ -2,11 +2,11 @@
 #include "types.h"
 #include "main.h"
 #include "osd.h"
-#include "usb_hid_keys.h"
+#include "input/usb_hid_keys.h"
 #include "input/sega.h"
 #include "masked_input.h"
 #include "time_zone.h"
-#include "app_rtc.h"
+#include "apps/app_rtc.h"
 
 // Setup > Setup RTC: the date and the time are typed into masked fields. Up / Down / Tab move
 // between the fields and the buttons, Left / Right move the cursor (or pick a button). The BOOT

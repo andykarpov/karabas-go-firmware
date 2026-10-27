@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include "hid_app.h"
+#include "usb/hid_app.h"
 
 #ifdef __cplusplus
 extern "C" {

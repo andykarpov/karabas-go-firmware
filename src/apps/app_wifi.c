@@ -2,13 +2,13 @@
 #include "types.h"
 #include "main.h"
 #include "osd.h"
-#include "usb_hid_keys.h"
+#include "input/usb_hid_keys.h"
 #include "input/sega.h"
-#include "ps2kbd.h"
+#include "input/ps2kbd.h"
 #include "esp_at_parse.h"
 #include "hid_ascii.h"
 #include "periph/esp_at.h"
-#include "app_wifi.h"
+#include "apps/app_wifi.h"
 
 // Setup > Setup Wi-Fi (BOOT core only, it bridges the ESP8266 UART): the module status, a scan,
 // the password of the chosen network, the join. The ESP keeps the network in its flash and joins

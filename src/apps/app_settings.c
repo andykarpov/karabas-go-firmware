@@ -2,10 +2,10 @@
 #include "types.h"
 #include "main.h"
 #include "osd.h"
-#include "usb_hid_keys.h"
+#include "input/usb_hid_keys.h"
 #include "input/sega.h"
 #include "ui/settings_items.h"
-#include "app_settings.h"
+#include "apps/app_settings.h"
 
 // Setup > Settings (BOOT core only): the karabas.ini settings. Up / Down / Tab pick a setting,
 // Left / Right / Enter change it. Save writes the changed values into karabas.ini and keeps the

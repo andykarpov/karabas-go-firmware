@@ -2,11 +2,11 @@
 #include "types.h"
 #include "main.h"
 #include "osd.h"
-#include "usb_hid_keys.h"
+#include "input/usb_hid_keys.h"
 #include "input/sega.h"
-#include "app_setup.h"
-#include "app_core.h"
-#include "sorts.h"
+#include "apps/app_setup.h"
+#include "apps/app_core.h"
+#include "ui/sorts.h"
 // the Setup screen: a list of the setup apps; Wi-Fi and Settings only in the BOOT core
 typedef struct {
   const char *label;

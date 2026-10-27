@@ -1,7 +1,7 @@
 #include "config.h"
 #include "types.h"
 #include "main.h"
-#include "hid_driver.h"
+#include "usb/hid_driver.h"
 #include "hid_learn.h"
 #include "input/sega.h"
 #include "ini_read.h"

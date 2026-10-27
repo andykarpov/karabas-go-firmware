@@ -3,10 +3,10 @@
 #include "types.h"
 #include "main.h"
 #include "osd.h"
-#include "usb_hid_keys.h"
+#include "input/usb_hid_keys.h"
 #include "input/sega.h"
-#include "app_file_loader.h"
-#include "sorts.h"
+#include "apps/app_file_loader.h"
+#include "ui/sorts.h"
 #include "file_name.h"
 
 // the dir of the core's files (core.dir), trimmed and from the root: "" -> "/", "nes" -> "/nes"

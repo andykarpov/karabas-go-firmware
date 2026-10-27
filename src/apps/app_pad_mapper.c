@@ -2,10 +2,10 @@
 #include "types.h"
 #include "main.h"
 #include "osd.h"
-#include "usb_hid_keys.h"
-#include "hid_driver.h"
+#include "input/usb_hid_keys.h"
+#include "usb/hid_driver.h"
 #include "hid_learn.h"
-#include "app_pad_mapper.h"
+#include "apps/app_pad_mapper.h"
 
 // First the two joystick ports: the pad on each and what maps it (a driver ini, the default
 // map, XInput); Forget renames the driver ini of a pad to .bak. Map: find the pad (the first

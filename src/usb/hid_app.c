@@ -2,15 +2,15 @@
 #include <stdint.h>
 #include "pio_usb.h"
 #include "tusb.h"
-#include "hid_app.h"
-#include "hid_driver.h"
+#include "usb/hid_app.h"
+#include "usb/hid_driver.h"
 #include "hid_joy_map.h"
 #include "hid_auto_map.h"
 #include "crc32.h"
 #include "input/usb_joy.h"
 #include "main.h"
 #include "host/usbh.h"
-#include "ps2kbd.h"
+#include "input/ps2kbd.h"
 #include "input/sega.h"
 #include "hardware/sync.h"
 

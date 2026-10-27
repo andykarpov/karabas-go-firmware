@@ -1,6 +1,6 @@
 #include "main.h"
 #include "ssd1306.h"
-#include "bitmaps.h"
+#include "ui/bitmaps.h"
 #include "i2c_bus.h"
 
 // Optional SSD1306 128x32 I2C OLED with a scrolling logo (lib/i2c ssd1306)

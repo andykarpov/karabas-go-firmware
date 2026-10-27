@@ -1,10 +1,10 @@
 #include "types.h"
 #include "config.h"
 #include "osd.h"
-#include "usb_hid_keys.h"
+#include "input/usb_hid_keys.h"
 #include "input/sega.h"
-#include "app_core.h"
-#include "sorts.h"
+#include "apps/app_core.h"
+#include "ui/sorts.h"
 #include "file_name.h"
 
 uint8_t curr_osd_item;

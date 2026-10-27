@@ -2,11 +2,11 @@
 #include "types.h"
 #include "main.h"
 #include "osd.h"
-#include "usb_hid_keys.h"
+#include "input/usb_hid_keys.h"
 #include "input/sega.h"
-#include "app_about.h"
-#include "app_core.h"
-#include "sorts.h"
+#include "apps/app_about.h"
+#include "apps/app_core.h"
+#include "ui/sorts.h"
 
 void app_about_overlay() {
   osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);

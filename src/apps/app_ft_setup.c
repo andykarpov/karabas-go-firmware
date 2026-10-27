@@ -2,14 +2,14 @@
 #include "types.h"
 #include "main.h"
 #include "ft812.h"
-#include "bitmaps.h"
-#include "usb_hid_keys.h"
+#include "ui/bitmaps.h"
+#include "input/usb_hid_keys.h"
 #include "input/sega.h"
 #include "ui/settings_items.h"
-#include "app_core_browser.h"
+#include "apps/app_core_browser.h"
 #include "ui/ft_mouse.h"
-#include "app_ft_pages.h"
-#include "app_ft_setup.h"
+#include "apps/app_ft_pages.h"
+#include "apps/app_ft_setup.h"
 
 // The graphic setup of the core browser (S on the FT812 menu): the sections on the left, the
 // settings of the chosen one on the right. Every change shows at once (the theme, the clock, the

@@ -2,8 +2,8 @@
 #include "types.h"
 #include "main.h"
 #include "osd.h"
-#include "app_msc.h"
-#include "app_core_browser.h"
+#include "apps/app_msc.h"
+#include "apps/app_core_browser.h"
 
 // the screen of the USB mass storage mode: the boot core shows it while the PC has the SD card
 // (msc_check_boot), nothing else runs until the card is ejected

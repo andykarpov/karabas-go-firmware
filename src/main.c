@@ -23,11 +23,11 @@
 ------------------------------------------------------------------------------------------------------------------*/
 
 #include "main.h"
-#include "hid_driver.h"
+#include "usb/hid_driver.h"
 #include "tusb.h"
 #include "pio_usb.h"
-#include "ps2kbd.h"
-#include "app_core_browser.h"
+#include "input/ps2kbd.h"
+#include "apps/app_core_browser.h"
 #include "diag/diag.h"
 #include "diag/hang_diag.h"
 #include "diag/usb_diag.h"
