@@ -43,7 +43,6 @@
 // see [rp2040] in platformio.ini: wakeups from irq context go through the timer task
 static_assert(configTIMER_TASK_PRIORITY == configMAX_PRIORITIES - 1, "FreeRTOS timer task must run above APP and USB");
 
-RTC zxrtc;
 volatile bool usb_host_ready = false;
 
 static uint32_t led_timer = 0;
@@ -77,7 +76,7 @@ static void esp_send(uint8_t c) {
 }
 
 static void on_rtc(uint8_t addr, uint8_t data) {
-  zxrtc.setData(addr, data);
+  rtc_set_data(addr, data);
 }
 
 // firmware init, runs on core0
@@ -139,7 +138,7 @@ static void karabas_setup()
   matrix_begin();
   oled_begin();
 
-  zxrtc.begin(spi_send, on_time);
+  rtc_begin(spi_send, on_time);
   osd_begin(spi_send);
   ft.begin(spi_send);
 
@@ -226,7 +225,7 @@ static void karabas_loop()
   //rp2040.wdt_reset();
   // the clock runs in msc mode too (the msc screen shows it)
   hang_mark(0x0300);
-  zxrtc.handle();
+  rtc_handle();
 
   // in msc mode nothing else runs until eject
   hang_mark(0x0400);

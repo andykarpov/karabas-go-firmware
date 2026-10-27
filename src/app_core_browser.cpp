@@ -185,12 +185,12 @@ void app_core_browser_ft_background(const setup_t &t) {
 void app_core_browser_ft_decor(const setup_t &t, bool show_char) {
   if (t.ft_time) {
     char time[9];
-    sprintf(time, "%02d:%02d:%02d", zxrtc.getHour(), zxrtc.getMinute(), zxrtc.getSecond());
+    sprintf(time, "%02d:%02d:%02d", rtc_get_hour(), rtc_get_minute(), rtc_get_second());
     ft.drawText(ft.width()-88, 30, 30, t.color_text, FT81x_OPT_CENTER, time);
   }
   if (t.ft_date) {
     char date[9];
-    sprintf(date, "%02d/%02d/%02d", zxrtc.getDay(), zxrtc.getMonth(), zxrtc.getYear() % 100);
+    sprintf(date, "%02d/%02d/%02d", rtc_get_day(), rtc_get_month(), rtc_get_year() % 100);
     ft.drawText(ft.width()-88, 60, 30, t.color_text, FT81x_OPT_CENTER, date);
   }
   ft.drawBitmap(0, 8, 8, LOGO_WIDTH, LOGO_HEIGHT, 4, 0);  // logo scaled 4x

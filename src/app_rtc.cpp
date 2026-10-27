@@ -110,9 +110,9 @@ static void draw() {
 // the fields from the RTC
 static void init_fields() {
   char buf[11];
-  snprintf(buf, sizeof(buf), "%02u.%02u.%04u", zxrtc.getDay(), zxrtc.getMonth(), 2000 + zxrtc.getYear());
+  snprintf(buf, sizeof(buf), "%02u.%02u.%04u", rtc_get_day(), rtc_get_month(), 2000 + rtc_get_year());
   kg_field_init(&date_field, buf);
-  snprintf(buf, sizeof(buf), "%02u:%02u", zxrtc.getHour(), zxrtc.getMinute());
+  snprintf(buf, sizeof(buf), "%02u:%02u", rtc_get_hour(), rtc_get_minute());
   kg_field_init(&time_field, buf);
 }
 
@@ -162,13 +162,13 @@ static bool save() {
     return false;
   }
   if (!save_tz()) return false;
-  zxrtc.setDay(day);
-  zxrtc.setMonth(month);
-  zxrtc.setYear(year - 2000);
-  zxrtc.setHour(hour);
-  zxrtc.setMinute(minute);
-  zxrtc.setSecond(0);
-  zxrtc.save();
+  rtc_set_day(day);
+  rtc_set_month(month);
+  rtc_set_year(year - 2000);
+  rtc_set_hour(hour);
+  rtc_set_minute(minute);
+  rtc_set_second(0);
+  rtc_save();
   return true;
 }
 

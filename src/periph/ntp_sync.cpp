@@ -60,13 +60,13 @@ static void set_clock() {
   kg_datetime_add_minutes(&now, tz);
   d_printf("NTP: %04d-%02d-%02d %02d:%02d:%02d (UTC%+d min)", now.year, now.month, now.day,
     now.hour, now.minute, now.second, tz); d_println();
-  zxrtc.setDay(now.day);
-  zxrtc.setMonth(now.month);
-  zxrtc.setYear(now.year - 2000);
-  zxrtc.setHour(now.hour);
-  zxrtc.setMinute(now.minute);
-  zxrtc.setSecond(now.second);
-  zxrtc.save();
+  rtc_set_day(now.day);
+  rtc_set_month(now.month);
+  rtc_set_year(now.year - 2000);
+  rtc_set_hour(now.hour);
+  rtc_set_minute(now.minute);
+  rtc_set_second(now.second);
+  rtc_save();
 }
 
 uint8_t ntp_sync_poll() {

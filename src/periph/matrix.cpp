@@ -156,7 +156,7 @@ void matrix_draw_audio() {
 
 // the text of the next pass, with {time} etc. of now
 static void scroll_pass_start() {
-  kg_matrix_vars_t vars = {cfg_name, cfg_build, zxrtc.getHour(), zxrtc.getMinute(), zxrtc.getDay(), zxrtc.getMonth(), (uint16_t) (2000 + zxrtc.getYear())};
+  kg_matrix_vars_t vars = {cfg_name, cfg_build, rtc_get_hour(), rtc_get_minute(), rtc_get_day(), rtc_get_month(), (uint16_t) (2000 + rtc_get_year())};
   kg_matrix_expand(scroll_src, &vars, scroll_text, sizeof(scroll_text));
   scroll_width = strlen(scroll_text) * KG_FONT_ADVANCE;
   scroll_pos = 16;
@@ -194,9 +194,9 @@ static void matrix_draw_image() {
 
 static void matrix_draw_fx() {
   static matrix_fx_input_t in;
-  in.hour = zxrtc.getHour();
-  in.minute = zxrtc.getMinute();
-  in.second = zxrtc.getSecond();
+  in.hour = rtc_get_hour();
+  in.minute = rtc_get_minute();
+  in.second = rtc_get_second();
   in.style = &mx_style;
   if (fx.effect == KG_MATRIX_FX_DRIVE) memcpy(in.drive, drives, sizeof(drives));
   matrix_fx_step(&fx, &in);

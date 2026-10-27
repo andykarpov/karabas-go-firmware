@@ -45,13 +45,13 @@ static void init_fields() {
   char buf[11];
   uint8_t pos;
   if (!edited[F_DATE]) {
-    snprintf(buf, sizeof(buf), "%02u.%02u.%04u", zxrtc.getDay(), zxrtc.getMonth(), 2000 + zxrtc.getYear());
+    snprintf(buf, sizeof(buf), "%02u.%02u.%04u", rtc_get_day(), rtc_get_month(), 2000 + rtc_get_year());
     pos = fields[F_DATE].pos;
     kg_field_init(&fields[F_DATE], buf);
     fields[F_DATE].pos = pos < fields[F_DATE].len ? pos : 0;
   }
   if (!edited[F_TIME]) {
-    snprintf(buf, sizeof(buf), "%02u:%02u", zxrtc.getHour(), zxrtc.getMinute());
+    snprintf(buf, sizeof(buf), "%02u:%02u", rtc_get_hour(), rtc_get_minute());
     pos = fields[F_TIME].pos;
     kg_field_init(&fields[F_TIME], buf);
     fields[F_TIME].pos = pos < fields[F_TIME].len ? pos : 0;
@@ -166,13 +166,13 @@ static void set_clock() {
     message = "Invalid time";
     return;
   }
-  zxrtc.setDay(day);
-  zxrtc.setMonth(month);
-  zxrtc.setYear(year - 2000);
-  zxrtc.setHour(hour);
-  zxrtc.setMinute(minute);
-  zxrtc.setSecond(0);
-  zxrtc.save();
+  rtc_set_day(day);
+  rtc_set_month(month);
+  rtc_set_year(year - 2000);
+  rtc_set_hour(hour);
+  rtc_set_minute(minute);
+  rtc_set_second(0);
+  rtc_save();
   edited[F_DATE] = edited[F_TIME] = false;
   message = "The clock is set";
   message_ok = true;

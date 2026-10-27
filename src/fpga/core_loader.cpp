@@ -380,9 +380,9 @@ void read_core(const char* filename) {
       core.eeprom[i].prev_val = core.eeprom[i].val;
     }
   }
-  zxrtc.setEepromBank(core.eeprom_bank);
-  zxrtc.setRtcType(core.rtc_type);
-  zxrtc.sendAll();
+  rtc_set_eeprom_bank(core.eeprom_bank);
+  rtc_set_rtc_type(core.rtc_type);
+  rtc_send_all();
 
   // read saved switches
   for(uint8_t i=0; i<core.osd_len; i++) {
@@ -396,7 +396,7 @@ void read_core(const char* filename) {
   core_send_all();
 
   // re-send rtc registers
-  zxrtc.sendAll();
+  rtc_send_all();
 
   has_ft = false;
 

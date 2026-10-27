@@ -9,7 +9,7 @@
 #include "types.h"
 #include "FT812.h"
 #include "osd.h"
-#include "RTC.h"
+#include "rtc.h"
 #include "input/sega.h"
 #include "hid_app.h"
 #include "ms_time.h"
@@ -40,7 +40,6 @@
 #include "ui/osd_ui.h"
 
 // main.cpp
-extern RTC zxrtc;
 extern volatile bool usb_host_ready; // set by core1 once PIO-USB has claimed its PIO/DMA resources
 void halt(const char* msg);
 

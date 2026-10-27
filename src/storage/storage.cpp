@@ -52,10 +52,10 @@ extern "C" DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void *buff) {
   }
 }
 
-// file dates from the RTC (the time read last by zxrtc.handle(), no I2C here)
+// file dates from the RTC (the time read last by rtc_handle(), no I2C here)
 extern "C" DWORD get_fattime(void) {
   kg_datetime_t dt;
-  if (!zxrtc.hasClock() || !zxrtc.now(dt)) {
+  if (!rtc_has_clock() || !rtc_now(&dt)) {
     return ((DWORD) (FF_NORTC_YEAR - 1980) << 25) | ((DWORD) FF_NORTC_MON << 21) | ((DWORD) FF_NORTC_MDAY << 16);
   }
   return ((DWORD) (dt.year - 1980) << 25) | ((DWORD) dt.month << 21) | ((DWORD) dt.day << 16) |

@@ -24,5 +24,3 @@ bool core_osd_phys(uint8_t pos, const char *filename);
 void core_ioctl_send(uint8_t slot, bool popup);
 void core_send_all();
 void core_trigger(uint8_t pos);
-uint8_t core_eeprom_get(uint8_t pos);
-void core_eeprom_set(uint8_t pos, uint8_t val);

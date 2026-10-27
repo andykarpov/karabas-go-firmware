@@ -119,17 +119,17 @@ void print_time() {
   osd_set_pos(24, 0);
   osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
   static bool dots_blink = !dots_blink;
-  uint8_t h = zxrtc.getHour();
-  uint8_t m = zxrtc.getMinute();
-  uint8_t s = zxrtc.getSecond();
+  uint8_t h = rtc_get_hour();
+  uint8_t m = rtc_get_minute();
+  uint8_t s = rtc_get_second();
   char sep = dots_blink ? ':' : ' ';
   osd_printf("%02u%c%02u%c%02u", h, sep, m, sep, s);
 
   osd_set_pos(24, 1);
   osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-  uint8_t d = zxrtc.getDay();
-  uint8_t mo = zxrtc.getMonth();
-  uint8_t y = zxrtc.getYear();
+  uint8_t d = rtc_get_day();
+  uint8_t mo = rtc_get_month();
+  uint8_t y = rtc_get_year();
   osd_printf("%02u/%02u/%02u", d, mo, y);
 }
 
