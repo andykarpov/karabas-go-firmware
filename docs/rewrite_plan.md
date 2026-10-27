@@ -4,7 +4,7 @@ The firmware moves from the Arduino framework (arduino-pico 5.5.1, PlatformIO, A
 
 ## Decisions
 
-- **Language:** C11 everywhere, `lib/KarabasCommon` included. The TypeScript ports in `tools/hidmapper` are not affected.
+- **Language:** C11 everywhere, `lib/common` included. The TypeScript ports in `tools/hidmapper` are not affected.
 - **Build:** CMake on the pico-sdk 2.x, a uf2 per board (`-DHW_ID=1/2/3`). The host tests are built by the same CMake (ctest + Unity) instead of `pio test -e native`.
 - **OS:** FreeRTOS SMP stays, with the same tasks (`APP`, `INPUT`, `USB`, `USBD`, `MATRIX`, `OLED`). The RP2040 port is built with `configSUPPORT_PICO_SYNC_INTEROP` / `configSUPPORT_PICO_TIME_INTEROP`, and TinyUSB with `CFG_TUSB_OS=OPT_OS_FREERTOS`.
 - **USB VID / PID and descriptor strings** stay as they are now, so hosts do not see a new device.
@@ -25,7 +25,7 @@ The rewrite removes the workarounds that exist only because of the Arduino layer
 
 ## Starting point
 
-- `src/`: ~14.7k lines (without `bitmaps.h`), `lib/KarabasCommon`: ~2.5k, own libraries (`FT812`, `OSD`, `RTC`, `IniFile`, `PioSPI`, `EspSerial`, `SegaController`, `MultiMatrixDisplay`, `GyverMenuExt`, `ElapsedTimer` (now `MsTime`)): ~4k. `lib/Pico-PIO-USB` is upstream 0.7.3 with our diagnostics (#59) and stays.
+- `src/`: ~14.7k lines (without `bitmaps.h`), `lib/common`: ~2.5k, own libraries (`FT812`, `OSD`, `RTC`, `IniFile`, `PioSPI`, `EspSerial`, `SegaController`, `MultiMatrixDisplay`, `GyverMenuExt`, `ElapsedTimer` (now `MsTime`)): ~4k. `third_party/pico_pio_usb` is upstream 0.7.3 with our diagnostics (#59) and stays.
 - minig: 620 KB text, 138 KB bss.
 - `KarabasCommon` is C already in all but the file names (only `usb_joy_slots.h` has a class). The C++ in `src/` is `String` (~60 uses: paths, trim, extensions), ~24 lambdas (mostly `link_on` handlers), a little `std::` / `<algorithm>`, the library wrapper classes and `PrinterTrace`.
 
@@ -58,15 +58,15 @@ arduino-pico exposes the pico-sdk `hardware_*` libraries, so most of the port ca
 
 1. **`KarabasCommon` to C:** `.cpp` -> `.c`, `usb_joy_slots` as a struct with functions, `extern "C"` guards in the headers. All tests stay green.
 2. **No Arduino idioms in `src/`:** `String` -> `snprintf` + path helpers; lambdas -> static functions; `ElapsedTimer` -> ms helpers; `app_setup` without GyverMenu; own ring buffer instead of GyverFIFO.
-3. **pico-sdk HAL:** gpio / time / delays (`board/pin.h`, `ms_time.h`); SPI0 through `lib/Spi0Bus` for the link and the FT812 (under the same `spi_bus_lock`; SD2's SdFat stays on Arduino's `SPI` until step 5); reboots and the free heap (`board/chip.h`); `EspSerial` and `SegaController` as C modules. `i2c_bus` on `hardware_i2c` moves to step 4: every I2C device library goes through `Wire`. `Serial` / `Print` (the CDC log) stay until phase 2. A pulse that the slow Arduino calls made long enough by themselves needs an explicit width with `gpio_put`: PROG_B became ~16 ns and the FPGA came up half reset (fixed in #67).
-4. **Own I2C drivers:** DS3231, 24xx EEPROM, PCA9536, HT16K33, SSD1306 in `lib/I2cDevices` on `hardware_i2c` (`i2c_dev` replaces `Wire`); the dates, the DS3231 registers and the 5x7 font of the matrix scroll in `KarabasCommon`, tested. RTClib, SparkFun and Adafruit display libraries go away. The `i2c_bus` lock stays C++ until step 6 (`hang_diag`).
-5. **Storage: SdFat -> FatFs.** The riskiest step of the phase, a PR of its own with the full checklist. Done as planned: FatFs R0.15 in `lib/FatFs` (`FILINFO.dir_ofs` and `f_readdir_at()` added for the ids; checked on FAT32 and exFAT images on a PC against a parse of the dir entries), `lib/SdSpi` (PIO SPI without DMA for now, as PioSPI was), `kg_ini_read`. On Mini G (2026-10-27): the NES loader found its last game by the old id; nanomig boots Workbench from the 14 GB HDF (after the `f_lseek` fix: a far seek took 1.16 s); MSC SD1 read 529 / write 456 kB/s (469 / 399 before), SD2 422 kB/s (375), sd2test x8 989 KB/s at 12 MHz (768).
+3. **pico-sdk HAL:** gpio / time / delays (`board/pin.h`, `ms_time.h`); SPI0 through `lib/spi0` for the link and the FT812 (under the same `spi_bus_lock`; SD2's SdFat stays on Arduino's `SPI` until step 5); reboots and the free heap (`board/chip.h`); `EspSerial` and `SegaController` as C modules. `i2c_bus` on `hardware_i2c` moves to step 4: every I2C device library goes through `Wire`. `Serial` / `Print` (the CDC log) stay until phase 2. A pulse that the slow Arduino calls made long enough by themselves needs an explicit width with `gpio_put`: PROG_B became ~16 ns and the FPGA came up half reset (fixed in #67).
+4. **Own I2C drivers:** DS3231, 24xx EEPROM, PCA9536, HT16K33, SSD1306 in `lib/i2c` on `hardware_i2c` (`i2c_dev` replaces `Wire`); the dates, the DS3231 registers and the 5x7 font of the matrix scroll in `KarabasCommon`, tested. RTClib, SparkFun and Adafruit display libraries go away. The `i2c_bus` lock stays C++ until step 6 (`hang_diag`).
+5. **Storage: SdFat -> FatFs.** The riskiest step of the phase, a PR of its own with the full checklist. Done as planned: FatFs R0.15 in `third_party/fatfs` (`FILINFO.dir_ofs` and `f_readdir_at()` added for the ids; checked on FAT32 and exFAT images on a PC against a parse of the dir entries), `lib/sd` (PIO SPI without DMA for now, as PioSPI was), `kg_ini_read`. On Mini G (2026-10-27): the NES loader found its last game by the old id; nanomig boots Workbench from the 14 GB HDF (after the `f_lseek` fix: a far seek took 1.16 s); MSC SD1 read 529 / write 456 kB/s (469 / 399 before), SD2 422 kB/s (375), sd2test x8 989 KB/s at 12 MHz (768).
    - `sd_spi.c`: SD SPI mode, CMD17 / 18 / 24 / 25, multi-block; PIO SPI backend (from `PioSPI`, with DMA) for SD1, SPI0 under the bus lock at 12 MHz for SD2.
    - MSC reads and writes sectors through `sd_spi`, past FatFs.
    - `IniFile` -> `kg_ini_read`.
    - **File ids:** `last_file_id` is written into the core file header (`FILE_POS_FILELOADER_FILE`) and is SdFat's `dirIndex` (+1 on exFAT). FatFs has no index, but `DIR.dptr` has the entry offset: id = `dptr / 32` (+1 on exFAT), and `sd_open_id` reads the dir with `f_readdir` up to that offset. Check on FAT32 and exFAT that the numbers match the old ones (otherwise the loader forgets the last file once).
    - Check the writes back into core files, `.sav`, `karabas.new` -> rename, and the eject (`syncDevice` -> `disk_ioctl(CTRL_SYNC)`).
-6. **All `.cpp` to `.c`:** `FT812`, `OSD`, `RTC`, the apps, `hid_app`, `printer_*`. The singletons (`zxosd`, `ft`, `zxrtc`) become modules with `osd_*` / `ft_*` / `rtc_*` functions. Done: `lib/OSD`, `lib/RTC`, `lib/FT812` (only the functions in use) are C modules; the debug output is a C API (`debug_printf`); C++ references and `std::sort` are gone (`qsort`); `SpiBusGuard` / `I2cGuard` became explicit lock / unlock calls; 52 modules of `src/` are `.c`. Left C++ for phase 2: `main.cpp`, `serial_bridge.cpp` and `msc.cpp` (`Serial`, the Adafruit USB classes).
+6. **All `.cpp` to `.c`:** `FT812`, `OSD`, `RTC`, the apps, `hid_app`, `printer_*`. The singletons (`zxosd`, `ft`, `zxrtc`) become modules with `osd_*` / `ft_*` / `rtc_*` functions. Done: `lib/osd`, `lib/rtc`, `lib/ft812` (only the functions in use) are C modules; the debug output is a C API (`debug_printf`); C++ references and `std::sort` are gone (`qsort`); `SpiBusGuard` / `I2cGuard` became explicit lock / unlock calls; 52 modules of `src/` are `.c`. Left C++ for phase 2: `main.cpp`, `serial_bridge.cpp` and `msc.cpp` (`Serial`, the Adafruit USB classes).
 
 After phase 1 Arduino is left only in `main.cpp` (`setup()`, task creation) and in the Adafruit TinyUSB wrappers.
 
@@ -76,7 +76,7 @@ One large PR, checked on hardware for 2-3 weeks.
 
 Done in branch `pico-cmake` (2026-10-27): CMake with the pico-sdk 2.2.0 (TinyUSB 0.18) and FreeRTOS-Kernel V11.2.0, pinned and fetched when no path is given; the earlephilhower toolchain (its newlib has the dynamic reent the per-task `struct _reent` needs). TinyUSB's own `OPT_OS_FREERTOS` replaced `__usb_mutex`. The timer task priority assert stays (`main.c`): pico-sdk locks released from an irq still wake through it. TinyUSB 0.18 has no `tuh_edpt_close()`: `printer_host` closes in PIO-USB. On the Mini G: everything from the checklist works, core0 runs ~10 % more loops than on Arduino, the flash cache hits 97-98 %. A text OSD redraw paid ~60 us a frame in locks (also on Arduino): `spi_bus_lock` now nests with a counter and `osd_update()` locks once, several times faster.
 
-- **CMake project:** pico-sdk, FreeRTOS-Kernel (SMP, RP2040 port, interop on), TinyUSB of the pico-sdk, `lib/Pico-PIO-USB`, `tusb_xinput`, FatFs; targets `karabas_go`, `karabas_mini`, `karabas_minig`.
+- **CMake project:** pico-sdk, FreeRTOS-Kernel (SMP, RP2040 port, interop on), TinyUSB of the pico-sdk, `third_party/pico_pio_usb`, `tusb_xinput`, FatFs; targets `karabas_go`, `karabas_mini`, `karabas_minig`.
 - **Own `main()`:** `set_sys_clock_khz(120000)`, no stdio, the tasks created as now, then the scheduler.
 - **Own `tusb_config.h`:** host limits (3 hubs, 8 devices, 16 HID, 1024-byte enumeration buffer), 4 KB MSC endpoint buffer, `CFG_TUSB_OS=OPT_OS_FREERTOS`. `CFG_TUSB_DEBUG` can go to `debug_out` instead of a UART.
 - **`usb_descriptors.c`:** composite CDC + MSC, the "SD Card" / "SD Card 2" names from watchdog scratch 0.
@@ -84,7 +84,7 @@ Done in branch `pico-cmake` (2026-10-27): CMake with the pico-sdk 2.2.0 (TinyUSB
 - **`debug_out`** straight on `tud_cdc_write` / `tud_cdc_write_flush` (also fixes the full-packets issue of #52).
 - **`hang_diag`:** `--wrap=panic` stays, the watchdog scratch layout does not change.
 - **Removed:** `platformio.ini`, `apply_patches.py`, `patches/`, the `ccount` reservation, the timer task priority assert (check first that no wakeups are lost).
-- **CI:** GitHub Actions with arm-none-eabi-gcc and the pico-sdk (cached), all three boards, ctest. The release job and `build*.sh` take the uf2 from the CMake build dir.
+- **CI:** GitHub Actions with arm-none-eabi-gcc and the pico-sdk (cached), all three boards, ctest. The release job takes the uf2 from the CMake build dir (`build*.sh` removed in phase 3).
 
 ## Phase 3: finishing
 

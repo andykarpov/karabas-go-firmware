@@ -10,7 +10,7 @@ extern "C" {
 // release the I2C lock before calling spi_send().
 
 void i2c_bus_init();                    // create the lock (before the tasks start)
-void i2c_bus_lock(void);     // also used by lib/RTC
+void i2c_bus_lock(void);     // also used by lib/rtc
 void i2c_bus_unlock(void);
 
 #ifdef __cplusplus

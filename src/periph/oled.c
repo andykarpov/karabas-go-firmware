@@ -1,9 +1,9 @@
 #include "main.h"
 #include "ssd1306.h"
-#include "bitmaps.h"
+#include "ui/bitmaps.h"
 #include "i2c_bus.h"
 
-// Optional SSD1306 128x32 I2C OLED with a scrolling logo (lib/I2cDevices ssd1306)
+// Optional SSD1306 128x32 I2C OLED with a scrolling logo (lib/i2c ssd1306)
 
 static bool has_oled = false;
 static int oled_scrollpos = -128;

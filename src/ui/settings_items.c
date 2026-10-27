@@ -1,7 +1,7 @@
 #include "main.h"
 #include "file_name.h"
 #include "ini_update.h"
-#include "app_core_browser.h"
+#include "apps/app_core_browser.h"
 #include "ui/settings_items.h"
 
 #define TIMEOUT_MAX 60

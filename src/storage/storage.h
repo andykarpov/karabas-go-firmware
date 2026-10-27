@@ -7,7 +7,7 @@
 extern "C" {
 #endif
 
-// The SD card of the MCU (SD1) through FatFs (lib/FatFs) on sd_card over the PIO SPI. Only
+// The SD card of the MCU (SD1) through FatFs (third_party/fatfs) on sd_card over the PIO SPI. Only
 // APP uses the file system; in MSC mode the PC gets the card (sd1_card()) past FatFs.
 // Paths are full ("/dir/name", or "name" in the root): FatFs has no current dir here.
 

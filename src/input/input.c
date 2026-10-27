@@ -1,8 +1,8 @@
 #include "usb_joy.h"
 #include "main.h"
-#include "ps2kbd.h"
-#include "usb_hid_keys.h"
-#include "app_core.h"
+#include "input/ps2kbd.h"
+#include "input/usb_hid_keys.h"
+#include "apps/app_core.h"
 #include "diag/hang_diag.h"
 
 #include <FreeRTOS.h>

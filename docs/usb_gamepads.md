@@ -12,7 +12,7 @@ A HID pad is mapped in one of two ways:
    [hidmapper](https://andykarpov.github.io/karabas-go-firmware/hidmapper/) (source in
    [`tools/hidmapper`](../tools/hidmapper)), which is rarely needed now.
 2. **Default map.** Otherwise the firmware builds a map from the HID report descriptor of the
-   pad (`lib/KarabasCommon/src/hid_auto_map.c`). Most pads work this way without an ini.
+   pad (`lib/common/hid_auto_map.c`). Most pads work this way without an ini.
    The default map is built for a pad with a driver too: it takes over when the driver is
    forgotten.
 
@@ -37,7 +37,7 @@ default map at once. **Map** learns a pad:
    setup the pad drawn on the screen then shows the buttons held through the new map.
 
 For each press the mapper takes a hat nibble first, then a single bit, then the axis that moved
-most, as an axis range from halfway between rest and pressed (`lib/KarabasCommon/src/hid_learn`).
+most, as an axis range from halfway between rest and pressed (`lib/common/hid_learn`).
 The result is an ordinary driver ini that can be edited by hand.
 
 ## Driver ini

@@ -1,5 +1,5 @@
 #include "main.h"
-#include "bitmaps.h"
+#include "ui/bitmaps.h"
 #include "ui/ft_mouse.h"
 #include "diag/hang_diag.h"
 

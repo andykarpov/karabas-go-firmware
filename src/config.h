@@ -279,7 +279,7 @@
 #define FILE_POS_BUTTONS 218 // 3 bytes per button (btn1..btn6): press action, hold action, hold time / 100 ms; FF = not set
 #define FILE_POS_EEPROM_DATA 256
 #define FILE_POS_SWITCHES_DATA 512
-#define FILE_POS_MATRIX 768 // 256 bytes: the LED matrix settings (make_core "matrix", lib/KarabasCommon kg_matrix.h); 0 = core
+#define FILE_POS_MATRIX 768 // 256 bytes: the LED matrix settings (make_core "matrix", lib/common kg_matrix.h); 0 = core
 #define FILE_POS_BITSTREAM_START 1024
 
 #if HW_ID==HW_ID_GO
