@@ -94,22 +94,44 @@ void debug_discard() {
 }
 
 // everything goes through the buffer; the owner sends what fits right away
-class DebugOut : public Print {
-public:
-  size_t write(uint8_t c) override {
-    return write(&c, 1);
-  }
-  size_t write(const uint8_t *data, size_t len) override {
-    debug_buffer(data, len);
-    debug_drain();
-    return len;
-  }
-};
+void debug_write(const char *data, size_t len) {
+  debug_buffer((const uint8_t *) data, len);
+  debug_drain();
+}
 
-static DebugOut debug_out_instance;
+void debug_print(const char *s) {
+  if (s) debug_write(s, strlen(s));
+}
 
-Print &debug_out() {
-  return debug_out_instance;
+void debug_println(const char *s, ...) {
+  debug_print(s);
+  debug_write("\r\n", 2);
+}
+
+// a small buffer on the stack (any task may log), a longer line from the heap (the DIAG line)
+void debug_vprintf(const char *fmt, va_list ap) {
+  char buf[128];
+  va_list ap2;
+  va_copy(ap2, ap);
+  int n = vsnprintf(buf, sizeof(buf), fmt, ap);
+  if (n >= 0 && (size_t) n < sizeof(buf)) {
+    debug_write(buf, n);
+  } else if (n > 0) {
+    char *big = (char *) malloc(n + 1);
+    if (big) {
+      vsnprintf(big, n + 1, fmt, ap2);
+      debug_write(big, n);
+      free(big);
+    }
+  }
+  va_end(ap2);
+}
+
+void debug_printf(const char *fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+  debug_vprintf(fmt, ap);
+  va_end(ap);
 }
 
 void debug_flush() {

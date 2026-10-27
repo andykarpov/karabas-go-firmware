@@ -124,7 +124,7 @@ uint32_t fpga_send(const char* filename) {
 
   // get bitstream size
   uint32_t total = file_read32(FILE_POS_BITSTREAM_LEN);
-  d_print("Bitstream size: "); d_println(total, DEC);
+  d_printf("Bitstream size: %lu", (unsigned long) total); d_println();
 
   // seek to bitstream start
   file_seek(FILE_POS_BITSTREAM_START);
@@ -162,13 +162,13 @@ uint32_t fpga_send(const char* filename) {
   pin_input(PIN_CONF_IO1);
 
   hang_step(0x92);
-  d_print(sent, DEC); d_println(" bytes done");
-  d_print("Elapsed time: "); d_print(ms_since(timer), DEC); d_println(" ms");
+  d_printf("%lu bytes done", (unsigned long) sent); d_println();
+  d_printf("Elapsed time: %lu ms", (unsigned long) ms_since(timer)); d_println();
   d_flush();
   hang_step(0x93);
 
   if (sent < total) {
-    d_print("Bitstream is truncated, expected "); d_print(total, DEC); d_println(" bytes");
+    d_printf("Bitstream is truncated, expected %lu bytes", (unsigned long) total); d_println();
   }
 
   d_print("Waiting for CONF_DONE... ");

@@ -590,7 +590,7 @@ int app_core_init_filebrowser() {
     }
   }
 
-  d_print("Files count "); d_print(files_len); d_println();
+  d_printf("Files count %u", files_len); d_println();
 
   std::sort(files, files + files_len);
 

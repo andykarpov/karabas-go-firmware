@@ -132,23 +132,23 @@ void load_setup() {
     d_println("Setup:");
     d_print("Debug enabled: "); d_println(hw_setup.debug_enabled ? "yes" : "no"); 
     d_print("DVI only: "); d_println(hw_setup.dvi_only ? "yes" : "no"); 
-    d_print("Time zone (minutes): "); d_println(hw_setup.tz);
+    d_printf("Time zone (minutes): %d", hw_setup.tz); d_println();
     d_print("FT812 enabled: "); d_println(hw_setup.ft_enabled ? "yes" : "no"); 
-    d_print("FT812 video mode: "); d_println(hw_setup.ft_video_mode);
-    d_print("FT812 sound: "); d_println(hw_setup.ft_sound); 
+    d_printf("FT812 video mode: %u", hw_setup.ft_video_mode); d_println();
+    d_printf("FT812 sound: %u", hw_setup.ft_sound); d_println();
     d_print("FT812 keypress click enabled: "); d_println(hw_setup.ft_click ? "yes" : "no"); 
     d_print("FT812 show time: "); d_println(hw_setup.ft_time ? "yes" : "no"); 
     d_print("FT812 show date: "); d_println(hw_setup.ft_date ? "yes" : "no"); 
     d_print("FT812 show character: "); d_println(hw_setup.ft_char ? "yes" : "no"); 
     d_print("FT812 use 3d buttons: "); d_println(hw_setup.ft_3d_buttons ? "yes" : "no"); 
-    d_print("FT812 mouse speed: "); d_println(hw_setup.ft_mouse_speed);
+    d_printf("FT812 mouse speed: %u", hw_setup.ft_mouse_speed); d_println();
     d_print("Matrix enabled: "); d_println(hw_setup.matrix_enabled ? "yes" : "no");
-    d_print("Matrix brightness: "); d_println(hw_setup.matrix_brightness);
+    d_printf("Matrix brightness: %u", hw_setup.matrix_brightness); d_println();
     d_print("Matrix style:");
     for (uint8_t i = 0; i < KG_MX_OPT_COUNT; i++) { d_print(" "); d_print(kg_mx_opt_name(i, hw_setup.matrix_style.opt[i])); }
     d_println(hw_setup.matrix_style.meter_peak ? " peak" : "");
     d_print("Autoload enabled: "); d_println(hw_setup.autoload_enabled ? "yes" : "no"); 
-    d_print("Autoload timeout: "); d_println(hw_setup.autoload_timeout); 
+    d_printf("Autoload timeout: %u", hw_setup.autoload_timeout); d_println();
     d_print("Autoload core: "); d_println(hw_setup.autoload_core); 
 
     free(text);

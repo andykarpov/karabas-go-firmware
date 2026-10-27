@@ -313,7 +313,7 @@ void read_core(const char* filename) {
   file_seek(offset); core.osd_len = file_read();
   //d_print("OSD len: "); d_println(core.osd_len);
 
-  d_print("Core SPI Frequency: "); if (core.spi_freq > 0 && core.spi_freq < 255) { d_print(core.spi_freq); d_println(" MHz"); } else d_println("default");
+  if (core.spi_freq > 0 && core.spi_freq < 255) { d_printf("Core SPI Frequency: %u MHz", core.spi_freq); d_println(); } else { d_println("Core SPI Frequency: default"); }
   
   img_close_all(); // the images of the previous core
   bk_forget();
@@ -526,7 +526,7 @@ void read_roms(const char* filename) {
 
   uint32_t bitstream_length = file_read32(FILE_POS_BITSTREAM_LEN);
   uint32_t roms_len = file_read32(FILE_POS_ROM_LEN);
-  d_print("ROMS len "); d_println(roms_len);
+  d_printf("ROMS len %lu", (unsigned long) roms_len); d_println();
   if (roms_len > 0) {
     spi_send(CMD_ROMLOADER, 0, 1);
   }
@@ -545,7 +545,7 @@ void read_roms(const char* filename) {
     uint32_t rom_len = rom.len;
     bool rom_is_external = rom.external;
     uint32_t rom_addr = rom.addr;
-    d_print("ROM #"); d_print(rom_idx); d_print(": addr="); d_print(rom_addr); d_print(", len="); d_println(rom_len);
+    d_printf("ROM #%lu: addr=%lu, len=%lu", (unsigned long) rom_idx, (unsigned long) rom_addr, (unsigned long) rom_len); d_println();
 
     // sanity check to not run away on a broken core file
     if (!rom_valid) {

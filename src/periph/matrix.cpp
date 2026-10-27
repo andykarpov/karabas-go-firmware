@@ -500,7 +500,7 @@ void matrix_frame() {
   for (uint8_t i=0; i<4; i++) {
     bool btn = (btns >> i) & 1;
     if (btn != (bool) ((prev_btns >> i) & 1)) {
-      d_print("Matrix Button "); d_print(i+1); d_print(": "); d_println(btn ? "on" : "off");
+      d_printf("Matrix Button %u: %s", i + 1, btn ? "on" : "off"); d_println();
       spi_send(CMD_MATRIX_BTN, i, btn);
     }
   }
