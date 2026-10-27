@@ -261,9 +261,12 @@ private:
   bool slow_spi = false;             ///< SPI at FT81x_SPI_LOW_CLOCK_SPEED until the system clock runs
   uint32_t clock_hz = 0;             ///< system clock measured by the last init() (also when it failed)
   uint8_t init_attempts = 0;         ///< attempts used by the last init()
+  char init_failures[96];            ///< why the failed attempts of the last init() failed
 
   void powerCycle();                 ///< hardware reset through PD_N (MCU pin or FPGA)
   bool powerUp();                    ///< one clock setup + wake-up attempt, false if the chip did not come up
+  bool sampleClock(uint32_t &us, uint32_t &cycles); ///< REG_CLOCK with the time it was read at
+  void initFailed(const char *fmt, ...);
   SPISettings spiSettings() { return slow_spi ? FT81x_SPI_LOW_SETTINGS : FT81x_SPI_SETTINGS; }
 
 protected:
@@ -285,6 +288,16 @@ public:
     */
     uint32_t initClockHz() { return clock_hz; }
     uint8_t initAttempts() { return init_attempts; }
+
+    /*!
+        @brief  Why the failed attempts of the last init() failed ("" if none did)
+    */
+    const char *initFailures() { return init_failures; }
+
+    /*!
+        @brief  Frames the chip scanned out in ms milliseconds (REG_FRAMES), 0 if the picture stands
+    */
+    uint32_t framesIn(uint32_t ms);
 
     /*!
         @brief  The video modes init() takes (0..modeCount()-1) and their names ("800x600@60")
