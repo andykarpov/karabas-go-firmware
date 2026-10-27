@@ -28,6 +28,7 @@
 #include <SPI.h>
 #include <FT812.h>
 #include <Arduino.h>
+#include <stdarg.h>
 
 // karabas: SPI0 is shared with the FPGA link; the firmware serializes bus access with these
 // (recursive) hooks around every FT81x transaction (src/fpga/link.cpp)
@@ -230,33 +231,71 @@ bool FT812::powerUp() {
     delay(50); // PLL lock
 
     init_timer.reset();
-    while (read8(FT81x_REG_ID) != 0x7C) {
-        if (init_timer.elapsed() > 1000) return false;
+    uint8_t id;
+    while ((id = read8(FT81x_REG_ID)) != 0x7C) {
+        if (init_timer.elapsed() > 1000) { initFailed("REG_ID %02x", id); return false; }
         delay(1);
     }
-    while (read16(FT81x_REG_CPURESET) != 0x00) {
-        if (init_timer.elapsed() > 1000) return false;
+    uint16_t cpureset;
+    while ((cpureset = read16(FT81x_REG_CPURESET)) != 0x00) {
+        if (init_timer.elapsed() > 1000) { initFailed("REG_CPURESET %x", cpureset); return false; }
         delay(1);
     }
 
-    // the PLL must run at the clock of the mode: count REG_CLOCK (system clock cycles) over 10 ms
-    uint32_t t0 = time_us_32();
-    uint32_t c0 = read32(FT81x_REG_CLOCK);
-    delay(10);
-    uint32_t t1 = time_us_32();
-    uint32_t c1 = read32(FT81x_REG_CLOCK);
+    // the PLL must run at the clock of the mode: count REG_CLOCK (system clock cycles) over 20 ms.
+    // Each read is timed on its own: a task above APP or a wait for the SPI bus between the time
+    // and the read made a good clock look 5 % off
+    uint32_t t0, c0, t1, c1;
+    if (!sampleClock(t0, c0)) { initFailed("REG_CLOCK read too slow"); return false; }
+    delay(20);
+    if (!sampleClock(t1, c1)) { initFailed("REG_CLOCK read too slow"); return false; }
     clock_hz = (uint32_t) ((uint64_t) (c1 - c0) * 1000000ULL / (t1 - t0));
     uint32_t want_hz = pll_hz;
-    if (clock_hz < want_hz - want_hz / 20 || clock_hz > want_hz + want_hz / 20) return false; // off by 5 %
+    if (clock_hz < want_hz - want_hz / 20 || clock_hz > want_hz + want_hz / 20) { // off by 5 %
+        initFailed("clock %lu kHz", (unsigned long) (clock_hz / 1000));
+        return false;
+    }
 
     slow_spi = false;
     return true;
+}
+
+// one read of REG_CLOCK, at the middle of the time it took; up to 5 tries for one that was not
+// held up (a read takes ~0.1 ms at the low SPI clock)
+bool FT812::sampleClock(uint32_t &us, uint32_t &cycles) {
+    for (int i = 0; i < 5; i++) {
+        uint32_t a = time_us_32();
+        cycles = read32(FT81x_REG_CLOCK);
+        uint32_t b = time_us_32();
+        if (b - a < 300) {
+            us = a + (b - a) / 2;
+            return true;
+        }
+    }
+    return false;
+}
+
+void FT812::initFailed(const char *fmt, ...) {
+    size_t len = strlen(init_failures);
+    if (len + 8 >= sizeof(init_failures)) return;
+    len += snprintf(init_failures + len, sizeof(init_failures) - len, "%s#%u ", len ? "; " : "", init_attempts);
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(init_failures + len, sizeof(init_failures) - len, fmt, ap);
+    va_end(ap);
+}
+
+uint32_t FT812::framesIn(uint32_t ms) {
+    uint32_t f0 = read32(FT81x_REG_FRAMES);
+    delay(ms);
+    return read32(FT81x_REG_FRAMES) - f0;
 }
 
 bool FT812::init(uint8_t m) {
 
     mode = ft_modes[m];
     clock_hz = 0;
+    init_failures[0] = 0;
 
     bool up = false;
     for (init_attempts = 1; init_attempts <= 3 && !up; init_attempts++) {

@@ -416,9 +416,17 @@ void read_core(const char* filename) {
       } else {
         ft.spi(true);
         has_ft = ft.init(hw_setup.ft_video_mode);
+        if (ft.initFailures()[0]) {
+          d_printf("FT81x failed attempts: %s", ft.initFailures()); d_println();
+        }
         if (has_ft) {
           d_printf("Found FT81x IC (system clock %lu kHz, attempt %u), switching to FT OSD",
             (unsigned long) (ft.initClockHz() / 1000), ft.initAttempts()); d_println();
+          // with no picture: 0 frames is the chip's side, running frames the video path of the core
+          // (on the Mini boards its hdmi_pll locks to the FT812 pixel clock)
+          if (hw_setup.debug_enabled) {
+            d_printf("FT81x scanout: %lu frames in 100 ms", (unsigned long) ft.framesIn(100)); d_println();
+          }
           ft.vga(true);
         } else {
           d_printf("FT81x IC did not found (%u attempts, last system clock %lu kHz)", ft.initAttempts(),
