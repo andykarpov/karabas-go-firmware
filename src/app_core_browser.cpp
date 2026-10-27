@@ -256,8 +256,9 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
   uint8_t pos = 0;
   uint8_t offset = FT_CORE_TOP;
   for(uint8_t i=core_from; i < core_to; i++) {
-    char name[18];
-    String n = String(cores[i].name); n.trim(); n.toCharArray(name, 18);
+    char trimmed[sizeof(cores[0].name)], name[18];
+    strcpy(trimmed, cores[i].name); kg_trim(trimmed);
+    snprintf(name, sizeof(name), "%s", trimmed);
     const bool sel = i == core_sel && !setup_focus;
     const uint32_t colorb = sel ? color_button_active : color_button;
     const uint32_t colort = sel ? color_text_active : color_text;
@@ -358,14 +359,10 @@ void app_core_browser_read_list() {
   autoload_enabled = false;
   // pre-select autoload core
   for (uint8_t i=0; i<cores_len; i++) {
-    String s1 = String(hw_setup.autoload_core);
-    String s2 = String(cores[i].id);
-    s1.trim();
-    s2.trim();
-//    d_println(s1);
-//    d_println(s2);
-//    d_println(hw_setup.autoload_enabled);
-    if (!autoload_enabled && hw_setup.autoload_enabled && s2.equals(s1)) {
+    char s1[sizeof(hw_setup.autoload_core)], s2[sizeof(cores[0].id)];
+    strcpy(s1, hw_setup.autoload_core); kg_trim(s1);
+    strcpy(s2, cores[i].id); kg_trim(s2);
+    if (!autoload_enabled && hw_setup.autoload_enabled && strcmp(s2, s1) == 0) {
       autoload_enabled = true;
       autoload_countdown = hw_setup.autoload_timeout;
       core_sel = i;
@@ -381,8 +378,8 @@ static void start_core() {
     app_core_browser_ft_menu(2); // play wav
   }
   d_printf("Selected core %s to boot from menu", cores[core_sel].filename); d_println();
-  String f = String(cores[core_sel].filename); f.trim(); 
-  char buf[32]; f.toCharArray(buf, sizeof(buf));
+  char buf[sizeof(cores[0].filename)];
+  strcpy(buf, cores[core_sel].filename); kg_trim(buf);
   has_ft = false;
   do_configure(buf);
   switch (core.type) {
@@ -567,8 +564,8 @@ void app_core_browser_on_time() {
   if (autoload_enabled) {
     if (autoload_timer.elapsed() > autoload_countdown * 1000) {
       autoload_enabled = false;
-      String f = String(cores[core_sel].filename); f.trim(); 
-      char buf[32]; f.toCharArray(buf, sizeof(buf));
+      char buf[sizeof(cores[0].filename)];
+      strcpy(buf, cores[core_sel].filename); kg_trim(buf);
       has_ft = false;
       do_configure(buf);
       switch (core.type) {

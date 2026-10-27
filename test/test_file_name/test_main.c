@@ -1,4 +1,5 @@
 #include <unity.h>
+#include <string.h>
 #include "file_name.h"
 
 void setUp() {}
@@ -45,10 +46,38 @@ static void test_phys() {
   TEST_ASSERT_EQUAL_INT(-1, kg_phys_drive(""));
 }
 
+static void test_trim_lower() {
+  char s[32];
+  strcpy(s, "  Hello World \r\n"); kg_trim(s); TEST_ASSERT_EQUAL_STRING("Hello World", s);
+  strcpy(s, "x"); kg_trim(s); TEST_ASSERT_EQUAL_STRING("x", s);
+  strcpy(s, " \t "); kg_trim(s); TEST_ASSERT_EQUAL_STRING("", s);
+  strcpy(s, ""); kg_trim(s); TEST_ASSERT_EQUAL_STRING("", s);
+  strcpy(s, "Game.TRD"); kg_str_lower(s); TEST_ASSERT_EQUAL_STRING("game.trd", s);
+}
+
+static void test_paths() {
+  char p[16];
+  TEST_ASSERT_TRUE(kg_path_join(p, sizeof(p), "/games", "x.trd"));
+  TEST_ASSERT_EQUAL_STRING("/games/x.trd", p);
+  TEST_ASSERT_TRUE(kg_path_join(p, sizeof(p), "/", "x.trd"));
+  TEST_ASSERT_EQUAL_STRING("//x.trd", p); // as String did; SdFat takes it
+  TEST_ASSERT_FALSE(kg_path_join(p, sizeof(p), "/games/zx", "long name.trd"));
+  strcpy(p, "//games//x"); kg_path_collapse(p); TEST_ASSERT_EQUAL_STRING("/games/x", p);
+  strcpy(p, ""); kg_path_root(p, sizeof(p)); TEST_ASSERT_EQUAL_STRING("/", p);
+  strcpy(p, "games"); kg_path_root(p, sizeof(p)); TEST_ASSERT_EQUAL_STRING("/games", p);
+  strcpy(p, "/games"); kg_path_root(p, sizeof(p)); TEST_ASSERT_EQUAL_STRING("/games", p);
+  strcpy(p, "0123456789abcde"); kg_path_root(p, sizeof(p)); TEST_ASSERT_EQUAL_STRING("/0123456789abcd", p);
+  strcpy(p, "/games/zx"); kg_path_parent(p); TEST_ASSERT_EQUAL_STRING("/games", p);
+  kg_path_parent(p); TEST_ASSERT_EQUAL_STRING("", p);
+  strcpy(p, "games"); kg_path_parent(p); TEST_ASSERT_EQUAL_STRING("games", p);
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_has_ext);
   RUN_TEST(test_short_name);
   RUN_TEST(test_phys);
+  RUN_TEST(test_trim_lower);
+  RUN_TEST(test_paths);
   return UNITY_END();
 }

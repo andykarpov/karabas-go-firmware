@@ -14,6 +14,14 @@
 #include "sorts.h"
 #include "file_name.h"
 
+// the dir of the core's files (core.dir), trimmed and from the root: "" -> "/", "nes" -> "/nes"
+static void core_dir_path(char *out, size_t size) {
+  char dir[sizeof(core.dir)];
+  strcpy(dir, core.dir);
+  kg_trim(dir);
+  snprintf(out, size, "%s%s", dir[0] == '/' ? "" : "/", dir);
+}
+
 void app_file_loader_read_list(bool forceIndex = false) {
 
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
@@ -31,12 +39,8 @@ void app_file_loader_read_list(bool forceIndex = false) {
   // files from sd1 card
 
   if (has_sd) {
-    String dir = String(core.dir);
-    dir.trim();
-    if (dir.length() == 0) dir = "/";
-    if (dir.charAt(0) != '/') dir = "/" + dir;
     char d[256];
-    dir.toCharArray(d, 255);
+    core_dir_path(d, sizeof(d));
     if (root1.isOpen()) {
       root1.close();
     }
@@ -62,10 +66,9 @@ void app_file_loader_read_list(bool forceIndex = false) {
     d_println("Read file list");
     files_clear();
     file_sel = 0;
-    String exts = String(core.file_extensions);
-    exts.toLowerCase(); exts.trim();
-    char e[33];
-    exts.toCharArray(e, 32);
+    char e[sizeof(core.file_extensions)];
+    strcpy(e, core.file_extensions);
+    kg_str_lower(e); kg_trim(e);
     while (file1.openNext(&root1, O_RDONLY)) {
       char filename[256]; file1.getName(filename, sizeof(filename));
       uint16_t id;
@@ -156,18 +159,8 @@ void app_file_loader_menu(uint8_t vpos) {
         if (sd_open_id(file1, &root1, files[i].file_id)) {
           char filename[255];
           file1.getName(filename, sizeof(filename));
-          String exts = String(core.file_extensions); exts.toLowerCase(); exts.trim();
-          String f(filename);
-          /*f.replace("_", " ");
-          f.replace("-", " ");
-          f.replace("[!]", "");
-          f.replace("  ", " "); f.replace("  ", " ");
-          if (exts.indexOf(f.substring(f.length()-4)) != -1) {
-            f.replace(f.substring(f.length()-4), "");
-          }
-          f.trim();*/
-          f.toCharArray(name, sizeof(name));
-          f.toCharArray(cached_names[j].name, sizeof(cached_names[j].name));
+          snprintf(name, sizeof(name), "%s", filename);
+          snprintf(cached_names[j].name, sizeof(cached_names[j].name), "%s", filename);
           cached_names[j].name[32] = '\0';
           file1.close();
         }
@@ -255,13 +248,8 @@ void app_file_loader_send_file(uint16_t file_id) {
   }
 
   if (!root1.isOpen()) {
-    String dir = String(core.dir);
-    dir.trim();
-    if (dir.length() == 0) dir = "/";
-    if (dir.charAt(0) != '/') dir = "/" + dir;
-    //sd1.chdir(dir);
     char dirname[255];
-    dir.toCharArray(dirname, sizeof(dirname));
+    core_dir_path(dirname, sizeof(dirname));
     if (!root1.open(&sd1, dirname)) {
       d_printf("Unable to open dir %s", dirname); d_println();
       return;

@@ -117,7 +117,6 @@ void print_time() {
   zxosd.setPos(24, 0);
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
   static bool dots_blink = !dots_blink;
-  String dots = String(dots_blink ? ':' : ' ');
   uint8_t h = zxrtc.getHour();
   uint8_t m = zxrtc.getMinute();
   uint8_t s = zxrtc.getSecond();

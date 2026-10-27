@@ -50,18 +50,20 @@ void core_ioctl_send(uint8_t slot, bool popup)
 
   uint64_t fsize = 0;
   spi_send64(CMD_IOCTL_SIZE, fsize);
-  String fname = String(file_slots[slot].dir) + "/" + String(file_slots[slot].filename);
-  fname.replace("//", "/");
+  char fname[KG_PATH_MAX];
+  kg_path_join(fname, sizeof(fname), file_slots[slot].dir, file_slots[slot].filename);
+  kg_path_collapse(fname);
   FsFile file = sd1.open(fname);
   if (!file) {
-    d_printf("Ioctl slot %d: unable to open %s", slot, fname.c_str()); d_println();
+    d_printf("Ioctl slot %d: unable to open %s", slot, fname); d_println();
   }
   fsize = file ? file.size() : 0;
   spi_send64(CMD_IOCTL_SIZE, fsize);
 
-  String ext = fname.substring(fname.lastIndexOf('.')+1);
-  for(uint8_t i = 0; i<ext.length(); i++) {
-    spi_send(CMD_IOCTL_EXT, i, ext.charAt(i));
+  const char *dot = strrchr(fname, '.');
+  const char *ext = dot ? dot + 1 : fname;
+  for(uint8_t i = 0; ext[i] && i < 255; i++) {
+    spi_send(CMD_IOCTL_EXT, i, ext[i]);
   }
 
   uint8_t buf[512];
@@ -86,7 +88,7 @@ void core_ioctl_send(uint8_t slot, bool popup)
   }
   file.close();
   spi_send(CMD_IOCTL_STATE, 0, 0); // finish
-  d_printf("Ioctl slot %d: %s, %lu bytes in %lu ms (%s)", slot, fname.c_str(), (unsigned long) i,
+  d_printf("Ioctl slot %d: %s, %lu bytes in %lu ms (%s)", slot, fname, (unsigned long) i,
     (unsigned long) send_timer.elapsed(), link_burst_available() ? "burst" : "classic");
   d_println();
 
@@ -145,11 +147,9 @@ void flashboot (uint8_t data) {
   // now it's implemented as hack: reload the same core (required for zx next hard reset)
   // d_printf("Core id %s", core.id); d_println();
   // d_printf("Core filename %s", core.filename); d_println();
-  //String f = String(core.filename); f.trim(); 
-  //d_printf("Loading core %s", f); d_println();
-  //char buf[33]; f.toCharArray(buf, sizeof(buf));
-  String id = String(core.id); id.trim();
-  if (id.compareTo("zxnext") == 0) { // allow flashboot only for zxnext core
+  char id[sizeof(core.id)];
+  strcpy(id, core.id); kg_trim(id);
+  if (strcmp(id, "zxnext") == 0) { // allow flashboot only for zxnext core
     is_flashboot = true;
     do_configure(core.filename);
   }
@@ -336,17 +336,16 @@ void read_core(const char* filename) {
       file_read_bytes(file_slots[core.osd[i].slot_id].ext, 256); file_slots[core.osd[i].slot_id].ext[255] = '\0';
       file_slots[core.osd[i].slot_id].offset_dir = file1.curPosition();
       file_read_bytes(file_slots[core.osd[i].slot_id].dir, 256); file_slots[core.osd[i].slot_id].dir[255] = '\0';
-      String dir = String(file_slots[core.osd[i].slot_id].dir);
-      dir.trim(); // make_core pads with spaces
-      if (dir == "") { dir = "/"; }
-      if (dir.charAt(0) != '/') { dir = '/' + dir; }
-      dir.toCharArray(file_slots[core.osd[i].slot_id].dir, sizeof(file_slots[core.osd[i].slot_id].dir));
+      char *dir = file_slots[core.osd[i].slot_id].dir;
+      kg_trim(dir); // make_core pads with spaces
+      kg_path_root(dir, sizeof(file_slots[0].dir));
       file_slots[core.osd[i].slot_id].offset_filename = file1.curPosition();
       file_read_bytes(file_slots[core.osd[i].slot_id].filename, 256); file_slots[core.osd[i].slot_id].filename[255] = '\0';
-      String sfilename = String( file_slots[core.osd[i].slot_id].filename); sfilename.trim();
-      sfilename.toCharArray(file_slots[core.osd[i].slot_id].filename, sizeof(file_slots[core.osd[i].slot_id].filename));
-      String sfullname = dir + "/" + sfilename; sfullname.trim();
-      if (sfilename.length() > 0 && (sd1.exists(sfullname) || core_osd_phys(i, sfilename.c_str()))) {
+      char *sfilename = file_slots[core.osd[i].slot_id].filename;
+      kg_trim(sfilename);
+      char sfullname[KG_PATH_MAX];
+      kg_path_join(sfullname, sizeof(sfullname), dir, sfilename);
+      if (sfilename[0] && (sd1.exists(sfullname) || core_osd_phys(i, sfilename))) {
         file_slots[core.osd[i].slot_id].is_mounted = true; //file_slots[core.osd[i].slot_id].file = sd1.open(sfullname, O_READ);
         // autoload: FL items below, after the switches (F items are always mounted)
       }
@@ -454,14 +453,13 @@ void read_core(const char* filename) {
   // mount slots
   for(uint8_t i=0; i<core.osd_len; i++) {
     if (core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER) {
-      String dir = String(file_slots[core.osd[i].slot_id].dir);
-      if (dir == "") { dir = "/"; }
-      if (dir.charAt(0) != '/') { dir = '/' + dir; }
-      dir.toCharArray(file_slots[core.osd[i].slot_id].dir, sizeof(file_slots[core.osd[i].slot_id].dir));
-      String sfilename = String( file_slots[core.osd[i].slot_id].filename);
-      String sfullname = dir + "/" + sfilename;
-      file_slots[core.osd[i].slot_id].is_mounted = sfilename.length() > 0 &&
-        (sd1.exists(sfullname) || core_osd_phys(i, sfilename.c_str()));
+      char *dir = file_slots[core.osd[i].slot_id].dir;
+      kg_path_root(dir, sizeof(file_slots[0].dir));
+      const char *sfilename = file_slots[core.osd[i].slot_id].filename;
+      char sfullname[KG_PATH_MAX];
+      kg_path_join(sfullname, sizeof(sfullname), dir, sfilename);
+      file_slots[core.osd[i].slot_id].is_mounted = sfilename[0] &&
+        (sd1.exists(sfullname) || core_osd_phys(i, sfilename));
       core_send(i); // opens the image and sends its size (or the physical drive)
     }
     // FL items with autoload: the file goes to the core before it starts (a Kickstart rom)

@@ -27,8 +27,7 @@ void app_setup_overlay() {
   setup_menu.setFastCursor(false);
 
   setup_menu.onPrint([](const char* str, size_t len) {
-      String s = String(str, len);
-      zxosd.print(s);
+      for (size_t i = 0; i < len; i++) zxosd.write((uint8_t) str[i]);
       zxosd.update();
   });
 
