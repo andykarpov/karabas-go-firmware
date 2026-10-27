@@ -2,6 +2,7 @@
 
 #include "config.h"
 #include "SdFat.h"
+#include "matrix_style.h"
 
 typedef struct {
 	uint8_t cmd;
@@ -141,6 +142,7 @@ typedef struct {
 	uint32_t color_copyright;
 	bool matrix_enabled;        // [matrix] enabled: off = the LED matrix stays dark
 	uint8_t matrix_brightness;  // [matrix] brightness: 0 = by the core, 1..16
+	kg_mx_style_t matrix_style;  // [matrix] clock_* / meter_*: the clock effect and the audio meters
 	int16_t tz;                 // [setup] tz: the UTC offset of the NTP sync, minutes
 } setup_t;
 

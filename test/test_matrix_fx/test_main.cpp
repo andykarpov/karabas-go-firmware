@@ -66,6 +66,39 @@ static void test_clock() {
   TEST_ASSERT_EQUAL_UINT8(1, count(&fx, KG_MX_RED));
 }
 
+static void test_clock_style() {
+  matrix_fx_t fx;
+  matrix_fx_init(&fx, KG_MATRIX_FX_CLOCK, 0, 1);
+  kg_mx_style_t st;
+  kg_mx_style_default(&st);
+  st.opt[KG_MX_OPT_CLOCK_HOURS] = KG_MX_CLR_RED;
+  st.opt[KG_MX_OPT_CLOCK_MINUTES] = KG_MX_CLR_GREEN;
+  st.opt[KG_MX_OPT_CLOCK_SECONDS] = KG_MX_SEC_COLON;
+  st.opt[KG_MX_OPT_CLOCK_SECONDS_COLOR] = KG_MX_CLR_YELLOW;
+  matrix_fx_input_t t = {};
+  t.hour = 12; t.minute = 34; t.second = 10;
+  t.style = &st;
+  matrix_fx_step(&fx, &t);
+  TEST_ASSERT_EQUAL_UINT8(KG_MX_RED, fx.fb[1][1]);
+  TEST_ASSERT_EQUAL_UINT8(KG_MX_GREEN, fx.fb[1][13]);
+  // the colon on even seconds, no dot on the bottom row
+  TEST_ASSERT_EQUAL_UINT8(KG_MX_YELLOW, fx.fb[2][7]);
+  TEST_ASSERT_EQUAL_UINT8(KG_MX_YELLOW, fx.fb[4][8]);
+  for (uint8_t x = 0; x < 16; x++) TEST_ASSERT_EQUAL_UINT8(KG_MX_OFF, fx.fb[7][x]);
+  t.second = 11;
+  matrix_fx_step(&fx, &t);
+  TEST_ASSERT_EQUAL_UINT8(KG_MX_OFF, fx.fb[2][7]);
+  // the bar: 30 s = 9 cells
+  st.opt[KG_MX_OPT_CLOCK_SECONDS] = KG_MX_SEC_BAR;
+  t.second = 30;
+  matrix_fx_step(&fx, &t);
+  TEST_ASSERT_EQUAL_UINT8(KG_MX_YELLOW, fx.fb[7][8]);
+  TEST_ASSERT_EQUAL_UINT8(KG_MX_OFF, fx.fb[7][9]);
+  st.opt[KG_MX_OPT_CLOCK_SECONDS] = KG_MX_SEC_OFF;
+  matrix_fx_step(&fx, &t);
+  for (uint8_t x = 0; x < 16; x++) TEST_ASSERT_EQUAL_UINT8(KG_MX_OFF, fx.fb[7][x]);
+}
+
 static void test_scanner_bounces() {
   matrix_fx_t fx;
   matrix_fx_init(&fx, KG_MATRIX_FX_SCANNER, 0, 1);
@@ -201,6 +234,7 @@ int main() {
   RUN_TEST(test_life_wraps);
   RUN_TEST(test_life_reseeds);
   RUN_TEST(test_clock);
+  RUN_TEST(test_clock_style);
   RUN_TEST(test_scanner_bounces);
   RUN_TEST(test_fire_rises);
   RUN_TEST(test_sin8);

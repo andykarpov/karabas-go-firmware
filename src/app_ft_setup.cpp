@@ -41,7 +41,7 @@ typedef struct {
   uint8_t len;
 } page_t;
 
-static const uint8_t page_system[] = { SET_DEBUG, SET_DVI, SET_MATRIX, SET_MATRIX_BRIGHTNESS };
+static const uint8_t page_system[] = { SET_DEBUG, SET_DVI, SET_MATRIX, SET_MATRIX_BRIGHTNESS, SET_MX_EFFECTS };
 static const uint8_t page_autoload[] = { SET_AUTOLOAD, SET_TIMEOUT, SET_CORE };
 static const uint8_t page_display[] = { SET_FT, SET_VIDEO_MODE, SET_3D, SET_TIME, SET_DATE, SET_CHAR, SET_MOUSE_SPEED };
 static const uint8_t page_sound[] = { SET_SOUND, SET_CLICK };
@@ -110,7 +110,22 @@ static uint16_t panel_w() {
   return w > PANEL_MAX_W ? PANEL_MAX_W : w;
 }
 
-static uint8_t cur_id() { return pages[tab].ids[row]; }
+static bool mx_page; // System > Matrix effects is open instead of the System page
+
+static const page_t *cur_page() {
+  static page_t mx;
+  if (!mx_page) return &pages[tab];
+  mx = { "System > Matrix effects", settings_mx_ids, settings_mx_len };
+  return &mx;
+}
+
+static uint8_t cur_id() { return cur_page()->ids[row]; }
+
+// the row of a setting on the page of the tab
+static uint8_t page_row(uint8_t id) {
+  for (uint8_t i = 0; i < pages[tab].len; i++) if (pages[tab].ids[i] == id) return i;
+  return 0;
+}
 
 static const ft_page_t *custom_page() { return tab >= T_PAGES && tab < T_SAVE ? custom_pages[tab - T_PAGES] : nullptr; }
 
@@ -155,6 +170,10 @@ static void draw_value(uint8_t id, int16_t y, bool focused, bool arrows) {
     ft.drawText(right - 60, y + ROW_H / 2, FONT_SMALL, s.color_text, FT81x_OPT_RIGHTX | FT81x_OPT_CENTERY, hex);
     return;
   }
+  if (st->kind == SET_KIND_PAGE) {
+    ft.drawText(right - 12, y + ROW_H / 2, FONT, s.color_text, FT81x_OPT_CENTER, ">");
+    return;
+  }
   char v[14]; // a long core name is shortened to fit between the arrows
   if (id == SET_VIDEO_MODE) strlcpy(v, FT812::modeName(focused ? mode_pick : s.ft_video_mode), sizeof(v));
   else settings_value_text(id, s, v, sizeof(v));
@@ -166,7 +185,7 @@ static void draw_value(uint8_t id, int16_t y, bool focused, bool arrows) {
 }
 
 static void draw_page() {
-  const page_t *p = &pages[tab];
+  const page_t *p = cur_page();
   int16_t w = panel_w();
   ft.drawText(PANEL_X + 16, TOP + TAB_H / 2, 29, s.color_text, FT81x_OPT_CENTERY, p->name);
   ft.drawRect(PANEL_X + 16, TOP + TAB_H + 2, w - 32, 1, 1, s.color_copyright);
@@ -302,6 +321,8 @@ static void draw_footer() {
 
 void app_ft_setup_draw() {
   if (!has_ft) return;
+  // the matrix shows the plugin of the Matrix effects setting with the focus
+  settings_preview(focus == F_PAGE && mx_page ? cur_id() : SET_COUNT);
   ft.beginDisplayList();
   ft_hit_clear();
   app_core_browser_ft_background(s);
@@ -363,6 +384,7 @@ static void track_tab() {
 static void to_tabs() {
   if (focus == F_CUSTOM) custom_page()->close();
   focus = F_TABS;
+  mx_page = false;
 }
 
 static void custom_key(uint8_t key, bool shift, bool joy) {
@@ -410,12 +432,28 @@ static void open_tab() {
       }
       focus = F_PAGE;
       row = 0;
+      mx_page = false;
       mode_pick = s.ft_video_mode;
   }
 }
 
+static void open_mx_page() {
+  mx_page = true;
+  row = 0;
+}
+
+// back from Matrix effects to its row on the System page
+static void close_mx_page() {
+  mx_page = false;
+  row = page_row(SET_MX_EFFECTS);
+}
+
 static void change(int d) {
   uint8_t id = cur_id();
+  if (settings[id].kind == SET_KIND_PAGE) {
+    if (d > 0) open_mx_page();
+    return;
+  }
   if (id == SET_VIDEO_MODE) {
     uint8_t n = FT812::modeCount();
     mode_pick = (mode_pick + d + n) % n;
@@ -473,12 +511,13 @@ static void handle(const keys_t &k) {
       else if (esc || (left && !ui_repeat)) leave(); // Left: the tabs are the top level
       break;
     case F_PAGE: {
-      uint8_t n = pages[tab].len;
+      uint8_t n = cur_page()->len;
       if (up) row = (row + n - 1) % n;
       else if (down) row = (row + 1) % n;
-      else if (k.tab) { tab = (tab + 1) % T_PAGES; row = 0; }
+      else if (k.tab) { tab = (tab + 1) % T_PAGES; row = 0; mx_page = false; }
       else if (left || right) change(left ? -1 : 1);
       else if (enter) enter_row();
+      else if (back && mx_page) close_mx_page();
       else if (back) focus = F_TABS;
       if (!up && !down) break;
       mode_pick = s.ft_video_mode;

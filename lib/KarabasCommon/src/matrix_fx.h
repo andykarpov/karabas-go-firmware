@@ -6,6 +6,7 @@
 #include <stdint.h>
 
 #include "kg_matrix.h"
+#include "matrix_style.h"
 
 #define MATRIX_FX_DRIVES 8  // image slots (MAX_FILE_SLOTS of the firmware)
 #define MATRIX_FX_STARS 12
@@ -21,6 +22,7 @@ typedef struct {
 typedef struct {
   uint8_t hour, minute, second;
   matrix_fx_drive_t drive[MATRIX_FX_DRIVES];
+  const kg_mx_style_t *style; // the clock of karabas.ini [matrix]; nullptr: the default look
 } matrix_fx_input_t;
 
 typedef struct {
