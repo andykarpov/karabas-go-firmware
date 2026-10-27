@@ -75,7 +75,7 @@ static void log_write(const char *s, size_t len) {
 }
 
 static void log_printf(const char *fmt, ...) {
-  char line[256];
+  char line[512];
   va_list ap;
   va_start(ap, fmt);
   int n = vsnprintf(line, sizeof(line) - 2, fmt, ap);

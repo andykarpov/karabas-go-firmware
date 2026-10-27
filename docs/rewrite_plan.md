@@ -49,6 +49,7 @@ What replaces each dependency:
 1. **Baseline on Mini G**, to compare against later: boot time, core load time, MSC speed SD1 / SD2 (454 / 249 KB/s), file loader speed, the `DIAG` line, firmware size.
 2. **Hardware checklist** (`docs/hw_checklist.md`): cores, OSD, file mounter, `.sav`, msc / msc2 and eject, gamepads / XInput / printer, PS/2, Sega, RTC / NTP, Wi-Fi, FT pages, matrix, OLED, `AT+KARABAS=`.
 3. **Spike** (a separate directory, Mini G): a minimal pico-sdk project with FreeRTOS SMP and the interop, TinyUSB device CDC + MSC on a RAM disk, and our Pico-PIO-USB host with a keyboard behind the hub. This is the biggest risk and the biggest gain: if the PIO-USB host is stable here, without the `ccount` hack and the patches, with an even SOF, the rest is predictable.
+   - **Result (2026-10-27, Mini G, `spike/`):** it works. SOF 1000/s with a max gap of 1005..1014 us, no disconnects, no `own`. A CDC flood from `APP` (5.4 MB in 20 s, no lost line, no `__usb_mutex`) with keys typed all the time: core0 does not stop, no key is lost. The MSC RAM disk mounts and keeps a file written by the PC. 7 hardware spinlocks free when the USB host starts, the PIO-USB programs fit without the `ccount` hack.
 
 ## Phase 1: clean up inside the current build
 
