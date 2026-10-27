@@ -1,6 +1,11 @@
 #pragma once
 
+#include <stdbool.h>
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 // A "black box" for hangs (debug=1 only). APP marks where it is (hang_mark), the SPI and I2C
 // bus locks note who holds and who waits for them; all of it in the watchdog scratch registers,
@@ -22,3 +27,7 @@ void hang_beat_core1();          // the USB loop on core1
 void hang_lock_wait(uint8_t lock);
 void hang_lock_held(uint8_t lock);
 void hang_lock_free(uint8_t lock, bool still_held);
+
+#ifdef __cplusplus
+}
+#endif

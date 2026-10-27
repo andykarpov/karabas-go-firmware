@@ -2,6 +2,10 @@
 #include <stdint.h>
 #include "hardware/sync.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // One claimed hardware spinlock for the short critical sections of the USB host data: these
 // joystick ports, the keyboard report and the gamepad mapper capture (hid_app.cpp). They are
 // never nested. Only 8 spinlocks can be claimed and the SDK takes some; PIO-USB claims one more
@@ -25,3 +29,7 @@ typedef struct {
   bool xinput;
 } usb_joy_port_t;
 void usb_joy_ports(usb_joy_port_t ports[2]);
+
+#ifdef __cplusplus
+}
+#endif

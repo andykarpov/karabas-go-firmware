@@ -308,9 +308,16 @@
 
 // debug output goes through src/diag/debug_out (single Serial writer, see there)
 #include "diag/debug_out.h"
-#define d_begin(...)   if (hw_setup.debug_enabled) Serial.begin(__VA_ARGS__);
-#define d_print(...)   if (hw_setup.debug_enabled) debug_out().print(__VA_ARGS__);
-#define d_printf(...)  if (hw_setup.debug_enabled) debug_out().printf(__VA_ARGS__);
-#define d_write(...)   if (hw_setup.debug_enabled) debug_out().write(__VA_ARGS__);
-#define d_println(...) if (hw_setup.debug_enabled) debug_out().println(__VA_ARGS__);
-#define d_flush(...)   if (hw_setup.debug_enabled) debug_flush();
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+// d_print: a string; d_println: an optional string and the line end; numbers through d_printf
+#define d_print(s)     do { if (hw_setup.debug_enabled) debug_print(s); } while (0)
+#define d_printf(...)  do { if (hw_setup.debug_enabled) debug_printf(__VA_ARGS__); } while (0)
+#define d_println(...) do { if (hw_setup.debug_enabled) debug_println(__VA_OPT__(__VA_ARGS__,) NULL); } while (0)
+#define d_flush()      do { if (hw_setup.debug_enabled) debug_flush(); } while (0)
+
+#ifdef __cplusplus
+}
+#endif

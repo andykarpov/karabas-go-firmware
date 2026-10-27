@@ -1,35 +1,47 @@
 #pragma once
-#include <cstddef>
-#include <cstdint>
+#include <stddef.h>
+#include <stdint.h>
 
-// Each instance belongs to one task. Emit whole lines, not one log call per
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// Each trace belongs to one task. Emit whole lines, not one log call per
 // byte: this reduces log traffic and prevents RX/TX text from interleaving.
 // Offsets reveal lost log lines. Hex preserves ESC, CR, LF and high-bit bytes.
-class PrinterTrace {
- public:
-  using Sink = void (*)(uint32_t, const char *);
-  explicit PrinterTrace(Sink sink) : sink_(sink) {}
-  void reset() { offset_ = 0; used_ = 0; }
-  void append(const uint8_t *data, size_t length) {
-    static constexpr char digits[] = "0123456789ABCDEF";
-    for (size_t i = 0; i < length; ++i) {
-      const size_t pos = used_ * 3;
-      hex_[pos] = digits[data[i] >> 4];
-      hex_[pos + 1] = digits[data[i] & 15];
-      hex_[pos + 2] = ' ';
-      if (++used_ == 32) flush();
-    }
+typedef void (*printer_trace_sink_t)(uint32_t offset, const char *hex);
+
+typedef struct {
+  printer_trace_sink_t sink;
+  uint32_t offset;
+  size_t used;
+  char hex[96];
+} printer_trace_t;
+
+static inline void printer_trace_reset(printer_trace_t *t) {
+  t->offset = 0;
+  t->used = 0;
+}
+
+static inline void printer_trace_flush(printer_trace_t *t) {
+  if (!t->used) return;
+  t->hex[t->used * 3 - 1] = 0;
+  t->sink(t->offset, t->hex);
+  t->offset += t->used;
+  t->used = 0;
+}
+
+static inline void printer_trace_append(printer_trace_t *t, const uint8_t *data, size_t length) {
+  static const char digits[] = "0123456789ABCDEF";
+  for (size_t i = 0; i < length; ++i) {
+    const size_t pos = t->used * 3;
+    t->hex[pos] = digits[data[i] >> 4];
+    t->hex[pos + 1] = digits[data[i] & 15];
+    t->hex[pos + 2] = ' ';
+    if (++t->used == 32) printer_trace_flush(t);
   }
-  void flush() {
-    if (!used_) return;
-    hex_[used_ * 3 - 1] = 0;
-    sink_(offset_, hex_);
-    offset_ += used_;
-    used_ = 0;
-  }
- private:
-  Sink sink_;
-  uint32_t offset_ = 0;
-  size_t used_ = 0;
-  char hex_[96]{};
-};
+}
+
+#ifdef __cplusplus
+}
+#endif

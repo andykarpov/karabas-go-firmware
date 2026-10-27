@@ -3,7 +3,13 @@
 // Runtime diagnostics (build with -D DIAG_STATS=1, printed with debug=1 in karabas.ini):
 // loop rate and worst loop gap per core, free heap and task stack headroom.
 
-#include <Arduino.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #ifndef DIAG_STATS
 #define DIAG_STATS 0
@@ -14,7 +20,11 @@ void diag_loop_core0();
 void diag_loop_core1();
 void diag_tick();
 #else
-inline void diag_loop_core0() {}
-inline void diag_loop_core1() {}
-inline void diag_tick() {}
+static inline void diag_loop_core0(void) {}
+static inline void diag_loop_core1(void) {}
+static inline void diag_tick(void) {}
+#endif
+
+#ifdef __cplusplus
+}
 #endif

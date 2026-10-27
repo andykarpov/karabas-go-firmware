@@ -1,7 +1,13 @@
 #pragma once
 
-#include <Arduino.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 #include "types.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 extern core_item_t core;
 extern core_file_slot_t file_slots[MAX_FILE_SLOTS];
@@ -24,5 +30,7 @@ bool core_osd_phys(uint8_t pos, const char *filename);
 void core_ioctl_send(uint8_t slot, bool popup);
 void core_send_all();
 void core_trigger(uint8_t pos);
-uint8_t core_eeprom_get(uint8_t pos);
-void core_eeprom_set(uint8_t pos, uint8_t val);
+
+#ifdef __cplusplus
+}
+#endif

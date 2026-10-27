@@ -1,6 +1,12 @@
 #pragma once
 
-#include <Arduino.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 // The AT firmware of the ESP8266 updated over the air from Espressif's server (AT+CIUPDATE),
 // BOOT core only, as Setup Wi-Fi. The module downloads into the other half of its flash and
@@ -28,3 +34,7 @@ uint8_t esp_update_progress();
 const char *esp_update_message();
 // the version of the module after the update or the reset ("" before)
 const char *esp_update_version();
+
+#ifdef __cplusplus
+}
+#endif

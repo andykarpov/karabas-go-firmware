@@ -1,3 +1,4 @@
+#include <Arduino.h>
 /*-------------------------------------------------------------------------------------------------------------------
 -- 
 -- 
@@ -43,7 +44,6 @@
 // see [rp2040] in platformio.ini: wakeups from irq context go through the timer task
 static_assert(configTIMER_TASK_PRIORITY == configMAX_PRIORITIES - 1, "FreeRTOS timer task must run above APP and USB");
 
-RTC zxrtc;
 volatile bool usb_host_ready = false;
 
 static uint32_t led_timer = 0;
@@ -77,7 +77,7 @@ static void esp_send(uint8_t c) {
 }
 
 static void on_rtc(uint8_t addr, uint8_t data) {
-  zxrtc.setData(addr, data);
+  rtc_set_data(addr, data);
 }
 
 // firmware init, runs on core0
@@ -139,9 +139,9 @@ static void karabas_setup()
   matrix_begin();
   oled_begin();
 
-  zxrtc.begin(spi_send, on_time);
-  zxosd.begin(spi_send);
-  ft.begin(spi_send);
+  rtc_begin(spi_send, on_time);
+  osd_begin(spi_send);
+  ft_begin(spi_send, PIN_MCU_FT_CS, board_ft_reset_pin());
 
   storage_begin();
 
@@ -226,7 +226,7 @@ static void karabas_loop()
   //rp2040.wdt_reset();
   // the clock runs in msc mode too (the msc screen shows it)
   hang_mark(0x0300);
-  zxrtc.handle();
+  rtc_handle();
 
   // in msc mode nothing else runs until eject
   hang_mark(0x0400);
@@ -275,14 +275,16 @@ static void karabas_loop()
   link_poll();
 }
 
-// usb host loop, runs on core1
-static void usb_host_loop()
+// usb host loop, runs on core1. It never blocks, so all of it runs from RAM: from flash,
+// each turn of it took code of APP out of the 16 KB flash cache that both cores share,
+// and the misses made core0 2-3 times slower (phase 1.6, the text OSD drew visibly).
+static void __not_in_flash_func(usb_host_loop)()
 {
   diag_loop_core1();
   hang_beat_core1();
   usb_diag_tick();
-  tuh_task();
-  printer_host_tick(ms_now());
+  if (tuh_task_event_ready()) tuh_task();
+  printer_host_tick();
   printer_usb_tick();
 }
 
@@ -320,7 +322,7 @@ static void app_task(void *param) {
   }
 }
 
-static void usb_task(void *param) {
+static void __not_in_flash_func(usb_task)(void *param) {
   usb_host_setup();
   for (;;) {
     usb_host_loop();

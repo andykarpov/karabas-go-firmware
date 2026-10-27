@@ -1,9 +1,15 @@
 #ifndef HID_APP_H
 #define HID_APP_H
 
-#include <Arduino.h>
-#include "Adafruit_TinyUSB.h"
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include "tusb.h"
 #include "config.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 extern hid_keyboard_report_t usb_keyboard_report;
 extern hid_mouse_report_t usb_mouse_report;
@@ -46,10 +52,6 @@ void usb_pads_get(usb_pad_t pads[2]);
 void hid_capture_start();
 void hid_capture_stop();
 bool hid_capture_get(hid_capture_t *out); // false until the pad is found
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 void tuh_mount_cb(uint8_t daddr);
 void tuh_umount_cb(uint8_t daddr);

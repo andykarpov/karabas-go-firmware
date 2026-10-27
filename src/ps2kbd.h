@@ -1,8 +1,14 @@
 #ifndef PS2_KBD_H
 #define PS2_KBD_H
 
-#include <Arduino.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 #include "hid_app.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 extern uint8_t kb_repeat_key;
 extern bool kb_repeat_state;
@@ -19,4 +25,8 @@ void kb_set_scancodeset(uint8_t val);
 void kb_set_typematic(uint8_t val);
 void kb_set_leds(uint8_t val);
 
+#endif
+
+#ifdef __cplusplus
+}
 #endif
