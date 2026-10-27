@@ -30,9 +30,9 @@ void serial_set_speed(uint8_t dll, uint8_t dlm) {
   uint32_t speed = 0;
   if (dll == 0 && dlm == 0) {
     speed = 256000; // zx evo special case
-  } else if (bitRead(dlm, 7) == 1) {
+  } else if (dlm & 0x80) {
     // native atmega mode
-    dlm = bitClear(dlm, 7);
+    dlm &= 0x7F;
     // (uint16)((DLM&0x7F)*256+DLL) = (691200/<скорость в бодах>)-1 
     speed = 691200 / ((dlm*256) + dll + 1);
   } else {

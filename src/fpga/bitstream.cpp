@@ -51,8 +51,8 @@ static bool bitstream_send_pio(uint32_t total, uint32_t &sent) {
   PIOProgram pgm(&fpga_serial_program); // releases the SM when going out of scope
   PIO pio;
   int sm, offset;
-  uint pin_lo = min(PIN_CONF_IO1, PIN_CONF_CLK);
-  uint pin_cnt = max(PIN_CONF_IO1, PIN_CONF_CLK) - pin_lo + 1;
+  uint pin_lo = MIN(PIN_CONF_IO1, PIN_CONF_CLK);
+  uint pin_cnt = MAX(PIN_CONF_IO1, PIN_CONF_CLK) - pin_lo + 1;
   if (!pgm.prepare(&pio, &sm, &offset, pin_lo, pin_cnt)) {
     d_println("No free PIO state machine for the bitstream loader");
     return false;

@@ -279,7 +279,7 @@ static void draw_mapper(const ft_page_ctx_t &c) {
       break;
     case ST_PRESS:
       snprintf(line1, sizeof(line1), "Press %s", btn_names[btn]);
-      snprintf(line2, sizeof(line2), "Skipped in %lu s", (unsigned long) ((PRESS_TIMEOUT_MS - min((uint32_t) ms_since(timer), (uint32_t) PRESS_TIMEOUT_MS) + 999) / 1000));
+      snprintf(line2, sizeof(line2), "Skipped in %lu s", (unsigned long) ((PRESS_TIMEOUT_MS - MIN((uint32_t) ms_since(timer), (uint32_t) PRESS_TIMEOUT_MS) + 999) / 1000));
       break;
     case ST_RELEASE:
       snprintf(line1, sizeof(line1), "Release %s", btn_names[btn]);

@@ -325,7 +325,7 @@ static void convert_nkro_to_6kro2(hid_keyboard_report_ext_t const *nkro_report, 
     uint8_t bits = nkro_report->bits[b];
     uint8_t code = b << 3;
     for(uint8_t i = 0; i<8; i++) {
-      if (bitRead(bits, i) == 1 && idx < 6) {
+      if (((bits >> i) & 1) && idx < 6) {
         report->keycode[idx] = code + i;
         idx++;
       }

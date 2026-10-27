@@ -170,12 +170,12 @@ static void joy_poll(bool &changedL, bool &changedR) {
 static void joy_send(bool changedL, bool changedR) {
   uint16_t l = joyL, r = joyR;
   if (changedL) {
-    spi_send(CMD_JOYSTICK, 0, lowByte(l));
-    spi_send(CMD_JOYSTICK, 1, highByte(l));
+    spi_send(CMD_JOYSTICK, 0, (uint8_t) l);
+    spi_send(CMD_JOYSTICK, 1, (uint8_t) (l >> 8));
   }
   if (changedR) {
-    spi_send(CMD_JOYSTICK, 2, lowByte(r));
-    spi_send(CMD_JOYSTICK, 3, highByte(r));
+    spi_send(CMD_JOYSTICK, 2, (uint8_t) r);
+    spi_send(CMD_JOYSTICK, 3, (uint8_t) (r >> 8));
   }
 }
 

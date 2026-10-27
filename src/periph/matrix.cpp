@@ -81,15 +81,15 @@ void matrix_ctl_data(uint8_t addr, uint8_t data) {
   if (has_matrix) {
     I2cGuard i2c;
     if (!core_owns_matrix()) return;
-    if (bitRead(data, 0)) matrix.clear(); 
-    if (bitRead(data, 1)) matrix.writeDisplay();
-    if (bitRead(data, 2)) matrix.setBrightness(data >> 4);
-    if (bitRead(data, 3) && matrix_mode == MATRIX_MODE_DRAW) {
+    if (data & 0x01) matrix.clear();
+    if (data & 0x02) matrix.writeDisplay();
+    if (data & 0x04) matrix.setBrightness(data >> 4);
+    if ((data & 0x08) && matrix_mode == MATRIX_MODE_DRAW) {
       matrix_mode = MATRIX_MODE_AUDIO;
       matrix.clear();
       matrix.writeDisplay();
     }
-    if (!bitRead(data, 3) && matrix_mode == MATRIX_MODE_AUDIO) {
+    if (!(data & 0x08) && matrix_mode == MATRIX_MODE_AUDIO) {
       matrix_mode = MATRIX_MODE_DRAW;
       matrix.clear();
       matrix.writeDisplay();
@@ -337,8 +337,9 @@ void matrix_register_handlers() {
 void matrix_progress(uint32_t val, uint32_t max) {
   if (has_matrix && mx_enabled) {
     I2cGuard i2c;
-    matrix.drawLine(0, 0, map(val, 0, max, 0, 15), 0, LED_GREEN);
-    matrix.drawLine(0, 1, map(val, 0, max, 0, 15), 1, LED_GREEN);
+    int16_t x = max ? (int16_t) ((uint64_t) val * 15 / max) : 0; // val 0..max -> x 0..15
+    matrix.drawLine(0, 0, x, 0, LED_GREEN);
+    matrix.drawLine(0, 1, x, 1, LED_GREEN);
     matrix.writeDisplay();
   }
 }
@@ -498,8 +499,8 @@ void matrix_frame() {
 
   // report changed buttons outside the I2C lock (lock order: never I2C -> SPI)
   for (uint8_t i=0; i<4; i++) {
-    bool btn = bitRead(btns, i);
-    if (btn != bitRead(prev_btns, i)) {
+    bool btn = (btns >> i) & 1;
+    if (btn != (bool) ((prev_btns >> i) & 1)) {
       d_print("Matrix Button "); d_print(i+1); d_print(": "); d_println(btn ? "on" : "off");
       spi_send(CMD_MATRIX_BTN, i, btn);
     }
