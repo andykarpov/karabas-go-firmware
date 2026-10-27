@@ -42,8 +42,8 @@ void app_about_overlay() {
 void app_about_on_keyboard() 
 {
   // esc, left
-  bool left = usb_keyboard_report.keycode[0] == KEY_LEFT || ((joyL | joyR) & SC_BTN_LEFT);
-  if (usb_keyboard_report.keycode[0] == KEY_ESC || ((joyL | joyR) & UI_JOY_ESC) || (left && !ui_repeat)) {
+  uint8_t key = ui_nav_key();
+  if (key == KEY_ESC || (key == KEY_LEFT && !ui_repeat)) {
     osd_state = osd_return_state;
   }
   osd_update();

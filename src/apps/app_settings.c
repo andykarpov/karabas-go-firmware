@@ -151,13 +151,13 @@ static void mx_on_keyboard(bool up, bool down, bool left, bool right, bool enter
 }
 
 void app_settings_on_keyboard() {
-  uint8_t key = usb_keyboard_report.keycode[0];
-  bool up = key == KEY_UP || (joyL & SC_BTN_UP) || (joyR & SC_BTN_UP);
-  bool down = key == KEY_DOWN || key == KEY_TAB || (joyL & SC_BTN_DOWN) || (joyR & SC_BTN_DOWN);
-  bool left = key == KEY_LEFT || (joyL & SC_BTN_LEFT) || (joyR & SC_BTN_LEFT);
-  bool right = key == KEY_RIGHT || (joyL & SC_BTN_RIGHT) || (joyR & SC_BTN_RIGHT);
-  bool enter = key == KEY_ENTER || key == KEY_KPENTER || (joyL & SC_BTN_A) || (joyR & SC_BTN_A) || (joyL & SC_BTN_B) || (joyR & SC_BTN_B);
-  bool esc = key == KEY_ESC || ((joyL | joyR) & UI_JOY_ESC);
+  uint8_t key = ui_nav_key();
+  bool up = key == KEY_UP;
+  bool down = key == KEY_DOWN || key == KEY_TAB;
+  bool left = key == KEY_LEFT;
+  bool right = key == KEY_RIGHT;
+  bool enter = key == KEY_ENTER;
+  bool esc = key == KEY_ESC;
   bool button = focus == I_SAVE || focus == I_CANCEL;
 
   if (mx_page) {

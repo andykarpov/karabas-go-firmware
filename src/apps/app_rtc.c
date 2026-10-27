@@ -186,22 +186,23 @@ static void leave() {
 }
 
 void app_rtc_on_keyboard() {
-  uint8_t key = usb_keyboard_report.keycode[0];
-  bool up = key == KEY_UP || (joyL & SC_BTN_UP) || (joyR & SC_BTN_UP);
-  bool down = key == KEY_DOWN || key == KEY_TAB || (joyL & SC_BTN_DOWN) || (joyR & SC_BTN_DOWN);
-  bool left = key == KEY_LEFT || (joyL & SC_BTN_LEFT) || (joyR & SC_BTN_LEFT);
-  bool right = key == KEY_RIGHT || (joyL & SC_BTN_RIGHT) || (joyR & SC_BTN_RIGHT);
-  bool enter = key == KEY_ENTER || key == KEY_KPENTER || (joyL & SC_BTN_A) || (joyR & SC_BTN_A) || (joyL & SC_BTN_B) || (joyR & SC_BTN_B);
-  bool esc = key == KEY_ESC || ((joyL | joyR) & UI_JOY_ESC);
+  uint8_t typed = usb_keyboard_report.keycode[0]; // 0: the key comes from the joystick
+  uint8_t key = ui_nav_key();
+  bool up = key == KEY_UP;
+  bool down = key == KEY_DOWN || key == KEY_TAB;
+  bool left = key == KEY_LEFT;
+  bool right = key == KEY_RIGHT;
+  bool enter = key == KEY_ENTER;
+  bool esc = key == KEY_ESC;
   kg_field_t *field = focus == F_DATE ? &date_field : focus == F_TIME ? &time_field : NULL;
   bool button = focus >= F_SAVE;
-  char digit = key_digit(key);
+  char digit = key_digit(typed);
 
   if (esc) {
     leave();
     return;
   }
-  if (field && !key && (up || down)) {
+  if (field && !typed && (up || down)) {
     // the joystick has no digits: Up / Down turn the one under the cursor
     error = NULL;
     kg_field_turn(field, up ? 1 : -1);
