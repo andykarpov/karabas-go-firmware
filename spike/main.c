@@ -215,12 +215,21 @@ static void usb_task(void *param) {
   pio_usb_configuration_t cfg = PIO_USB_DEFAULT_CONFIG;
   cfg.pin_dp = HOST_PIN_DP;
   cfg.pinout = HOST_PINOUT;
+#ifdef SPIKE_USB_PIO
+  // upstream 0.7.x: tx, rx and eop on one PIO block (all 32 words), the other one stays free
+  cfg.pio_tx_num = SPIKE_USB_PIO;
+  cfg.pio_rx_num = SPIKE_USB_PIO;
+  cfg.sm_tx = 0;
+  cfg.sm_rx = 1;
+  cfg.sm_eop = 2;
+#endif
   tuh_configure(BOARD_TUH_RHPORT, TUH_CFGID_RPI_PIO_USB_CONFIGURATION, &cfg);
   // here, on core1: PIO-USB runs its SOF timer on the core that starts it
   tusb_rhport_init_t host_init = { .role = TUSB_ROLE_HOST, .speed = TUSB_SPEED_AUTO };
   tusb_init(BOARD_TUH_RHPORT, &host_init);
-  log_printf("USB host: started, %d hardware spinlocks were free, PIO programs %s", n_free,
-             pio_usb_host_programs_loaded() ? "loaded" : "DID NOT LOAD");
+  log_printf("USB host: started, %d hardware spinlocks were free, PIO programs %s (tx pio%d, rx pio%d)",
+             n_free, pio_usb_host_programs_loaded() ? "loaded" : "DID NOT LOAD", cfg.pio_tx_num,
+             cfg.pio_rx_num);
   for (;;) {
     tuh_task(); // blocks until an event
     host_wakeups++;

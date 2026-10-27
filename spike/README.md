@@ -30,6 +30,19 @@ ninja -C spike/build
 
 The first configure builds picotool from source, into `spike/build/_deps`.
 
+### Upstream Pico-PIO-USB
+
+By default the spike uses `lib/Pico-PIO-USB` (0.5.3 with our fixes). To build it with upstream 0.7.3 and our diagnostics (`pio-usb-0.7.3-diag.patch`, counters only: `own` SE0 is counted, not released), with the whole usb host on pio1:
+
+```
+git clone -b 0.7.3 https://github.com/sekigon-gonnoc/Pico-PIO-USB.git ~/pico/Pico-PIO-USB
+git -C ~/pico/Pico-PIO-USB apply $PWD/spike/pio-usb-0.7.3-diag.patch
+cmake -S spike -B spike/build-073 -G Ninja -DPICO_PIO_USB_PATH=$HOME/pico/Pico-PIO-USB -DSPIKE_USB_PIO=1
+ninja -C spike/build-073
+```
+
+0.7.3 puts tx, rx and eop on one PIO block (5 + 10 + 17 = all 32 words, sm 0..2), pio0 by default. The firmware keeps pio0 for its own programs (ccount of arduino-pico, PioSPI of SD1, `fpga_serial`), so `SPIKE_USB_PIO=1` moves the usb host to pio1.
+
 ## Flash
 
 The firmware and the spike both reboot into BOOTSEL on a 1200 baud touch:
