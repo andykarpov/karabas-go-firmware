@@ -1,7 +1,13 @@
 #pragma once
 
-#include <Arduino.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 #include "types.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 // handler for an incoming fpga command (cmd, addr, data frame)
 typedef void (*link_handler_t)(uint8_t addr, uint8_t data);
@@ -17,13 +23,6 @@ void link_set_rx_enabled(bool enabled);   // ignore incoming commands while the 
 // that must not interleave with other tasks (core config, rom / file transfers).
 void spi_bus_lock();
 void spi_bus_unlock();
-struct SpiBusGuard {
-  SpiBusGuard() { spi_bus_lock(); }
-  ~SpiBusGuard() { spi_bus_unlock(); }
-  SpiBusGuard(const SpiBusGuard&) = delete;
-  SpiBusGuard& operator=(const SpiBusGuard&) = delete;
-};
-
 void link_set_dispatch_task(void *task);  // task that runs the incoming command handlers (APP)
 void link_set_event_task(void *task);     // task woken by spi_queue (INPUT)
 void link_dispatch_pending();             // handle frames received by other tasks
@@ -50,3 +49,7 @@ void spi_send24(uint8_t cmd, uint32_t data);
 void spi_send32(uint8_t cmd, uint32_t data);
 void spi_send64(uint8_t cmd, uint64_t data);
 void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data);
+
+#ifdef __cplusplus
+}
+#endif

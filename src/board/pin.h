@@ -5,6 +5,10 @@
 #include <stdbool.h>
 #include "hardware/gpio.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 static inline void pin_output(uint pin) {
   gpio_init(pin);
   gpio_set_drive_strength(pin, GPIO_DRIVE_STRENGTH_4MA);
@@ -28,3 +32,7 @@ static inline void pin_input_pulldown(uint pin) {
   gpio_set_dir(pin, GPIO_IN);
   gpio_pull_down(pin);
 }
+
+#ifdef __cplusplus
+}
+#endif

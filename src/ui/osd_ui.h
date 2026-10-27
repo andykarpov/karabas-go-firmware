@@ -1,10 +1,16 @@
 #pragma once
 
-#include <Arduino.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 #include "osd.h"
 #include "ms_time.h"
-#include "Adafruit_TinyUSB.h"
+#include "tusb.h"
 #include "input/sega.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 // the joystick Esc of the menus: C, or Select (Mode) on pads without C
 #define UI_JOY_ESC (SC_BTN_C | SC_BTN_MODE)
@@ -39,3 +45,7 @@ bool ui_joy_edit(char *text, size_t max, uint8_t key);
 bool ui_joy_repeats();
 // false while a screen reads the joystick itself: no global joystick hotkeys (Start+X reboots)
 bool ui_joy_hotkeys();
+
+#ifdef __cplusplus
+}
+#endif

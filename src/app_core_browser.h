@@ -1,12 +1,18 @@
 #pragma once
 
-#include <Arduino.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 #include "config.h"
 #include "types.h"
 #include "main.h"
 #include "ft812.h"
 #include "bitmaps.h"
 #include "osd.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 extern core_list_item_t cores[MAX_CORES];
 extern uint8_t cores_len;
@@ -31,3 +37,7 @@ void app_core_browser_on_keyboard();
 void app_core_browser_tick(); // the mouse
 
 void app_core_browser_on_time();
+
+#ifdef __cplusplus
+}
+#endif

@@ -1,6 +1,12 @@
 #pragma once
 
-#include <Arduino.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 // The RTC set from NTP through the ESP8266 (BOOT core only, as Setup Wi-Fi). Non-blocking:
 // ntp_sync_start(), then ntp_sync_poll() from the tick of the screen.
@@ -20,5 +26,9 @@ void ntp_sync_cancel();
 uint8_t ntp_sync_poll();
 // the state, nothing is read
 uint8_t ntp_sync_state();
-// the state as text for the screen, nullptr when idle
+// the state as text for the screen, NULL when idle
 const char *ntp_sync_message();
+
+#ifdef __cplusplus
+}
+#endif

@@ -1,6 +1,6 @@
 #pragma once
 // The I2C bus of the board on the pico-sdk (hardware_i2c), blocking transfers with a timeout.
-// All devices are fast-mode (400 kHz). The caller holds the I2C bus lock (I2cGuard,
+// All devices are fast-mode (400 kHz). The caller holds the I2C bus lock (i2c_bus_lock(),
 // src/periph/i2c_bus) around a transfer. Pure C.
 
 #include <stdbool.h>

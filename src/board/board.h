@@ -3,9 +3,15 @@
 // Board abstraction: everything that differs between Karabas Go / Mini / Mini G
 // lives in src/board/board_*.cpp. The rest of the firmware must not use #if HW_ID.
 
-#include <Arduino.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 #include "config.h"
 #include "ft812.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 // the PD_N pin of the FT812 driven by the MCU, or FT_NO_RESET (driven by the FPGA)
 uint8_t board_ft_reset_pin();
@@ -30,3 +36,7 @@ bool board_has_floppy();
 
 bool btn_read(uint8_t num);
 void led_write(uint8_t num, bool on);
+
+#ifdef __cplusplus
+}
+#endif

@@ -2,6 +2,10 @@
 
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // Backup RAM files of the core (the battery RAM of a cartridge: docs/protocol.md, section "Backup
 // RAM"). The core asks for its file with CMD_BK_MOUNT after a game is loaded; the firmware opens or
 // creates <save dir>/<game name>.sav and mounts it in the img slot the core named, and the core
@@ -20,3 +24,7 @@ bool bk_flush();
 void bk_close();
 // another core: forget the save without telling the fpga (its files are closed by img_close_all)
 void bk_forget();
+
+#ifdef __cplusplus
+}
+#endif

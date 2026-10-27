@@ -1,8 +1,14 @@
 #pragma once
 
-#include <Arduino.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 #include "kg_matrix.h"
 #include "types.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 void matrix_begin();
 void matrix_register_handlers();
@@ -30,3 +36,7 @@ void matrix_on_configure_done(uint8_t core_type);
 #define MATRIX_ICON_MSC 0
 #define MATRIX_ICON_BOOTSEL 1
 void matrix_icon(uint8_t icon); // a static icon instead of the scroll / meters (msc, bootsel)
+
+#ifdef __cplusplus
+}
+#endif

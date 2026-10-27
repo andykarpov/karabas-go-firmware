@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include "main.h"
 #include "Adafruit_TinyUSB.h"
 #include "hardware/watchdog.h"

@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include "main.h"
 #include "diag/hang_diag.h"
 #include "at_cmd.h"
@@ -98,6 +99,11 @@ static void at_list_cores() {
   Serial.print("OK\r\n");
 }
 
+// the reports of AT commands (sd2test) to the host
+static void serial_out(const char *text) {
+  Serial.print(text);
+}
+
 static void at_command(const char *arg) {
   d_printf("Serial: AT+KARABAS=%s", arg); d_println();
   if (strcasecmp(arg, "list") == 0) {
@@ -116,7 +122,7 @@ static void at_command(const char *arg) {
     esp_mode = true;
     Serial.print("OK\r\n");
   } else if (strcasecmp(arg, "sd2test") == 0 && core.type == CORE_TYPE_BOOT) {
-    sd2_test(Serial);
+    sd2_test(serial_out);
   } else if (strcasecmp(arg, "uart") == 0) {
     esp_mode = false;
     Serial.print("OK\r\n");

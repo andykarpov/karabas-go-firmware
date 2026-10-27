@@ -11,6 +11,10 @@
 extern "C" {
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 enum {
   SC_CTL_ON    = 1, // the pad is connected
   SC_BTN_UP    = 2,
@@ -32,6 +36,10 @@ enum {
 void sega_begin(unsigned sck, unsigned load, unsigned data, unsigned select);
 // the buttons of the left / right pad (SC_*)
 uint16_t sega_state(bool left);
+
+#ifdef __cplusplus
+}
+#endif
 
 #ifdef __cplusplus
 }

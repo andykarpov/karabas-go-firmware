@@ -3,6 +3,10 @@
 #include "ff.h"
 #include "sd_card.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // The SD card of the MCU (SD1) through FatFs (lib/FatFs) on sd_card over the PIO SPI. Only
 // APP uses the file system; in MSC mode the PC gets the card (sd1_card()) past FatFs.
 // Paths are full ("/dir/name", or "name" in the root): FatFs has no current dir here.
@@ -16,8 +20,8 @@ sd_card_t *sd1_card();
 bool sd_is_exfat();
 bool sd_exists(const char *path);
 bool sd_is_dir(const char *path);
-static inline bool sd_is_open(const FIL *f) { return f->obj.fs != nullptr; }
-static inline bool sd_dir_is_open(const DIR *d) { return d->obj.fs != nullptr; }
+static inline bool sd_is_open(const FIL *f) { return f->obj.fs != NULL; }
+static inline bool sd_dir_is_open(const DIR *d) { return d->obj.fs != NULL; }
 // close if open
 void sd_close(FIL *f);
 // f_open after closing f (FA_READ, FA_READ | FA_WRITE, FA_WRITE | FA_CREATE_ALWAYS, ...)
@@ -27,7 +31,7 @@ void sd_closedir(DIR *d);
 // f_read / f_write of len bytes; the count done, 0 on an error
 UINT sd_read(FIL *f, void *buf, UINT len);
 UINT sd_write(FIL *f, const void *buf, UINT len);
-// the whole file in a malloc()ed buffer with a null after it (free() it); nullptr if it can't
+// the whole file in a malloc()ed buffer with a null after it (free() it); NULL if it can't
 // be read or is longer than max
 char *sd_read_all(const char *path, size_t max, size_t *len);
 // the dirs of a path, each made if missing
@@ -40,3 +44,7 @@ bool sd_mkdirs(const char *path);
 bool sd_file_id(const FILINFO *fi, uint16_t *id);
 // the item of an id in the open dir
 bool sd_find_id(DIR *dir, uint16_t id, FILINFO *fi);
+
+#ifdef __cplusplus
+}
+#endif

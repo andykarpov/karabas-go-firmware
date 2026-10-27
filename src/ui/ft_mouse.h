@@ -1,6 +1,12 @@
 #pragma once
 
-#include <Arduino.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 // The mouse pointer of the graphic menus (FT812, APP only).
 // A screen ends its frame with ft_frame_end() instead of ft_swap_screen(): the frame is kept in
@@ -37,3 +43,7 @@ int16_t ft_hover(); // the area under the pointer, FT_HIT_NONE while it is hidde
 
 void ft_frame_end();
 void ft_pointer_frame();
+
+#ifdef __cplusplus
+}
+#endif

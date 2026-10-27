@@ -1,7 +1,13 @@
 #pragma once
 
-#include <Arduino.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 #include "types.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 // The karabas.ini settings that the OSD Settings screens edit (BOOT core only): their names, hints,
 // values and how they change. The classic screen (app_settings) and the graphic one (app_ft_setup)
@@ -60,3 +66,7 @@ uint8_t settings_theme_count();
 const char *settings_theme_name(uint8_t i);
 int settings_theme(const setup_t *s);
 void settings_theme_apply(setup_t *s, uint8_t i);
+
+#ifdef __cplusplus
+}
+#endif

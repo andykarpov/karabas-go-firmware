@@ -8,7 +8,7 @@ extern "C" {
 
 // XInput button word / triggers / left stick -> Karabas Sega protocol bits.
 // C and Z accept both shoulder and trigger inputs for M30 firmware variants.
-inline uint16_t xinput_joy_map(uint16_t buttons, uint8_t lt, uint8_t rt, int16_t x, int16_t y) {
+static inline uint16_t xinput_joy_map(uint16_t buttons, uint8_t lt, uint8_t rt, int16_t x, int16_t y) {
   uint16_t result = 1; // SC_CTL_ON
   result |= (buttons & 0x001f) << 1; // D-pad and Start
   if (buttons & 0x0020) result |= 4096; // Back -> Mode

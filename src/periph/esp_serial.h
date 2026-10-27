@@ -12,6 +12,10 @@
 extern "C" {
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef void (*esp_serial_send_t)(uint8_t c); // one byte to the fpga
 
 void esp_serial_begin(esp_serial_send_t send);
@@ -25,6 +29,10 @@ void esp_serial_clear_rx(void);
 int esp_serial_available_for_write(void);
 size_t esp_serial_write(const uint8_t *buf, size_t len);
 void esp_serial_print(const char *s);
+
+#ifdef __cplusplus
+}
+#endif
 
 #ifdef __cplusplus
 }

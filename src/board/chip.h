@@ -5,6 +5,10 @@
 #include "hardware/watchdog.h"
 #include "pico/bootrom.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 static inline void chip_reboot(void) {
   watchdog_reboot(0, 0, 10);
   while (1) continue;
@@ -22,3 +26,7 @@ static inline int chip_free_heap(void) {
   struct mallinfo m = mallinfo();
   return (int) (&__StackLimit - &__bss_end__) - m.uordblks;
 }
+
+#ifdef __cplusplus
+}
+#endif
