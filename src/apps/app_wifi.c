@@ -9,6 +9,7 @@
 #include "hid_ascii.h"
 #include "periph/esp_at.h"
 #include "apps/app_wifi.h"
+#include "ui/ui_draw.h"
 
 // Setup > Setup Wi-Fi (BOOT core only, it bridges the ESP8266 UART): the module status, a scan,
 // the password of the chosen network, the join. The ESP keeps the network in its flash and joins
@@ -244,12 +245,6 @@ static void draw_message(uint8_t y, const char *msg, uint8_t color) {
   osd_set_pos(1, y); print_text(msg, 30);
 }
 
-static void draw_footer(const char *line1, const char *line2) {
-  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-  osd_fill(0, 24, 31, 25, ' ');
-  osd_set_pos(1, 24); osd_print(line1);
-  osd_set_pos(1, 25); osd_print(line2);
-}
 
 // the text field: the tail that fits, a cyan cursor at the end
 static void draw_field(uint8_t y, const char *text, bool hidden) {
@@ -304,12 +299,12 @@ static void draw() {
   switch (screen) {
     case W_INIT:
       draw_message(8, "Talking to ESP8266...", OSD_COLOR_YELLOW_I);
-      draw_footer("Please wait", "Esc: back");
+      ui_hint("Please wait", "Esc: back");
       break;
     case W_NO_ESP:
       draw_message(8, "ESP8266 is not responding", OSD_COLOR_RED_I);
       ui_button(1, 11, BTN_WIDTH, "Retry", true);
-      draw_footer("Enter: retry", "Esc: back");
+      ui_hint("Enter: retry", "Esc: back");
       break;
     case W_STATUS:
       draw_info(8, "Module", version[0] ? version : "?", OSD_COLOR_CYAN_I);
@@ -321,22 +316,22 @@ static void draw() {
         uint8_t ids[M_COUNT], n = menu_items(ids);
         for (uint8_t i = 0; i < n; i++) ui_button(1, 14 + 2 * i, MENU_WIDTH, menu_names[ids[i]], sel == i);
       }
-      draw_footer("Enter: select", "Esc: back");
+      ui_hint("Enter: select", "Esc: back");
       break;
     case W_SCAN:
       draw_message(8, "Scanning...", OSD_COLOR_YELLOW_I);
-      draw_footer("Please wait", "Esc: back");
+      ui_hint("Please wait", "Esc: back");
       break;
     case W_LIST:
       osd_set_color(OSD_COLOR_GREY, OSD_COLOR_BLACK);
       osd_set_pos(1, 7); osd_print("dBm   Network");
       draw_list();
-      draw_footer("Enter: connect, R: rescan", "* password, > joined; Esc: back");
+      ui_hint("Enter: connect, R: rescan", "* password, > joined; Esc: back");
       break;
     case W_SSID:
       draw_message(8, "Network name:", OSD_COLOR_WHITE);
       draw_field(9, ssid, false);
-      draw_footer("Enter: next", "Esc: back");
+      ui_hint("Enter: next", "Esc: back");
       break;
     case W_PASS:
       osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
@@ -345,12 +340,12 @@ static void draw() {
       osd_set_pos(10, 8); print_text(ssid, 21);
       draw_message(10, "Password:", OSD_COLOR_WHITE);
       draw_field(11, pass, !show_pass);
-      draw_footer("Enter: connect, Esc: back", show_pass ? "Tab: hide the password" : "Tab: show the password");
+      ui_hint("Enter: connect, Esc: back", show_pass ? "Tab: hide the password" : "Tab: show the password");
       break;
     case W_JOIN:
       snprintf(buf, sizeof(buf), "Connecting to %s...", ssid);
       draw_message(8, buf, OSD_COLOR_YELLOW_I);
-      draw_footer("Please wait", "");
+      ui_hint("Please wait", "");
       break;
     case W_RESULT:
       if (result_error) {
@@ -362,7 +357,7 @@ static void draw() {
         draw_message(13, "The ESP8266 remembers it", OSD_COLOR_GREY);
       }
       ui_button(1, 16, BTN_WIDTH, "OK", true);
-      draw_footer("Enter: back", "");
+      ui_hint("Enter: back", "");
       break;
     case W_FORGET:
       draw_message(8, "Forget this network?", OSD_COLOR_YELLOW_I);
@@ -370,7 +365,7 @@ static void draw() {
       draw_message(12, "The ESP8266 will not join it", OSD_COLOR_GREY);
       ui_button(1, 15, BTN_WIDTH, "Forget", sel == 0);
       ui_button(12, 15, BTN_WIDTH, "Cancel", sel == 1);
-      draw_footer("Left/Right: select", "Enter: OK, Esc: back");
+      ui_hint("Left/Right: select", "Enter: OK, Esc: back");
       break;
     case W_UPD_ASK:
       if (restoring) {
@@ -387,7 +382,7 @@ static void draw() {
       }
       ui_button(1, 17, BTN_WIDTH, restoring ? "Erase" : "Update", sel == 0);
       ui_button(12, 17, BTN_WIDTH, "Cancel", sel == 1);
-      draw_footer("Left/Right: select", "Enter: OK, Esc: back");
+      ui_hint("Left/Right: select", "Enter: OK, Esc: back");
       break;
     case W_UPD:
       upd_percent = esp_update_progress();
@@ -397,7 +392,7 @@ static void draw() {
       osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
       osd_set_pos(28, 10); osd_printf("%3u%%", upd_percent);
       draw_message(12, "Do not power off the board", OSD_COLOR_GREY);
-      draw_footer("Please wait", "");
+      ui_hint("Please wait", "");
       break;
     case W_UPD_END: {
       bool ok = esp_update_poll() == ESP_UPD_OK;
@@ -409,7 +404,7 @@ static void draw() {
         draw_message(10, "Join the network again", OSD_COLOR_GREY);
       }
       ui_button(1, 14, BTN_WIDTH, "OK", true);
-      draw_footer("Enter: back", "");
+      ui_hint("Enter: back", "");
       break;
     }
   }
@@ -427,14 +422,7 @@ static void start_init() {
 }
 
 void app_wifi_overlay() {
-  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-  osd_clear();
-  osd_header(core.build, core.id, HW_ID);
-  print_time();
-  osd_set_pos(0, 5);
-  osd_print("Setup Wi-Fi");
-  osd_line(6);
-  osd_line(23);
+  ui_screen("Setup Wi-Fi");
 
   hid_kbd_report_sync();
   prev_kbd = usb_keyboard_report; // the key that opened the screen is not a press here

@@ -6,36 +6,27 @@
 #include "input/sega.h"
 #include "apps/app_about.h"
 #include "apps/app_core.h"
-#include "ui/sorts.h"
+#include "ui/ui_draw.h"
+
+static const char *const thanks[] = {
+  "solegstar", "nihirash", "dr_max", "tslabs", "tank-uk", "kalantaj", "caasper911", "xdemox", "dumpkin",
+};
+
+static void heading(uint8_t y, const char *text) {
+  osd_set_color(OSD_COLOR_CYAN_I, OSD_COLOR_BLACK);
+  osd_set_pos(0, y); osd_print(text);
+  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+}
 
 void app_about_overlay() {
-  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-  osd_clear();
-  osd_header(core.build, core.id, HW_ID);
-  print_time();
-  osd_set_pos(0,5);
-  osd_print("About");
-  osd_line(6);
-  osd_set_color(OSD_COLOR_CYAN_I, OSD_COLOR_BLACK);
-  osd_set_pos(0,8); osd_print("Karabas Go HW was designed by:");
-  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-  osd_set_pos(1,10); osd_print("- andy.karpov");
-  osd_set_color(OSD_COLOR_CYAN_I, OSD_COLOR_BLACK);
-  osd_set_pos(0,12); osd_print("Special thanks to:");
-  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-  osd_set_pos(1, 14); osd_print("- solegstar");
-  osd_set_pos(1, 15); osd_print("- nihirash");
-  osd_set_pos(1, 16); osd_print("- dr_max");
-  osd_set_pos(1, 17); osd_print("- tslabs");
-  osd_set_pos(1, 18); osd_print("- tank-uk");
-  osd_set_pos(1, 19); osd_print("- kalantaj");
-  osd_set_pos(1, 20); osd_print("- caasper911");
-  osd_set_pos(1, 21); osd_print("- xdemox");
-  osd_set_pos(1, 22); osd_print("- dumpkin");
-
-  // footer
-  osd_line(24);
-  osd_set_pos(1,25); osd_print("Press Esc to exit");
+  ui_screen("About");
+  heading(8, "Karabas Go HW was designed by:");
+  osd_set_pos(1, 10); osd_print("- andy.karpov");
+  heading(12, "Special thanks to:");
+  for (uint8_t i = 0; i < sizeof(thanks) / sizeof(thanks[0]); i++) {
+    osd_set_pos(1, 14 + i); osd_print("- "); osd_print(thanks[i]);
+  }
+  ui_hint(NULL, "Press Esc to exit");
   osd_update();
 }
 

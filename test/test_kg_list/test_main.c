@@ -49,6 +49,16 @@ static void test_moved_flag() {
   TEST_ASSERT_EQUAL_UINT16(2, sel);
 }
 
+static void test_pages() {
+  TEST_ASSERT_EQUAL_UINT16(1, kg_list_pages(0, 16));
+  TEST_ASSERT_EQUAL_UINT16(1, kg_list_pages(16, 16));
+  TEST_ASSERT_EQUAL_UINT16(2, kg_list_pages(17, 16));
+  TEST_ASSERT_EQUAL_UINT16(1, kg_list_page(0, 16));
+  TEST_ASSERT_EQUAL_UINT16(1, kg_list_page(15, 16));
+  TEST_ASSERT_EQUAL_UINT16(2, kg_list_page(16, 16));
+  TEST_ASSERT_EQUAL_UINT16(5, kg_list_page(4, 0)); // page 0 is taken as 1
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_up_down_wrap);
@@ -56,5 +66,6 @@ int main() {
   RUN_TEST(test_empty_and_one);
   RUN_TEST(test_selection_past_the_end);
   RUN_TEST(test_moved_flag);
+  RUN_TEST(test_pages);
   return UNITY_END();
 }

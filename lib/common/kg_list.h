@@ -21,6 +21,11 @@ typedef enum {
 // *sel at 0, a selection past the end is put on the last item first.
 bool kg_list_move(uint16_t *sel, uint16_t len, uint16_t page, kg_list_move_t move);
 
+// the pages of a list of len items, page items a page: at least 1 (an empty list has one page)
+uint16_t kg_list_pages(uint16_t len, uint16_t page);
+// the page of item sel, from 1
+uint16_t kg_list_page(uint16_t sel, uint16_t page);
+
 #ifdef __cplusplus
 }
 #endif

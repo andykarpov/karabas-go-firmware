@@ -17,3 +17,13 @@ bool kg_list_move(uint16_t *sel, uint16_t len, uint16_t page, kg_list_move_t mov
   *sel = s;
   return s != old;
 }
+
+uint16_t kg_list_pages(uint16_t len, uint16_t page) {
+  if (page == 0) page = 1;
+  return len ? (len + page - 1) / page : 1;
+}
+
+uint16_t kg_list_page(uint16_t sel, uint16_t page) {
+  if (page == 0) page = 1;
+  return sel / page + 1;
+}

@@ -11,7 +11,6 @@
 #include <string.h>
 #include <strings.h>
 #include <ctype.h>
-#include <math.h>
 #include "pico/stdlib.h"
 #include "pico/util/queue.h"
 #include "hardware/gpio.h"

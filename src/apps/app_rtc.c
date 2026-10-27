@@ -7,6 +7,7 @@
 #include "masked_input.h"
 #include "time_zone.h"
 #include "apps/app_rtc.h"
+#include "ui/ui_draw.h"
 
 // Setup > Setup RTC: the date and the time are typed into masked fields. Up / Down / Tab move
 // between the fields and the buttons, Left / Right move the cursor (or pick a button). The BOOT
@@ -116,13 +117,7 @@ static void init_fields() {
 }
 
 void app_rtc_overlay() {
-  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-  osd_clear();
-  osd_header(core.build, core.id, HW_ID);
-  print_time();
-  osd_set_pos(0, 5);
-  osd_print("Setup RTC");
-  osd_line(6);
+  ui_screen("Setup RTC");
 
   init_fields();
   focus = F_DATE;
@@ -130,11 +125,7 @@ void app_rtc_overlay() {
   tz = hw_setup.tz;
   ntp_sync_cancel();
 
-  // footer
-  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-  osd_line(23);
-  osd_set_pos(1, 24); osd_print("Digits: edit, Up/Down: next");
-  osd_set_pos(1, 25); osd_print("Enter: OK, Esc: cancel");
+  ui_hint("Digits: edit, Up/Down: next", "Enter: OK, Esc: cancel");
   draw();
 }
 

@@ -12,6 +12,8 @@
 #include "file_name.h"
 #include "ui/ft_mouse.h"
 #include <stdio.h>
+#include "ui/ui_draw.h"
+#include "kg_list.h"
 
 core_list_item_t cores[MAX_CORES];
 uint8_t cores_len = 0;
@@ -41,61 +43,45 @@ enum { HIT_SETUP = 1000, HIT_PREV, HIT_NEXT };
 static int16_t hover = FT_HIT_NONE; // under the pointer at the last draw
 static bool setup_focus = false;    // the graphic browser: the keys are on the Setup button
 
+// the whole seconds left until the autoload
+static uint32_t autoload_left_s() {
+  uint32_t ms = ms_since(autoload_timer);
+  return ms < autoload_countdown * 1000 ? (autoload_countdown * 1000 - ms) / 1000 : 0;
+}
+
 void app_core_browser_overlay() {
   osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
   osd_clear();
   osd_header(core.build, core.id, HW_ID);
   print_time();
-  osd_set_pos(0,5);
-  app_core_browser_menu(APP_COREBROWSER_MENU_OFFSET);  
+  app_core_browser_menu(APP_COREBROWSER_MENU_OFFSET);
   // footer
   osd_line(21);
-  osd_set_pos(0, 22); 
-  osd_set_color(OSD_COLOR_CYAN_I, OSD_COLOR_FLASH); osd_print("S");
-  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK); osd_print("etup");
+  osd_set_pos(0, 22);
+  ui_hotkey("S", "etup");
   osd_set_pos(29, 22); // right of the page number
-  osd_set_color(OSD_COLOR_CYAN_I, OSD_COLOR_FLASH); osd_print("G");
-  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK); osd_print("UI");
-  osd_line(23);
-  osd_set_pos(1,24); osd_print("Please use arrows to navigate");
-  osd_set_pos(1,25); osd_print("Press Enter to load selection");
+  ui_hotkey("G", "UI");
+  ui_hint("Please use arrows to navigate", "Press Enter to load selection");
   osd_update();
 }
 
 void app_core_browser_menu(uint8_t vpos) {
-  core_pages = ceil((float)cores_len / core_page_size);
-  core_page = ceil((float)(core_sel+1)/core_page_size);
+  core_pages = kg_list_pages(cores_len, core_page_size);
+  core_page = kg_list_page(core_sel, core_page_size);
   uint8_t core_from = (core_page-1)*core_page_size;
   uint8_t core_to = core_page*core_page_size > cores_len ? cores_len : core_page*core_page_size;
-  uint8_t core_fill = core_page*core_page_size;
-  uint8_t pos = vpos;
-  for(uint8_t i=core_from; i < core_to; i++) {
-    osd_set_pos(0, pos);
-    if (core_sel == i) {
-      osd_set_color(OSD_COLOR_BLACK, OSD_COLOR_WHITE);
-    } else {
-      osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+  for (uint8_t row = 0; row < core_page_size; row++) {
+    uint8_t i = core_from + row;
+    char line[40] = "";
+    // number, name (17 chars), build, where it is
+    if (i < core_to) {
+      snprintf(line, sizeof(line), "%-3d %-17.17s%s%s", i+1, cores[i].name, cores[i].build, cores[i].flash ? "  F" : " SD");
     }
-    char name[18]; memcpy(name, cores[i].name, 17); name[17] = '\0';
-    char b[40];
-    sprintf(b, "%-3d ", i+1); 
-    osd_print(b);
-    osd_print(name);
-    osd_print(cores[i].build);
-    osd_print(cores[i].flash ? "  F" : " SD");
-    pos++;
-  }
-  if (core_fill > core_to) {
-    for (uint8_t i=core_to; i<core_fill; i++) {
-      osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-      for (uint8_t j=0; j<32; j++) {
-        osd_print(" ");
-      }
-    }
+    ui_row(0, vpos + row, line, i == core_sel && i < core_to);
   }
   osd_set_pos(8, vpos + core_page_size + 1); osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-  char b[40];
-  sprintf(b, "Page %02d of %02d", core_page, core_pages); 
+  char b[24];
+  snprintf(b, sizeof(b), "Page %02d of %02d", core_page, core_pages);
   osd_print(b);
   osd_update();
 }
@@ -243,8 +229,8 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
   ft_hit_clear();
 
   uint8_t ft_page = ft_core_page_size();
-  core_pages = ceil((float)cores_len / ft_page);
-  core_page = ceil((float)(core_sel+1)/ft_page);
+  core_pages = kg_list_pages(cores_len, ft_page);
+  core_page = kg_list_page(core_sel, ft_page);
   uint8_t core_from = (core_page-1)*ft_page;
   uint8_t core_to = core_page*ft_page > cores_len ? cores_len : core_page*ft_page;
   uint8_t pos = 0;
@@ -265,7 +251,7 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
       ft_draw_text(ft_width()/4+ft_width()/2-16-24, offset + pos*FT_CORE_STEP + 16, 28, colort, FT81x_OPT_CENTERY, "F\0");
     }
     if (autoload_enabled && i==core_sel) {
-      uint32_t diff = (ms_since(autoload_timer) < autoload_countdown * 1000) ? ceil((autoload_countdown * 1000 - ms_since(autoload_timer))/1000) : 0;
+      uint32_t diff = autoload_left_s();
       ft_draw_gauge(ft_width()/4+16+12, offset + pos*FT_CORE_STEP + 16, 12, colort, colorb, 0, 1, 1, diff, autoload_countdown);
     }
     pos++;
@@ -287,7 +273,7 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
   }
 
   if (autoload_enabled) {
-    uint32_t diff = (ms_since(autoload_timer) < autoload_countdown * 1000) ? ceil((autoload_countdown * 1000 - ms_since(autoload_timer))/1000) : 0;
+    uint32_t diff = autoload_left_s();
     sprintf(b, "Autoloading core in %lu s", (unsigned long) diff);
     ft_draw_text(ft_width()/2, ft_height()-20, 27, color_copyright, FT81x_OPT_CENTER, b);
   } else {
