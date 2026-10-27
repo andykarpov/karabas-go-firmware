@@ -5,7 +5,7 @@ Phase 0 of `docs/rewrite_plan.md`: the firmware's USB setup on the plain pico-sd
 - **FreeRTOS SMP** V11.2.0. The pico-sdk locks block a task through the port's interop, instead of a `wfe` loop per core.
 - **TinyUSB 0.18.0** of the pico-sdk 2.2.0, on `OPT_OS_FREERTOS`:
   - device on the native port: CDC for the log, MSC with an 8 KB RAM disk, under the firmware's ids (2e8a:000a, "Karabas" / "Go", the flash id as serial);
-  - host on PIO-USB: `lib/Pico-PIO-USB` of the firmware, with its diagnostics and the SE0 fix of #57.
+  - host on PIO-USB: `lib/Pico-PIO-USB` of the firmware (upstream 0.7.3 with our diagnostics), on pio1.
 - **Tasks**, as in the firmware:
   - `USBD` (core0) runs `tud_task()`, blocking on TinyUSB's queue;
   - `USB` (core1) runs `tuh_task()`;
@@ -30,18 +30,9 @@ ninja -C spike/build
 
 The first configure builds picotool from source, into `spike/build/_deps`.
 
-### Upstream Pico-PIO-USB
+### Pico-PIO-USB
 
-By default the spike uses `lib/Pico-PIO-USB` (0.5.3 with our fixes). To build it with upstream 0.7.3 and our diagnostics (`pio-usb-0.7.3-diag.patch`, counters only: `own` SE0 is counted, not released), with the whole usb host on pio1:
-
-```
-git clone -b 0.7.3 https://github.com/sekigon-gonnoc/Pico-PIO-USB.git ~/pico/Pico-PIO-USB
-git -C ~/pico/Pico-PIO-USB apply $PWD/spike/pio-usb-0.7.3-diag.patch
-cmake -S spike -B spike/build-073 -G Ninja -DPICO_PIO_USB_PATH=$HOME/pico/Pico-PIO-USB -DSPIKE_USB_PIO=1
-ninja -C spike/build-073
-```
-
-0.7.3 puts tx, rx and eop on one PIO block (5 + 10 + 17 = all 32 words, sm 0..2), pio0 by default. The firmware keeps pio0 for its own programs (ccount of arduino-pico, PioSPI of SD1, `fpga_serial`), so `SPIKE_USB_PIO=1` moves the usb host to pio1.
+The spike uses the firmware's `lib/Pico-PIO-USB`: upstream 0.7.3 with our diagnostics (#59). As in the firmware, the whole usb host is on pio1 (`SPIKE_USB_PIO`, default 1): tx, rx and eop share the block (5 + 10 + 17 = all 32 words, sm 0..2). Another copy can be tried with `-DPICO_PIO_USB_PATH=...` (an empty `SPIKE_USB_PIO` keeps the library's default layout).
 
 ## Flash
 

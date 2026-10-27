@@ -8,7 +8,7 @@ set(FIRMWARE_ROOT ${CMAKE_CURRENT_LIST_DIR}/..)
 # TinyUSB of the pico-sdk on FreeRTOS, its PIO-USB host driver with our copy of Pico-PIO-USB
 set(TINYUSB_OPT_OS OPT_OS_FREERTOS)
 set(LOG 0)
-# our copy (0.5.3 + fixes) by default; -DPICO_PIO_USB_PATH=... for upstream with pio-usb-0.7.3-diag.patch
+# the firmware's copy (upstream 0.7.3 + our diagnostics) by default
 set(PICO_PIO_USB_PATH ${FIRMWARE_ROOT}/lib/Pico-PIO-USB CACHE PATH "Pico-PIO-USB sources")
 
 include(pico_sdk_import.cmake)
@@ -24,8 +24,8 @@ target_compile_definitions(kg_spike PRIVATE
   HW_ID=${KG_HW_ID}
   PICO_PANIC_FUNCTION=spike_panic
 )
-# upstream Pico-PIO-USB only: put the whole usb host on one PIO block (0 or 1)
-set(SPIKE_USB_PIO "" CACHE STRING "PIO block of the usb host, empty for the library default")
+# the whole usb host on one PIO block (0 or 1), as in the firmware
+set(SPIKE_USB_PIO 1 CACHE STRING "PIO block of the usb host, empty for the library default")
 if (NOT SPIKE_USB_PIO STREQUAL "")
   target_compile_definitions(kg_spike PRIVATE SPIKE_USB_PIO=${SPIKE_USB_PIO})
 endif()
