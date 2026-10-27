@@ -142,17 +142,16 @@ void img_mount(uint8_t slot) {
     return;
   }
   if (fs.is_mounted) {
-    String dir = String(fs.dir);
-    if (dir == "") { dir = "/"; }
-    if (dir.charAt(0) != '/') { dir = '/' + dir; }
-    String fname = dir + "/" + String(fs.filename);
+    char dir[sizeof(fs.dir) + 1], fname[KG_PATH_MAX];
+    snprintf(dir, sizeof(dir), "%s%s", fs.dir[0] == '/' ? "" : "/", fs.dir);
+    kg_path_join(fname, sizeof(fname), dir, fs.filename);
     // read-write, so the core can write sectors back; read only if the file is write protected
-    if (!fs.file.open(&sd1, fname.c_str(), O_RDWR) && !fs.file.open(&sd1, fname.c_str(), O_RDONLY)) {
-      d_printf("Mount slot %d: unable to open %s", slot, fname.c_str()); d_println();
+    if (!fs.file.open(&sd1, fname, O_RDWR) && !fs.file.open(&sd1, fname, O_RDONLY)) {
+      d_printf("Mount slot %d: unable to open %s", slot, fname); d_println();
       fs.is_mounted = false;
     } else {
       fsize = fs.file.fileSize();
-      d_printf("Mount slot %d: %s, %lu bytes", slot, fname.c_str(), (unsigned long) fsize); d_println();
+      d_printf("Mount slot %d: %s, %llu bytes", slot, fname, (unsigned long long) fsize); d_println();
     }
   }
   matrix_drive_mount(slot, (uint32_t) ((fsize + IMG_SECTOR_SIZE - 1) / IMG_SECTOR_SIZE));
