@@ -14,15 +14,15 @@ int pio_usb_host_add_port(uint8_t pin_dp, PIO_USB_PINOUT pinout);
 void pio_usb_host_task(void);
 void pio_usb_host_stop(void);
 void pio_usb_host_restart(void);
-bool pio_usb_host_programs_loaded(void); // karabas: false if a PIO program did not fit
 uint32_t pio_usb_host_get_frame_number(void);
+bool pio_usb_host_programs_loaded(void); // karabas: false if a PIO program did not fit
 
 // karabas: counters for the hang diagnostics (DIAG line, root port events), written on core1
 typedef struct {
   volatile uint32_t connects;     // the root port went from SE0 to an idle line
   volatile uint32_t disconnects;  // SE0 on the root port at a SOF
   volatile uint32_t own_se0;      // of these, SE0 driven by our own tx (released, so the hub comes back)
-  volatile uint32_t rx_overflows; // a packet longer than usb_rx_buffer, dropped
+  volatile uint32_t rx_overflows; // a packet longer than usb_rx_buffer
   volatile uint32_t max_sof_gap_us;   // the longest time between two frames (1000 if on time)
   volatile uint32_t max_frame_us;     // the longest frame handler
 } pio_usb_diag_t;
