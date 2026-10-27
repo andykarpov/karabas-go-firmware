@@ -49,17 +49,18 @@ EspSerial esp_serial;
 
 static ElapsedTimer led_timer;
 
+#define USB_HOST_PIO pio1
+
+// The usb host takes all of pio1: tx, rx and eop (5 + 10 + 17 = all 32 instruction words,
+// sm0..2). The firmware's own programs (ccount, PioSPI of the SD card, fpga_serial) go to pio0.
 // Under FreeRTOS SysTick belongs to the scheduler, so the core runs its cycle counter (ccount,
-// 2 instructions) on a PIO state machine, allocated in main() before setup(). It lands on pio1,
-// whose whole 32-word instruction memory the PIO-USB receiver needs (decoder 15 + edge
-// detector 17): the edge detector then fails to load and the host never sees a handshake.
-// Reserve pio1 and pio0 sm0 (PIO-USB tx) in a static constructor, which runs before main(),
-// so ccount goes to pio0 sm1. usb_host_setup() releases them right before PIO-USB init,
-// which gives the usb host the PIO layout it expects.
+// 2 instructions) on a PIO state machine, allocated in main() before setup(); on pio1 it would
+// leave no room for the usb programs and the host would fail silently. Reserve the state
+// machines of pio1 in a static constructor, which runs before main(), so nothing but the usb
+// host can load a program there. usb_host_setup() releases them right before PIO-USB init.
 static struct UsbPioReserve {
   UsbPioReserve() {
-    pio_sm_claim(pio0, 0);
-    pio_claim_sm_mask(pio1, 0xf);
+    pio_claim_sm_mask(USB_HOST_PIO, 0xf);
   }
 } usb_pio_reserve;
 
@@ -173,11 +174,14 @@ static void usb_host_setup() {
   pio_usb_configuration_t pio_cfg = PIO_USB_DEFAULT_CONFIG;
   pio_cfg.pin_dp = HOST_PIN_DP;
   pio_cfg.pinout = (PIO_USB_PINOUT) board_usb_pinout();
+  pio_cfg.pio_tx_num = PIO_NUM(USB_HOST_PIO);
+  pio_cfg.pio_rx_num = PIO_NUM(USB_HOST_PIO);
+  pio_cfg.sm_tx = 0;
+  pio_cfg.sm_rx = 1;
+  pio_cfg.sm_eop = 2;
 
-  // PIO-USB claims its default state machines (pio0 sm0, pio1 sm0/sm1) and pio1 memory:
-  // release what usb_pio_reserve held for it since before main()
-  pio_sm_unclaim(pio0, 0);
-  for (uint i=0; i<4; i++) pio_sm_unclaim(pio1, i);
+  // release what usb_pio_reserve held for the usb host since before main()
+  for (uint i=0; i<4; i++) pio_sm_unclaim(USB_HOST_PIO, i);
 
   // PIO-USB claims a hardware spinlock for its alarm pool and panics if none is left
   // (only 8 can be claimed, see usb_host_lock())
@@ -287,7 +291,7 @@ static void app_task(void *param) {
   // and only this task writes to the usb serial port
   debug_set_owner_task(xTaskGetCurrentTaskHandle());
   // let PIO-USB claim its PIO memory, state machines and DMA channel first:
-  // the SD card driver (PioSPI) would otherwise take PIO memory that the usb rx programs need
+  // the SD card driver (PioSPI) would otherwise take PIO memory that the usb programs need (all of pio1)
   ElapsedTimer wait;
   while (!usb_host_ready && wait.elapsed() < 2000) { delay(1); }
   karabas_setup();
