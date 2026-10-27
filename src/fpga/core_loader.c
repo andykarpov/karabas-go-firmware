@@ -142,7 +142,6 @@ void core_eeprom_set(uint8_t pos, uint8_t val) {
 
 void flashboot (uint8_t data) {
   if (is_flashboot) return; // skip already in flashboot mode
-  uint8_t flashboot_coreid = data;
   d_printf("Flashboot core id: %02x", data); d_println();
   d_flush(); ms_delay(100);
   // todo: add flashboot_id to the core structure, search for desired id and boot it
@@ -444,7 +443,7 @@ void read_core(const char* filename) {
 
   // dump parsed OSD items
   for(uint8_t i=0; i<core.osd_len; i++) {
-    d_printf("OSD %d: type: %d name: %s def: %d len: %d keys: [%d %d %d]", i, core.osd[i].type, core.osd[i].name, core.osd[i].def, core.osd[i].options_len, core.osd[i].keys[0], core.osd[i].keys[1], core.osd[i].keys[2]); 
+    d_printf("OSD %d: type: %d name: %s def: %d len: %d keys: [%d %d]", i, core.osd[i].type, core.osd[i].name, core.osd[i].def, core.osd[i].options_len, core.osd[i].keys[0], core.osd[i].keys[1]); 
     d_println();
     for (uint8_t j=0; j<core.osd[i].options_len; j++) {
       d_print(core.osd[i].options[j].name); d_print(", "); 

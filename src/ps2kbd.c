@@ -90,7 +90,7 @@ void kb_set_scancodeset(uint8_t val) {
 void kb_set_typematic(uint8_t val) {
   repeat_us = repeats[val & 0x1f];
   delay_ms = delays[(val & 0x60) >> 5];
-  d_printf("Set ps/2 kb repeat rate %d us, delay rate %d ms", repeat_us, delay_ms); d_println();
+  d_printf("Set ps/2 kb repeat rate %lu us, delay rate %d ms", (unsigned long) repeat_us, delay_ms); d_println();
 }
 
 void kb_set_leds(uint8_t val) {
@@ -125,12 +125,12 @@ void kb_send_xt(uint8_t byte, bool state) {
 
 void kb_maybe_send_e0(uint8_t key) {
   if(key == HID_KEY_PRINT_SCREEN ||
-     key >= HID_KEY_INSERT && key <= HID_KEY_ARROW_UP ||
+     (key >= HID_KEY_INSERT && key <= HID_KEY_ARROW_UP) ||
      key == HID_KEY_KEYPAD_DIVIDE ||
      key == HID_KEY_KEYPAD_ENTER ||
      key == HID_KEY_APPLICATION ||
      key == HID_KEY_POWER ||
-     key >= HID_KEY_GUI_LEFT && key != HID_KEY_SHIFT_RIGHT) {
+     (key >= HID_KEY_GUI_LEFT && key != HID_KEY_SHIFT_RIGHT)) {
     kb_send(0xe0);
     kb_send_xt(0xe0, true);
   }
@@ -154,8 +154,8 @@ int64_t repeat_callback(alarm_id_t, void *user_data) {
 }
 
 void kb_send_key(uint8_t key, bool state, uint8_t modifiers) {
-  if(key > HID_KEY_F24 &&
-     key < HID_KEY_CONTROL_LEFT ||
+  if((key > HID_KEY_F24 &&
+     key < HID_KEY_CONTROL_LEFT) ||
      key > HID_KEY_GUI_RIGHT) return;
   
   if(key == HID_KEY_PAUSE) {

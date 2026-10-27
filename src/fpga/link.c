@@ -33,6 +33,12 @@ static uint16_t debug_address = 0;
 static uint16_t debug_data = 0;
 
 static SemaphoreHandle_t spi_bus_mutex = NULL;
+// the task holding the bus and how deep: a nested lock is a counter, the mutex and the hang
+// marks only at the outermost level (a take of a FreeRTOS mutex costs ~8 us, a frame ~3 us).
+// Only the owner writes spi_bus_owner while holding the mutex, so a task finds itself there
+// only if it holds the bus.
+static volatile TaskHandle_t spi_bus_owner = NULL;
+static uint32_t spi_bus_depth = 0;
 static TaskHandle_t dispatch_task = NULL;
 static TaskHandle_t event_task = NULL;
 
@@ -42,25 +48,37 @@ void link_queue_init() {
 }
 
 void link_os_init() {
-  spi_bus_mutex = xSemaphoreCreateRecursiveMutex();
+  spi_bus_mutex = xSemaphoreCreateMutex();
 }
 
 void spi_bus_lock() {
   if (!spi_bus_mutex) return;
+  TaskHandle_t self = xTaskGetCurrentTaskHandle();
+  if (spi_bus_owner == self) {
+    spi_bus_depth++;
+    return;
+  }
   hang_lock_wait(HANG_LOCK_SPI);
-  xSemaphoreTakeRecursive(spi_bus_mutex, portMAX_DELAY);
+  xSemaphoreTake(spi_bus_mutex, portMAX_DELAY);
+  spi_bus_owner = self;
+  spi_bus_depth = 1;
   hang_lock_held(HANG_LOCK_SPI);
 }
 
 void spi_bus_unlock() {
   if (!spi_bus_mutex) return;
-  xSemaphoreGiveRecursive(spi_bus_mutex);
-  hang_lock_free(HANG_LOCK_SPI, xSemaphoreGetMutexHolder(spi_bus_mutex) != NULL);
+  if (--spi_bus_depth) return;
+  spi_bus_owner = NULL;
+  hang_lock_free(HANG_LOCK_SPI, false);
+  xSemaphoreGive(spi_bus_mutex);
 }
 
 // hooks called by lib/FT812 around its own SPI0 transactions
 void ft812_bus_lock(void) { spi_bus_lock(); }
 void ft812_bus_unlock(void) { spi_bus_unlock(); }
+// and by lib/OSD around a redraw
+void osd_bus_lock(void) { spi_bus_lock(); }
+void osd_bus_unlock(void) { spi_bus_unlock(); }
 
 void link_set_dispatch_task(void *task) {
   dispatch_task = (TaskHandle_t) task;

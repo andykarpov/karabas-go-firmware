@@ -74,6 +74,7 @@ void osd_printf(const char *fmt, ...) {
 }
 
 void osd_update(void) {
+  osd_bus_lock();
   for (uint8_t y = 0; y < OSD_SIZE_Y; y++) {
     for (uint8_t x = 0; x < OSD_SIZE_X; x++) {
       if (changed[y][x]) {
@@ -85,6 +86,7 @@ void osd_update(void) {
       }
     }
   }
+  osd_bus_unlock();
 }
 
 void osd_clear(void) {

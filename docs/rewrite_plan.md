@@ -74,6 +74,8 @@ After phase 1 Arduino is left only in `main.cpp` (`setup()`, task creation) and 
 
 One large PR, checked on hardware for 2-3 weeks.
 
+Done in branch `pico-cmake` (2026-10-27): CMake with the pico-sdk 2.2.0 (TinyUSB 0.18) and FreeRTOS-Kernel V11.2.0, pinned and fetched when no path is given; the earlephilhower toolchain (its newlib has the dynamic reent the per-task `struct _reent` needs). TinyUSB's own `OPT_OS_FREERTOS` replaced `__usb_mutex`. The timer task priority assert stays (`main.c`): pico-sdk locks released from an irq still wake through it. TinyUSB 0.18 has no `tuh_edpt_close()`: `printer_host` closes in PIO-USB. On the Mini G: everything from the checklist works, core0 runs ~10 % more loops than on Arduino, the flash cache hits 97-98 %. A text OSD redraw paid ~60 us a frame in locks (also on Arduino): `spi_bus_lock` now nests with a counter and `osd_update()` locks once, several times faster.
+
 - **CMake project:** pico-sdk, FreeRTOS-Kernel (SMP, RP2040 port, interop on), TinyUSB of the pico-sdk, `lib/Pico-PIO-USB`, `tusb_xinput`, FatFs; targets `karabas_go`, `karabas_mini`, `karabas_minig`.
 - **Own `main()`:** `set_sys_clock_khz(120000)`, no stdio, the tasks created as now, then the scheduler.
 - **Own `tusb_config.h`:** host limits (3 hubs, 8 devices, 16 HID, 1024-byte enumeration buffer), 4 KB MSC endpoint buffer, `CFG_TUSB_OS=OPT_OS_FREERTOS`. `CFG_TUSB_DEBUG` can go to `debug_out` instead of a UART.

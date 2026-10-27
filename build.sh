@@ -1,19 +1,17 @@
 #!/bin/sh
-
-export PATH=$HOME/.platformio/penv/bin:$PATH
-
-echo "Building MCU sources"
+# Release build of the Karabas Go firmware into the sibling repo (CI does the same on master).
+# Needs the earlephilhower toolchain on PATH (or PICO_TOOLCHAIN_PATH); the pico-sdk and FreeRTOS
+# come from PICO_SDK_PATH / FREERTOS_KERNEL_PATH or are fetched.
+set -e
 
 BUILD_VER=`date +%y%m%d%H`
 echo "Build version: $BUILD_VER"
 
-# GO: 
-pio run -e go -t clean
-export PLATFORMIO_BUILD_FLAGS="-DBUILD_VER=$BUILD_VER"
-pio run -e go
-cp .pio/build/go/firmware.uf2 ../karabas-go/firmware/firmware.uf2
+rm -rf build-release
+cmake -S . -B build-release -G Ninja -DBUILD_VER=$BUILD_VER
+ninja -C build-release karabas_go
+cp build-release/karabas_go.uf2 ../karabas-go/firmware/firmware.uf2
 cp src/karabas.ini ../karabas-go/firmware/karabas.ini
-
-pio run -e go -t clean
+rm -rf build-release
 
 echo "Done"

@@ -1,5 +1,5 @@
-#include <Arduino.h>
 #include "main.h"
+#include "tusb.h"
 #include "diag/hang_diag.h"
 #include "at_cmd.h"
 #include "file_name.h"
@@ -27,6 +27,35 @@ static uint32_t at_hold_timer = 0;         // held bytes go to the core when the
 #define AT_HOLD_TIMEOUT_MS 500
 static bool esp_mode = false;
 
+// The host side is the CDC port (also the debug log, both from APP only). A write waits while
+// the fifo is full, at most HOST_WRITE_WAIT_MS without progress (no terminal reading): USBD,
+// above APP, sends meanwhile. Arduino's Serial.write waited for the whole write too.
+#define HOST_WRITE_WAIT_MS 50
+
+static void host_write(const void *data, size_t len) {
+  const uint8_t *p = (const uint8_t *) data;
+  uint32_t stalled = ms_now();
+  while (len > 0 && tud_cdc_connected()) {
+    uint32_t n = tud_cdc_write(p, len);
+    if (n > 0) {
+      p += n;
+      len -= n;
+      stalled = ms_now();
+    } else {
+      tud_cdc_write_flush();
+      if (ms_since(stalled) >= HOST_WRITE_WAIT_MS) break;
+    }
+  }
+}
+
+static void host_print(const char *s) {
+  host_write(s, strlen(s));
+}
+
+static void host_flush(void) {
+  tud_cdc_write_flush();
+}
+
 void serial_set_speed(uint8_t dll, uint8_t dlm) {
   uint32_t speed = 0;
   if (dll == 0 && dlm == 0) {
@@ -40,23 +69,15 @@ void serial_set_speed(uint8_t dll, uint8_t dlm) {
     // standard mode
     speed = 115200 / ((dlm*256) + dll);
   }
-  // switch serial spseed
-  if (serial_speed != speed) {
-    serial_speed = speed;
-    Serial.end();
-    Serial.begin(speed);
-  }
+  // the pace of the bytes to the core (the CDC itself has no baud rate)
+  serial_speed = speed;
 }
 
 void serial_data(uint8_t addr, uint8_t data) {
     if (addr == 0) {
       // ts zifi 115200
-      if (serial_speed != 115200) {
-        serial_speed = 115200;
-        Serial.end();
-        Serial.begin(serial_speed);
-      }
-      Serial.write(data);
+      serial_speed = 115200;
+      host_write(&data, 1);
     } else if (addr == 1) {
       // evo rs232 dll
       evo_rs232_dll = data;
@@ -67,7 +88,7 @@ void serial_data(uint8_t addr, uint8_t data) {
       serial_set_speed(evo_rs232_dll, evo_rs232_dlm);
     } else if (addr == 3) {
       // evo rs232 data
-      Serial.write(data);
+      host_write(&data, 1);
     }
 }
 
@@ -82,8 +103,8 @@ static void read_core_str(FIL *f, uint32_t pos, char *out, size_t len) {
 static void at_list_cores() {
   static DIR root; // not on the stack: a FIL has its own sector buffer
   static FIL f;
-  if (!has_sd) { Serial.print("ERROR\r\n"); return; }
-  if (!sd_opendir(&root, "/")) { Serial.print("ERROR\r\n"); return; }
+  if (!has_sd) { host_print("ERROR\r\n"); return; }
+  if (!sd_opendir(&root, "/")) { host_print("ERROR\r\n"); return; }
   FILINFO fi;
   while (f_readdir(&root, &fi) == FR_OK && fi.fname[0]) {
     if (!(fi.fattrib & AM_DIR) && kg_name_has_ext(fi.fname, CORE_EXT) && sd_open(&f, fi.fname, FA_READ)) {
@@ -91,17 +112,19 @@ static void at_list_cores() {
       read_core_str(&f, FILE_POS_CORE_ID, id, 32);
       read_core_str(&f, FILE_POS_CORE_NAME, name, 32);
       read_core_str(&f, FILE_POS_CORE_BUILD, build, 8);
-      Serial.printf("+KARABAS:%s;%s;%s;%s\r\n", fi.fname, id, name, build);
+      char line[160];
+      snprintf(line, sizeof(line), "+KARABAS:%s;%s;%s;%s\r\n", fi.fname, id, name, build);
+      host_print(line);
       sd_close(&f);
     }
   }
   sd_closedir(&root);
-  Serial.print("OK\r\n");
+  host_print("OK\r\n");
 }
 
 // the reports of AT commands (sd2test) to the host
 static void serial_out(const char *text) {
-  Serial.print(text);
+  host_print(text);
 }
 
 static void at_command(const char *arg) {
@@ -110,30 +133,29 @@ static void at_command(const char *arg) {
     at_list_cores();
   } else if (strcasecmp(arg, "boot") == 0) {
     bk_flush();
-    Serial.print("OK\r\n"); Serial.flush(); ms_delay(100);
+    host_print("OK\r\n"); host_flush(); ms_delay(100);
     hang_diag_stop();
     matrix_icon(MATRIX_ICON_BOOTSEL); // the bootloader leaves the matrix as it is
     chip_reboot_bootsel();
   } else if (strcasecmp(arg, "msc") == 0 || strcasecmp(arg, "msc2") == 0) {
-    Serial.print("OK\r\n"); Serial.flush(); ms_delay(100);
+    host_print("OK\r\n"); host_flush(); ms_delay(100);
     hang_diag_stop();
     msc_reboot_to_msc(strcasecmp(arg, "msc2") == 0 ? 2 : 1);
   } else if (strcasecmp(arg, "esp") == 0 && core.type == CORE_TYPE_BOOT) {
     esp_mode = true;
-    Serial.print("OK\r\n");
+    host_print("OK\r\n");
   } else if (strcasecmp(arg, "sd2test") == 0 && core.type == CORE_TYPE_BOOT) {
     sd2_test(serial_out);
   } else if (strcasecmp(arg, "uart") == 0) {
     esp_mode = false;
-    Serial.print("OK\r\n");
+    host_print("OK\r\n");
   } else {
-    Serial.print("ERROR\r\n");
+    host_print("ERROR\r\n");
   }
 }
 
 void serial_bridge_begin() {
   kg_at_init(&at_parser);
-  Serial.begin(serial_speed);
 }
 
 // esp mode: host <-> ESP8266 uart, except while Setup Wi-Fi waits for a reply of the module
@@ -143,10 +165,10 @@ static void esp_tick() {
   uint8_t buf[64];
   int n = 0;
   while (n < (int) sizeof(buf) && esp_serial_available() > 0) buf[n++] = (uint8_t) esp_serial_read();
-  if (n > 0) { Serial.write(buf, n); Serial.flush(); }
+  if (n > 0) { host_write(buf, n); host_flush(); }
 
-  while (Serial.available() > 0 && esp_serial_available_for_write() > (int) sizeof(at_parser.out)) {
-    int c = Serial.read();
+  while (tud_cdc_available() > 0 && esp_serial_available_for_write() > (int) sizeof(at_parser.out)) {
+    int c = tud_cdc_read_char();
     if (c == -1) return;
     at_hold_timer = ms_now();
     switch (kg_at_feed(&at_parser, (char) c)) {
@@ -162,10 +184,9 @@ static void esp_tick() {
 
 // forward bytes received from the host to the core
 void serial_bridge_tick() {
-  // TinyUSB sends only full 64-byte packets by itself, and the FreeRTOS yield() of arduino-pico
-  // does not flush the CDC as the plain one does after loop(): the tail of what the core, the ESP
-  // or at_command() wrote would wait for the next 64 bytes
-  Serial.flush();
+  // TinyUSB sends only full 64-byte packets by itself: the tail of what the core, the ESP or
+  // at_command() wrote would wait for the next 64 bytes
+  host_flush();
   if (esp_mode && core.type != CORE_TYPE_BOOT) esp_mode = false;
   if (esp_mode) { esp_tick(); return; }
 
@@ -175,8 +196,8 @@ void serial_bridge_tick() {
 
   if (tx_pos >= tx_len) {
     tx_pos = tx_len = 0;
-    if (Serial.available() > 0) {
-      int uart_rx = Serial.read();
+    if (tud_cdc_available() > 0) {
+      int uart_rx = tud_cdc_read_char();
       if (uart_rx == -1) return;
       at_hold_timer = ms_now();
       switch (kg_at_feed(&at_parser, (char) uart_rx)) {

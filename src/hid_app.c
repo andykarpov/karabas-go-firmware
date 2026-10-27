@@ -305,18 +305,6 @@ static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_
   }
 }
 
-static void convert_nkro_to_6kro(hid_keyboard_report_ext_t const *nkro_report, hid_keyboard_report_t *report)
-{
-  report->modifier = nkro_report->mod;
-  uint8_t idx = 0;
-  for (uint8_t code = 0x04; code < 0xA4; code++) {
-      if (idx < 6 && ((code >> 3) < 16) && nkro_report->bits[code >> 3] > 0 && (nkro_report->bits[code >> 3] & (1 << (code & 7)))) {
-        report->keycode[idx] = code;
-        idx++;
-    }
-  }
-}
-
 static void convert_nkro_to_6kro2(hid_keyboard_report_ext_t const *nkro_report, hid_keyboard_report_t *report)
 {
   report->modifier = nkro_report->mod;

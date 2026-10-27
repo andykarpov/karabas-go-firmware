@@ -1,12 +1,32 @@
-// The newlib of the arduino-pico toolchain (gcc 14.3, earlephilhower) is built with retargetable
-// locking and no default locks: arduino-pico brings its own (cores/rp2040/lock.cpp). Its
-// sys/lock.h fixes struct __lock at 8 bytes, so a lock here keeps a pointer to a pico-sdk
-// recursive mutex from a pool, set up at its first use. These mutexes block a FreeRTOS task
-// through the pico_sync interop.
+// newlib under FreeRTOS SMP, what arduino-pico brought before (cores/rp2040/lock.cpp, freertos/tasks.c).
+//
+// Locks: the newlib of the earlephilhower toolchain (gcc 14.3) is built with retargetable locking
+// and no default locks. Its sys/lock.h fixes struct __lock at 8 bytes, so a lock here keeps a
+// pointer to a pico-sdk recursive mutex from a pool, set up at its first use. These mutexes block
+// a FreeRTOS task through the pico_sync interop.
+//
+// Reentrancy: the same newlib is built with dynamic reent, every libc call asks __getreent() for
+// its struct _reent (errno, the bigints of printf's %f, strtok). FreeRTOS keeps one per task
+// (configUSE_NEWLIB_REENTRANT) and tells at each switch which one runs on the core
+// (configSET_TLS_BLOCK in FreeRTOSConfig.h); before the scheduler starts it is the global one.
 
+#include <reent.h>
 #include <sys/lock.h>
+
+// a newlib with static reent or default locks would build too, and share errno and the locks
+#if !defined(__DYNAMIC_REENT__) || !defined(_RETARGETABLE_LOCKING)
+#error "newlib needs dynamic reent and retargetable locks: the earlephilhower toolchain (pico-quick-toolchain 4.1.0)"
+#endif
 #include "pico/mutex.h"
 #include "hardware/sync.h"
+#include "FreeRTOS.h"
+
+struct _reent *kg_task_reent[2];
+
+struct _reent *__wrap___getreent(void) {
+  struct _reent *r = kg_task_reent[get_core_num()];
+  return r ? r : _GLOBAL_REENT;
+}
 
 struct __lock __lock___arc4random_mutex;
 struct __lock __lock___atexit_recursive_mutex;
@@ -52,7 +72,7 @@ void __retarget_lock_init_recursive(_LOCK_T lock) {
   *(recursive_mutex_t **) lock = NULL;
 }
 
-// the pool is not given back: files are not opened in the spike
+// the pool is not given back: no FILE is opened (FatFs has its own)
 void __retarget_lock_close(_LOCK_T lock) { (void) lock; }
 void __retarget_lock_close_recursive(_LOCK_T lock) { (void) lock; }
 

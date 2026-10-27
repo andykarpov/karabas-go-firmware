@@ -62,6 +62,10 @@ extern "C" {
 
 typedef void (*osd_send_t)(uint8_t cmd, uint8_t addr, uint8_t data);
 
+// hooks of the firmware: osd_update() holds the bus for all its frames
+void osd_bus_lock(void);
+void osd_bus_unlock(void);
+
 void osd_begin(osd_send_t send);
 void osd_set_pos(uint8_t x, uint8_t y);
 void osd_set_color(uint8_t color, uint8_t bgcolor);

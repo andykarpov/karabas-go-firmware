@@ -3,12 +3,9 @@
 #include "hardware/sync.h"
 #include "tusb.h"
 
-#include "pico/mutex.h"
 #include <FreeRTOS.h>
 #include <task.h>
 
-// taken by the USBD task while it runs tud_task(): see src/usb/usb_device.cpp
-extern mutex_t __usb_mutex;
 static TaskHandle_t owner_task = NULL;
 
 // all output, until the owner sends it (as much as the CDC fifo takes), and for everyone until
@@ -31,14 +28,13 @@ void debug_set_owner_task(void *task) {
   owner_task = (TaskHandle_t) task;
 }
 
-// a terminal has the port open. Not Serial's operator bool: it yields when nothing is connected,
-// which would hand the APP loop to the OLED task on every pass
+// a terminal has the port open
 static bool port_open() {
   return tud_cdc_connected();
 }
 
 static bool is_owner() {
-  if (__get_current_exception() != 0) return false; // never write to Serial from an irq
+  if (__get_current_exception() != 0) return false; // never write to the CDC from an irq
   if (owner_task != NULL) return xTaskGetCurrentTaskHandle() == owner_task;
   return get_core_num() == 0;
 }
@@ -57,14 +53,9 @@ static size_t debug_buffer(const uint8_t *data, size_t len) {
   return len;
 }
 
-// as much as the CDC fifo takes now: never waits. Adafruit's Serial.write loops with yield()
-// until all of it is sent, and the board hung for good at a boot right after a flash, with a
-// terminal opening the port while the boot log was written
+// as much as the CDC fifo takes now: never waits, the rest goes out with the next call
 void debug_drain() {
   if (!is_owner() || !port_open()) return;
-  // a write claims the endpoint with TinyUSB's (per core) mutex: USBD, above APP, would wait
-  // for it forever. Taken already: USBD is in tud_task(), the rest goes out later
-  if (!mutex_try_enter(&__usb_mutex, NULL)) return;
   uint8_t chunk[64];
   bool sent = false;
   for (;;) {
@@ -82,7 +73,6 @@ void debug_drain() {
     sent = true;
   }
   if (sent) tud_cdc_write_flush();
-  mutex_exit(&__usb_mutex);
   static uint32_t reported_dropped = 0;
   if (debug_dropped != reported_dropped) {
     reported_dropped = debug_dropped;

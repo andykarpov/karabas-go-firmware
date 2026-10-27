@@ -1,4 +1,3 @@
-#include <Arduino.h>
 /*-------------------------------------------------------------------------------------------------------------------
 -- 
 -- 
@@ -36,13 +35,13 @@
 #include "periph/printer_usb.h"
 #include "periph/printer_link.h"
 
-#ifndef __FREERTOS
-#error "The firmware runs on FreeRTOS: build it with -D PIO_FRAMEWORK_ARDUINO_ENABLE_FREERTOS (see platformio.ini)"
-#endif
+#include "usb/usb_device.h"
+#include "hardware/clocks.h"
+#include "hardware/pio.h"
 #include <FreeRTOS.h>
 #include <task.h>
-// see [rp2040] in platformio.ini: wakeups from irq context go through the timer task
-static_assert(configTIMER_TASK_PRIORITY == configMAX_PRIORITIES - 1, "FreeRTOS timer task must run above APP and USB");
+// see FreeRTOSConfig.h: wakeups from irq context go through the timer task
+_Static_assert(configTIMER_TASK_PRIORITY == configMAX_PRIORITIES - 1, "FreeRTOS timer task must run above APP and USB");
 
 volatile bool usb_host_ready = false;
 
@@ -51,17 +50,9 @@ static uint32_t led_timer = 0;
 #define USB_HOST_PIO pio1
 
 // The usb host takes all of pio1: tx, rx and eop (5 + 10 + 17 = all 32 instruction words,
-// sm0..2). The firmware's own programs (ccount, the PIO SPI of the SD card, fpga_serial) go to pio0.
-// Under FreeRTOS SysTick belongs to the scheduler, so the core runs its cycle counter (ccount,
-// 2 instructions) on a PIO state machine, allocated in main() before setup(); on pio1 it would
-// leave no room for the usb programs and the host would fail silently. Reserve the state
-// machines of pio1 in a static constructor, which runs before main(), so nothing but the usb
-// host can load a program there. usb_host_setup() releases them right before PIO-USB init.
-static struct UsbPioReserve {
-  UsbPioReserve() {
-    pio_claim_sm_mask(USB_HOST_PIO, 0xf);
-  }
-} usb_pio_reserve;
+// sm0..2). The firmware's own programs (the PIO SPI of the SD card, fpga_serial) go to pio0.
+// main() reserves the state machines of pio1, so nothing but the usb host can load a program
+// there; usb_host_setup() releases them right before PIO-USB init.
 
 // fpga commands handled here (link_on)
 static void on_flashboot(uint8_t addr, uint8_t data) {
@@ -87,13 +78,11 @@ static void karabas_setup()
   hw_setup.debug_enabled = true;
   hang_diag_report();
 
-  msc_init();
-
   //rp2040.wdt_begin(5000);
 
   joyL = joyR = 0;
 
-  for (uint8_t i=0; i<MAX_FILE_SLOTS; i++) { file_slots[i] = {0}; }
+  memset(file_slots, 0, sizeof(file_slots));
 
   // SPI0 to FPGA, incoming fpga commands
   link_begin();
@@ -127,7 +116,7 @@ static void karabas_setup()
   i2c_dev_begin(PIN_I2C_SDA, PIN_I2C_SCL, 400000);
 
 #if WAIT_SERIAL
-  while ( !Serial ) yield();   // wait for native usb
+  while (!tud_cdc_connected()) ms_delay(10); // wait for a terminal
 #endif
 
   serial_bridge_begin();
@@ -194,7 +183,7 @@ static void usb_host_setup() {
   pio_cfg.sm_rx = 1;
   pio_cfg.sm_eop = 2;
 
-  // release what usb_pio_reserve held for the usb host since before main()
+  // release what main() held for the usb host
   for (uint i=0; i<4; i++) pio_sm_unclaim(USB_HOST_PIO, i);
 
   // PIO-USB claims a hardware spinlock for its alarm pool and panics if none is left
@@ -204,8 +193,8 @@ static void usb_host_setup() {
   for (int i = 0; i < n_free; i++) spin_lock_unclaim(free_locks[i]);
   d_printf("USB host: %d hardware spinlocks free\r\n", n_free);
 
-  tuh_configure(1, TUH_CFGID_RPI_PIO_USB_CONFIGURATION, &pio_cfg);
-  tuh_init(1);
+  tuh_configure(BOARD_TUH_RHPORT, TUH_CFGID_RPI_PIO_USB_CONFIGURATION, &pio_cfg);
+  tuh_init(BOARD_TUH_RHPORT);
   if (!pio_usb_host_programs_loaded()) {
     // pio_add_program failed: no PIO instruction memory left for the usb host programs
     d_println("USB host: PIO programs did not load, usb devices will not work");
@@ -283,14 +272,13 @@ static void __not_in_flash_func(usb_host_loop)()
   diag_loop_core1();
   hang_beat_core1();
   usb_diag_tick();
-  if (tuh_task_event_ready()) tuh_task();
+  // timeout 0: on OPT_OS_FREERTOS tuh_task() would block on its queue after the last event
+  if (tuh_task_event_ready()) tuh_task_ext(0, false);
   printer_host_tick();
   printer_usb_tick();
 }
 
-// The firmware and the usb host run in their own pinned tasks.
-// The framework's CORE0 task (4 KB stack) only creates them; setup1/loop1 are not defined,
-// so the framework does not start its own CORE1 task.
+// The firmware and the usb host run in their own pinned tasks, created by main().
 
 #ifndef APP_TASK_STACK
 #define APP_TASK_STACK 4096 // words
@@ -299,7 +287,7 @@ static void __not_in_flash_func(usb_host_loop)()
 #define USB_TASK_STACK 2048 // words
 #endif
 #define APP_TASK_PRIORITY (configMAX_PRIORITIES / 2)
-#define USB_TASK_PRIORITY (configMAX_PRIORITIES - 2) // above everything but the framework's flash idle tasks
+#define USB_TASK_PRIORITY (configMAX_PRIORITIES - 2) // above everything but the timer task
 
 static void app_task(void *param) {
   // incoming fpga commands are handled here, also when another task received them
@@ -329,27 +317,36 @@ static void __not_in_flash_func(usb_task)(void *param) {
   }
 }
 
-void setup() {
-  // first: until it exists, the USB irq runs the device stack itself
+// FreeRTOS hooks: the message is kept for the next boot's log (hang_diag, --wrap=panic)
+void vApplicationStackOverflowHook(TaskHandle_t task, char *name) {
+  (void) task; (void) name;
+  panic("stack overflow");
+}
+
+void vApplicationMallocFailedHook(void) {
+  panic("malloc failed");
+}
+
+int main() {
+  // PIO-USB needs a multiple of 12 MHz; clk_peri (SPI, I2C) stays at 48 MHz from the USB PLL
+  set_sys_clock_khz(120000, true);
+  pio_claim_sm_mask(USB_HOST_PIO, 0xf);
+  // the USB name of the card (msc / msc2), asked by the PC as soon as USB comes up
+  msc_init();
   usb_device_task_start();
   link_os_init();
   // before the USB task: its hid callbacks push events into the link queue
   link_queue_init();
   i2c_bus_init();
-  // tasks must be created already pinned: the USB task has a higher priority than the
-  // framework's CORE0 task running this code, so it starts immediately on creation.
-  // Unpinned, it could start on core0 and starve CORE0 forever (it never blocks),
-  // and PIO-USB would set up its SOF timer on the wrong core.
-  if (xTaskCreateAffinitySet(usb_task, "USB", USB_TASK_STACK, nullptr, USB_TASK_PRIORITY, 1 << 1, nullptr) != pdPASS) {
+  // pinned at creation: PIO-USB sets up its SOF timer on the core that starts it
+  if (xTaskCreateAffinitySet(usb_task, "USB", USB_TASK_STACK, NULL, USB_TASK_PRIORITY, 1 << 1, NULL) != pdPASS) {
     panic("Unable to create USB task");
   }
-  if (xTaskCreateAffinitySet(app_task, "APP", APP_TASK_STACK, nullptr, APP_TASK_PRIORITY, 1 << 0, nullptr) != pdPASS) {
+  if (xTaskCreateAffinitySet(app_task, "APP", APP_TASK_STACK, NULL, APP_TASK_PRIORITY, 1 << 0, NULL) != pdPASS) {
     panic("Unable to create APP task");
   }
-}
-
-void loop() {
-  vTaskDelay(portMAX_DELAY);
+  vTaskStartScheduler();
+  return 0;
 }
 
 void halt(const char* msg) {

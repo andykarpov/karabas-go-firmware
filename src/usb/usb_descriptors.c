@@ -1,5 +1,5 @@
-// The device descriptors: CDC + MSC under the firmware's ids and names (2e8a:000a, "Karabas" /
-// "Go", the flash id as the serial), so the host sees the same device.
+// The device descriptors: CDC + MSC under the ids and names of the arduino-pico firmware before
+// (2e8a:000a, "Karabas" / "Go", the flash id as the serial), so the host sees the same device.
 
 #include <string.h>
 #include "tusb.h"

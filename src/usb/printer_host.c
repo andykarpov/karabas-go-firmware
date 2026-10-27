@@ -1,6 +1,14 @@
 #include "printer_host.h"
 #include <string.h>
 #include "ms_time.h"
+#include "pio_usb_ll.h"
+
+// TinyUSB 0.18 has no tuh_edpt_close() (Adafruit's had): close it in PIO-USB, the next
+// tuh_edpt_open() configures it again with DATA0 (PIO-USB's root port 0 is TinyUSB's rhport 1)
+static void edpt_close(uint8_t address, uint8_t ep) {
+  tuh_edpt_abort_xfer(address, ep);
+  pio_usb_host_endpoint_close(BOARD_TUH_RHPORT - 1, address, ep);
+}
 
 typedef enum { CONTROL_IDLE, CONTROL_ID, CONTROL_STATUS, CONTROL_RESET } control_t;
 static printer_info_t info;
@@ -57,7 +65,7 @@ static bool open(uint8_t rhport, uint8_t address, const tusb_desc_interface_t *i
       (itf->bInterfaceProtocol == 2 && (endpoints != 2 || !in.bEndpointAddress))) return false;
   if (!tuh_edpt_open(address, &out)) return false;
   if (in.bEndpointAddress && !tuh_edpt_open(address, &in)) {
-    tuh_edpt_close(address, out.bEndpointAddress);
+    edpt_close(address, out.bEndpointAddress);
     return false;
   }
   memset(&info, 0, sizeof(info));
@@ -146,8 +154,8 @@ static void control_done(tuh_xfer_t *xfer) {
     if (result == XFER_RESULT_SUCCESS) {
       // PIO-USB's hcd_edpt_clear_stall() is a no-op. Reopening idle endpoints
       // resets the host DATA toggle to match the printer's reset pipes.
-      tuh_edpt_close(info.address, info.ep_out);
-      if (info.ep_in) tuh_edpt_close(info.address, info.ep_in);
+      edpt_close(info.address, info.ep_out);
+      if (info.ep_in) edpt_close(info.address, info.ep_in);
       bool ok = tuh_edpt_open(info.address, &out_desc);
       if (info.ep_in) ok = tuh_edpt_open(info.address, &in_desc) && ok;
       if (!ok) result = XFER_RESULT_FAILED;

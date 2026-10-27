@@ -46,7 +46,7 @@ void app_file_loader_read_list(bool forceIndex) {
         osd_print("Error occured");
         osd_set_pos(9,10);
         char b[255];
-        sprintf(b, "Bad dir %s", d); 
+        snprintf(b, sizeof(b), "Bad dir %s", d);
         osd_print(b);
         osd_update();
         ms_delay(1000);
@@ -261,7 +261,7 @@ void app_file_loader_send_file(uint16_t file_id) {
 
   uint64_t file_size = f_size(&file1);
 
-  d_printf("Sending file %d (%d bytes)", file_id, (uint32_t)((file_size))); d_println();
+  d_printf("Sending file %d (%lu bytes)", file_id, (unsigned long) file_size); d_println();
   d_flush();
   
 uint32_t cnt = 0;
@@ -293,8 +293,8 @@ uint32_t c1 = 0;
   spi_bus_unlock();
 
   sd_close(&file1);
-  d_printf("Sent %u bytes in %lu ms (%s), crc32 %08x", cnt, (unsigned long) ms_since(send_timer),
-    link_burst_available() ? "burst" : "classic", kg_crc32_final(crc)); d_println();
+  d_printf("Sent %lu bytes in %lu ms (%s), crc32 %08lx", (unsigned long) cnt, (unsigned long) ms_since(send_timer),
+    link_burst_available() ? "burst" : "classic", (unsigned long) kg_crc32_final(crc)); d_println();
   ms_delay(100);
 
   // reload menu
