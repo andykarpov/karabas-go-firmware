@@ -13,6 +13,15 @@ const setting_t settings[SET_COUNT] = {
   { "DVI only",       "No HDMI audio, next core",       SET_KIND_BOOL },
   { "LED matrix",     "The dot matrix add-on",          SET_KIND_BOOL },
   { "Matrix bright.", "Core: as the core sets it",      SET_KIND_CHOICE },
+  { "Matrix effects", "The clock and the audio meters", SET_KIND_PAGE },
+  { "Clock hours",    "The color of the hours",         SET_KIND_CHOICE },
+  { "Clock minutes",  "The color of the minutes",       SET_KIND_CHOICE },
+  { "Clock seconds",  "A dot, a colon or a bar",        SET_KIND_CHOICE },
+  { "Seconds color",  "The color of the seconds",       SET_KIND_CHOICE },
+  { "Meter style",    "How the audio meters look",      SET_KIND_CHOICE },
+  { "Meter colors",   "Zones: green, yellow, red",      SET_KIND_CHOICE },
+  { "Meter decay",    "How fast the meters fall",       SET_KIND_CHOICE },
+  { "Peak hold",      "A dot holds the peak a second",  SET_KIND_BOOL },
   { "Enabled",        "Start a core on power on",       SET_KIND_BOOL },
   { "Timeout",        "Seconds before the start",       SET_KIND_CHOICE },
   { "Core",           "The core to start",              SET_KIND_CHOICE },
@@ -34,6 +43,14 @@ const setting_t settings[SET_COUNT] = {
   { "Active text",    "The text of the chosen button",  SET_KIND_COLOR },
   { "Footer text",    "The build, page and autoload",   SET_KIND_COLOR },
 };
+
+const uint8_t settings_mx_ids[] = {
+  SET_MX_CLOCK_HOURS, SET_MX_CLOCK_MINUTES, SET_MX_CLOCK_SECONDS, SET_MX_CLOCK_SECONDS_COLOR,
+  SET_MX_METER_STYLE, SET_MX_METER_COLORS, SET_MX_METER_DECAY, SET_MX_METER_PEAK,
+};
+const uint8_t settings_mx_len = sizeof(settings_mx_ids);
+
+static bool is_mx_opt(uint8_t id) { return id >= SET_MX_CLOCK_HOURS && id < SET_MX_CLOCK_HOURS + KG_MX_OPT_COUNT; }
 
 static const char *const sound_names[SOUNDS] = { "Off", "Klyuchik", "Ta-dan", "Run", "Sound 4" };
 
@@ -83,7 +100,14 @@ void settings_begin(setup_t &s) {
 }
 
 void settings_end() {
-  matrix_setup(hw_setup.matrix_enabled, hw_setup.matrix_brightness);
+  matrix_setup(hw_setup);
+  matrix_preview(MATRIX_PREVIEW_NONE);
+}
+
+void settings_preview(uint8_t id) {
+  if (id >= SET_MX_CLOCK_HOURS && id <= SET_MX_CLOCK_SECONDS_COLOR) matrix_preview(MATRIX_PREVIEW_CLOCK);
+  else if (id >= SET_MX_METER_STYLE && id <= SET_MX_METER_PEAK) matrix_preview(MATRIX_PREVIEW_METER);
+  else matrix_preview(MATRIX_PREVIEW_NONE);
 }
 
 static bool *bool_ref(uint8_t id, setup_t &s) {
@@ -98,6 +122,7 @@ static bool *bool_ref(uint8_t id, setup_t &s) {
     case SET_DATE: return &s.ft_date;
     case SET_CHAR: return &s.ft_char;
     case SET_CLICK: return &s.ft_click;
+    case SET_MX_METER_PEAK: return &s.matrix_style.meter_peak;
     default: return nullptr;
   }
 }
@@ -130,6 +155,11 @@ void settings_value_text(uint8_t id, const setup_t &s, char *out, size_t size) {
     snprintf(out, size, "%06lx", (unsigned long) (*c & 0xffffff));
     return;
   }
+  if (is_mx_opt(id)) {
+    uint8_t opt = id - SET_MX_CLOCK_HOURS;
+    strlcpy(out, kg_mx_opt_name(opt, s.matrix_style.opt[opt]), size);
+    return;
+  }
   switch (id) {
     case SET_TIMEOUT: snprintf(out, size, "%u s", s.autoload_timeout); break;
     case SET_CORE: {
@@ -157,7 +187,13 @@ void settings_value_text(uint8_t id, const setup_t &s, char *out, size_t size) {
 void settings_change(uint8_t id, setup_t &s, int d) {
   if (bool *b = bool_ref(id, s)) {
     *b = !*b;
-    if (id == SET_MATRIX) matrix_setup(s.matrix_enabled, s.matrix_brightness); // shown at once
+    if (id == SET_MATRIX || id == SET_MX_METER_PEAK) matrix_setup(s); // shown at once
+    return;
+  }
+  if (is_mx_opt(id)) {
+    uint8_t opt = id - SET_MX_CLOCK_HOURS, n = kg_mx_opt_count(opt);
+    s.matrix_style.opt[opt] = (s.matrix_style.opt[opt] + d + n) % n;
+    matrix_setup(s);
     return;
   }
   switch (id) {
@@ -179,7 +215,7 @@ void settings_change(uint8_t id, setup_t &s, int d) {
     case SET_MOUSE_SPEED: s.ft_mouse_speed = (s.ft_mouse_speed - 1 + d + 5) % 5 + 1; break;
     case SET_MATRIX_BRIGHTNESS:
       s.matrix_brightness = (s.matrix_brightness + d + 17) % 17;
-      matrix_setup(s.matrix_enabled, s.matrix_brightness);
+      matrix_setup(s);
       break;
     case SET_THEME: {
       int t = settings_theme(s);

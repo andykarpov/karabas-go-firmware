@@ -2,6 +2,7 @@
 #include "i2c_bus.h"
 #include "kg_matrix.h"
 #include "matrix_fx.h"
+#include "matrix_meter.h"
 
 // Optional dot matrix addon (2x HT16K33 bi-color 8x8), see MATRIX.md
 //
@@ -35,6 +36,11 @@ static uint8_t cfg_core_type;
 // karabas.ini [matrix] as shown now: hw_setup, or the values being edited in Settings
 static bool mx_enabled = true;
 static uint8_t mx_brightness = 0; // 0: the core's
+static kg_mx_style_t mx_style;    // the clock and the meters
+static uint8_t preview = MATRIX_PREVIEW_NONE; // Settings shows a plugin while its options are edited
+static kg_meter_t meter;
+static uint32_t demo_rnd = 0x1234567;
+static uint8_t demo_wait[2]; // frames to the next beat of the demo signal
 
 // the boot core without settings: the scroll of old
 static const char *const matrix_boot_text = "KARABAS GO ";
@@ -114,43 +120,39 @@ void matrix_bitplan_data(uint8_t addr, uint8_t data) {
   }
 }
 
-uint8_t led_bar(uint16_t val) {
-  uint16_t values[16] = {20000, 16000, 10000, 8000, 6500, 5000, 3500, 3000, 2000, 1500, 1000, 750, 600, 500, 350, 200};
-  for (uint8_t i=0; i<=15; i++) {
-    if (val >= values[i]) 
-      return constrain(16-i, 1, 16);
+static const uint8_t led_colors[4] = {LED_OFF, LED_RED, LED_GREEN, LED_YELLOW}; // by KG_MX_*
+
+// a 16x8 picture of KG_MX_* colors
+static void matrix_draw_fb(const uint8_t fb[KG_MATRIX_H][KG_MATRIX_W]) {
+  matrix.clear();
+  for (uint8_t y=0; y<8; y++) {
+    for (uint8_t x=0; x<16; x++) {
+      if (fb[y][x]) matrix.drawPixel(x, y, led_colors[fb[y][x] & 3]);
+    }
   }
-  return 0;
+  matrix.writeDisplay();
 }
 
-void matrix_draw_bar(uint8_t y, uint8_t val) {
-  if (val > 0) {
-    for (uint8_t x=0; x<=15; x++) {
-      if (val >= x) {
-          matrix.drawPixel(x, y, (x > 14) ? LED_RED : (x > 12) ? LED_YELLOW : LED_GREEN);
-      }
-    }
+// the preview of the meters in Settings: beats of random strength, each channel on its own
+static void matrix_demo_signal() {
+  volatile uint16_t *ch[2] = { &audio_l, &audio_r };
+  for (uint8_t i = 0; i < 2; i++) {
+    if (demo_wait[i] > 0) { demo_wait[i]--; continue; }
+    demo_rnd ^= demo_rnd << 13; demo_rnd ^= demo_rnd >> 17; demo_rnd ^= demo_rnd << 5;
+    uint16_t v = 1500 + demo_rnd % 24000;
+    if (v > *ch[i]) *ch[i] = v;
+    demo_wait[i] = 8 + (demo_rnd >> 16) % 24;
   }
 }
 
 void matrix_draw_audio() {
-  matrix.clear();
-  uint8_t l = led_bar(audio_l);
-  uint8_t r = led_bar(audio_r);
-  matrix_draw_bar(1, l);
-  matrix_draw_bar(2, l);
-  matrix_draw_bar(5, r);
-  matrix_draw_bar(6, r);
-  matrix.writeDisplay();
-  
-  // decay
-  uint16_t decay_l = audio_l >> 4;
-  uint16_t decay_r = audio_r >> 4;
-  audio_l = (audio_l > decay_l) ? audio_l - decay_l : 0;
-  audio_r = (audio_r > decay_r) ? audio_r - decay_r : 0;
+  if (preview == MATRIX_PREVIEW_METER) matrix_demo_signal();
+  static uint8_t fb[KG_MATRIX_H][KG_MATRIX_W];
+  kg_meter_draw(&meter, &mx_style, kg_meter_level(audio_l), kg_meter_level(audio_r), fb);
+  matrix_draw_fb(fb);
+  audio_l = kg_meter_decay(audio_l, mx_style.opt[KG_MX_OPT_METER_DECAY]);
+  audio_r = kg_meter_decay(audio_r, mx_style.opt[KG_MX_OPT_METER_DECAY]);
 }
-
-static const uint8_t led_colors[4] = {LED_OFF, LED_RED, LED_GREEN, LED_YELLOW}; // by KG_MX_*
 
 // the text of the next pass, with {time} etc. of now
 static void scroll_pass_start() {
@@ -198,15 +200,10 @@ static void matrix_draw_fx() {
   in.hour = zxrtc.getHour();
   in.minute = zxrtc.getMinute();
   in.second = zxrtc.getSecond();
+  in.style = &mx_style;
   if (fx.effect == KG_MATRIX_FX_DRIVE) memcpy(in.drive, drives, sizeof(drives));
   matrix_fx_step(&fx, &in);
-  matrix.clear();
-  for (uint8_t y=0; y<8; y++) {
-    for (uint8_t x=0; x<16; x++) {
-      if (fx.fb[y][x]) matrix.drawPixel(x, y, led_colors[fx.fb[y][x]]);
-    }
-  }
-  matrix.writeDisplay();
+  matrix_draw_fb(fx.fb);
 }
 
 static void matrix_start(uint8_t mode);
@@ -222,9 +219,31 @@ static void matrix_pass_done(uint8_t repeat) {
 // start a mode of the settings (KG_MATRIX_MODE_*); with the I2C lock held
 static void matrix_start_mode(uint8_t mode);
 
+static void matrix_start_audio() {
+  matrix_mode = MATRIX_MODE_AUDIO;
+  kg_meter_init(&meter);
+}
+
+// the plugin whose options Settings edits, instead of the mode of the core
+static void matrix_start_preview() {
+  matrix.clear();
+  matrix.writeDisplay();
+  passes = 0;
+  if (preview == MATRIX_PREVIEW_CLOCK) {
+    matrix_fx_init(&fx, KG_MATRIX_FX_CLOCK, KG_MX_OFF, time_us_32());
+    step_frames = matrix_fx_default_speed(KG_MATRIX_FX_CLOCK);
+    step_count = step_frames - 1;
+    matrix_mode = MATRIX_MODE_EFFECT;
+  } else {
+    audio_l = audio_r = 0;
+    matrix_start_audio();
+  }
+}
+
 // the matrix switched off in karabas.ini: dark in every mode
 static void matrix_start(uint8_t mode) {
-  matrix_start_mode(mx_enabled ? mode : KG_MATRIX_MODE_BLANK);
+  if (mx_enabled && preview != MATRIX_PREVIEW_NONE) matrix_start_preview();
+  else matrix_start_mode(mx_enabled ? mode : KG_MATRIX_MODE_BLANK);
 }
 
 static void matrix_start_mode(uint8_t mode) {
@@ -265,7 +284,7 @@ static void matrix_start_mode(uint8_t mode) {
         scroll_pass_start();
         matrix_mode = MATRIX_MODE_SCROLL;
       } else {
-        matrix_mode = MATRIX_MODE_AUDIO;
+        matrix_start_audio();
         audio_l = 32000;
         audio_r = 32000;
       }
@@ -284,6 +303,7 @@ void matrix_begin() {
   // until the first core is loaded: the boot scroll
   cfg.brightness = KG_MATRIX_DEFAULT_BRIGHTNESS;
   cfg_core_type = CORE_TYPE_BOOT;
+  kg_mx_style_default(&mx_style);
   matrix_init();
   if (has_matrix) matrix_start_mode(KG_MATRIX_MODE_CORE); // karabas.ini is not read yet
 }
@@ -325,15 +345,25 @@ void matrix_drive_access(uint8_t slot, uint32_t lba, bool write) {
   else drives[slot].reads++;
 }
 
-void matrix_setup(bool enabled, uint8_t brightness) {
+void matrix_setup(const setup_t &s) {
   if (!has_matrix) return;
   I2cGuard i2c;
-  bool restart = enabled != mx_enabled;
-  mx_enabled = enabled;
-  mx_brightness = brightness;
+  bool restart = s.matrix_enabled != mx_enabled;
+  mx_enabled = s.matrix_enabled;
+  mx_brightness = s.matrix_brightness;
+  mx_style = s.matrix_style; // the next frame draws with it
   if (matrix_mode == MATRIX_MODE_ICON || matrix_mode == MATRIX_MODE_LOADING) return;
   matrix_init();
   if (restart) matrix_start(cfg.mode);
+}
+
+void matrix_preview(uint8_t what) {
+  if (!has_matrix) return;
+  I2cGuard i2c;
+  if (what == preview) return;
+  preview = what;
+  if (matrix_mode == MATRIX_MODE_ICON || matrix_mode == MATRIX_MODE_LOADING) return;
+  matrix_start(cfg.mode);
 }
 
 void matrix_on_configure_start() {
@@ -350,6 +380,8 @@ void matrix_on_configure_done(uint8_t core_type) {
     I2cGuard i2c;
     mx_enabled = hw_setup.matrix_enabled;
     mx_brightness = hw_setup.matrix_brightness;
+    mx_style = hw_setup.matrix_style;
+    preview = MATRIX_PREVIEW_NONE;
     matrix_init();
     cfg_core_type = core_type;
     matrix_start(cfg.mode);

@@ -85,14 +85,33 @@ static void draw_digit(matrix_fx_t *fx, uint8_t d, uint8_t x0, uint8_t y0, uint8
   }
 }
 
-// HH (green) and MM (yellow), the seconds as a red dot running along the bottom row
+// HH and MM in the colors of the style (green and yellow), the seconds as a dot running along
+// the bottom row (red), a colon blinking between them, or a bar growing along the bottom row
 static void step_clock(matrix_fx_t *fx, const matrix_fx_input_t *t) {
-  uint8_t h = t ? t->hour : 0, m = t ? t->minute : 0, s = t ? t->second : 0;
-  draw_digit(fx, h / 10, 0, 1, KG_MX_GREEN);
-  draw_digit(fx, h % 10, 4, 1, KG_MX_GREEN);
-  draw_digit(fx, m / 10, 9, 1, KG_MX_YELLOW);
-  draw_digit(fx, m % 10, 13, 1, KG_MX_YELLOW);
-  fx->fb[7][(s % 60) * KG_MATRIX_W / 60] = KG_MX_RED;
+  kg_mx_style_t def;
+  const kg_mx_style_t *st = t ? t->style : nullptr;
+  if (!st) { kg_mx_style_default(&def); st = &def; }
+  uint8_t h = t ? t->hour : 0, m = t ? t->minute : 0, s = (t ? t->second : 0) % 60;
+  uint8_t ch = kg_mx_color(st->opt[KG_MX_OPT_CLOCK_HOURS]), cm = kg_mx_color(st->opt[KG_MX_OPT_CLOCK_MINUTES]);
+  uint8_t cs = kg_mx_color(st->opt[KG_MX_OPT_CLOCK_SECONDS_COLOR]);
+  draw_digit(fx, h / 10, 0, 1, ch);
+  draw_digit(fx, h % 10, 4, 1, ch);
+  draw_digit(fx, m / 10, 9, 1, cm);
+  draw_digit(fx, m % 10, 13, 1, cm);
+  switch (st->opt[KG_MX_OPT_CLOCK_SECONDS]) {
+    case KG_MX_SEC_COLON:
+      if (s % 2 == 0) {
+        for (uint8_t x = 7; x <= 8; x++) fx->fb[2][x] = fx->fb[4][x] = cs;
+      }
+      break;
+    case KG_MX_SEC_BAR:
+      for (uint8_t x = 0; x <= s * KG_MATRIX_W / 60; x++) fx->fb[7][x] = cs;
+      break;
+    case KG_MX_SEC_OFF:
+      break;
+    default:
+      fx->fb[7][s * KG_MATRIX_W / 60] = cs;
+  }
 }
 
 // the heat rises from the bottom row and cools down

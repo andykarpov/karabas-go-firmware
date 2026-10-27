@@ -26,6 +26,18 @@ After `repeat` passes of the scroll (or loops of the animation) the matrix goes 
 
 `karabas.ini` `[matrix]`: `enabled=0` keeps the matrix dark in all cores, `brightness=1..16` sets the brightness of all cores (`0`: as the core sets it). Both are in Setup > Settings of the boot menu.
 
+The look of the clock effect and of the audio meters of the cores is set in `[matrix]` too, for all cores (Setup > Settings > Matrix effects, the graphic menu: System > Matrix effects; the matrix shows the plugin while its options are edited):
+
+| Key | Values | Default |
+|---|---|---|
+| `clock_hours`, `clock_minutes` | `green`, `yellow`, `red` | `green`, `yellow` |
+| `clock_seconds` | `dot` (runs along the bottom row), `colon` (blinks between HH and MM), `bar` (grows along the bottom row in a minute), `off` | `dot` |
+| `clock_seconds_color` | `green`, `yellow`, `red` | `red` |
+| `meter_style` | `bars` (two rows per channel), `wide` (four rows), `center` (left to the left of the middle, right to the right), `mono` (the louder channel on all rows), `vertical` (two columns growing up) | `bars` |
+| `meter_colors` | `zones` (green, yellow, red at the top), `green`, `yellow`, `red`, `fire` (yellow with a red tip) | `zones` |
+| `meter_decay` | `slow`, `normal`, `fast` | `normal` |
+| `meter_peak` | `1`: a dot holds the peak for a second, then falls | `0` |
+
 The core can draw on the matrix (the registers below, `CMD_MATRIX_*`) only in the `core` mode; otherwise its writes are ignored.
 
 ## ZX Spectrum Support
