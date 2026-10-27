@@ -37,7 +37,7 @@ static void test_life_wraps() {
 static void test_life_reseeds() {
   matrix_fx_t fx;
   matrix_fx_init(&fx, KG_MATRIX_FX_LIFE, 0, 1234);
-  for (int i = 0; i < 2000; i++) matrix_fx_step(&fx, nullptr);
+  for (int i = 0; i < 2000; i++) matrix_fx_step(&fx, NULL);
   // still something alive (dead fields are seeded again)
   uint16_t any = 0;
   for (uint8_t y = 0; y < KG_MATRIX_H; y++) any |= fx.cells[y];
@@ -103,13 +103,13 @@ static void test_scanner_bounces() {
   matrix_fx_t fx;
   matrix_fx_init(&fx, KG_MATRIX_FX_SCANNER, 0, 1);
   for (int i = 0; i < 100; i++) {
-    matrix_fx_step(&fx, nullptr);
+    matrix_fx_step(&fx, NULL);
     TEST_ASSERT_TRUE(fx.pos >= 0 && fx.pos < KG_MATRIX_W);
     TEST_ASSERT_TRUE(count(&fx, KG_MX_RED) >= 4); // the head
     TEST_ASSERT_EQUAL_UINT8(0, count(&fx, KG_MX_GREEN));
   }
   matrix_fx_init(&fx, KG_MATRIX_FX_SCANNER, KG_MX_GREEN, 1);
-  matrix_fx_step(&fx, nullptr);
+  matrix_fx_step(&fx, NULL);
   TEST_ASSERT_EQUAL_UINT8(4, count(&fx, KG_MX_GREEN));
 }
 
@@ -118,7 +118,7 @@ static void test_fire_rises() {
   matrix_fx_init(&fx, KG_MATRIX_FX_FIRE, 0, 99);
   uint16_t bottom = 0, top = 0;
   for (int i = 0; i < 200; i++) {
-    matrix_fx_step(&fx, nullptr);
+    matrix_fx_step(&fx, NULL);
     for (uint8_t x = 0; x < KG_MATRIX_W; x++) {
       if (fx.fb[7][x]) bottom++;
       if (fx.fb[0][x]) top++;
@@ -141,7 +141,7 @@ static void test_rain() {
   matrix_fx_init(&fx, KG_MATRIX_FX_RAIN, 0, 7);
   uint16_t lit = 0;
   for (int i = 0; i < 300; i++) {
-    matrix_fx_step(&fx, nullptr);
+    matrix_fx_step(&fx, NULL);
     TEST_ASSERT_EQUAL_UINT8(0, count(&fx, KG_MX_RED));
     // a column has at most one head
     for (uint8_t x = 0; x < KG_MATRIX_W; x++) {
@@ -157,10 +157,10 @@ static void test_rain() {
 static void test_plasma_moves() {
   matrix_fx_t fx;
   matrix_fx_init(&fx, KG_MATRIX_FX_PLASMA, 0, 1);
-  matrix_fx_step(&fx, nullptr);
+  matrix_fx_step(&fx, NULL);
   uint8_t first[KG_MATRIX_H][KG_MATRIX_W];
   memcpy(first, fx.fb, sizeof(first));
-  for (int i = 0; i < 5; i++) matrix_fx_step(&fx, nullptr);
+  for (int i = 0; i < 5; i++) matrix_fx_step(&fx, NULL);
   TEST_ASSERT_TRUE(memcmp(first, fx.fb, sizeof(first)) != 0);
   // all four bands show up
   TEST_ASSERT_TRUE(count(&fx, KG_MX_OFF) + count(&fx, KG_MX_GREEN) + count(&fx, KG_MX_YELLOW) + count(&fx, KG_MX_RED) == 128);
@@ -170,7 +170,7 @@ static void test_stars() {
   matrix_fx_t fx;
   matrix_fx_init(&fx, KG_MATRIX_FX_STARS, 0, 3);
   for (int i = 0; i < 500; i++) {
-    matrix_fx_step(&fx, nullptr);
+    matrix_fx_step(&fx, NULL);
     uint8_t lit = 128 - count(&fx, KG_MX_OFF);
     TEST_ASSERT_TRUE(lit > 0 && lit <= MATRIX_FX_STARS);
   }
@@ -182,7 +182,7 @@ static void test_pong() {
   uint16_t bounces = 0;
   int8_t dx = fx.ball_dx;
   for (int i = 0; i < 2000; i++) {
-    matrix_fx_step(&fx, nullptr);
+    matrix_fx_step(&fx, NULL);
     // the paddles, 3 pixels each (the ball may stand on one of them after a miss)
     for (uint8_t k = 0; k < 3; k++) {
       uint8_t l = fx.fb[fx.paddle[0] + k][0], r = fx.fb[fx.paddle[1] + k][KG_MATRIX_W - 1];

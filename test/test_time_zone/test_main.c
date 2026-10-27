@@ -48,31 +48,31 @@ static void test_step() {
   TEST_ASSERT_EQUAL(-15, kg_tz_step(0, -1));
 }
 
-static void check(const kg_datetime_t &t, int y, int mo, int d, int h, int mi, int s) {
-  TEST_ASSERT_EQUAL(y, t.year); TEST_ASSERT_EQUAL(mo, t.month); TEST_ASSERT_EQUAL(d, t.day);
-  TEST_ASSERT_EQUAL(h, t.hour); TEST_ASSERT_EQUAL(mi, t.minute); TEST_ASSERT_EQUAL(s, t.second);
+static void check(const kg_datetime_t *t, int y, int mo, int d, int h, int mi, int s) {
+  TEST_ASSERT_EQUAL(y, t->year); TEST_ASSERT_EQUAL(mo, t->month); TEST_ASSERT_EQUAL(d, t->day);
+  TEST_ASSERT_EQUAL(h, t->hour); TEST_ASSERT_EQUAL(mi, t->minute); TEST_ASSERT_EQUAL(s, t->second);
 }
 
 static void test_add() {
   kg_datetime_t t = { 2026, 10, 26, 18, 46, 23 };
-  kg_datetime_add_minutes(&t, 180); check(t, 2026, 10, 26, 21, 46, 23);
-  kg_datetime_add_minutes(&t, 180); check(t, 2026, 10, 27, 0, 46, 23);
-  kg_datetime_add_minutes(&t, -360); check(t, 2026, 10, 26, 18, 46, 23);
-  t = { 2026, 12, 31, 22, 30, 0 };
-  kg_datetime_add_minutes(&t, 90); check(t, 2027, 1, 1, 0, 0, 0);
-  t = { 2027, 1, 1, 0, 10, 5 };
-  kg_datetime_add_minutes(&t, -15); check(t, 2026, 12, 31, 23, 55, 5);
+  kg_datetime_add_minutes(&t, 180); check(&t, 2026, 10, 26, 21, 46, 23);
+  kg_datetime_add_minutes(&t, 180); check(&t, 2026, 10, 27, 0, 46, 23);
+  kg_datetime_add_minutes(&t, -360); check(&t, 2026, 10, 26, 18, 46, 23);
+  t = (kg_datetime_t) { 2026, 12, 31, 22, 30, 0 };
+  kg_datetime_add_minutes(&t, 90); check(&t, 2027, 1, 1, 0, 0, 0);
+  t = (kg_datetime_t) { 2027, 1, 1, 0, 10, 5 };
+  kg_datetime_add_minutes(&t, -15); check(&t, 2026, 12, 31, 23, 55, 5);
   // leap years
-  t = { 2028, 2, 28, 23, 0, 0 };
-  kg_datetime_add_minutes(&t, 60); check(t, 2028, 2, 29, 0, 0, 0);
-  t = { 2027, 2, 28, 23, 0, 0 };
-  kg_datetime_add_minutes(&t, 60); check(t, 2027, 3, 1, 0, 0, 0);
-  t = { 2028, 3, 1, 1, 0, 0 };
-  kg_datetime_add_minutes(&t, -720); check(t, 2028, 2, 29, 13, 0, 0);
-  t = { 2000, 3, 1, 0, 0, 0 };
-  kg_datetime_add_minutes(&t, -1); check(t, 2000, 2, 29, 23, 59, 0);
-  t = { 2026, 5, 10, 12, 0, 0 };
-  kg_datetime_add_minutes(&t, 0); check(t, 2026, 5, 10, 12, 0, 0);
+  t = (kg_datetime_t) { 2028, 2, 28, 23, 0, 0 };
+  kg_datetime_add_minutes(&t, 60); check(&t, 2028, 2, 29, 0, 0, 0);
+  t = (kg_datetime_t) { 2027, 2, 28, 23, 0, 0 };
+  kg_datetime_add_minutes(&t, 60); check(&t, 2027, 3, 1, 0, 0, 0);
+  t = (kg_datetime_t) { 2028, 3, 1, 1, 0, 0 };
+  kg_datetime_add_minutes(&t, -720); check(&t, 2028, 2, 29, 13, 0, 0);
+  t = (kg_datetime_t) { 2000, 3, 1, 0, 0, 0 };
+  kg_datetime_add_minutes(&t, -1); check(&t, 2000, 2, 29, 23, 59, 0);
+  t = (kg_datetime_t) { 2026, 5, 10, 12, 0, 0 };
+  kg_datetime_add_minutes(&t, 0); check(&t, 2026, 5, 10, 12, 0, 0);
 }
 
 int main() {

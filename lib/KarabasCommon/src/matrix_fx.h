@@ -1,12 +1,17 @@
 #pragma once
 
 // Effects of the LED matrix (make_core "matrix": {"mode": "effect"}), drawn into a 16x8
-// buffer of KG_MX_* colors. Pure C++, no Arduino dependencies.
+// buffer of KG_MX_* colors. Pure C, no Arduino dependencies.
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #include "kg_matrix.h"
 #include "matrix_style.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define MATRIX_FX_DRIVES 8  // image slots (MAX_FILE_SLOTS of the firmware)
 #define MATRIX_FX_STARS 12
@@ -22,7 +27,7 @@ typedef struct {
 typedef struct {
   uint8_t hour, minute, second;
   matrix_fx_drive_t drive[MATRIX_FX_DRIVES];
-  const kg_mx_style_t *style; // the clock of karabas.ini [matrix]; nullptr: the default look
+  const kg_mx_style_t *style; // the clock of karabas.ini [matrix]; NULL: the default look
 } matrix_fx_input_t;
 
 typedef struct {
@@ -68,3 +73,7 @@ void matrix_fx_life_next(const uint16_t *cells, uint16_t *out);
 
 // a sine of a / 256 of a turn, -127..127
 int8_t matrix_fx_sin8(uint8_t a);
+
+#ifdef __cplusplus
+}
+#endif

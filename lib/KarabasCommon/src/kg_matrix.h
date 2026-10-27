@@ -1,7 +1,7 @@
 #pragma once
 
 // LED matrix settings of a core: the 256-byte block at FILE_POS_MATRIX of the core file
-// (make_core "matrix"). Pure C++, no Arduino dependencies.
+// (make_core "matrix"). Pure C, no Arduino dependencies.
 //
 // +0 mode, +1 color, +2 speed (frames of 20 ms per step, 0 = the mode's default),
 // +3 repeat (scroll passes / animation loops, 0 = forever), +4 then (mode after the repeats),
@@ -10,8 +10,13 @@
 // the green one, 2 bytes per row, bit 7 of the first byte is x = 0.
 // Core files made before this block have zeros there (mode core).
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define KG_MATRIX_BLOCK_SIZE 256
 #define KG_MATRIX_TEXT_LEN 64
@@ -92,3 +97,7 @@ typedef struct {
 // Expand {name}, {build}, {time} (HH:MM), {date} (DD.MM.YYYY) of the text; an unknown
 // {...} stays as it is. Returns the length of out (truncated to size - 1).
 size_t kg_matrix_expand(const char *text, const kg_matrix_vars_t *vars, char *out, size_t size);
+
+#ifdef __cplusplus
+}
+#endif

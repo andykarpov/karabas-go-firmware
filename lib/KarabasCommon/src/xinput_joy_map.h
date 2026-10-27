@@ -1,5 +1,10 @@
 #pragma once
+#include <stdbool.h>
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 // XInput button word / triggers / left stick -> Karabas Sega protocol bits.
 // C and Z accept both shoulder and trigger inputs for M30 firmware variants.
@@ -19,3 +24,7 @@ inline uint16_t xinput_joy_map(uint16_t buttons, uint8_t lt, uint8_t rt, int16_t
   if (y > 16384) result |= 2;
   return result;
 }
+
+#ifdef __cplusplus
+}
+#endif

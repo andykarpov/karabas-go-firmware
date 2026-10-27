@@ -1,7 +1,7 @@
 #pragma once
 
 // Default mapping of a USB HID joystick / gamepad to Sega MD2 buttons, built from its HID
-// report descriptor, for pads without a drivers/*.ini. Pure C++, no Arduino dependencies.
+// report descriptor, for pads without a drivers/*.ini. Pure C, no Arduino dependencies.
 //
 // Only fields inside a top-level application collection Joystick, Gamepad or Multi-axis
 // controller (Generic Desktop) are used:
@@ -14,7 +14,12 @@
 //     SNES / PlayStation style pads (1 top, 2 right, 3 bottom, 4 left, 5 / 6 shoulders,
 //     7 / 8 second shoulders, 9 select, 10 start).
 
+#include <stdbool.h>
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define HID_AUTO_MAX_FIELDS 24
 
@@ -33,7 +38,7 @@
 #define HID_SC_Z      2048
 #define HID_SC_MODE   4096
 
-enum hid_auto_kind_e : uint8_t {
+enum hid_auto_kind_e {
   HID_AUTO_BUTTON, // non-zero -> btn
   HID_AUTO_AXIS_X,
   HID_AUTO_AXIS_Y,
@@ -66,3 +71,7 @@ bool hid_auto_map_has_report(const hid_auto_map_t *m, uint8_t report_id);
 // without the report id byte, report_id is that byte (0 if the device has no report ids).
 // Fields of other reports and fields beyond len are ignored.
 uint16_t hid_auto_map_report(const hid_auto_map_t *m, uint8_t report_id, const uint8_t *data, uint16_t len, uint16_t base);
+
+#ifdef __cplusplus
+}
+#endif

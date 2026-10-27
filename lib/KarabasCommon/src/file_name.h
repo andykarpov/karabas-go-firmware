@@ -1,6 +1,11 @@
 #pragma once
 
+#include <stdbool.h>
 #include <stddef.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 // File name helpers for the OSD file lists. The lists use the long names: exFAT has no 8.3
 // names, so FAT and exFAT cards work the same way.
@@ -18,3 +23,7 @@ void kg_short_name(const char *name, char *out, size_t width);
 // for any other name; kg_phys_name writes the name of a drive (out: at least 7 bytes).
 int kg_phys_drive(const char *name);
 void kg_phys_name(int drive, char *out);
+
+#ifdef __cplusplus
+}
+#endif

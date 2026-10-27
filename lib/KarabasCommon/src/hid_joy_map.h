@@ -1,6 +1,6 @@
 #pragma once
 
-// USB HID joystick driver mapping (drivers/*.ini). Pure C++, no Arduino dependencies.
+// USB HID joystick driver mapping (drivers/*.ini). Pure C, no Arduino dependencies.
 //
 // A button is mapped by one or more sources, separated by '|'. A source is
 // "pos,type,value[,arg]", pos being the byte in the report (after the report id byte):
@@ -12,12 +12,17 @@
 //   4  bit value (0..7) is clear
 // Example: up = 1,3,0,63|5,2,0 (stick up or hat up). Types 0 and 1 are the original format.
 
+#include <stdbool.h>
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define HID_JOY_BUTTONS 12
 #define HID_JOY_MAX_RULES 32
 
-enum hid_joy_type_e : uint8_t {
+enum hid_joy_type_e {
   HID_JOY_VALUE = 0,
   HID_JOY_BIT = 1,
   HID_JOY_HAT = 2,
@@ -54,3 +59,7 @@ bool hid_joy_accepts_report(const hid_joy_config_t *cfg, uint8_t report_id);
 // Map a raw HID report to sega button bits, starting from base (e.g. SC_CTL_ON).
 // Rules whose byte position is outside the report are ignored.
 uint16_t hid_joy_map_report(const hid_joy_config_t *cfg, const uint8_t *report, uint16_t len, uint16_t base);
+
+#ifdef __cplusplus
+}
+#endif

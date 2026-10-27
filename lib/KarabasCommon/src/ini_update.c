@@ -80,7 +80,7 @@ void kg_ini_update_line(kg_ini_update_t *u, const char *line) {
   }
 
   emit_blanks(u);
-  const char *eq = (*p == ';' || *p == '#') ? nullptr : strchr(p, '=');
+  const char *eq = (*p == ';' || *p == '#') ? NULL : strchr(p, '=');
   if (eq && u->section[0]) {
     for (uint8_t i = 0; i < u->count; i++) {
       kg_ini_item_t *it = &u->items[i];

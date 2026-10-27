@@ -83,7 +83,7 @@ bool hid_learn_detect(const hid_learn_rest_t *rest, uint8_t report_id, const uin
           // the other nibble (buttons) stays, so a whole axis byte moving is not a hat
           bool other_same = ((b ^ c) & (0xf0 >> shift)) == 0;
           if (bn >= 8 && cn <= 7 && other_same) {
-            *out = {0, (uint8_t) i, HID_JOY_HAT, cn, shift};
+            *out = (hid_joy_rule_t) {0, (uint8_t) i, HID_JOY_HAT, cn, shift};
             return true;
           }
         }
@@ -94,7 +94,7 @@ bool hid_learn_detect(const hid_learn_rest_t *rest, uint8_t report_id, const uin
         if (!centered && (d & (d - 1)) == 0) {
           uint8_t bit = 0;
           while (!((d >> bit) & 1)) bit++;
-          *out = {0, (uint8_t) i, (uint8_t) ((c & d) ? HID_JOY_BIT : HID_JOY_BIT_CLEAR), bit, 0};
+          *out = (hid_joy_rule_t) {0, (uint8_t) i, (uint8_t) ((c & d) ? HID_JOY_BIT : HID_JOY_BIT_CLEAR), bit, 0};
           return true;
         }
       }

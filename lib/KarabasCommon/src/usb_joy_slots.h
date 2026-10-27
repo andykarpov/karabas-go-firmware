@@ -1,42 +1,32 @@
 #pragma once
+#include <stdbool.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // Stable USB joystick ports, keyed by device/interface. Callers provide synchronization.
-template <unsigned N> class UsbJoySlots {
-  struct Slot { uint8_t address, instance; bool xinput; uint16_t buttons; } slots[N] = {};
-public:
-  bool set(uint8_t address, uint8_t instance, bool xinput, uint16_t buttons) {
-    if (!address) return false;
-    unsigned free = N;
-    for (unsigned i = 0; i < N; ++i) {
-      if (slots[i].address == address && slots[i].instance == instance && slots[i].xinput == xinput) {
-        slots[i].buttons = buttons;
-        return true;
-      }
-      if (!slots[i].address && free == N) free = i;
-    }
-    if (free == N) return false;
-    slots[free] = {address, instance, xinput, buttons};
-    return true;
-  }
-  void remove(uint8_t address, uint8_t instance, bool xinput) {
-    for (auto &s : slots)
-      if (s.address == address && s.instance == instance && s.xinput == xinput) s = {};
-  }
-  // the pad on port i; false if the port is free
-  bool get(unsigned i, uint8_t &address, uint8_t &instance, bool &xinput) const {
-    if (i >= N || !slots[i].address) return false;
-    address = slots[i].address;
-    instance = slots[i].instance;
-    xinput = slots[i].xinput;
-    return true;
-  }
-  uint8_t snapshot(uint16_t *buttons) const {
-    uint8_t count = 0;
-    for (unsigned i = 0; i < N; ++i) {
-      buttons[i] = slots[i].buttons;
-      if (slots[i].address) count = i + 1;
-    }
-    return count;
-  }
-};
+#define USB_JOY_SLOTS 2
+
+typedef struct {
+  uint8_t address, instance;
+  bool xinput;
+  uint16_t buttons;
+} usb_joy_slot_t;
+
+typedef struct {
+  usb_joy_slot_t slot[USB_JOY_SLOTS];
+} usb_joy_slots_t;
+
+// the buttons of a pad; a new pad takes the first free port. false if address is 0 or all are taken
+bool usb_joy_slots_set(usb_joy_slots_t *s, uint8_t address, uint8_t instance, bool xinput, uint16_t buttons);
+void usb_joy_slots_remove(usb_joy_slots_t *s, uint8_t address, uint8_t instance, bool xinput);
+// the pad on port i; false if the port is free
+bool usb_joy_slots_get(const usb_joy_slots_t *s, unsigned i, uint8_t *address, uint8_t *instance, bool *xinput);
+// the buttons of all ports; returns the number of ports up to the last one in use
+uint8_t usb_joy_slots_snapshot(const usb_joy_slots_t *s, uint16_t buttons[USB_JOY_SLOTS]);
+
+#ifdef __cplusplus
+}
+#endif

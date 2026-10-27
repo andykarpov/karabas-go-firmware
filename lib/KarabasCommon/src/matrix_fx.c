@@ -89,7 +89,7 @@ static void draw_digit(matrix_fx_t *fx, uint8_t d, uint8_t x0, uint8_t y0, uint8
 // the bottom row (red), a colon blinking between them, or a bar growing along the bottom row
 static void step_clock(matrix_fx_t *fx, const matrix_fx_input_t *t) {
   kg_mx_style_t def;
-  const kg_mx_style_t *st = t ? t->style : nullptr;
+  const kg_mx_style_t *st = t ? t->style : NULL;
   if (!st) { kg_mx_style_default(&def); st = &def; }
   uint8_t h = t ? t->hour : 0, m = t ? t->minute : 0, s = (t ? t->second : 0) % 60;
   uint8_t ch = kg_mx_color(st->opt[KG_MX_OPT_CLOCK_HOURS]), cm = kg_mx_color(st->opt[KG_MX_OPT_CLOCK_MINUTES]);
@@ -207,7 +207,7 @@ static void step_scanner(matrix_fx_t *fx) {
 static void step_rain(matrix_fx_t *fx) {
   fx->step++;
   for (uint8_t x = 0; x < KG_MATRIX_W; x++) {
-    int8_t &y = fx->drop[x];
+    int8_t y = fx->drop[x];
     if (y < 0) {
       uint32_t r = fx_rand(fx);
       if (r % 10 == 0) {
@@ -219,6 +219,7 @@ static void step_rain(matrix_fx_t *fx) {
       y++;
       if (y - 3 >= KG_MATRIX_H) y = -1; // the tail is gone too
     }
+    fx->drop[x] = y;
     if (y < 0) continue;
     for (int8_t i = 0; i < 4; i++) {
       int8_t ty = y - i;
@@ -268,8 +269,8 @@ static void step_stars(matrix_fx_t *fx) {
     } else {
       fx->star_x[i] -= speeds[l];
     }
-    uint8_t &p = fx->fb[fx->star_y[i]][fx->star_x[i] / 16];
-    if (colors[l] > p) p = colors[l];
+    uint8_t *p = &fx->fb[fx->star_y[i]][fx->star_x[i] / 16];
+    if (colors[l] > *p) *p = colors[l];
   }
 }
 
@@ -314,7 +315,7 @@ static void step_pong(matrix_fx_t *fx) {
 static void step_drive(matrix_fx_t *fx, const matrix_fx_input_t *in) {
   uint8_t slots[4], n = 0;
   for (uint8_t i = 0; i < MATRIX_FX_DRIVES; i++) {
-    const matrix_fx_drive_t *d = in ? &in->drive[i] : nullptr;
+    const matrix_fx_drive_t *d = in ? &in->drive[i] : NULL;
     if (d && (d->reads != fx->seen_reads[i] || d->writes != fx->seen_writes[i])) {
       fx->led_color[i] = d->writes != fx->seen_writes[i] ? KG_MX_RED : KG_MX_GREEN;
       fx->led_steps[i] = 8;
