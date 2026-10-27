@@ -38,7 +38,7 @@ static uint8_t ft_core_page_size() {
 // the cores on a page of the menu on screen (Left / Right jump by it)
 static uint8_t page_size() { return has_ft ? ft_core_page_size() : core_page_size; }
 uint16_t rot = 0;
-ElapsedTimer autoload_timer;
+uint32_t autoload_timer = 0;
 bool autoload_enabled;
 uint32_t autoload_countdown;
 
@@ -271,7 +271,7 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
       ft.drawText(ft.width()/4+ft.width()/2-16-24, offset + pos*FT_CORE_STEP + 16, 28, colort, FT81x_OPT_CENTERY, "F\0");
     }
     if (autoload_enabled && i==core_sel) {
-      uint32_t diff = (autoload_timer.elapsed() < autoload_countdown * 1000) ? ceil((autoload_countdown * 1000 - autoload_timer.elapsed())/1000) : 0;
+      uint32_t diff = (ms_since(autoload_timer) < autoload_countdown * 1000) ? ceil((autoload_countdown * 1000 - ms_since(autoload_timer))/1000) : 0;
       ft.drawGauge(ft.width()/4+16+12, offset + pos*FT_CORE_STEP + 16, 12, colort, colorb, 0, 1, 1, diff, autoload_countdown);
     }
     pos++;
@@ -293,7 +293,7 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
   }
 
   if (autoload_enabled) {
-    uint32_t diff = (autoload_timer.elapsed() < autoload_countdown * 1000) ? ceil((autoload_countdown * 1000 - autoload_timer.elapsed())/1000) : 0;
+    uint32_t diff = (ms_since(autoload_timer) < autoload_countdown * 1000) ? ceil((autoload_countdown * 1000 - ms_since(autoload_timer))/1000) : 0;
     sprintf(b, "Autoloading core in %d s\0", diff);
     ft.drawText(ft.width()/2, ft.height()-20, 27, color_copyright, FT81x_OPT_CENTER, b);
   } else {
@@ -366,7 +366,7 @@ void app_core_browser_read_list() {
       autoload_enabled = true;
       autoload_countdown = hw_setup.autoload_timeout;
       core_sel = i;
-      autoload_timer.reset();
+      autoload_timer = ms_now();
     }
   }
 
@@ -562,7 +562,7 @@ void app_core_browser_tick() {
 
 void app_core_browser_on_time() {
   if (autoload_enabled) {
-    if (autoload_timer.elapsed() > autoload_countdown * 1000) {
+    if (ms_since(autoload_timer) > autoload_countdown * 1000) {
       autoload_enabled = false;
       char buf[sizeof(cores[0].filename)];
       strcpy(buf, cores[core_sel].filename); kg_trim(buf);

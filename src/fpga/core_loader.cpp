@@ -69,8 +69,8 @@ void core_ioctl_send(uint8_t slot, bool popup)
   uint8_t buf[512];
   uint64_t i = 0;
   int c;
-  ElapsedTimer send_timer;
-  send_timer.reset();
+  uint32_t send_timer = ms_now();
+  send_timer = ms_now();
   while (i < fsize && (c = file.read(buf, sizeof(buf))) > 0) {
     if (popup && i % 8192 == 0) {
       zxosd.loadingPopup(i, fsize);
@@ -89,7 +89,7 @@ void core_ioctl_send(uint8_t slot, bool popup)
   file.close();
   spi_send(CMD_IOCTL_STATE, 0, 0); // finish
   d_printf("Ioctl slot %d: %s, %lu bytes in %lu ms (%s)", slot, fname, (unsigned long) i,
-    (unsigned long) send_timer.elapsed(), link_burst_available() ? "burst" : "classic");
+    (unsigned long) ms_since(send_timer), link_burst_available() ? "burst" : "classic");
   d_println();
 
   if (popup) {
@@ -528,8 +528,8 @@ void read_roms(const char* filename) {
   if (roms_len > 0) {
     spi_send(CMD_ROMLOADER, 0, 1);
   }
-  ElapsedTimer rom_timer;
-  rom_timer.reset();
+  uint32_t rom_timer = ms_now();
+  rom_timer = ms_now();
   uint32_t rom_bytes = 0;
   uint32_t offset = 0;
   uint32_t rom_idx = 0;
@@ -613,7 +613,7 @@ void read_roms(const char* filename) {
   spi_send(CMD_ROMLOADER, 0, 0);
 
   if (rom_bytes > 0) {
-    d_printf("ROMs: %lu bytes in %lu ms (%s)", (unsigned long) rom_bytes, (unsigned long) rom_timer.elapsed(),
+    d_printf("ROMs: %lu bytes in %lu ms (%s)", (unsigned long) rom_bytes, (unsigned long) ms_since(rom_timer),
       link_burst_available() ? "burst" : "classic");
     d_println();
   }

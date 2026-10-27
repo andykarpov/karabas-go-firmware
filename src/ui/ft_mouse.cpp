@@ -47,8 +47,8 @@ static uint8_t hits_len;
 static int16_t px, py;      // the pointer
 static int32_t rx, ry;      // the remainders of the speed scaling
 static bool visible;
-static ElapsedTimer idle_timer;
-static ElapsedTimer frame_timer;
+static uint32_t idle_timer = 0;
+static uint32_t frame_timer = 0;
 static bool frame_pending;  // a move waits for its pointer frame
 static uint16_t frame_len;  // the kept frame, 0: none
 static uint8_t buttons;     // held
@@ -96,7 +96,7 @@ bool ft_mouse_poll(ft_mouse_event_t *ev) {
     int32_t dx = scale(m.dx, rx), dy = scale(m.dy, ry);
     bool was_visible = visible;
     if (dx || dy || m.pressed || m.wheel) {
-      idle_timer.reset();
+      idle_timer = ms_now();
       visible = true;
     }
     if (dx || dy) {
@@ -110,11 +110,11 @@ bool ft_mouse_poll(ft_mouse_event_t *ev) {
     ev->pressed = was_visible ? m.pressed : 0;
     ev->wheel = m.wheel > 0 ? 1 : m.wheel < 0 ? -1 : 0;
   }
-  if (visible && idle_timer.elapsed() >= HIDE_MS) {
+  if (visible && ms_since(idle_timer) >= HIDE_MS) {
     visible = false;
     frame_pending = true;
   }
-  if (frame_pending && frame_timer.elapsed() >= FRAME_MS) {
+  if (frame_pending && ms_since(frame_timer) >= FRAME_MS) {
     frame_pending = false;
     ev->moved = true;
   }
@@ -141,7 +141,7 @@ int16_t ft_hover() { return visible ? ft_hit_at(px, py) : FT_HIT_NONE; }
 
 static void draw_pointer() {
   if (visible) ft.drawBitmapARGB4(POINTER_OFFSET, px, py, POINTER_W, POINTER_H);
-  frame_timer.reset();
+  frame_timer = ms_now();
 }
 
 // hang marks: the FT steps inside the tick that draws

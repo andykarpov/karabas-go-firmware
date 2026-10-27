@@ -15,7 +15,7 @@
 #include "SdFat.h"
 #include "SegaController.h"
 #include "hid_app.h"
-#include "ElapsedTimer.h"
+#include "ms_time.h"
 #include "file.h"
 #include "EspSerial.h"
 #include "MultiMatrixDisplay.h"

@@ -25,7 +25,7 @@ The rewrite removes the workarounds that exist only because of the Arduino layer
 
 ## Starting point
 
-- `src/`: ~14.7k lines (without `bitmaps.h`), `lib/KarabasCommon`: ~2.5k, own libraries (`FT812`, `OSD`, `RTC`, `IniFile`, `PioSPI`, `EspSerial`, `SegaController`, `MultiMatrixDisplay`, `GyverMenuExt`, `ElapsedTimer`): ~4k. `lib/Pico-PIO-USB` is upstream 0.7.3 with our diagnostics (#59) and stays.
+- `src/`: ~14.7k lines (without `bitmaps.h`), `lib/KarabasCommon`: ~2.5k, own libraries (`FT812`, `OSD`, `RTC`, `IniFile`, `PioSPI`, `EspSerial`, `SegaController`, `MultiMatrixDisplay`, `GyverMenuExt`, `ElapsedTimer` (now `MsTime`)): ~4k. `lib/Pico-PIO-USB` is upstream 0.7.3 with our diagnostics (#59) and stays.
 - minig: 620 KB text, 138 KB bss.
 - `KarabasCommon` is C already in all but the file names (only `usb_joy_slots.h` has a class). The C++ in `src/` is `String` (~60 uses: paths, trim, extensions), ~24 lambdas (mostly `link_on` handlers), a little `std::` / `<algorithm>`, the library wrapper classes and `PrinterTrace`.
 

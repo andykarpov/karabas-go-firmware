@@ -20,8 +20,8 @@ static uint8_t result = ESP_UPD_IDLE;
 static const char *message;
 static uint8_t stage;       // KG_ESP_UPD_*
 static int error_stage;     // a negative +CIPUPDATE
-static ElapsedTimer stage_timer;
-static ElapsedTimer restart_timer;
+static uint32_t stage_timer = 0;
+static uint32_t restart_timer = 0;
 static char version[16];
 static bool restore;        // AT+RESTORE, not the update
 
@@ -36,7 +36,7 @@ static const char *const stage_text[] = {
 
 static void set_stage(uint8_t s) {
   stage = s;
-  stage_timer.reset();
+  stage_timer = ms_now();
   message = stage_text[s];
 }
 
@@ -64,7 +64,7 @@ static void go(uint8_t s) {
       if (restore) esp_at_start("AT+RESTORE", 5000, nullptr);
       else esp_at_start("AT+CIUPDATE", UPDATE_TIMEOUT_MS, on_update);
       break;
-    case S_RESTART: set_stage(KG_ESP_UPD_RESTART); restart_timer.reset(); break;
+    case S_RESTART: set_stage(KG_ESP_UPD_RESTART); restart_timer = ms_now(); break;
     case S_PING:    esp_at_start("AT", PING_MS, nullptr); break;
     case S_ECHO:    esp_at_start("ATE0", 1000, nullptr); break;
     case S_VERSION: version[0] = '\0'; esp_at_start("AT+GMR", 2000, on_version); break;
@@ -93,7 +93,7 @@ void esp_update_cancel() {
 uint8_t esp_update_poll() {
   if (step == S_IDLE) return result;
   if (step == S_RESTART) {
-    if (restart_timer.elapsed() >= RESTART_WAIT_MS) go(S_PING);
+    if (ms_since(restart_timer) >= RESTART_WAIT_MS) go(S_PING);
     return result;
   }
   uint8_t r = esp_at_poll();
@@ -106,7 +106,7 @@ uint8_t esp_update_poll() {
       break;
     case S_PING:
       if (r == ESP_AT_OK) go(S_ECHO);
-      else if (restart_timer.elapsed() >= PING_TIMEOUT_MS) finish(ESP_UPD_ERROR, "The module did not come back");
+      else if (ms_since(restart_timer) >= PING_TIMEOUT_MS) finish(ESP_UPD_ERROR, "The module did not come back");
       else go(S_PING);
       break;
     case S_ECHO:
@@ -120,7 +120,7 @@ uint8_t esp_update_poll() {
 }
 
 uint8_t esp_update_progress() {
-  return kg_esp_update_progress(stage, stage_timer.elapsed());
+  return kg_esp_update_progress(stage, ms_since(stage_timer));
 }
 
 const char *esp_update_message() {

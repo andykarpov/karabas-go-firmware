@@ -31,10 +31,10 @@ void diag_loop_core0() { diag_loop(diag[0]); }
 void diag_loop_core1() { diag_loop(diag[1]); }
 
 void diag_tick() {
-  static ElapsedTimer timer;
-  if (timer.elapsed() < DIAG_PERIOD_MS) return;
-  uint32_t elapsed = timer.elapsed();
-  timer.reset();
+  static uint32_t timer = 0;
+  if (ms_since(timer) < DIAG_PERIOD_MS) return;
+  uint32_t elapsed = ms_since(timer);
+  timer = ms_now();
 
   uint32_t loops0 = diag[0].loops, gap0 = diag[0].max_gap_us;
   uint32_t loops1 = diag[1].loops, gap1 = diag[1].max_gap_us;

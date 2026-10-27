@@ -16,7 +16,7 @@ static uint8_t step = S_IDLE;
 static uint8_t result = NTP_IDLE;
 static const char *message;
 static uint8_t tries;
-static ElapsedTimer wait_timer;
+static uint32_t wait_timer = 0;
 static char ssid[KG_WIFI_SSID_MAX + 1];
 static kg_datetime_t now;
 static bool got_time;
@@ -37,7 +37,7 @@ static void go(uint8_t s) {
   switch (s) {
     case S_JAP:  ssid[0] = '\0'; esp_at_start("AT+CWJAP?", 2000, on_jap); break;
     case S_CFG:  esp_at_start("AT+CIPSNTPCFG=1,0,\"pool.ntp.org\",\"time.google.com\"", 2000, nullptr); break;
-    case S_WAIT: wait_timer.reset(); break;
+    case S_WAIT: wait_timer = ms_now(); break;
     case S_TIME: got_time = false; esp_at_start("AT+CIPSNTPTIME?", 2000, on_time); break;
   }
 }
@@ -72,7 +72,7 @@ static void set_clock() {
 uint8_t ntp_sync_poll() {
   if (step == S_IDLE) return result;
   if (step == S_WAIT) {
-    if (wait_timer.elapsed() >= TIME_WAIT_MS) go(S_TIME);
+    if (ms_since(wait_timer) >= TIME_WAIT_MS) go(S_TIME);
     return result;
   }
   uint8_t r = esp_at_poll();

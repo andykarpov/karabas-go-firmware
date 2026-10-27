@@ -22,7 +22,7 @@ static unsigned long uart_rx_last = 0;
 static kg_at_parser_t at_parser;
 static char tx_buf[sizeof(at_parser.out)]; // bytes to forward to the core, one per rx period
 static uint8_t tx_len = 0, tx_pos = 0;
-static ElapsedTimer at_hold_timer;         // held bytes go to the core when the host goes quiet
+static uint32_t at_hold_timer = 0;         // held bytes go to the core when the host goes quiet
 #define AT_HOLD_TIMEOUT_MS 500
 static bool esp_mode = false;
 
@@ -141,14 +141,14 @@ static void esp_tick() {
   while (Serial.available() > 0 && esp_serial.availableForWrite() > (int) sizeof(at_parser.out)) {
     int c = Serial.read();
     if (c == -1) return;
-    at_hold_timer.reset();
+    at_hold_timer = ms_now();
     switch (kg_at_feed(&at_parser, (char) c)) {
       case KG_AT_PASS: esp_serial.write((const uint8_t *) at_parser.out, at_parser.out_len); break;
       case KG_AT_COMMAND: at_command(kg_at_arg(&at_parser)); return;
       default: break;
     }
   }
-  if (at_parser.len > 0 && at_hold_timer.elapsed() >= AT_HOLD_TIMEOUT_MS && kg_at_flush(&at_parser) > 0) {
+  if (at_parser.len > 0 && ms_since(at_hold_timer) >= AT_HOLD_TIMEOUT_MS && kg_at_flush(&at_parser) > 0) {
     esp_serial.write((const uint8_t *) at_parser.out, at_parser.out_len);
   }
 }
@@ -171,13 +171,13 @@ void serial_bridge_tick() {
     if (Serial.available() > 0) {
       int uart_rx = Serial.read();
       if (uart_rx == -1) return;
-      at_hold_timer.reset();
+      at_hold_timer = ms_now();
       switch (kg_at_feed(&at_parser, (char) uart_rx)) {
         case KG_AT_PASS: break;
         case KG_AT_COMMAND: at_command(kg_at_arg(&at_parser)); return;
         default: return;
       }
-    } else if (!(at_parser.len > 0 && at_hold_timer.elapsed() >= AT_HOLD_TIMEOUT_MS && kg_at_flush(&at_parser) > 0)) {
+    } else if (!(at_parser.len > 0 && ms_since(at_hold_timer) >= AT_HOLD_TIMEOUT_MS && kg_at_flush(&at_parser) > 0)) {
       return;
     }
     memcpy(tx_buf, at_parser.out, at_parser.out_len);

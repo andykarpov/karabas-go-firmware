@@ -38,7 +38,7 @@ static const char *const btn_names[HID_JOY_BUTTONS] = {"Up", "Down", "Left", "Ri
 
 static uint8_t state = ST_IDLE;
 static uint8_t btn;
-static ElapsedTimer timer;
+static uint32_t timer = 0;
 static uint32_t last_seq;
 static hid_capture_t rep;
 static hid_learn_rest_t rest;
@@ -53,7 +53,7 @@ static bool list_msg_ok;
 
 static void set_state(uint8_t s) {
   state = s;
-  timer.reset();
+  timer = ms_now();
 }
 
 static void draw_status(const char *line1, const char *line2 = "") {
@@ -297,8 +297,8 @@ void app_pad_mapper_tick() {
   switch (state) {
     case ST_LIST:
       // the pads come and go
-      if (timer.elapsed() >= LIST_REFRESH_MS) {
-        timer.reset();
+      if (ms_since(timer) >= LIST_REFRESH_MS) {
+        timer = ms_now();
         usb_pad_t now[2];
         usb_pads_get(now);
         if (memcmp(now, pads, sizeof(now)) != 0) {
@@ -312,12 +312,12 @@ void app_pad_mapper_tick() {
       if (fresh) { set_state(ST_SETTLE); draw(); }
       break;
     case ST_SETTLE:
-      if (timer.elapsed() >= SETTLE_MS) { hid_learn_rest_reset(&rest); set_state(ST_REST); }
+      if (ms_since(timer) >= SETTLE_MS) { hid_learn_rest_reset(&rest); set_state(ST_REST); }
       break;
     case ST_REST:
       if (fresh) hid_learn_rest_add(&rest, rep.report_id, rep.data, rep.len);
       // a pad may only report on changes: the last report is the idle one then
-      if (timer.elapsed() >= REST_MS) {
+      if (ms_since(timer) >= REST_MS) {
         if (rest.len == 0) hid_learn_rest_add(&rest, rep.report_id, rep.data, rep.len);
         btn = 0;
         set_state(ST_PRESS);
@@ -329,12 +329,12 @@ void app_pad_mapper_tick() {
         mapped[btn] = true;
         set_state(ST_RELEASE);
         draw();
-      } else if (timer.elapsed() >= PRESS_TIMEOUT_MS) {
+      } else if (ms_since(timer) >= PRESS_TIMEOUT_MS) {
         next_button(); // skip
       }
       break;
     case ST_RELEASE:
-      if ((fresh && hid_learn_is_rest(&rest, rep.report_id, rep.data, rep.len)) || timer.elapsed() >= RELEASE_TIMEOUT_MS) {
+      if ((fresh && hid_learn_is_rest(&rest, rep.report_id, rep.data, rep.len)) || ms_since(timer) >= RELEASE_TIMEOUT_MS) {
         next_button();
       }
       break;

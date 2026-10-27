@@ -121,7 +121,7 @@ void app_file_loader_read_list(bool forceIndex = false) {
           // hide osd
           if (!is_osd_hiding) {
             is_osd_hiding = true;
-            hide_timer.reset();
+            hide_timer = ms_now();
             zxosd.hideMenu();
           }
       }
@@ -290,8 +290,8 @@ void app_file_loader_send_file(uint16_t file_id) {
   
 uint32_t cnt = 0;
 uint32_t c1 = 0;
-  ElapsedTimer send_timer;
-  send_timer.reset();
+  uint32_t send_timer = ms_now();
+  send_timer = ms_now();
   uint32_t crc = KG_CRC32_INIT; // debug: compare with the crc32 of the file on a pc
 
   while((c = file1.read(buf, sizeof(buf))) > 0) {
@@ -317,7 +317,7 @@ uint32_t c1 = 0;
   spi_bus_unlock();
 
   file1.close();
-  d_printf("Sent %u bytes in %lu ms (%s), crc32 %08x", cnt, (unsigned long) send_timer.elapsed(),
+  d_printf("Sent %u bytes in %lu ms (%s), crc32 %08x", cnt, (unsigned long) ms_since(send_timer),
     link_burst_available() ? "burst" : "classic", kg_crc32_final(crc)); d_println();
   delay(100);
 
@@ -377,7 +377,7 @@ void app_file_loader_on_keyboard()
           // hide osd
           if (!is_osd_hiding) {
             is_osd_hiding = true;
-            hide_timer.reset();
+            hide_timer = ms_now();
             zxosd.hideMenu();
           }
         }

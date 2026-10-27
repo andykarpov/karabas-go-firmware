@@ -22,13 +22,13 @@ volatile bool is_osd = false;       // also read by the input task
 volatile bool is_osd_hiding = false;
 bool need_redraw = false;
 bool has_ft = false;
-ElapsedTimer hide_timer;
+uint32_t hide_timer = 0;
 uint8_t osd_state;
 uint8_t osd_return_state;
 bool ui_repeat = false;
 
 static bool is_popup_hiding = false;
-static ElapsedTimer popup_timer;
+static uint32_t popup_timer = 0;
 static uint8_t osd_prev_state = state_main;
 
 typedef struct {
@@ -84,7 +84,7 @@ void ui_on_keyboard() {
 // show a popup and hide it after 500 ms
 void ui_popup_start(uint8_t i) {
   is_popup_hiding = true;
-  popup_timer.reset();
+  popup_timer = ms_now();
   zxosd.showPopup(i);
 }
 
@@ -95,13 +95,13 @@ void ui_tick() {
 
   // set is_osd off after 200ms of real switching off 
   // to avoid esc keypress passes to the host
-  if (is_osd_hiding && hide_timer.elapsed() >= 200) {
+  if (is_osd_hiding && ms_since(hide_timer) >= 200) {
     is_osd = false;
     is_osd_hiding = false;
   }
 
   // hide popup after 500 ms
-  if (is_popup_hiding && popup_timer.elapsed() >= 500) {
+  if (is_popup_hiding && ms_since(popup_timer) >= 500) {
     is_popup_hiding = false;
     zxosd.hidePopup();
     osd_handle(true); // reinit osd

@@ -67,7 +67,7 @@ enum { B_UP, B_DOWN, B_LEFT, B_RIGHT, B_A, B_B, B_C, B_X, B_Y, B_Z, B_START, B_M
 static uint8_t state = ST_LIST;
 static uint8_t btn;
 static int8_t last_btn = -1; // the button learned last, shown under the pad
-static ElapsedTimer timer;
+static uint32_t timer = 0;
 static uint32_t last_seq;
 static hid_capture_t rep;
 static hid_learn_rest_t rest;
@@ -85,12 +85,12 @@ static const char *list_msg;
 static bool list_msg_ok;
 static uint16_t test_joy[2]; // the test: the buttons held on each port
 static uint8_t draw_port;    // the port whose pad is drawn
-static ElapsedTimer test_exit; // how long Start+Mode is held
+static uint32_t test_exit = 0; // how long Start+Mode is held
 static bool joy_released = true; // after the test: the pad keys count again once all are released
 
 static void set_state(uint8_t s) {
   state = s;
-  timer.reset();
+  timer = ms_now();
   dirty = true;
 }
 
@@ -121,7 +121,7 @@ static void build_cfg() {
 static void start_test() {
   test_joy[0] = test_joy[1] = 0;
   list_msg = nullptr;
-  test_exit.reset();
+  test_exit = ms_now();
   set_state(ST_TEST);
 }
 
@@ -279,7 +279,7 @@ static void draw_mapper(const ft_page_ctx_t &c) {
       break;
     case ST_PRESS:
       snprintf(line1, sizeof(line1), "Press %s", btn_names[btn]);
-      snprintf(line2, sizeof(line2), "Skipped in %lu s", (unsigned long) ((PRESS_TIMEOUT_MS - min((uint32_t) timer.elapsed(), (uint32_t) PRESS_TIMEOUT_MS) + 999) / 1000));
+      snprintf(line2, sizeof(line2), "Skipped in %lu s", (unsigned long) ((PRESS_TIMEOUT_MS - min((uint32_t) ms_since(timer), (uint32_t) PRESS_TIMEOUT_MS) + 999) / 1000));
       break;
     case ST_RELEASE:
       snprintf(line1, sizeof(line1), "Release %s", btn_names[btn]);
@@ -393,8 +393,8 @@ static bool tick() {
   if (!joy_released && (joyL | joyR) == 0) joy_released = true;
   if (state == ST_LIST || state == ST_TEST) {
     // the pads come and go
-    if (timer.elapsed() >= LIST_REFRESH_MS) {
-      timer.reset();
+    if (ms_since(timer) >= LIST_REFRESH_MS) {
+      timer = ms_now();
       usb_pad_t now[2];
       usb_pads_get(now);
       if (memcmp(now, pads, sizeof(now)) != 0) {
@@ -407,8 +407,8 @@ static bool tick() {
   if (state == ST_TEST) {
     uint16_t l = joyL, r = joyR;
     if (l != test_joy[0] || r != test_joy[1]) { test_joy[0] = l; test_joy[1] = r; dirty = true; }
-    if ((l & TEST_EXIT) != TEST_EXIT && (r & TEST_EXIT) != TEST_EXIT) test_exit.reset();
-    else if (test_exit.elapsed() >= TEST_EXIT_MS) stop_test();
+    if ((l & TEST_EXIT) != TEST_EXIT && (r & TEST_EXIT) != TEST_EXIT) test_exit = ms_now();
+    else if (ms_since(test_exit) >= TEST_EXIT_MS) stop_test();
   } else if (state != ST_LIST) {
     bool fresh = hid_capture_get(&rep) && rep.seq != last_seq;
     if (fresh) last_seq = rep.seq;
@@ -418,12 +418,12 @@ static bool tick() {
         if (fresh) set_state(ST_SETTLE);
         break;
       case ST_SETTLE:
-        if (timer.elapsed() >= SETTLE_MS) { hid_learn_rest_reset(&rest); state = ST_REST; timer.reset(); }
+        if (ms_since(timer) >= SETTLE_MS) { hid_learn_rest_reset(&rest); state = ST_REST; timer = ms_now(); }
         break;
       case ST_REST:
         if (fresh) hid_learn_rest_add(&rest, rep.report_id, rep.data, rep.len);
         // a pad may only report on changes: the last report is the idle one then
-        if (timer.elapsed() >= REST_MS) {
+        if (ms_since(timer) >= REST_MS) {
           if (rest.len == 0) hid_learn_rest_add(&rest, rep.report_id, rep.data, rep.len);
           btn = 0;
           set_state(ST_PRESS);
@@ -434,12 +434,12 @@ static bool tick() {
           mapped[btn] = true;
           last_btn = btn;
           set_state(ST_RELEASE);
-        } else if (timer.elapsed() >= PRESS_TIMEOUT_MS) {
+        } else if (ms_since(timer) >= PRESS_TIMEOUT_MS) {
           next_button(); // skip
         }
         break;
       case ST_RELEASE:
-        if ((fresh && hid_learn_is_rest(&rest, rep.report_id, rep.data, rep.len)) || timer.elapsed() >= RELEASE_TIMEOUT_MS) {
+        if ((fresh && hid_learn_is_rest(&rest, rep.report_id, rep.data, rep.len)) || ms_since(timer) >= RELEASE_TIMEOUT_MS) {
           next_button();
         }
         break;

@@ -70,7 +70,7 @@ static void osd_toggle() {
     zxosd.showMenu();
   } else if (!is_osd_hiding) {
     is_osd_hiding = true;
-    hide_timer.reset();
+    hide_timer = ms_now();
     zxosd.hideMenu();
   }
 }
@@ -114,26 +114,26 @@ static void btn_run(uint8_t i, uint8_t action) {
 void input_tick_buttons() {
   static bool state[CORE_BUTTONS];
   static bool held[CORE_BUTTONS];   // the hold action ran: the release does nothing
-  static ElapsedTimer debounce[CORE_BUTTONS], pressed_for[CORE_BUTTONS];
+  static uint32_t debounce[CORE_BUTTONS] = {}, pressed_for[CORE_BUTTONS] = {};
 
   for (uint8_t i=0; i<CORE_BUTTONS; i++) {
     const core_btn_t &b = core.btn[i];
     bool pressed = btn_read(i);
     if (pressed == state[i]) {
-      debounce[i].reset();
-      if (pressed && b.hold != BTN_ACTION_NONE && !held[i] && pressed_for[i].elapsed() >= b.hold_ms) {
+      debounce[i] = ms_now();
+      if (pressed && b.hold != BTN_ACTION_NONE && !held[i] && ms_since(pressed_for[i]) >= b.hold_ms) {
         held[i] = true;
         btn_run(i, b.hold);
       }
       continue;
     }
-    if (debounce[i].elapsed() < BTN_DEBOUNCE_MS) continue;
+    if (ms_since(debounce[i]) < BTN_DEBOUNCE_MS) continue;
 
     state[i] = pressed;
     d_printf("Button %u: %s", i+1, pressed ? "on" : "off"); d_println();
     if (pressed) {
       held[i] = false;
-      pressed_for[i].reset();
+      pressed_for[i] = ms_now();
     }
     if (b.press == BTN_ACTION_CORE) {
       spi_send(CMD_BTN, i, pressed);
@@ -212,15 +212,15 @@ void input_tick_repeat() {
   // a held joystick direction repeats in the OSD like a held key
   static uint16_t joy_held = 0;
   static bool joy_repeating = false;
-  static ElapsedTimer joy_timer;
+  static uint32_t joy_timer = 0;
   uint16_t dirs = is_osd && ui_joy_repeats() ? (joyL | joyR) & JOY_DIRS : 0;
   if (dirs != joy_held) {
     joy_held = dirs;
     joy_repeating = false;
-    joy_timer.reset();
-  } else if (dirs && joy_timer.elapsed() >= (joy_repeating ? JOY_REPEAT_MS : JOY_REPEAT_DELAY_MS)) {
+    joy_timer = ms_now();
+  } else if (dirs && ms_since(joy_timer) >= (joy_repeating ? JOY_REPEAT_MS : JOY_REPEAT_DELAY_MS)) {
     joy_repeating = true;
-    joy_timer.reset();
+    joy_timer = ms_now();
     ui_repeat = true;
     on_keyboard();
     ui_repeat = false;

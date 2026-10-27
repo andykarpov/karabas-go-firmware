@@ -15,7 +15,7 @@ static Adafruit_USBD_MSC usb_msc;
 static bool expose_msc = false;
 static uint8_t card = 1;
 static bool failed = false;
-static ElapsedTimer failed_timer;
+static uint32_t failed_timer = 0;
 // The reboot after an eject waits until the host lets the device go (unmounted or suspended:
 // Windows "Safely Remove" ends with the port disabled), or MSC_EJECT_REBOOT_MS (Linux, the
 // Eject of the drive in Explorer). Gone at once, the device hung the Windows 10 removal (msc2).
@@ -23,7 +23,7 @@ static volatile bool ejected = false;   // set by the USBD task
 static volatile uint32_t eject_ms = 0;
 static volatile bool host_gone = false; // the host let the device go after the eject (USBD task)
 static bool msc_blink = false;
-static ElapsedTimer msc_blink_timer;
+static uint32_t msc_blink_timer = 0;
 
 int32_t msc_read_cb_sd (uint32_t lba, void* buffer, uint32_t bufsize);
 int32_t msc_write_cb_sd (uint32_t lba, uint8_t* buffer, uint32_t bufsize);
@@ -68,7 +68,7 @@ void msc_start() {
     if (!sd2_begin()) {
       d_println("MSC: no second SD card");
       failed = true;
-      failed_timer.reset();
+      failed_timer = ms_now();
       return;
     }
     block_count = sd2_sector_count();
@@ -100,17 +100,17 @@ bool msc_tick() {
     d_flush();
     rp2040.reboot();
   }
-  if (failed && failed_timer.elapsed() >= MSC_FAILED_REBOOT_MS) {
+  if (failed && ms_since(failed_timer) >= MSC_FAILED_REBOOT_MS) {
     rp2040.reboot();
   }
 
 #if ENABLE_MSC
   if (expose_msc) {
 
-    if (msc_blink_timer.elapsed() >= 200) {
+    if (ms_since(msc_blink_timer) >= 200) {
           msc_blink = !msc_blink;
         led_write(1, msc_blink);
-        msc_blink_timer.reset();
+        msc_blink_timer = ms_now();
     }
 
     // do not process other loop things until exit from msc mode

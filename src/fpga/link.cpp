@@ -257,8 +257,8 @@ bool link_caps_query() {
   // reset (a pll that has not locked yet, LCK_cycle:NoWait), and the frames sent then are lost.
   // So the query (protocol version 1) and its polls go again until the core answers; the answer
   // comes in the reply bytes of a later transfer. Old cores never answer: they cost the timeout.
-  ElapsedTimer timer;
-  timer.reset();
+  uint32_t timer = ms_now();
+  timer = ms_now();
   uint32_t tries = 0;
   do {
     tries++;
@@ -266,14 +266,14 @@ bool link_caps_query() {
     for (uint8_t i=0; i<CAPS_QUERY_POLLS && rx[0] != CMD_CAPS; i++) {
       spi_xfer(CMD_NOP, 0, 0, rx);
     }
-  } while (rx[0] != CMD_CAPS && timer.elapsed() < CAPS_READY_TIMEOUT_MS);
+  } while (rx[0] != CMD_CAPS && ms_since(timer) < CAPS_READY_TIMEOUT_MS);
 
   if (rx[0] != CMD_CAPS) {
-    d_printf("FPGA caps: no answer in %lu ms (classic link)", (unsigned long) timer.elapsed()); d_println();
+    d_printf("FPGA caps: no answer in %lu ms (classic link)", (unsigned long) ms_since(timer)); d_println();
     return false;
   }
   d_printf("FPGA caps: %02x, burst max %u MHz, core answered after %lu ms (%lu queries)", rx[1], rx[2],
-    (unsigned long) timer.elapsed(), (unsigned long) tries); d_println();
+    (unsigned long) ms_since(timer), (unsigned long) tries); d_println();
   core_caps = rx[1];
   burst_caps = rx[1];
   burst_mhz = rx[2];

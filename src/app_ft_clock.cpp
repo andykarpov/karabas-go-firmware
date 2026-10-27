@@ -37,7 +37,7 @@ static uint8_t focus;
 static const char *message;
 static bool message_ok;
 static bool message_busy; // the NTP sync runs
-static ElapsedTimer message_timer;
+static uint32_t message_timer = 0;
 static int16_t tz; // the time zone of the page, minutes
 
 // the fields not edited from the RTC, the cursor stays
@@ -176,7 +176,7 @@ static void set_clock() {
   edited[F_DATE] = edited[F_TIME] = false;
   message = "The clock is set";
   message_ok = true;
-  message_timer.reset();
+  message_timer = ms_now();
 }
 
 static void sync_clock() {
@@ -196,10 +196,10 @@ static bool tick() {
     message = ntp_sync_message();
     message_ok = r == NTP_OK;
     message_busy = false;
-    message_timer.reset();
+    message_timer = ms_now();
     return true;
   }
-  if (!message || !message_ok || message_timer.elapsed() < MESSAGE_MS) return false;
+  if (!message || !message_ok || ms_since(message_timer) < MESSAGE_MS) return false;
   message = nullptr;
   return true;
 }
