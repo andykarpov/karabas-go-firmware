@@ -6,11 +6,10 @@
  version 2 as published by the Free Software Foundation.
  */
 
-#include <SPI.h>
-#include <RTClib.h>
 #include <RTC.h>
 #include <Arduino.h>
-#include <Wire.h>
+#include "ds3231.h"
+#include "eeprom24.h"
 
 // karabas: the I2C bus is shared between tasks; the firmware provides a recursive lock
 // (src/periph/i2c_bus.cpp). It is held only around the I2C calls, never around action()
@@ -36,22 +35,20 @@ void RTC::begin(spi_cb act, osd_cb evt)
 
   I2cHold i2c;
 
-  // init eeprom
-  eeprom.setMemoryType(8);
-  has_eeprom = eeprom.begin();
+  // init eeprom (24C08)
+  has_eeprom = eeprom24_present();
 
   // callbacks
   action = act;
   event = evt;
 
-  has_clock = rtc_clock.begin(&Wire);
+  has_clock = ds3231_present();
 
-  if (rtc_clock.lostPower()) {
-    DateTime now = rtc_clock.now();
-    if (now.isValid()) {
-      rtc_clock.adjust(now); // this will flip the OSF bit also
-    } else {
-      rtc_clock.adjust(DateTime(F(__DATE__), F(__TIME__)));
+  if (has_clock && ds3231_lost_power()) {
+    // keep a time that still reads as one (this clears OSF), else the build time
+    kg_datetime_t t;
+    if (ds3231_read(&t) || kg_datetime_parse_build(__DATE__, __TIME__, &t)) {
+      ds3231_write(&t);
     }
   }
   is_started = true;
@@ -67,11 +64,27 @@ bool RTC::hasClock()
   return has_clock;
 }
 
-bool RTC::now(DateTime &dt)
+bool RTC::now(kg_datetime_t &dt)
 {
   if (!has_clock || rtc_month == 0) return false; // no clock or not read yet
-  dt = DateTime(2000 + rtc_year, rtc_month, rtc_day, rtc_hours, rtc_minutes, rtc_seconds);
+  dt = (kg_datetime_t) { 2000 + rtc_year, rtc_month, rtc_day, rtc_hours, rtc_minutes, rtc_seconds };
   return true;
+}
+
+void RTC::adjust()
+{
+  kg_datetime_t t = { 2000 + rtc_year, rtc_month, rtc_day, rtc_hours, rtc_minutes, rtc_seconds };
+  // the core writes the registers one by one: a date that does not exist yet waits for the rest
+  if (!has_clock || !kg_datetime_valid(&t)) return;
+  I2cHold i2c;
+  ds3231_write(&t);
+}
+
+// the time from the clock chip into the fields; false if it could not be read
+static bool read_clock(bool has_clock, kg_datetime_t &t)
+{
+  I2cHold i2c;
+  return has_clock && ds3231_read(&t);
 }
 
 void RTC::handle()
@@ -81,18 +94,17 @@ void RTC::handle()
   // read time from rtc
   if (n - tr >= 500) {
 
-    DateTime now;
-    { I2cHold i2c; now = rtc_clock.now(); }
+    kg_datetime_t now;
     // keep the last good time if the rtc read failed
-    if (now.isValid()) {
-      rtc_year = get_year(now.year());
-      rtc_month = now.month();
-      rtc_day = now.day();
-      rtc_week = now.dayOfTheWeek();
+    if (read_clock(has_clock, now)) {
+      rtc_year = get_year(now.year);
+      rtc_month = now.month;
+      rtc_day = now.day;
+      rtc_week = kg_datetime_weekday(&now);
 
-      rtc_hours = now.hour();
-      rtc_minutes = now.minute();
-      rtc_seconds = now.second();
+      rtc_hours = now.hour;
+      rtc_minutes = now.minute;
+      rtc_seconds = now.second;
     }
 
     // a time written by the core but not yet set: do not send the old one over it
@@ -115,9 +127,7 @@ void RTC::handle()
 }
 
 void RTC::save() {
-  I2cHold i2c;
-  rtc_clock.adjust(DateTime(2000 + rtc_year, rtc_month, rtc_day, rtc_hours, rtc_minutes, rtc_seconds));
-  // todo: set dow
+  adjust(); // the day of the week comes from the date
 }
 
 void RTC::send(uint8_t reg, uint8_t data) {
@@ -205,7 +215,7 @@ void RTC::msm_time_regs(uint8_t *regs) {
     regs[2 * i] = v[i] % 10;
     regs[2 * i + 1] = (v[i] / 10) % 10;
   }
-  regs[12] = rtc_week % 7; // 0 = sunday, as RTClib
+  regs[12] = rtc_week % 7; // 0 = sunday
 }
 
 void RTC::msm_commit() {
@@ -222,10 +232,7 @@ void RTC::msm_commit() {
   }
   rtc_seconds = s; rtc_minutes = mi; rtc_hours = h;
   rtc_day = d; rtc_month = mo; rtc_year = y;
-  {
-    I2cHold i2c;
-    rtc_clock.adjust(DateTime(2000 + rtc_year, rtc_month, rtc_day, rtc_hours, rtc_minutes, rtc_seconds));
-  }
+  adjust();
   readAll(); // the day of the week of the new date
   sendTime();
 }
@@ -273,9 +280,7 @@ void RTC::setData(uint8_t addr, uint8_t data) {
 
         // a write to a time register (0-6) sets the clock chip
         if (addr <= 6) {
-            DateTime now = DateTime(2000 + rtc_year, rtc_month, rtc_day, rtc_hours, rtc_minutes, rtc_seconds);
-            I2cHold i2c;
-            rtc_clock.adjust(now);
+            adjust();
         }
 
   } else {
@@ -325,26 +330,24 @@ void RTC::setData(uint8_t addr, uint8_t data) {
       }
 
       if (addr <= 9) {
-          DateTime now = DateTime(2000 + rtc_year, rtc_month, rtc_day, rtc_hours, rtc_minutes, rtc_seconds); 
-          I2cHold i2c;
-          rtc_clock.adjust(now);
+          adjust();
       }
   }
 }
 
 void RTC::readAll() {
 
-  DateTime now;
-  { I2cHold i2c; now = rtc_clock.now(); }
+  kg_datetime_t now;
+  if (read_clock(has_clock, now)) {
+    rtc_year = get_year(now.year);
+    rtc_month = now.month;
+    rtc_day = now.day;
+    rtc_week = kg_datetime_weekday(&now);
 
-  rtc_year = get_year(now.year());
-  rtc_month = now.month();
-  rtc_day = now.day();
-  rtc_week = now.dayOfTheWeek();
-
-  rtc_hours = now.hour();
-  rtc_minutes = now.minute();
-  rtc_seconds = now.second();
+    rtc_hours = now.hour;
+    rtc_minutes = now.minute;
+    rtc_seconds = now.second;
+  }
 
   // read is_bcd, is_24h
   uint8_t reg_b = getEepromReg(0xB);
@@ -424,7 +427,7 @@ uint8_t RTC::getEepromReg(uint8_t reg) {
   if (has_eeprom && eeprom_bank < 4) {
     uint32_t addr = (uint32_t)eeprom_bank*256 + reg;
     uint8_t data;
-    { I2cHold i2c; data = eeprom.read(addr); }
+    { I2cHold i2c; data = eeprom24_read(addr); }
     //Serial.printf("<== eeprom %08x = %02x", addr, data); Serial.println();
     return data;
   } else if (eeprom_bank >=4 && eeprom_bank < 255) {
@@ -439,7 +442,7 @@ void RTC::setEepromReg(uint8_t reg, uint8_t val) {
   if (has_eeprom && eeprom_bank < 4) {
     uint32_t addr = (uint32_t)eeprom_bank*256 + reg;
     //Serial.printf("==> eeprom %08x = %02x", addr, val); Serial.println();
-    { I2cHold i2c; eeprom.write(addr, val); }
+    { I2cHold i2c; eeprom24_write(addr, val); }
   } else if (eeprom_bank >= 4 && eeprom_bank < 255) {
     core_eeprom_set(reg, val);
   } else {
