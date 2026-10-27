@@ -33,7 +33,9 @@ bool ssd1306_begin(void) {
     0x2E,             // no scrolling
     0xAF,             // display on
   };
-  if (!i2c_dev_probe(SSD1306_ADDR)) return false;
+  // found by a NOP command: the I2C interface of the SSD1306 is write only
+  static const uint8_t nop[] = { 0xE3 };
+  if (!commands(nop, sizeof(nop))) return false;
   ssd1306_clear();
   return commands(init, sizeof(init));
 }
