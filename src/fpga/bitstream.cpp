@@ -134,9 +134,12 @@ uint32_t fpga_send(const char* filename) {
   pin_output(PIN_CONF_IO1);
   gpio_put(PIN_CONF_CLK, 0);
 
-  // pulse PROG_B
+  // pulse PROG_B: low for at least T_PROGRAM (500 ns on Spartan-6). Arduino's digitalWrite
+  // calls made the pulse long enough by themselves; gpio_put back to back is a few cycles,
+  // and the fpga then came up half reset (the OSD flags of the next core were ignored)
   gpio_put(PIN_CONF_PRG_B, 1);
   gpio_put(PIN_CONF_PRG_B, 0);
+  busy_wait_us_32(5);
   gpio_put(PIN_CONF_PRG_B, 1);
 
   // wait for INIT_B = 0
