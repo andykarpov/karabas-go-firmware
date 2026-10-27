@@ -81,69 +81,15 @@ static void app_core_select_phys(uint8_t pos, int drive) {
   core.osd_need_save = true;
 }
 
-uint8_t find_first_item() {
-  if (core.osd_len > 0) {
-    for (uint8_t i = 0; i < core.osd_len; i++) {
-      if (core.osd[i].options_len > 0 || core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[i].type == CORE_OSD_TYPE_FILELOADER) {
-        return i;
-      }
-    }
-  }
-  return 0;
+// the items of the core menu that take the cursor (options, file items; not the text rows)
+static bool item_active(uint16_t i, void *ctx) {
+  (void) ctx;
+  return core_osd_selectable(i);
 }
 
-uint8_t find_last_item() {
-  if (core.osd_len > 0) {
-    for (uint8_t i = core.osd_len-1; i >= 0; i--) {
-      if (core.osd[i].options_len > 0 || core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[i].type == CORE_OSD_TYPE_FILELOADER) {
-        return i;
-      }
-    }
-  }
-  return 0;
-}
-
-uint8_t find_prev_item() {
-  uint8_t first = find_first_item();
-  uint8_t last = find_last_item();
-
-  // border case with 0 or 1 items
-  if (first == last) {
-    return first;
-  }
-
-  // if there is a room to decrease - find a previous item
-  if (curr_osd_item > first) {
-    for (uint8_t i = curr_osd_item-1; i >= first; i--) {
-      if (core.osd[i].options_len > 0 || core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[i].type == CORE_OSD_TYPE_FILELOADER) {
-        return i;
-      }
-    }
-  }
-  // fallback - return last item with options
-  return last;
-}
-
-uint8_t find_next_item() {
-  uint8_t first = find_first_item();
-  uint8_t last = find_last_item();
-
-  // border case with 0 or 1 items
-  if (first == last) {
-    return last;
-  }
-
-  // if there is a room to increase - find a next item
-  if (curr_osd_item < last) {
-    for (uint8_t i = curr_osd_item+1; i <= last; i++) {
-      if (core.osd[i].options_len > 0 || core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[i].type == CORE_OSD_TYPE_FILELOADER) {
-        return i;
-      }
-    }
-  }
-  // fallback - return first item with options
-  return first;
-
+static uint8_t first_item() {
+  uint16_t i = kg_list_first_active(core.osd_len, item_active, NULL);
+  return i < core.osd_len ? i : 0;
 }
 
 void app_core_overlay(bool force)
@@ -160,7 +106,7 @@ void app_core_overlay(bool force)
   print_time();
 
   if (force) {
-    curr_osd_item = find_first_item();
+    curr_osd_item = first_item();
   }
   app_core_menu(APP_COREBROWSER_MENU_OFFSET);
 
@@ -184,59 +130,49 @@ void app_core_overlay(bool force)
   osd_update();
 }
 
+// the value of a core menu item as shown: the option, the image of a file item
+static void item_value(uint8_t i, char *out, size_t size) {
+  const core_osd_t *item = &core.osd[i];
+  if (item->type == CORE_OSD_TYPE_FILEMOUNTER || item->type == CORE_OSD_TYPE_FILELOADER) {
+    const core_file_slot_t *fs = &file_slots[item->slot_id];
+    int phys = kg_phys_drive(fs->filename);
+    if (fs->is_mounted && phys >= 0) snprintf(out, size, "Phys DF%d", phys);
+    else if (fs->is_mounted) kg_short_name(fs->filename, out, size - 1); // long names: "Princ~.trd"
+    else snprintf(out, size, "-NO IMAGE-");
+  } else {
+    snprintf(out, size, "%-10s", item->options[item->val].name);
+  }
+}
+
+// the rows of the core menu: a text row, or the name, the value (yellow, the cursor on it) and
+// the hotkey
 void app_core_menu(uint8_t vpos) {
   for (uint8_t i=0; i<core.osd_len; i++) {
-    const char *name = core.osd[i].name;
-    const char *hotkey = core.osd[i].hotkey;
+    const core_osd_t *item = &core.osd[i];
+    uint8_t y = vpos + i;
     char text[33];
-    osd_set_pos(0, i+vpos);
-    osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-    // text line (32 chars)
-    if (core.osd[i].type == CORE_OSD_TYPE_TEXT) {
-      snprintf(text, sizeof(text), "%s%s", name, hotkey);
-      osd_print(text);
-    // normal osd line (name, option, hotkey)
-    } else {
-      snprintf(text, 11, "%s", name);
-      osd_print(text);
-
-      char option[11];
-      if (core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[i].type == CORE_OSD_TYPE_FILELOADER) {
-        int phys = kg_phys_drive(file_slots[core.osd[i].slot_id].filename);
-        if (file_slots[core.osd[i].slot_id].is_mounted && phys >= 0) {
-          strcpy(option, phys ? "Phys DF1" : "Phys DF0");
-        } else if (file_slots[core.osd[i].slot_id].is_mounted) {
-          kg_short_name(file_slots[core.osd[i].slot_id].filename, option, 10); // long names: "Princ~.trd"
-        } else {
-          strcpy(option, "-NO IMAGE-");
-        }
-      } else {
-        snprintf(option, sizeof(option), "%-10s", core.osd[i].options[core.osd[i].val].name);
-      }
-      osd_set_pos(11, i+vpos);
-      if (curr_osd_item == i) {
-        osd_set_color(OSD_COLOR_BLACK, OSD_COLOR_YELLOW_I);
-      } else {
-        osd_set_color(OSD_COLOR_YELLOW_I, OSD_COLOR_BLACK);
-      }
-      osd_print(option);
-
+    if (item->type == CORE_OSD_TYPE_TEXT) {
+      snprintf(text, sizeof(text), "%s%s", item->name, item->hotkey);
+      ui_row(0, y, text, false);
+      continue;
+    }
+    snprintf(text, 11, "%s", item->name);
+    ui_row(0, y, text, false);
+    if (core_osd_selectable(i)) {
+      item_value(i, text, 11);
+      osd_set_color(curr_osd_item == i ? OSD_COLOR_BLACK : OSD_COLOR_YELLOW_I, curr_osd_item == i ? OSD_COLOR_YELLOW_I : OSD_COLOR_BLACK);
+      osd_set_pos(11, y); osd_print(text);
       osd_set_color(OSD_COLOR_CYAN_I, OSD_COLOR_BLACK);
-      if (core.osd[i].options_len > 0 || core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[i].type == CORE_OSD_TYPE_FILELOADER) {
-        osd_set_pos(22, i+vpos);
-        snprintf(text, 11, "%s", hotkey);
-        osd_print(text);
-      } else {
-        osd_set_pos(11, i+vpos);
-        osd_print(hotkey);
-      }
+      snprintf(text, 11, "%s", item->hotkey);
+      osd_set_pos(22, y); osd_print(text);
+    } else {
+      // a trigger: the hotkey where the value would be
+      osd_set_color(OSD_COLOR_CYAN_I, OSD_COLOR_BLACK);
+      osd_set_pos(11, y); osd_print(item->hotkey);
     }
   }
-  if (core.osd_len <= 19) osd_fill(0, 23, 31, 23, ' ');
-  if (core.osd_len <= 18) osd_fill(0, 22, 31, 22, ' ');
-  if (core.osd_len <= 17) osd_fill(0, 21, 31, 21, ' ');
-  // no osd_update() here: app_core_overlay() draws the footer over these rows first, else the
-  // cleared footer went out and came back on every move
+  // no osd_update() here: app_core_overlay() draws the footer first, else the cleared footer
+  // went out and came back on every move
 }
 
 void app_core_save(uint8_t pos)
@@ -365,13 +301,13 @@ void app_core_on_keyboard() {
 
         // down
         if (key == KEY_DOWN) {
-          curr_osd_item = find_next_item();
+          curr_osd_item = kg_list_step_active(curr_osd_item, core.osd_len, 1, item_active, NULL);
           need_redraw = true;
         }
 
         // up
         if (key == KEY_UP) {
-          curr_osd_item = find_prev_item();
+          curr_osd_item = kg_list_step_active(curr_osd_item, core.osd_len, -1, item_active, NULL);
           need_redraw = true;
         }
 
@@ -380,14 +316,7 @@ void app_core_on_keyboard() {
           if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILELOADER) {
             filebrowser_open();
           } else {
-            core.osd[curr_osd_item].val++; 
-            if (core.osd[curr_osd_item].val > core.osd[curr_osd_item].options_len-1) {
-              core.osd[curr_osd_item].val = 0;
-            }
-            core_send(curr_osd_item);
-            if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_SWITCH) {
-              core.osd_need_save = true;
-            }
+            core_osd_change(curr_osd_item, 1);
           }
           need_redraw = true;
         }
@@ -397,15 +326,7 @@ void app_core_on_keyboard() {
           if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILELOADER) {
             filebrowser_open();
           } else {
-            if (core.osd[curr_osd_item].val > 0) {
-              core.osd[curr_osd_item].val--;
-            } else {
-              core.osd[curr_osd_item].val = core.osd[curr_osd_item].options_len-1;
-            }
-            core_send(curr_osd_item);
-            if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_SWITCH) {
-              core.osd_need_save = true;
-            }
+            core_osd_change(curr_osd_item, -1);
           }
           need_redraw = true;
         }

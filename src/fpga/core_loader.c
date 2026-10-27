@@ -22,6 +22,20 @@ bool core_osd_phys(uint8_t pos, const char *filename) {
   return core_osd_can_phys(pos) && kg_phys_drive(filename) >= 0;
 }
 
+bool core_osd_selectable(uint8_t pos) {
+  return pos < core.osd_len && (core.osd[pos].options_len > 0 || core.osd[pos].type == CORE_OSD_TYPE_FILEMOUNTER ||
+         core.osd[pos].type == CORE_OSD_TYPE_FILELOADER);
+}
+
+void core_osd_change(uint8_t pos, int d) {
+  core_osd_t *item = &core.osd[pos];
+  if (item->options_len == 0) return;
+  if (d > 0) item->val = item->val + 1 < item->options_len ? item->val + 1 : 0;
+  else item->val = item->val > 0 ? item->val - 1 : item->options_len - 1;
+  core_send(pos);
+  if (item->type == CORE_OSD_TYPE_SWITCH) core.osd_need_save = true;
+}
+
 void core_send(uint8_t pos)
 {
   if (core.osd[pos].type == CORE_OSD_TYPE_FILEMOUNTER) {
