@@ -30,7 +30,7 @@
 
 #include <Arduino.h>
 #include <SPI.h>
-#include <ElapsedTimer.h>
+#include "ms_time.h"
 
 // Library headers
 // Project headers
@@ -257,7 +257,7 @@ private:
   uint8_t pin_cs;                    ///< CS pin for FT81x
   uint8_t pin_reset;                 ///< RESET pin for FT81x
   bool has_reset;
-  ElapsedTimer init_timer;
+  uint32_t init_timer = ms_now();
   bool slow_spi = false;             ///< SPI at FT81x_SPI_LOW_CLOCK_SPEED until the system clock runs
   uint32_t clock_hz = 0;             ///< system clock measured by the last init() (also when it failed)
   uint8_t init_attempts = 0;         ///< attempts used by the last init()

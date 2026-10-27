@@ -2,7 +2,7 @@
 
 #include <Arduino.h>
 #include "OSD.h"
-#include "ElapsedTimer.h"
+#include "ms_time.h"
 #include "Adafruit_TinyUSB.h"
 #include "SegaController.h"
 
@@ -14,7 +14,7 @@ extern volatile bool is_osd;
 extern volatile bool is_osd_hiding;
 extern bool need_redraw;
 extern bool has_ft;
-extern ElapsedTimer hide_timer;
+extern uint32_t hide_timer;
 extern uint8_t osd_state;
 extern uint8_t osd_return_state;
 // on_keyboard() runs for a held key or joystick direction, not a press (Left as back ignores it)

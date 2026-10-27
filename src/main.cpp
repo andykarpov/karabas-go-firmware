@@ -47,7 +47,7 @@ RTC zxrtc;
 volatile bool usb_host_ready = false;
 EspSerial esp_serial;
 
-static ElapsedTimer led_timer;
+static uint32_t led_timer = 0;
 
 #define USB_HOST_PIO pio1
 
@@ -235,9 +235,9 @@ static void karabas_loop()
   hang_mark(0x0500);
   ui_tick();
 
-  if (led_timer.elapsed() >= 100) {
+  if (ms_since(led_timer) >= 100) {
       led_write(0, true);
-      led_timer.reset();
+      led_timer = ms_now();
   }
 
   hang_mark(0x0600);
@@ -305,8 +305,8 @@ static void app_task(void *param) {
   debug_set_owner_task(xTaskGetCurrentTaskHandle());
   // let PIO-USB claim its PIO memory, state machines and DMA channel first:
   // the SD card driver (PioSPI) would otherwise take PIO memory that the usb programs need (all of pio1)
-  ElapsedTimer wait;
-  while (!usb_host_ready && wait.elapsed() < 2000) { delay(1); }
+  uint32_t wait = ms_now();
+  while (!usb_host_ready && ms_since(wait) < 2000) { delay(1); }
   karabas_setup();
   // usb / ps2 / joystick events are forwarded by their own task from now on
   input_task_start();

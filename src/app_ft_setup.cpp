@@ -90,7 +90,7 @@ static const char *error;
 static uint8_t mode_pick;  // the video mode picked on its row, tried on Enter
 static uint8_t mode_cur;   // the video mode the FT812 runs
 static uint8_t mode_old;   // the one to fall back to
-static ElapsedTimer mode_timer;
+static uint32_t mode_timer = 0;
 
 static uint8_t dialog;     // D_*
 static bool dialog_left;   // the left button is chosen
@@ -269,7 +269,7 @@ static void draw_dialog() {
   const char *left, *right;
   if (dialog == D_MODE) {
     snprintf(title, sizeof(title), "Keep %s?", FT812::modeName(mode_cur));
-    uint32_t t = mode_timer.elapsed() < MODE_TEST_S * 1000 ? (MODE_TEST_S * 1000 - mode_timer.elapsed() + 999) / 1000 : 0;
+    uint32_t t = ms_since(mode_timer) < MODE_TEST_S * 1000 ? (MODE_TEST_S * 1000 - ms_since(mode_timer) + 999) / 1000 : 0;
     snprintf(text, sizeof(text), "Going back in %lu s", (unsigned long) t);
     left = "Keep";
     right = "Revert";
@@ -404,7 +404,7 @@ static void mouse_tick();
 
 void app_ft_setup_tick() {
   if (!has_ft) return;
-  if (focus == F_DIALOG && dialog == D_MODE && mode_timer.elapsed() >= MODE_TEST_S * 1000) {
+  if (focus == F_DIALOG && dialog == D_MODE && ms_since(mode_timer) >= MODE_TEST_S * 1000) {
     set_mode(mode_old);
     focus = F_PAGE;
     app_ft_setup_draw();
@@ -480,7 +480,7 @@ static void enter_row() {
     focus = F_DIALOG;
     dialog = D_MODE;
     dialog_left = false;
-    mode_timer.reset();
+    mode_timer = ms_now();
   } else {
     change(1);
   }

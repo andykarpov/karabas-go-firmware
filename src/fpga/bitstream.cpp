@@ -45,8 +45,8 @@ static int claim_dma_channel() {
 
 static bool bitstream_send_pio(uint32_t total, uint32_t &sent) {
   // let core1 allocate its PIO-USB programs and DMA channel first
-  ElapsedTimer wait;
-  while (!usb_host_ready && wait.elapsed() < 500) { delay(1); }
+  uint32_t wait = ms_now();
+  while (!usb_host_ready && ms_since(wait) < 500) { delay(1); }
 
   PIOProgram pgm(&fpga_serial_program); // releases the SM when going out of scope
   PIO pio;
@@ -143,8 +143,8 @@ uint32_t fpga_send(const char* filename) {
   delay(10);
   bool init_ready = digitalRead(PIN_CONF_INIT_B); // the fpga has cleared its memory
 
-  ElapsedTimer timer;
-  timer.reset();
+  uint32_t timer = ms_now();
+  timer = ms_now();
 
   uint32_t sent = 0;
   hang_step(0x90);
@@ -161,7 +161,7 @@ uint32_t fpga_send(const char* filename) {
 
   hang_step(0x92);
   d_print(sent, DEC); d_println(" bytes done");
-  d_print("Elapsed time: "); d_print(timer.elapsed(), DEC); d_println(" ms");
+  d_print("Elapsed time: "); d_print(ms_since(timer), DEC); d_println(" ms");
   d_flush();
   hang_step(0x93);
 
@@ -170,10 +170,10 @@ uint32_t fpga_send(const char* filename) {
   }
 
   d_print("Waiting for CONF_DONE... ");
-  timer.reset();
+  timer = ms_now();
   hang_step(0x94);
   while(digitalRead(PIN_CONF_DONE) == LOW) {
-    if (timer.elapsed() >= 1000) {
+    if (ms_since(timer) >= 1000) {
       // INIT_B low after the bitstream: a CRC error
       halt(!init_ready ? "FPGA configuration failed: CONF_DONE timeout, INIT_B low before the bitstream" :
            sent < total ? "FPGA configuration failed: CONF_DONE timeout, bitstream truncated" :

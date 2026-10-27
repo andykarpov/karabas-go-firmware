@@ -137,16 +137,16 @@ bool bk_flush() {
   if (bk_slot < 0 || !(link_core_caps() & CAPS_BK)) return true;
   flush_result = 0;
   spi_send(CMD_IMG_FLUSH, bk_slot, 0);
-  ElapsedTimer timer;
-  timer.reset();
+  uint32_t timer = ms_now();
+  timer = ms_now();
   // the core writes its sectors through the file mounter: serve them while waiting for the answer
-  while (flush_result == 0 && timer.elapsed() < BK_FLUSH_TIMEOUT_MS) {
+  while (flush_result == 0 && ms_since(timer) < BK_FLUSH_TIMEOUT_MS) {
     img_tick();
     spi_send(CMD_NOP, 0, 0);
   }
   bool ok = flush_result == IMG_RES_DONE;
   d_printf("Save: flush slot %d %s in %lu ms", bk_slot, flush_result == 0 ? "no answer" : ok ? "done" : "FAILED",
-    (unsigned long) timer.elapsed()); d_println();
+    (unsigned long) ms_since(timer)); d_println();
   if (file_slots[bk_slot].file.isOpen()) file_slots[bk_slot].file.sync();
   return ok;
 }

@@ -5,7 +5,7 @@
 static uint8_t state = ESP_AT_IDLE;
 static esp_at_line_cb line_cb;
 static uint32_t timeout;
-static ElapsedTimer timer;
+static uint32_t timer = 0;
 static char line[160]; // a longer line is cut
 static uint8_t line_len;
 
@@ -14,7 +14,7 @@ void esp_at_start(const char *cmd, uint32_t timeout_ms, esp_at_line_cb on_line) 
   line_len = 0;
   line_cb = on_line;
   timeout = timeout_ms;
-  timer.reset();
+  timer = ms_now();
   state = ESP_AT_BUSY;
   // the password stays out of the log
   if (strncmp(cmd, "AT+CWJAP=", 9) == 0) { d_println("ESP >> AT+CWJAP=..."); }
@@ -24,7 +24,7 @@ void esp_at_start(const char *cmd, uint32_t timeout_ms, esp_at_line_cb on_line) 
 }
 
 bool esp_at_busy() {
-  if (state == ESP_AT_BUSY && timer.elapsed() >= timeout) {
+  if (state == ESP_AT_BUSY && ms_since(timer) >= timeout) {
     d_println("ESP: timeout");
     state = ESP_AT_TIMEOUT;
   }

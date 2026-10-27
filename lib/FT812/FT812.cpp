@@ -34,7 +34,7 @@
 // (recursive) hooks around every FT81x transaction (src/fpga/link.cpp)
 extern "C" void ft812_bus_lock(void);
 extern "C" void ft812_bus_unlock(void);
-#include <ElapsedTimer.h>
+#include "ms_time.h"
 
 /****************************************************************************/
 
@@ -230,15 +230,15 @@ bool FT812::powerUp() {
     sendCommand(FT81x_CMD_ACTIVE);
     delay(50); // PLL lock
 
-    init_timer.reset();
+    init_timer = ms_now();
     uint8_t id;
     while ((id = read8(FT81x_REG_ID)) != 0x7C) {
-        if (init_timer.elapsed() > 1000) { initFailed("REG_ID %02x", id); return false; }
+        if (ms_since(init_timer) > 1000) { initFailed("REG_ID %02x", id); return false; }
         delay(1);
     }
     uint16_t cpureset;
     while ((cpureset = read16(FT81x_REG_CPURESET)) != 0x00) {
-        if (init_timer.elapsed() > 1000) { initFailed("REG_CPURESET %x", cpureset); return false; }
+        if (ms_since(init_timer) > 1000) { initFailed("REG_CPURESET %x", cpureset); return false; }
         delay(1);
     }
 
