@@ -3,7 +3,7 @@
 #if HW_ID == HW_ID_GO
 
 #include <Arduino.h>
-#include <SparkFun_PCA9536_Arduino_Library.h>
+#include "pca9536.h"
 #include "input/sega.h"
 #include "pio_usb.h"
 #include "board.h"
@@ -12,7 +12,6 @@
 
 FT812 ft(PIN_MCU_FT_CS, PIN_FT_RESET);
 
-static PCA9536 extender;
 static bool has_extender = false;
 
 void board_init_pins() {
@@ -23,7 +22,7 @@ void board_init_pins() {
 
 void board_init_io() {
   I2cGuard i2c;
-  if (extender.begin() == false) {
+  if (!pca9536_present()) {
     has_extender = false;
     d_println("PCA9536 unavailable. Please check soldering.");
   } else {
@@ -32,12 +31,11 @@ void board_init_io() {
   }
 
   if (has_extender) {
-    extender.pinMode(PIN_EXT_BTN1, INPUT_PULLUP);
-    extender.pinMode(PIN_EXT_BTN2, INPUT_PULLUP);
-    extender.pinMode(PIN_EXT_LED1, OUTPUT);
-    extender.pinMode(PIN_EXT_LED2, OUTPUT);
-    extender.digitalWrite(PIN_EXT_LED1, HIGH);
-    extender.digitalWrite(PIN_EXT_LED2, HIGH);
+    // LEDs off (active low) before they become outputs; the buttons are inputs with the
+    // chip's pull-ups (SparkFun's pinMode took INPUT_PULLUP for an output driven high)
+    pca9536_write(PIN_EXT_LED1, true);
+    pca9536_write(PIN_EXT_LED2, true);
+    pca9536_outputs((1 << PIN_EXT_LED1) | (1 << PIN_EXT_LED2));
   }
 
   sega_begin(PIN_JOY_SCK, PIN_JOY_LOAD, PIN_JOY_DATA, PIN_JOY_P7);
@@ -62,13 +60,14 @@ bool board_has_floppy() {
 bool btn_read(uint8_t num) {
   if (!has_extender) return false;
   I2cGuard i2c;
-  return !extender.digitalRead(num == 0 ? PIN_EXT_BTN1 : PIN_EXT_BTN2);
+  uint8_t levels;
+  return pca9536_read(&levels) && !((levels >> (num == 0 ? PIN_EXT_BTN1 : PIN_EXT_BTN2)) & 1);
 }
 
 void led_write(uint8_t num, bool on) {
   if (!has_extender) return;
   I2cGuard i2c;
-  extender.digitalWrite(num == 0 ? PIN_EXT_LED1 : PIN_EXT_LED2, !on);
+  pca9536_write(num == 0 ? PIN_EXT_LED1 : PIN_EXT_LED2, !on);
 }
 
 #endif // HW_ID_GO
