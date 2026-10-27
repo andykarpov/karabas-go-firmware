@@ -88,6 +88,8 @@ Done in branch `pico-cmake` (2026-10-27): CMake with the pico-sdk 2.2.0 (TinyUSB
 
 ## Phase 3: finishing
 
+Done (2026-10-28): 3.1 (#72) the repository cleanup (PlatformIO / LittleFS leftovers, `lib/` and `third_party/` in lower case, `src/` in subdirectories, no `build*.sh`); 3.2 no example `karabas.ini` and `drivers/` (the defaults in the code, the formats in the docs), the history taken out of CLAUDE.md. The G of the text OSD with no picture (3 of 10) was the boot core's `hdmi_pll`, fixed in karabas-go-core-menu #10.
+
 - Rewrite CLAUDE.md: many sections (`__usb_mutex`, the PIO budget with `ccount`, `Serial`, lost wakeups) become history.
 - Revisit the task model: what can block now instead of polling (`link_poll`, `esp_serial`).
 - Compare with the phase 0 baseline. Run Go and Mini too: they are not checked with FreeRTOS yet.
