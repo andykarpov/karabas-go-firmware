@@ -59,21 +59,10 @@ extern "C" {
 extern volatile bool usb_host_ready; // set by core1 once PIO-USB has claimed its PIO/DMA resources
 void halt(const char* msg);
 
-// hid_app.cpp / hid_driver.cpp
+// usb/hid_app.c, usb/hid_driver.c
 extern hid_keyboard_report_t usb_keyboard_report;
 extern hid_mouse_report_t usb_mouse_report;
 
-// ui/file_list.cpp
-extern file_list_sort_item_t *files;
-extern uint16_t files_len;
-void files_clear();                       // empty the list (frees a large buffer)
-file_list_sort_item_t *files_append();    // zeroed slot for a new entry, NULL if full / no memory
-extern uint16_t file_sel;
-extern uint16_t file_page_size;
-extern uint16_t file_pages;
-extern uint16_t file_page;
-extern file_list_item_t cached_names[MAX_CORES_PER_PAGE];
-extern uint16_t cached_file_from, cached_file_to;
 
 #ifdef __cplusplus
 }
