@@ -6,6 +6,7 @@
 #include "input/sega.h"
 #include "ui/settings_items.h"
 #include "apps/app_settings.h"
+#include "ui/ui_draw.h"
 
 // Setup > Settings (BOOT core only): the karabas.ini settings. Up / Down / Tab pick a setting,
 // Left / Right / Enter change it. Save writes the changed values into karabas.ini and keeps the
@@ -71,30 +72,22 @@ static void section(uint8_t row, const char *title) {
   osd_set_pos(1, row); osd_print(title);
 }
 
-static void footer(const char *line1, const char *line2) {
-  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-  osd_fill(0, 24, 31, 25, ' ');
-  osd_set_pos(1, 24); osd_print(line1);
-  osd_set_pos(1, 25); osd_print(line2);
-}
 
 // the sections and the footer of the main page or of the Matrix effects page
 static void draw_frame() {
   osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-  osd_fill(0, 5, 31, 5, ' ');
-  osd_fill(0, 7, 31, 22, ' ');
-  osd_set_pos(0, 5);
+  osd_fill(0, UI_ROW_BODY, 31, UI_ROW_HINT_LINE - 1, ' ');
   if (mx_page) {
-    osd_print("Settings > Matrix effects");
+    ui_row(0, UI_ROW_TITLE, "Settings > Matrix effects", false);
     section(ROW_CLOCK, "Clock");
     section(ROW_METERS, "Audio meters");
-    footer("Up/Down: select, Left/Right:", "change, Esc: back");
+    ui_hint("Up/Down: select, Left/Right:", "change, Esc: back");
   } else {
-    osd_print("Settings");
+    ui_row(0, UI_ROW_TITLE, "Settings", false);
     section(ROW_SYSTEM, "System");
     section(ROW_AUTOLOAD, "Autoload");
     section(ROW_FT, "Graphic menu (FT812)");
-    footer("Up/Down: select, Left/Right:", "change, Esc: cancel");
+    ui_hint("Up/Down: select, Left/Right:", "change, Esc: cancel");
   }
 }
 
@@ -127,12 +120,7 @@ static void show_page(bool mx) {
 }
 
 void app_settings_overlay() {
-  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-  osd_clear();
-  osd_header(core.build, core.id, HW_ID);
-  print_time();
-  osd_line(6);
-  osd_line(23);
+  ui_screen("");
 
   s = hw_setup;
   settings_begin(&s);

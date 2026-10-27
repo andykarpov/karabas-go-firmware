@@ -7,6 +7,7 @@
 #include "apps/app_setup.h"
 #include "apps/app_core.h"
 #include "ui/sorts.h"
+#include "ui/ui_draw.h"
 // the Setup screen: a list of the setup apps; Wi-Fi and Settings only in the BOOT core
 typedef struct {
   const char *label;
@@ -21,7 +22,6 @@ static const setup_item_t setup_items[] = {
   { "Map USB gamepad", state_pad_mapper, false },
 };
 #define SETUP_ITEMS (sizeof(setup_items) / sizeof(setup_items[0]))
-#define SETUP_MENU_TOP 5 // the "Setup" title; the items start 2 rows below
 
 static uint8_t setup_sel = 0; // index among the shown items, kept while the OSD is open
 
@@ -45,35 +45,17 @@ static const setup_item_t *setup_item(uint8_t pos) {
 }
 
 static void setup_menu_draw() {
-  char line[33];
-  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-  osd_set_pos(0, SETUP_MENU_TOP);
-  snprintf(line, sizeof(line), "%-32s", "Setup");
-  osd_print(line);
   uint8_t n = setup_count();
   for (uint8_t pos = 0; pos < n; pos++) {
-    bool sel = pos == setup_sel;
-    osd_set_pos(0, SETUP_MENU_TOP + 2 + pos);
-    osd_set_color(sel ? OSD_COLOR_BLACK : OSD_COLOR_WHITE, sel ? OSD_COLOR_WHITE : OSD_COLOR_BLACK);
-    snprintf(line, sizeof(line), "%-32s", setup_item(pos)->label);
-    osd_print(line);
+    ui_row(0, UI_ROW_BODY + pos, setup_item(pos)->label, pos == setup_sel);
   }
-  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
 }
 
 void app_setup_overlay() {
-  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-  osd_clear();
-  osd_header(core.build, core.id, HW_ID);
-  print_time();
-
+  ui_screen("Setup");
   if (setup_sel >= setup_count()) setup_sel = 0;
   setup_menu_draw();
-
-  // footer
-  osd_line(23);
-  osd_set_pos(1,24); osd_print("Please use arrows to navigate");
-  osd_set_pos(1,25); osd_print("Press Esc to exit setup");
+  ui_hint("Please use arrows to navigate", "Press Esc to exit setup");
   osd_update();
 }
 

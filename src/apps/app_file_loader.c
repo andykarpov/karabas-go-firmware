@@ -8,6 +8,8 @@
 #include "apps/app_file_loader.h"
 #include "ui/sorts.h"
 #include "file_name.h"
+#include "ui/ui_draw.h"
+#include "kg_list.h"
 
 // the dir of the core's files (core.dir), trimmed and from the root: "" -> "/", "nes" -> "/nes"
 static void core_dir_path(char *out, size_t size) {
@@ -120,73 +122,39 @@ void app_file_loader_read_list(bool forceIndex) {
 }
 
 void app_file_loader_menu(uint8_t vpos) {
-  file_pages = ceil((float)files_len / file_page_size);
-  file_page = ceil((float)(file_sel+1)/file_page_size);
+  file_pages = kg_list_pages(files_len, file_page_size);
+  file_page = kg_list_page(file_sel, file_page_size);
   uint16_t file_from = (file_page-1)*file_page_size;
   uint16_t file_to = file_page*file_page_size > files_len ? files_len : file_page*file_page_size;
-  uint16_t file_fill = file_page*file_page_size;
-  uint16_t pos = vpos;
-  uint16_t j = 0;
+  bool cached = cached_file_from == file_from && cached_file_to == file_to;
 
-  if (files_len > 0) {    
-    for(uint16_t i=file_from; i < file_to; i++) {
-      osd_set_pos(0, pos);
-      if (file_sel == i) {
-        osd_set_color(OSD_COLOR_BLACK, OSD_COLOR_WHITE);
+  for (uint16_t row = 0; row < file_page_size; row++) {
+    uint16_t i = file_from + row;
+    char name[33] = "";
+    if (i < file_to) {
+      if (cached) {
+        memcpy(name, cached_names[row].name, sizeof(name));
       } else {
-        osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-      }
-      // display 32 chars
-      char name[32+1]; 
-      
-      // copy name from cache
-      if ((cached_file_from == file_from) && (cached_file_to == file_to)) {
-        memcpy(name, cached_names[j].name, sizeof(name));
-      } 
-      // get name from filename and put into cache
-      else {
-
         FILINFO fi;
-        if (sd_find_id(&root1, files[i].file_id, &fi)) {
-          snprintf(name, sizeof(name), "%s", fi.fname);
-          snprintf(cached_names[j].name, sizeof(cached_names[j].name), "%s", fi.fname);
-          cached_names[j].name[32] = '\0';
-        }
+        if (sd_find_id(&root1, files[i].file_id, &fi)) snprintf(name, sizeof(name), "%s", fi.fname);
+        memcpy(cached_names[row].name, name, sizeof(name));
       }
+    }
+    ui_row(0, vpos + row, name, i == file_sel && i < file_to);
+  }
+  cached_file_from = file_from;
+  cached_file_to = file_to;
 
-      osd_print(name);
-      // fill name with spaces
-      uint8_t l = strlen(name);
-      if (l < 32) {
-        for (uint8_t ll=l; ll<32; ll++) {
-          osd_print(" ");
-        }
-      }
-      pos++;
-      j++;
-    }
-    cached_file_from = file_from;
-    cached_file_to = file_to;
-  }
-  if (file_fill > file_to) {
-    for (uint16_t i=file_to; i<file_fill; i++) {
-      osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-      for (uint16_t j=0; j<32; j++) {
-        osd_print(" ");
-      }
-    }
-  }
-  osd_set_pos(8, vpos + file_page_size + 1); osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-  char b[40];
-  sprintf(b, "Page %03d of %03d", file_page, file_pages); 
-  osd_print(b);
+  char b[32];
+  snprintf(b, sizeof(b), "Page %03u of %03u", file_page, file_pages);
+  ui_row(0, vpos + file_page_size + 1, "", false);
+  osd_set_pos(8, vpos + file_page_size + 1); osd_print(b);
   osd_update();
 }
 
 void app_file_loader_overlay(bool initSD, bool recreateIndex) {
   osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
   osd_clear();
-
   osd_header(core.build, core.id, HW_ID);
   print_time();
 
@@ -195,14 +163,9 @@ void app_file_loader_overlay(bool initSD, bool recreateIndex) {
       app_file_loader_read_list(recreateIndex);
   }
 
-  osd_set_pos(0,5);
-  app_file_loader_menu(APP_COREBROWSER_MENU_OFFSET);  
-
-  // footer
+  app_file_loader_menu(APP_COREBROWSER_MENU_OFFSET);
   osd_line(21);
-  osd_line(23);
-  osd_set_pos(1,24); osd_print("Please use arrows to navigate");
-  osd_set_pos(1,25); osd_print("Press Enter to load selection");
+  ui_hint("Please use arrows to navigate", "Press Enter to load selection");
   osd_update();
 }
 

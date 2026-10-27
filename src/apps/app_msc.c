@@ -4,6 +4,7 @@
 #include "osd.h"
 #include "apps/app_msc.h"
 #include "apps/app_core_browser.h"
+#include "ui/ui_draw.h"
 
 // the screen of the USB mass storage mode: the boot core shows it while the PC has the SD card
 // (msc_check_boot), nothing else runs until the card is ejected
@@ -58,12 +59,7 @@ void app_msc_overlay() {
     return;
   }
 
-  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-  osd_clear();
-  osd_header(core.build, core.id, HW_ID);
-  osd_set_pos(0, 5);
-  osd_print("USB mass storage");
-  osd_line(6);
+  ui_screen("USB mass storage");
   osd_set_color(OSD_COLOR_CYAN_I, OSD_COLOR_BLACK);
   const char *const *l = msc_lines();
   for (uint8_t i = 0; i < MSC_LINES; i++) {

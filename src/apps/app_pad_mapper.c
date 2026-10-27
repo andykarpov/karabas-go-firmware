@@ -6,6 +6,7 @@
 #include "usb/hid_driver.h"
 #include "hid_learn.h"
 #include "apps/app_pad_mapper.h"
+#include "ui/ui_draw.h"
 
 // First the two joystick ports: the pad on each and what maps it (a driver ini, the default
 // map, XInput); Forget renames the driver ini of a pad to .bak. Map: find the pad (the first
@@ -82,12 +83,6 @@ static void draw_buttons() {
   }
 }
 
-static void draw_footer(const char *line1, const char *line2) {
-  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-  osd_fill(0, 24, 31, 25, ' ');
-  osd_set_pos(1, 24); osd_print(line1);
-  osd_set_pos(1, 25); osd_print(line2);
-}
 
 static bool can_forget() { return pads[port].source == USB_PAD_DRIVER; }
 
@@ -132,7 +127,7 @@ static void draw_list() {
   osd_set_pos(1, 20); osd_print("port");
   osd_set_pos(1, 21); osd_print("Forget: the driver ini -> .bak,");
   osd_set_pos(1, 22); osd_print("the pad uses its default map");
-  draw_footer("Up/Down: port, Left/Right: btn", "Enter: OK, Esc: return");
+  ui_hint("Up/Down: port, Left/Right: btn", "Enter: OK, Esc: return");
 }
 
 static void draw() {
@@ -170,7 +165,7 @@ static void draw() {
       break;
   }
   draw_buttons();
-  draw_footer(state >= ST_SAVED ? "Enter: back to the ports" : "", "Esc: back to the ports");
+  ui_hint(state >= ST_SAVED ? "Enter: back to the ports" : "", "Esc: back to the ports");
   osd_update();
 }
 
@@ -196,15 +191,7 @@ static void start() {
 }
 
 void app_pad_mapper_overlay() {
-  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-  osd_clear();
-  osd_header(core.build, core.id, HW_ID);
-  print_time();
-  osd_set_pos(0, 5);
-  osd_print("Map USB gamepad");
-  osd_line(6);
-
-  osd_line(23);
+  ui_screen("Map USB gamepad");
   port = 0;
   list_msg = NULL;
   show_list();
