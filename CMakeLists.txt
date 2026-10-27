@@ -73,7 +73,8 @@ function(karabas_firmware target hw_id)
   if (BUILD_VER)
     target_compile_definitions(${target} PRIVATE BUILD_VER=${BUILD_VER})
   endif()
-  target_compile_options(${target} PRIVATE -Wall -Os)
+  # -Wno-format-truncation: snprintf into the OSD lines and paths cuts them on purpose
+  target_compile_options(${target} PRIVATE -Wall -Wno-format-truncation -Os)
   target_link_options(${target} PRIVATE
     # panics are kept for the next boot's log (src/diag/hang_diag)
     -Wl,--wrap=panic

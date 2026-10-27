@@ -142,7 +142,6 @@ void core_eeprom_set(uint8_t pos, uint8_t val) {
 
 void flashboot (uint8_t data) {
   if (is_flashboot) return; // skip already in flashboot mode
-  uint8_t flashboot_coreid = data;
   d_printf("Flashboot core id: %02x", data); d_println();
   d_flush(); ms_delay(100);
   // todo: add flashboot_id to the core structure, search for desired id and boot it

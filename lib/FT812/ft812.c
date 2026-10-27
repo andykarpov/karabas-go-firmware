@@ -714,11 +714,10 @@ static void ft_send_command(const uint32_t cmd) {
     gpio_put(pin_cs, 0);
     spi0_bus_byte(cmd >> 16);
     spi0_bus_byte(cmd >> 8);
-    uint8_t res = spi0_bus_byte(cmd);
+    spi0_bus_byte(cmd);
     gpio_put(pin_cs, 1);
     ft812_bus_unlock();
     //ms_delay(200);
-    //Serial.printf("Command %d result %d", cmd, res); Serial.println();
 }
 
 static uint8_t ft_read8(const uint32_t address) {

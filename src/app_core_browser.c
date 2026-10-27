@@ -179,12 +179,12 @@ void app_core_browser_ft_background(const setup_t *t) {
 
 void app_core_browser_ft_decor(const setup_t *t, bool show_char) {
   if (t->ft_time) {
-    char time[9];
+    char time[12];
     sprintf(time, "%02d:%02d:%02d", rtc_get_hour(), rtc_get_minute(), rtc_get_second());
     ft_draw_text(ft_width()-88, 30, 30, t->color_text, FT81x_OPT_CENTER, time);
   }
   if (t->ft_date) {
-    char date[9];
+    char date[12];
     sprintf(date, "%02d/%02d/%02d", rtc_get_day(), rtc_get_month(), rtc_get_year() % 100);
     ft_draw_text(ft_width()-88, 60, 30, t->color_text, FT81x_OPT_CENTER, date);
   }
@@ -274,10 +274,10 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
   char b[40]; 
 
   //ft_draw_text(112, ft_height()-40, 27, color_copyright, FT81x_OPT_CENTER, "www.karabas.uk\0");
-  sprintf(b, "FW build: %s\0", STRINGIZE_VALUE_OF(BUILD_VER));
+  sprintf(b, "FW build: %s", STRINGIZE_VALUE_OF(BUILD_VER));
   ft_draw_text(112, ft_height()-40, 27, color_copyright, FT81x_OPT_CENTER, b);
-  ft_draw_text(112, ft_height()-20, 27, color_copyright, FT81x_OPT_CENTER, "(c) 2026 andykarpov\0");
-  sprintf(b, "Page %d of %d\0", core_page, core_pages);
+  ft_draw_text(112, ft_height()-20, 27, color_copyright, FT81x_OPT_CENTER, "(c) 2026 andykarpov");
+  sprintf(b, "Page %d of %d", core_page, core_pages);
   ft_draw_text(ft_width()/2, ft_height()-40, 27, color_copyright, FT81x_OPT_CENTER, b);
   if (core_pages > 1) {
     bool h = ft_hit_add(ft_width()/2 - 96, ft_height()-54, 32, 28, HIT_PREV);
@@ -288,10 +288,10 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
 
   if (autoload_enabled) {
     uint32_t diff = (ms_since(autoload_timer) < autoload_countdown * 1000) ? ceil((autoload_countdown * 1000 - ms_since(autoload_timer))/1000) : 0;
-    sprintf(b, "Autoloading core in %d s\0", diff);
+    sprintf(b, "Autoloading core in %lu s", (unsigned long) diff);
     ft_draw_text(ft_width()/2, ft_height()-20, 27, color_copyright, FT81x_OPT_CENTER, b);
   } else {
-    sprintf(b, "Autoload disabled\0");
+    sprintf(b, "Autoload disabled");
     ft_draw_text(ft_width()/2, ft_height()-20, 27, color_copyright, FT81x_OPT_CENTER, b);
   }
 
