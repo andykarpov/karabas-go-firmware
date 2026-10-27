@@ -9,7 +9,7 @@
 #include "ui/sorts.h"
 #include "file_name.h"
 #include "ui/ui_draw.h"
-#include "kg_list.h"
+#include "ui/file_browser.h"
 
 // the dir of the core's files (core.dir), trimmed and from the root: "" -> "/", "nes" -> "/nes"
 static void core_dir_path(char *out, size_t size) {
@@ -56,21 +56,15 @@ void app_file_loader_read_list(bool forceIndex) {
         return;
     }
     d_println("Read file list");
-    files_clear();
-    file_sel = 0;
+    fb_clear();
     char e[sizeof(core.file_extensions)];
     strcpy(e, core.file_extensions);
     kg_str_lower(e); kg_trim(e);
     FILINFO fi;
     while (f_readdir(&root1, &fi) == FR_OK && fi.fname[0]) {
-      const char *filename = fi.fname;
       uint16_t id;
-      if (!(fi.fattrib & AM_DIR) && sd_file_id(&fi, &id) && kg_name_has_ext(filename, e)) {
-        file_list_sort_item_t *item = files_append();
-        if (item) {
-          memcpy(item->hash, filename, SORT_HASH_LEN);
-          item->file_id = id;
-        }
+      if (!(fi.fattrib & AM_DIR) && sd_file_id(&fi, &id) && kg_name_has_ext(fi.fname, e)) {
+        fb_add_file(fi.fname, id);
       }
     }
 
@@ -90,7 +84,7 @@ void app_file_loader_read_list(bool forceIndex) {
   }
 
   // sort by file name
-  files_sort(files, files_len);
+  fb_sort();
   
   // cleanup error messages
   if (has_sd) {
@@ -100,11 +94,10 @@ void app_file_loader_read_list(bool forceIndex) {
   }
 
   // select and load prev file on boot
-  if (has_sd && files_len > 0 && core.last_file_id > 0) {
-    //d_printf("Looking for last file id = %d", core.last_file_id); d_println();
-    for (uint16_t i=0; i<files_len; i++) {
-      if (core.last_file_id == files[i].file_id) {
-          file_sel = i;
+  if (has_sd && fb_len() > 0 && core.last_file_id > 0) {
+    for (uint16_t i=0; i<fb_len(); i++) {
+      if (core.last_file_id == fb_id(i)) {
+          fb_select(i);
           //d_printf("Found %d pos", i); d_println();
           FILINFO fi;
           if (sd_find_id(&root1, core.last_file_id, &fi)) {
@@ -122,34 +115,9 @@ void app_file_loader_read_list(bool forceIndex) {
 }
 
 void app_file_loader_menu(uint8_t vpos) {
-  file_pages = kg_list_pages(files_len, file_page_size);
-  file_page = kg_list_page(file_sel, file_page_size);
-  uint16_t file_from = (file_page-1)*file_page_size;
-  uint16_t file_to = file_page*file_page_size > files_len ? files_len : file_page*file_page_size;
-  bool cached = cached_file_from == file_from && cached_file_to == file_to;
-
-  for (uint16_t row = 0; row < file_page_size; row++) {
-    uint16_t i = file_from + row;
-    char name[33] = "";
-    if (i < file_to) {
-      if (cached) {
-        memcpy(name, cached_names[row].name, sizeof(name));
-      } else {
-        FILINFO fi;
-        if (sd_find_id(&root1, files[i].file_id, &fi)) snprintf(name, sizeof(name), "%s", fi.fname);
-        memcpy(cached_names[row].name, name, sizeof(name));
-      }
-    }
-    ui_row(0, vpos + row, name, i == file_sel && i < file_to);
-  }
-  cached_file_from = file_from;
-  cached_file_to = file_to;
-
-  char b[32];
-  snprintf(b, sizeof(b), "Page %03u of %03u", file_page, file_pages);
-  ui_row(0, vpos + file_page_size + 1, "", false);
-  osd_set_pos(8, vpos + file_page_size + 1); osd_print(b);
-  osd_update();
+  char d[256];
+  core_dir_path(d, sizeof(d));
+  fb_draw(vpos, d, false);
 }
 
 void app_file_loader_overlay(bool initSD, bool recreateIndex) {
@@ -164,7 +132,6 @@ void app_file_loader_overlay(bool initSD, bool recreateIndex) {
   }
 
   app_file_loader_menu(APP_COREBROWSER_MENU_OFFSET);
-  osd_line(21);
   ui_hint("Please use arrows to navigate", "Press Enter to load selection");
   osd_update();
 }
@@ -175,7 +142,7 @@ void app_file_loader_save()
       d_println("Unable to open bitstream file to write");
       return;
     }
-    core.last_file_id = files[file_sel].file_id;
+    core.last_file_id = fb_id(fb_sel());
     file_write16(FILE_POS_FILELOADER_FILE, core.last_file_id);
     sd_close(&file1);
 }
@@ -265,21 +232,20 @@ uint32_t c1 = 0;
 }
 
 void app_file_loader_on_keyboard() {
-  if (files_len == 0) return;
+  if (fb_len() == 0) return;
   uint8_t key = ui_nav_key();
 
   // up / down, left / right a page
-  ui_list_key(&file_sel, files_len, file_page_size, key);
+  fb_key(key);
 
   // R = recreate file index
   if (key == KEY_R) {
-    file_sel = 0;
     app_file_loader_overlay(true, true);
   }
 
   if (key == KEY_ENTER) {
     app_file_loader_save();
-    app_file_loader_send_file(files[file_sel].file_id);
+    app_file_loader_send_file(fb_id(fb_sel()));
     // hide osd
     if (!is_osd_hiding) {
       is_osd_hiding = true;

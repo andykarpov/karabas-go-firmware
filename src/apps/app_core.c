@@ -7,6 +7,7 @@
 #include "ui/sorts.h"
 #include "file_name.h"
 #include "ui/ui_draw.h"
+#include "ui/file_browser.h"
 #include "kg_list.h"
 
 uint8_t curr_osd_item;
@@ -17,20 +18,6 @@ bool prev_is_filebrowser = false;
 // the dir of the slot when the file browser was opened: browsing changes the dir of the slot,
 // esc puts it back, so it stays the dir of the mounted image
 static char filebrowser_dir[256];
-
-// hash of the eject entry of the file browser: '*' is not in FAT names and sorts before "."
-#define FILEBROWSER_EJECT "*"
-
-static bool is_eject_entry(uint16_t i) {
-  return files[i].file_id == 0 && files[i].hash[0] == '*';
-}
-
-// hash of the physical drive entries ("+0", "+1"; Karabas Go): '+' sorts after '*', before "."
-#define FILEBROWSER_PHYS "+"
-
-static int phys_entry_drive(uint16_t i) {
-  return (files[i].file_id == 0 && files[i].hash[0] == '+') ? files[i].hash[1] - '0' : -1;
-}
 
 // the file mounter slot of the image chosen last: a slot without an image opens its browser in
 // that dir (a game on several disks: DF1 starts where the disk of DF0 is)
@@ -283,51 +270,45 @@ void app_core_on_keyboard() {
   if (is_filebrowser) {
 
     // up / down, left / right a page
-    if (ui_list_key(&file_sel, files_len, file_page_size, key)) need_redraw = true;
+    if (fb_key(key)) need_redraw = true;
 
     // enter
     if (key == KEY_ENTER) {
-      if (files_len > 0) {
+      uint16_t sel = fb_sel();
+      if (fb_len() > 0) {
         sd_close(&file1);
-        const char *hash = files[file_sel].hash;
         FILINFO fi;
         // eject
-        if (is_eject_entry(file_sel)) {
+        if (fb_is_eject(sel)) {
           app_core_eject(curr_osd_item);
           is_filebrowser = false;
         }
         // physical floppy drive
-        else if (phys_entry_drive(file_sel) >= 0) {
-          app_core_select_phys(curr_osd_item, phys_entry_drive(file_sel));
+        else if (fb_phys(sel) >= 0) {
+          app_core_select_phys(curr_osd_item, fb_phys(sel));
           is_filebrowser = false;
         }
         // goto root (.)
-        else if (files[file_sel].file_id == 0 && strcmp(hash, ".") == 0) {
+        else if (fb_is_root(sel)) {
           strcpy(file_slots[core.osd[curr_osd_item].slot_id].dir, "/");
           // re-read files from root (the image stays mounted until a file is selected)
-          file_sel = 0;
-          cached_file_from = 0;
-          cached_file_to = 0;
           app_core_init_filebrowser();
           app_core_filebrowser(APP_COREBROWSER_MENU_OFFSET);
           return;
         }
         // goto parent (..)
-        else if (files[file_sel].file_id == 0 && strcmp(hash, "..") == 0) {
+        else if (fb_is_parent(sel)) {
           char *dir = file_slots[core.osd[curr_osd_item].slot_id].dir;
           kg_path_parent(dir);
           kg_path_collapse(dir);
           d_print("Enter directory "); d_print(dir); d_println();
           // re-read files from parent dir
-          file_sel = 0;
-          cached_file_from = 0;
-          cached_file_to = 0;
           app_core_init_filebrowser();
           app_core_filebrowser(APP_COREBROWSER_MENU_OFFSET);
           return;
         }
         // open file / dir
-        else if (sd_find_id(&root1, files[file_sel].file_id, &fi)) {
+        else if (sd_find_id(&root1, fb_id(sel), &fi)) {
           // goto new dir name
           if (fi.fattrib & AM_DIR) {
             const char *dirname = fi.fname;
@@ -336,16 +317,13 @@ void app_core_on_keyboard() {
             kg_path_join(path, sizeof(path), dir, dirname);
             kg_path_collapse(path);
             snprintf(dir, sizeof(file_slots[0].dir), "%s", path);
-            file_sel = 0;
-            cached_file_from = 0;
-            cached_file_to = 0;
             app_core_init_filebrowser();
             app_core_filebrowser(APP_COREBROWSER_MENU_OFFSET);
             return;
           }
           // file selection (if ext matches)
           else {
-            d_printf("Selecting file id %d", files[file_sel].file_id); d_println();
+            d_printf("Selecting file id %d", fb_id(sel)); d_println();
             const char *filename = fi.fname;
             d_printf("Filename %s", filename);
             // check file ext match
@@ -496,137 +474,61 @@ int app_core_init_filebrowser() {
   sd_close(&file1);
 
   d_println("Read file list");
-  files_clear();
-  file_sel = 0;
-  memset(cached_names, 0, sizeof(cached_names));
-  cached_file_from = 0;
-  cached_file_to = 0;
+  fb_clear();
 
-  // add eject entry (a mounted image of a file mounter)
-  file_list_sort_item_t *item;
-  bool has_eject = false;
+  // the eject entry (a mounted image of a file mounter), the physical floppy drives (an F item
+  // of a board with the floppy connector), the root and the parent dir
+  uint16_t n_special = 0;
   if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER && file_slots[core.osd[curr_osd_item].slot_id].is_mounted) {
-    item = files_append();
-    if (item) { strcpy(item->hash, FILEBROWSER_EJECT); has_eject = true; } // file_id 0
+    if (fb_add_eject()) n_special++;
   }
-
-  // add the physical floppy drive entries (an F item of a board with the floppy connector)
-  uint16_t n_special = has_eject ? 1 : 0;
   if (core_osd_can_phys(curr_osd_item)) {
     for (uint8_t d = 0; d < 2; d++) {
-      item = files_append();
-      if (item) { strcpy(item->hash, FILEBROWSER_PHYS); item->hash[1] = '0' + d; item->hash[2] = '\0'; n_special++; } // file_id 0
+      if (fb_add_phys(d)) n_special++;
     }
   }
-
-  // add root entry
-  item = files_append();
-  if (item) strcpy(item->hash, "."); // file_id 0
-
-  // add parent dir entry
-  if (strlen(dir) > 1) {
-    item = files_append();
-    if (item) strcpy(item->hash, ".."); // file_id 0
-  }
+  fb_add_root();
+  if (strlen(dir) > 1) fb_add_parent();
 
   uint16_t presel_id = 0;
   uint16_t after_id = 0; // the image of another slot (presel_after): the next file is preselected
+  const char *core_f = file_slots[core.osd[curr_osd_item].slot_id].filename;
   FILINFO fi;
   while (sd_dir_is_open(&root1) && f_readdir(&root1, &fi) == FR_OK && fi.fname[0]) {
-    const char *filename = fi.fname;
     uint16_t id;
-    item = sd_file_id(&fi, &id) ? files_append() : NULL;
-    if (item) {
-      memcpy(item->hash, filename, SORT_HASH_LEN);
-      item->file_id = id;
-      const char *core_f = file_slots[core.osd[curr_osd_item].slot_id].filename;
-      if (core_f[0] && strcasecmp(core_f, filename) == 0) {
-        presel_id = item->file_id;
-      }
-      if (presel_after[0] && strcasecmp(presel_after, filename) == 0) {
-        after_id = item->file_id;
-      }
-    }
+    if (!sd_file_id(&fi, &id) || !fb_add_file(fi.fname, id)) continue;
+    if (core_f[0] && strcasecmp(core_f, fi.fname) == 0) presel_id = id;
+    if (presel_after[0] && strcasecmp(presel_after, fi.fname) == 0) after_id = id;
   }
 
-  d_printf("Files count %u", files_len); d_println();
+  d_printf("Files count %u", fb_len()); d_println();
 
-  files_sort(files, files_len);
+  fb_sort();
 
   // preselect file in browser after sorting; not the eject or physical drive entries (they sort
   // first) if the image is in another dir: enter must not eject by accident
-  if (n_special > 0 && files_len > n_special) {
-    file_sel = n_special;
+  uint16_t len = fb_len();
+  if (n_special > 0 && len > n_special) {
+    fb_select(n_special);
   }
-  int presel_phys = kg_phys_drive(file_slots[core.osd[curr_osd_item].slot_id].filename);
-  for (uint16_t i=0; i<files_len; i++) {
-    if (presel_phys >= 0 && phys_entry_drive(i) == presel_phys) {
-      file_sel = i;
+  int presel_phys = kg_phys_drive(core_f);
+  for (uint16_t i=0; i<len; i++) {
+    if (presel_phys >= 0 && fb_phys(i) == presel_phys) {
+      fb_select(i);
     }
-    if (presel_id != 0 && presel_id == files[i].file_id) {
-      file_sel = i;
+    if (presel_id != 0 && presel_id == fb_id(i)) {
+      fb_select(i);
     }
-    if (presel_id == 0 && after_id != 0 && after_id == files[i].file_id) {
-      file_sel = (i + 1 < files_len) ? i + 1 : i;
+    if (presel_id == 0 && after_id != 0 && after_id == fb_id(i)) {
+      fb_select(i + 1 < len ? i + 1 : i);
     }
   }
 
   return core.osd[curr_osd_item].slot_id;
 }
 
-// the name of entry i of the file list, as the browser shows it
-static void entry_name(uint16_t i, char *name, size_t size) {
-  const char *h = files[i].hash;
-  FILINFO fi;
-  name[0] = '\0';
-  if (is_eject_entry(i)) {
-    snprintf(name, size, "[ Eject ]");
-  } else if (phys_entry_drive(i) >= 0) {
-    snprintf(name, size, phys_entry_drive(i) ? "[ Physical DF1 ]" : "[ Physical DF0 ]");
-  } else if (files[i].file_id == 0 && (strcmp(h, ".") == 0 || strcmp(h, "..") == 0)) {
-    snprintf(name, size, "%s", h);
-  } else if (sd_find_id(&root1, files[i].file_id, &fi)) {
-    kg_trim(fi.fname);
-    snprintf(name, size, "%s", fi.fname);
-  }
-}
-
 void app_core_filebrowser(uint8_t vpos) {
-  file_pages = kg_list_pages(files_len, file_page_size);
-  file_page = kg_list_page(file_sel, file_page_size);
-  uint16_t file_from = (file_page-1)*file_page_size;
-  uint16_t file_to = file_page*file_page_size > files_len ? files_len : file_page*file_page_size;
-  bool cached = cached_file_from == file_from && cached_file_to == file_to;
-
-  sd_opendir(&root1, file_slots[core.osd[curr_osd_item].slot_id].dir);
-  for (uint16_t row = 0; row < file_page_size; row++) {
-    uint16_t i = file_from + row;
-    char name[33] = "";
-    if (i < file_to) {
-      if (cached) {
-        memcpy(name, cached_names[row].name, sizeof(name));
-      } else {
-        entry_name(i, name, sizeof(name));
-        memcpy(cached_names[row].name, name, sizeof(name));
-      }
-    }
-    ui_row(0, vpos + row, name, i == file_sel && i < file_to);
-  }
-  cached_file_from = file_from;
-  cached_file_to = file_to;
-
-  // the dir and the page
-  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-  osd_line(21);
-  char b[32];
-  snprintf(b, sizeof(b), "Dir %.20s", file_slots[core.osd[curr_osd_item].slot_id].dir);
-  ui_row(0, vpos + file_page_size + 1, "", false);
-  osd_set_pos(8, vpos + file_page_size + 1); osd_print(b);
-  snprintf(b, sizeof(b), "Page %03u of %03u", file_page, file_pages);
-  ui_row(0, vpos + file_page_size + 2, "", false);
-  osd_set_pos(8, vpos + file_page_size + 2); osd_print(b);
-
-  osd_update();
+  fb_draw(vpos, file_slots[core.osd[curr_osd_item].slot_id].dir, true);
 }
 
 void app_core_on_select_file() {
