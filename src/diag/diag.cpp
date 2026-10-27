@@ -44,7 +44,7 @@ void diag_tick() {
   d_printf("DIAG core0: %lu loops/s, max gap %lu us | core1: %lu loops/s, max gap %lu us | heap free %d",
     (unsigned long) (loops0 * 1000ULL / elapsed), (unsigned long) gap0,
     (unsigned long) (loops1 * 1000ULL / elapsed), (unsigned long) gap1,
-    rp2040.getFreeHeap());
+    chip_free_heap());
   TaskHandle_t app = xTaskGetHandle("APP");
   TaskHandle_t usb = xTaskGetHandle("USB");
   TaskHandle_t input = xTaskGetHandle("INPUT");

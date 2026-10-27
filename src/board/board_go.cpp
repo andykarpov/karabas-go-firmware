@@ -4,7 +4,7 @@
 
 #include <Arduino.h>
 #include <SparkFun_PCA9536_Arduino_Library.h>
-#include <SegaController.h>
+#include "input/sega.h"
 #include "pio_usb.h"
 #include "board.h"
 #include "main.h"
@@ -13,7 +13,6 @@
 FT812 ft(PIN_MCU_FT_CS, PIN_FT_RESET);
 
 static PCA9536 extender;
-static SegaController sega;
 static bool has_extender = false;
 
 void board_init_pins() {
@@ -41,7 +40,7 @@ void board_init_io() {
     extender.digitalWrite(PIN_EXT_LED2, HIGH);
   }
 
-  sega.begin(PIN_JOY_SCK, PIN_JOY_LOAD, PIN_JOY_DATA, PIN_JOY_P7);
+  sega_begin(PIN_JOY_SCK, PIN_JOY_LOAD, PIN_JOY_DATA, PIN_JOY_P7);
 }
 
 uint8_t board_usb_pinout() {
@@ -49,8 +48,8 @@ uint8_t board_usb_pinout() {
 }
 
 void board_joy_read(uint16_t &left, uint16_t &right) {
-  left = sega.getState(true);
-  right = sega.getState(false);
+  left = sega_state(true);
+  right = sega_state(false);
 }
 
 void board_reset_peripherals() {

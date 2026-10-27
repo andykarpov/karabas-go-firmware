@@ -4,7 +4,7 @@
 #include "main.h"
 #include "OSD.h"
 #include "usb_hid_keys.h"
-#include "SegaController.h"
+#include "input/sega.h"
 #include "ps2kbd.h"
 #include "esp_at_parse.h"
 #include "hid_ascii.h"

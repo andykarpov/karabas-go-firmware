@@ -10,7 +10,7 @@
 #include "main.h"
 #include "host/usbh.h"
 #include "ps2kbd.h"
-#include "SegaController.h"
+#include "input/sega.h"
 #include "hardware/sync.h"
 
 hid_keyboard_report_t usb_keyboard_report;

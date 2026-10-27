@@ -6,7 +6,7 @@
 #include "bitmaps.h"
 #include "OSD.h"
 #include "SdFat.h"
-#include "SegaController.h"
+#include "input/sega.h"
 #include "usb_hid_keys.h"
 #include <algorithm>
 #include <tuple>

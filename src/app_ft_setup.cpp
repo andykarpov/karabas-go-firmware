@@ -5,7 +5,7 @@
 #include "FT812.h"
 #include "bitmaps.h"
 #include "usb_hid_keys.h"
-#include "SegaController.h"
+#include "input/sega.h"
 #include "ui/settings_items.h"
 #include "app_core_browser.h"
 #include "ui/ft_mouse.h"

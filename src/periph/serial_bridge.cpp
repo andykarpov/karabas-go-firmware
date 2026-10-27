@@ -106,7 +106,7 @@ static void at_command(const char *arg) {
     Serial.print("OK\r\n"); Serial.flush(); ms_delay(100);
     hang_diag_stop();
     matrix_icon(MATRIX_ICON_BOOTSEL); // the bootloader leaves the matrix as it is
-    rp2040.rebootToBootloader();
+    chip_reboot_bootsel();
   } else if (strcasecmp(arg, "msc") == 0 || strcasecmp(arg, "msc2") == 0) {
     Serial.print("OK\r\n"); Serial.flush(); ms_delay(100);
     hang_diag_stop();

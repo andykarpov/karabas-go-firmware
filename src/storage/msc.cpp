@@ -45,7 +45,7 @@ void msc_reboot_to_msc(uint8_t sd_card) {
   bk_flush();
   matrix_icon(MATRIX_ICON_MSC);
   watchdog_hw->scratch[0] = sd_card == 2 ? MSC2_REQUEST_MAGIC : MSC_REQUEST_MAGIC;
-  rp2040.reboot();
+  chip_reboot();
 }
 
 void msc_check_boot() {
@@ -98,10 +98,10 @@ bool msc_tick() {
   if (ejected && (host_gone || ms_now() - eject_ms >= MSC_EJECT_REBOOT_MS)) {
     d_println(host_gone ? "MSC: the host let the device go, reboot" : "MSC: reboot after the eject");
     d_flush();
-    rp2040.reboot();
+    chip_reboot();
   }
   if (failed && ms_since(failed_timer) >= MSC_FAILED_REBOOT_MS) {
-    rp2040.reboot();
+    chip_reboot();
   }
 
 #if ENABLE_MSC

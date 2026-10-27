@@ -363,5 +363,5 @@ void halt(const char* msg) {
       led_write(1, !blink);
       ms_delay(100);
   }
-  rp2040.reboot();
+  chip_reboot();
 }

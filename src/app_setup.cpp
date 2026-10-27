@@ -4,7 +4,7 @@
 #include "main.h"
 #include "OSD.h"
 #include "usb_hid_keys.h"
-#include "SegaController.h"
+#include "input/sega.h"
 #include "SdFat.h"
 #include <algorithm>
 #include <tuple>
