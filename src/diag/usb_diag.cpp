@@ -10,7 +10,7 @@ static volatile uint32_t device_missed = 0;
 
 void usb_diag_device_missed() { device_missed++; }
 
-// who drives D+ / D- (DPDM pinout: D- is D+ + 1): "pio0 out 0" when a PIO state machine drives
+// who drives D+ / D- (DPDM pinout: D- is D+ + 1): "pio1 out 0" when a PIO state machine drives
 // the pin low (the host's bus reset, or a stuck transmit), "in 0" when nothing on our side does
 static void pin_state(char *buf, size_t size, uint pin) {
   uint32_t st = io_bank0_hw->io[pin].status;
