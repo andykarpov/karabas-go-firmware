@@ -9,7 +9,8 @@
 
 enum { S_IDLE, S_JAP, S_CFG, S_WAIT, S_TIME };
 
-#define TIME_TRIES 15
+// the first sync after the ESP starts took ~30 s on Mini G (AT 1.7.6), the next ones a few s
+#define TIME_TRIES 40
 #define TIME_WAIT_MS 1000
 
 static uint8_t step = S_IDLE;
