@@ -42,9 +42,9 @@ uint8_t board_usb_pinout() {
   return PIO_USB_PINOUT_DPDM;
 }
 
-void board_joy_read(uint16_t &left, uint16_t &right) {
-  left = 0;
-  right = 0;
+void board_joy_read(uint16_t *left, uint16_t *right) {
+  (*left) = 0;
+  (*right) = 0;
 }
 
 void board_reset_peripherals() {

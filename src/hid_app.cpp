@@ -578,27 +578,27 @@ void usb_pads_get(usb_pad_t pads[2])
   usb_joy_port_t ports[2];
   usb_joy_ports(ports);
   for (uint8_t i = 0; i < 2; i++) {
-    usb_pad_t &p = pads[i];
-    memset(&p, 0, sizeof(p)); // the padding too: the screens memcmp two snapshots
+    usb_pad_t *p = &pads[i];
+    memset(p, 0, sizeof(*p)); // the padding too: the screens memcmp two snapshots
     if (!ports[i].address) continue;
     if (ports[i].xinput) {
-      p.source = USB_PAD_XINPUT;
-      tuh_vid_pid_get(ports[i].address, &p.vid, &p.pid);
+      p->source = USB_PAD_XINPUT;
+      tuh_vid_pid_get(ports[i].address, &p->vid, &p->pid);
       continue;
     }
     uint8_t n = ports[i].instance;
     if (n >= CFG_TUH_HID) continue;
     uint32_t save = spin_lock_blocking(usb_host_lock());
-    p.vid = hid_info[n].vid;
-    p.pid = hid_info[n].pid;
+    p->vid = hid_info[n].vid;
+    p->pid = hid_info[n].pid;
     const hid_joy_config_t *driver = hid_info[n].driver;
     bool map = hid_info[n].auto_map != nullptr;
     spin_unlock(usb_host_lock(), save);
     if (driver) {
-      p.source = USB_PAD_DRIVER;
-      p.file = hid_driver_file(driver);
+      p->source = USB_PAD_DRIVER;
+      p->file = hid_driver_file(driver);
     } else {
-      p.source = map ? USB_PAD_DEFAULT : USB_PAD_NONE;
+      p->source = map ? USB_PAD_DEFAULT : USB_PAD_NONE;
     }
   }
 }

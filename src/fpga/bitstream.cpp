@@ -43,7 +43,7 @@ static int claim_dma_channel() {
   return -1;
 }
 
-static bool bitstream_send_pio(uint32_t total, uint32_t &sent) {
+static bool bitstream_send_pio(uint32_t total, uint32_t *sent) {
   // let core1 allocate its PIO-USB programs and DMA channel first
   uint32_t wait = ms_now();
   while (!usb_host_ready && ms_since(wait) < 500) { ms_delay(1); }
@@ -76,13 +76,13 @@ static bool bitstream_send_pio(uint32_t total, uint32_t &sent) {
 
   // double buffering: DMA streams one chunk while the next one is read from SD
   uint8_t cur = 0;
-  int n = bitstream_read(chunk_buf[cur], total - sent);
+  int n = bitstream_read(chunk_buf[cur], total - (*sent));
   while (n > 0) {
     dma_channel_configure(dma, &c, &pio->txf[sm], chunk_buf[cur], n, true);
-    sent += n;
-    bitstream_progress(sent, total);
+    (*sent) += n;
+    bitstream_progress((*sent), total);
     cur ^= 1;
-    int next = (sent < total) ? bitstream_read(chunk_buf[cur], total - sent) : 0;
+    int next = ((*sent) < total) ? bitstream_read(chunk_buf[cur], total - (*sent)) : 0;
     dma_channel_wait_for_finish_blocking(dma);
     n = next;
   }
@@ -96,9 +96,9 @@ static bool bitstream_send_pio(uint32_t total, uint32_t &sent) {
   return true;
 }
 
-static void bitstream_send_bitbang(uint32_t total, uint32_t &sent) {
+static void bitstream_send_bitbang(uint32_t total, uint32_t *sent) {
   int n;
-  while (sent < total && (n = bitstream_read(chunk_buf[0], total - sent)) > 0) {
+  while ((*sent) < total && (n = bitstream_read(chunk_buf[0], total - (*sent))) > 0) {
     for (int s=0; s<n; s++) {
       uint8_t c = chunk_buf[0][s];
       for (uint8_t j=0; j<8; ++j) {
@@ -109,8 +109,8 @@ static void bitstream_send_bitbang(uint32_t total, uint32_t &sent) {
         gpio_put(PIN_CONF_CLK, 0);
       }
     }
-    sent += n;
-    bitstream_progress(sent, total);
+    (*sent) += n;
+    bitstream_progress((*sent), total);
   }
 }
 
@@ -150,9 +150,9 @@ uint32_t fpga_send(const char* filename) {
 
   uint32_t sent = 0;
   hang_step(0x90);
-  if (!bitstream_send_pio(total, sent)) {
+  if (!bitstream_send_pio(total, &sent)) {
     d_println("Falling back to bit-banged bitstream loading");
-    bitstream_send_bitbang(total, sent);
+    bitstream_send_bitbang(total, &sent);
   }
   hang_step(0x91);
   sd_close(&file1);

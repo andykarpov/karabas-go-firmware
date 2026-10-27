@@ -22,7 +22,7 @@ typedef struct {
   // optional: the tab got chosen / left; such a page runs its tick while its tab is chosen
   void (*show)();
   void (*hide)();
-  void (*draw)(const ft_page_ctx_t &c); // adds its clickable areas with ft_page_hit() while focused
+  void (*draw)(const ft_page_ctx_t *c); // adds its clickable areas with ft_page_hit() while focused
   // a pressed key (joy: from a joystick, as the arrows, Enter and Esc); false: back to the tabs
   bool (*key)(uint8_t key, bool shift, bool joy);
   bool (*tick)();                       // while focused (or chosen, see show); true: redraw
@@ -37,11 +37,11 @@ typedef struct {
 
 bool ft_page_hit(int16_t x, int16_t y, int16_t w, int16_t h, int16_t id);
 // a button: the active color when focused, a frame when hovered (the setup's tab look)
-void ft_page_button(const ft_page_ctx_t &c, int16_t x, int16_t y, int16_t w, const char *label, bool focused, int16_t id);
+void ft_page_button(const ft_page_ctx_t *c, int16_t x, int16_t y, int16_t w, const char *label, bool focused, int16_t id);
 // a rounded rect inside x, y, w, h (the FT812 grows a rect by its corner radius)
 void ft_page_rect(int16_t x, int16_t y, int16_t w, int16_t h, uint8_t r, uint32_t color);
 // a row that can be picked (lists, fields): a band when focused or hovered
-void ft_page_row(const ft_page_ctx_t &c, int16_t x, int16_t y, int16_t w, int16_t h, bool focused, bool hovered);
+void ft_page_row(const ft_page_ctx_t *c, int16_t x, int16_t y, int16_t w, int16_t h, bool focused, bool hovered);
 // the mark of the chosen row or tab: a dot near the left edge of x, y, h (raised when opt is 3D)
 void ft_page_marker(int16_t x, int16_t y, int16_t h, uint32_t color, uint16_t opt);
 // text in a font of the FT812, the chars it has no glyph for as '?'

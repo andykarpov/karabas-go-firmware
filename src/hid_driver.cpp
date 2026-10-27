@@ -207,11 +207,11 @@ void hid_drivers_dump()
   }
   d_printf("Loaded %d drivers", t->len); d_println();
   for (uint8_t i=0; i<t->len; i++) {
-    const hid_joy_config_t &d = t->list[i].cfg;
-    d_printf("Driver %s for %04x:%04x, report id %d, %u rules:", t->list[i].file, d.vid, d.pid, d.report_id, d.count); d_println();
-    for (uint8_t j=0; j<d.count; j++) {
-      const hid_joy_rule_t &r = d.rules[j];
-      d_printf("Button %d byte %d type %d value %d arg %d", r.btn, r.pos, r.type, r.val, r.arg);
+    const hid_joy_config_t *d = &t->list[i].cfg;
+    d_printf("Driver %s for %04x:%04x, report id %d, %u rules:", t->list[i].file, d->vid, d->pid, d->report_id, d->count); d_println();
+    for (uint8_t j=0; j<d->count; j++) {
+      const hid_joy_rule_t *r = &d->rules[j];
+      d_printf("Button %d byte %d type %d value %d arg %d", r->btn, r->pos, r->type, r->val, r->arg);
       d_println();
     }
   }

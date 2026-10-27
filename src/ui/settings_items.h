@@ -39,7 +39,7 @@ extern const uint8_t settings_mx_ids[];
 extern const uint8_t settings_mx_len;
 
 // starts editing s (a copy of hw_setup): picks the autoload core in the core list
-void settings_begin(setup_t &s);
+void settings_begin(setup_t *s);
 // editing is over (saved or not): what shows at once while editing (the LED matrix) goes back
 // to hw_setup
 void settings_end();
@@ -47,16 +47,16 @@ void settings_end();
 // (SET_COUNT or another setting: the mode of the core again)
 void settings_preview(uint8_t id);
 // the value as text ("On", "5 s", "800x600@60", "0000c8")
-void settings_value_text(uint8_t id, const setup_t &s, char *out, size_t size);
-bool settings_bool(uint8_t id, const setup_t &s);
+void settings_value_text(uint8_t id, const setup_t *s, char *out, size_t size);
+bool settings_bool(uint8_t id, const setup_t *s);
 // the next (d = 1) / previous (d = -1) value; a color does not change this way
-void settings_change(uint8_t id, setup_t &s, int d);
-uint32_t *settings_color(uint8_t id, setup_t &s);
+void settings_change(uint8_t id, setup_t *s, int d);
+uint32_t *settings_color(uint8_t id, setup_t *s);
 // a setting of the screens differs (the unsaved changes)
-bool settings_differ(const setup_t &a, const setup_t &b);
+bool settings_differ(const setup_t *a, const setup_t *b);
 
 // the color themes of the graphic menu; settings_theme() is -1 for colors of no theme (Custom)
 uint8_t settings_theme_count();
 const char *settings_theme_name(uint8_t i);
-int settings_theme(const setup_t &s);
-void settings_theme_apply(setup_t &s, uint8_t i);
+int settings_theme(const setup_t *s);
+void settings_theme_apply(setup_t *s, uint8_t i);

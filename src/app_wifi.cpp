@@ -282,14 +282,14 @@ static void draw_list() {
   if (sel < top) top = sel;
   if (sel >= top + LIST_ROWS) top = sel - LIST_ROWS + 1;
   for (uint8_t row = 0; row < LIST_ROWS && top + row < aps_len; row++) {
-    const kg_wifi_ap_t &ap = aps[top + row];
+    const kg_wifi_ap_t *ap = &aps[top + row];
     bool focused = top + row == sel && !on_rescan;
     osd_set_color(focused ? OSD_COLOR_BLACK : OSD_COLOR_WHITE, focused ? OSD_COLOR_YELLOW_I : OSD_COLOR_BLACK);
     osd_fill(0, LIST_ROW + row, 31, LIST_ROW + row, ' ');
     osd_set_pos(0, LIST_ROW + row);
-    osd_putc(strcmp(ap.ssid, cur_ssid) == 0 ? '>' : ' ');
-    osd_printf("%4d %c ", ap.rssi, ap.ecn ? '*' : ' ');
-    print_text(ap.ssid, 24);
+    osd_putc(strcmp(ap->ssid, cur_ssid) == 0 ? '>' : ' ');
+    osd_printf("%4d %c ", ap->rssi, ap->ecn ? '*' : ' ');
+    print_text(ap->ssid, 24);
   }
   if (aps_len > LIST_ROWS) {
     osd_set_color(OSD_COLOR_GREY, OSD_COLOR_BLACK);

@@ -6,8 +6,6 @@
 #include "osd.h"
 #include "usb_hid_keys.h"
 #include "input/sega.h"
-#include <algorithm>
-#include <tuple>
 #include "app_file_loader.h"
 #include "sorts.h"
 #include "file_name.h"
@@ -91,7 +89,7 @@ void app_file_loader_read_list(bool forceIndex = false) {
   }
 
   // sort by file name
-  std::sort(files, files + files_len);
+  files_sort(files, files_len);
   
   // cleanup error messages
   if (has_sd) {

@@ -51,7 +51,7 @@ static void draw_item(uint8_t id, uint8_t row, bool focused) {
   osd_set_pos(LABEL_X, row); osd_print(id == SET_FT ? "Enabled" : settings[id].label);
 
   char value[VALUE_WIDTH + 1];
-  settings_value_text(id, s, value, sizeof(value));
+  settings_value_text(id, &s, value, sizeof(value));
   if (settings[id].kind == SET_KIND_PAGE) strlcpy(value, "...", sizeof(value));
   osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
   osd_fill(VALUE_X, row, VALUE_X + VALUE_WIDTH + 1, row, ' ');
@@ -136,7 +136,7 @@ void app_settings_overlay() {
   osd_line(23);
 
   s = hw_setup;
-  settings_begin(s);
+  settings_begin(&s);
   focus = 0;
   error = nullptr;
   show_page(false);
@@ -146,7 +146,7 @@ static void mx_on_keyboard(bool up, bool down, bool left, bool right, bool enter
   if (esc || back) { show_page(false); return; }
   if (up) mx_focus = (mx_focus + settings_mx_len - 1) % settings_mx_len;
   else if (down) mx_focus = (mx_focus + 1) % settings_mx_len;
-  else if (left || right || enter) settings_change(settings_mx_ids[mx_focus], s, left ? -1 : 1);
+  else if (left || right || enter) settings_change(settings_mx_ids[mx_focus], &s, left ? -1 : 1);
   else return;
   draw();
 }
@@ -181,9 +181,9 @@ void app_settings_on_keyboard() {
     if (enter || right) { show_page(true); return; }
     return;
   } else if (!button && (left || right || enter)) {
-    settings_change(ids[focus], s, left ? -1 : 1);
+    settings_change(ids[focus], &s, left ? -1 : 1);
   } else if (enter && focus == I_SAVE) {
-    if (save_setup(s)) { osd_state = state_setup; return; }
+    if (save_setup(&s)) { osd_state = state_setup; return; }
     error = "Can't save karabas.ini";
     draw();
     return;

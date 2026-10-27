@@ -82,25 +82,25 @@ static void trim_copy(char *out, const char *in, size_t size) {
   while (len > 0 && out[len - 1] == ' ') out[--len] = '\0';
 }
 
-void settings_begin(setup_t &s) {
-  char core_id[sizeof(s.autoload_core)];
-  trim_copy(core_id, s.autoload_core, sizeof(core_id));
-  strlcpy(s.autoload_core, core_id, sizeof(s.autoload_core));
-  if (s.autoload_timeout > TIMEOUT_MAX) s.autoload_timeout = TIMEOUT_MAX;
-  if (s.ft_sound >= SOUNDS) s.ft_sound = 1;
+void settings_begin(setup_t *s) {
+  char core_id[sizeof(s->autoload_core)];
+  trim_copy(core_id, s->autoload_core, sizeof(core_id));
+  strlcpy(s->autoload_core, core_id, sizeof(s->autoload_core));
+  if (s->autoload_timeout > TIMEOUT_MAX) s->autoload_timeout = TIMEOUT_MAX;
+  if (s->ft_sound >= SOUNDS) s->ft_sound = 1;
   core_sel = cores_len;
   for (uint8_t i = 0; i < cores_len; i++) {
     char id[sizeof(cores[0].id)];
     trim_copy(id, cores[i].id, sizeof(id));
-    if (strcmp(id, s.autoload_core) == 0) { core_sel = i; break; }
+    if (strcmp(id, s->autoload_core) == 0) { core_sel = i; break; }
   }
   core_other = core_sel == cores_len;
-  strlcpy(core_other_id, s.autoload_core, sizeof(core_other_id));
+  strlcpy(core_other_id, s->autoload_core, sizeof(core_other_id));
   settings_end();
 }
 
 void settings_end() {
-  matrix_setup(hw_setup);
+  matrix_setup(&hw_setup);
   matrix_preview(MATRIX_PREVIEW_NONE);
 }
 
@@ -110,43 +110,43 @@ void settings_preview(uint8_t id) {
   else matrix_preview(MATRIX_PREVIEW_NONE);
 }
 
-static bool *bool_ref(uint8_t id, setup_t &s) {
+static bool *bool_ref(uint8_t id, setup_t *s) {
   switch (id) {
-    case SET_DEBUG: return &s.debug_enabled;
-    case SET_DVI: return &s.dvi_only;
-    case SET_MATRIX: return &s.matrix_enabled;
-    case SET_AUTOLOAD: return &s.autoload_enabled;
-    case SET_FT: return &s.ft_enabled;
-    case SET_3D: return &s.ft_3d_buttons;
-    case SET_TIME: return &s.ft_time;
-    case SET_DATE: return &s.ft_date;
-    case SET_CHAR: return &s.ft_char;
-    case SET_CLICK: return &s.ft_click;
-    case SET_MX_METER_PEAK: return &s.matrix_style.meter_peak;
+    case SET_DEBUG: return &s->debug_enabled;
+    case SET_DVI: return &s->dvi_only;
+    case SET_MATRIX: return &s->matrix_enabled;
+    case SET_AUTOLOAD: return &s->autoload_enabled;
+    case SET_FT: return &s->ft_enabled;
+    case SET_3D: return &s->ft_3d_buttons;
+    case SET_TIME: return &s->ft_time;
+    case SET_DATE: return &s->ft_date;
+    case SET_CHAR: return &s->ft_char;
+    case SET_CLICK: return &s->ft_click;
+    case SET_MX_METER_PEAK: return &s->matrix_style.meter_peak;
     default: return nullptr;
   }
 }
 
-bool settings_bool(uint8_t id, const setup_t &s) {
-  bool *b = bool_ref(id, const_cast<setup_t &>(s));
+bool settings_bool(uint8_t id, const setup_t *s) {
+  bool *b = bool_ref(id, (setup_t *) s);
   return b && *b;
 }
 
-uint32_t *settings_color(uint8_t id, setup_t &s) {
+uint32_t *settings_color(uint8_t id, setup_t *s) {
   switch (id) {
-    case SET_COLOR_BG: return &s.color_bg;
-    case SET_COLOR_GRADIENT: return &s.color_gradient;
-    case SET_COLOR_BUTTON: return &s.color_button;
-    case SET_COLOR_ACTIVE: return &s.color_active;
-    case SET_COLOR_TEXT: return &s.color_text;
-    case SET_COLOR_TEXT_ACTIVE: return &s.color_text_active;
-    case SET_COLOR_COPYRIGHT: return &s.color_copyright;
+    case SET_COLOR_BG: return &s->color_bg;
+    case SET_COLOR_GRADIENT: return &s->color_gradient;
+    case SET_COLOR_BUTTON: return &s->color_button;
+    case SET_COLOR_ACTIVE: return &s->color_active;
+    case SET_COLOR_TEXT: return &s->color_text;
+    case SET_COLOR_TEXT_ACTIVE: return &s->color_text_active;
+    case SET_COLOR_COPYRIGHT: return &s->color_copyright;
     default: return nullptr;
   }
 }
 
-void settings_value_text(uint8_t id, const setup_t &s, char *out, size_t size) {
-  setup_t &m = const_cast<setup_t &>(s);
+void settings_value_text(uint8_t id, const setup_t *s, char *out, size_t size) {
+  setup_t *m = (setup_t *) s;
   if (bool_ref(id, m)) {
     strlcpy(out, *bool_ref(id, m) ? "On" : "Off", size);
     return;
@@ -157,24 +157,24 @@ void settings_value_text(uint8_t id, const setup_t &s, char *out, size_t size) {
   }
   if (is_mx_opt(id)) {
     uint8_t opt = id - SET_MX_CLOCK_HOURS;
-    strlcpy(out, kg_mx_opt_name(opt, s.matrix_style.opt[opt]), size);
+    strlcpy(out, kg_mx_opt_name(opt, s->matrix_style.opt[opt]), size);
     return;
   }
   switch (id) {
-    case SET_TIMEOUT: snprintf(out, size, "%u s", s.autoload_timeout); break;
+    case SET_TIMEOUT: snprintf(out, size, "%u s", s->autoload_timeout); break;
     case SET_CORE: {
       char name[sizeof(cores[0].name)];
-      trim_copy(name, core_sel < cores_len ? cores[core_sel].name : s.autoload_core, sizeof(name));
+      trim_copy(name, core_sel < cores_len ? cores[core_sel].name : s->autoload_core, sizeof(name));
       kg_short_name(name[0] ? name : "-", out, size - 1);
       break;
     }
-    case SET_VIDEO_MODE: strlcpy(out, ft_mode_name(s.ft_video_mode), size); break;
-    case SET_MOUSE_SPEED: snprintf(out, size, "%u", s.ft_mouse_speed); break;
+    case SET_VIDEO_MODE: strlcpy(out, ft_mode_name(s->ft_video_mode), size); break;
+    case SET_MOUSE_SPEED: snprintf(out, size, "%u", s->ft_mouse_speed); break;
     case SET_MATRIX_BRIGHTNESS:
-      if (s.matrix_brightness == 0) strlcpy(out, "Core", size);
-      else snprintf(out, size, "%u", s.matrix_brightness);
+      if (s->matrix_brightness == 0) strlcpy(out, "Core", size);
+      else snprintf(out, size, "%u", s->matrix_brightness);
       break;
-    case SET_SOUND: strlcpy(out, sound_names[s.ft_sound < SOUNDS ? s.ft_sound : 0], size); break;
+    case SET_SOUND: strlcpy(out, sound_names[s->ft_sound < SOUNDS ? s->ft_sound : 0], size); break;
     case SET_THEME: {
       int t = settings_theme(s);
       strlcpy(out, t < 0 ? "Custom" : themes[t].name, size);
@@ -184,7 +184,7 @@ void settings_value_text(uint8_t id, const setup_t &s, char *out, size_t size) {
   }
 }
 
-void settings_change(uint8_t id, setup_t &s, int d) {
+void settings_change(uint8_t id, setup_t *s, int d) {
   if (bool *b = bool_ref(id, s)) {
     *b = !*b;
     if (id == SET_MATRIX || id == SET_MX_METER_PEAK) matrix_setup(s); // shown at once
@@ -192,29 +192,29 @@ void settings_change(uint8_t id, setup_t &s, int d) {
   }
   if (is_mx_opt(id)) {
     uint8_t opt = id - SET_MX_CLOCK_HOURS, n = kg_mx_opt_count(opt);
-    s.matrix_style.opt[opt] = (s.matrix_style.opt[opt] + d + n) % n;
+    s->matrix_style.opt[opt] = (s->matrix_style.opt[opt] + d + n) % n;
     matrix_setup(s);
     return;
   }
   switch (id) {
-    case SET_TIMEOUT: s.autoload_timeout = (s.autoload_timeout + d + TIMEOUT_MAX + 1) % (TIMEOUT_MAX + 1); break;
+    case SET_TIMEOUT: s->autoload_timeout = (s->autoload_timeout + d + TIMEOUT_MAX + 1) % (TIMEOUT_MAX + 1); break;
     case SET_CORE: {
       uint8_t n = cores_len + (core_other ? 1 : 0);
       if (n == 0) break;
       core_sel = (core_sel + d + n) % n;
-      if (core_sel < cores_len) trim_copy(s.autoload_core, cores[core_sel].id, sizeof(s.autoload_core));
-      else strlcpy(s.autoload_core, core_other_id, sizeof(s.autoload_core));
+      if (core_sel < cores_len) trim_copy(s->autoload_core, cores[core_sel].id, sizeof(s->autoload_core));
+      else strlcpy(s->autoload_core, core_other_id, sizeof(s->autoload_core));
       break;
     }
     case SET_VIDEO_MODE: {
       uint8_t n = ft_mode_count();
-      s.ft_video_mode = (s.ft_video_mode + d + n) % n;
+      s->ft_video_mode = (s->ft_video_mode + d + n) % n;
       break;
     }
-    case SET_SOUND: s.ft_sound = (s.ft_sound + d + SOUNDS) % SOUNDS; break;
-    case SET_MOUSE_SPEED: s.ft_mouse_speed = (s.ft_mouse_speed - 1 + d + 5) % 5 + 1; break;
+    case SET_SOUND: s->ft_sound = (s->ft_sound + d + SOUNDS) % SOUNDS; break;
+    case SET_MOUSE_SPEED: s->ft_mouse_speed = (s->ft_mouse_speed - 1 + d + 5) % 5 + 1; break;
     case SET_MATRIX_BRIGHTNESS:
-      s.matrix_brightness = (s.matrix_brightness + d + 17) % 17;
+      s->matrix_brightness = (s->matrix_brightness + d + 17) % 17;
       matrix_setup(s);
       break;
     case SET_THEME: {
@@ -226,7 +226,7 @@ void settings_change(uint8_t id, setup_t &s, int d) {
   }
 }
 
-bool settings_differ(const setup_t &a, const setup_t &b) {
+bool settings_differ(const setup_t *a, const setup_t *b) {
   for (uint8_t id = 0; id < SET_COUNT; id++) {
     if (id == SET_CORE || id == SET_THEME) continue; // the core below; the theme is the colors
     char va[KG_INI_VALUE_MAX], vb[KG_INI_VALUE_MAX];
@@ -234,9 +234,9 @@ bool settings_differ(const setup_t &a, const setup_t &b) {
     settings_value_text(id, b, vb, sizeof(vb));
     if (strcmp(va, vb) != 0) return true;
   }
-  char ca[sizeof(a.autoload_core)], cb[sizeof(b.autoload_core)];
-  trim_copy(ca, a.autoload_core, sizeof(ca));
-  trim_copy(cb, b.autoload_core, sizeof(cb));
+  char ca[sizeof(a->autoload_core)], cb[sizeof(b->autoload_core)];
+  trim_copy(ca, a->autoload_core, sizeof(ca));
+  trim_copy(cb, b->autoload_core, sizeof(cb));
   return strcmp(ca, cb) != 0;
 }
 
@@ -244,8 +244,8 @@ uint8_t settings_theme_count() { return themes_len; }
 
 const char *settings_theme_name(uint8_t i) { return i < themes_len ? themes[i].name : "?"; }
 
-int settings_theme(const setup_t &s) {
-  setup_t &m = const_cast<setup_t &>(s);
+int settings_theme(const setup_t *s) {
+  setup_t *m = (setup_t *) s;
   for (uint8_t t = 0; t < themes_len; t++) {
     bool same = true;
     for (uint8_t i = 0; i < SET_COLORS && same; i++) {
@@ -256,7 +256,7 @@ int settings_theme(const setup_t &s) {
   return -1;
 }
 
-void settings_theme_apply(setup_t &s, uint8_t t) {
+void settings_theme_apply(setup_t *s, uint8_t t) {
   if (t >= themes_len) return;
   for (uint8_t i = 0; i < SET_COLORS; i++) *settings_color(SET_COLOR_BG + i, s) = themes[t].colors[i];
 }

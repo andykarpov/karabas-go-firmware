@@ -5,8 +5,6 @@
 #include "usb_hid_keys.h"
 #include "input/sega.h"
 #include "app_core.h"
-#include <algorithm>
-#include <tuple>
 #include "sorts.h"
 #include "file_name.h"
 
@@ -41,20 +39,20 @@ static char presel_after[256];
 
 static void filebrowser_open() {
   uint8_t slot = core.osd[curr_osd_item].slot_id;
-  core_file_slot_t &fs = file_slots[slot];
-  memcpy(filebrowser_dir, fs.dir, sizeof(filebrowser_dir));
+  core_file_slot_t *fs = &file_slots[slot];
+  memcpy(filebrowser_dir, fs->dir, sizeof(filebrowser_dir));
   presel_after[0] = '\0';
-  if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER && !fs.is_mounted) {
+  if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER && !fs->is_mounted) {
     // the last chosen image of a slot with the same extensions, else any mounted one
     int from = -1;
     for (uint8_t i = 0; i < core.osd_len; i++) {
       if (core.osd[i].type != CORE_OSD_TYPE_FILEMOUNTER) continue;
       uint8_t s = core.osd[i].slot_id;
-      if (s == slot || !file_slots[s].is_mounted || strcmp(file_slots[s].ext, fs.ext) != 0) continue;
+      if (s == slot || !file_slots[s].is_mounted || strcmp(file_slots[s].ext, fs->ext) != 0) continue;
       if (from == -1 || s == last_mount_slot) from = s;
     }
-    if (from != -1 && strcmp(file_slots[from].dir, fs.dir) != 0) {
-      memcpy(fs.dir, file_slots[from].dir, sizeof(fs.dir));
+    if (from != -1 && strcmp(file_slots[from].dir, fs->dir) != 0) {
+      memcpy(fs->dir, file_slots[from].dir, sizeof(fs->dir));
       filebrowser_slot = -1; // read the file list of that dir
     }
     if (from != -1) {
@@ -68,10 +66,10 @@ static void filebrowser_open() {
 // eject the image of a file mounter item: the core gets size 0, the core file forgets the image
 static void app_core_eject(uint8_t pos) {
   if (core.osd[pos].type != CORE_OSD_TYPE_FILEMOUNTER) return;
-  core_file_slot_t &fs = file_slots[core.osd[pos].slot_id];
+  core_file_slot_t *fs = &file_slots[core.osd[pos].slot_id];
   d_printf("Eject slot %d", core.osd[pos].slot_id); d_println();
-  fs.filename[0] = '\0';
-  fs.is_mounted = false;
+  fs->filename[0] = '\0';
+  fs->is_mounted = false;
   img_mount(core.osd[pos].slot_id);
   filebrowser_slot = -1; // the file list has no eject entry now
   core.osd_need_save = true;
@@ -86,10 +84,10 @@ static void app_core_select_phys(uint8_t pos, int drive) {
       app_core_eject(i);
     }
   }
-  core_file_slot_t &fs = file_slots[core.osd[pos].slot_id];
+  core_file_slot_t *fs = &file_slots[core.osd[pos].slot_id];
   d_printf("Slot %d: physical drive DS%d", core.osd[pos].slot_id, drive); d_println();
-  kg_phys_name(drive, fs.filename);
-  fs.is_mounted = true;
+  kg_phys_name(drive, fs->filename);
+  fs->is_mounted = true;
   img_mount(core.osd[pos].slot_id); // also a disk change for the core
   filebrowser_slot = -1;
   core.osd_need_save = true;
@@ -415,9 +413,9 @@ void app_core_on_keyboard() {
 
     // esc: back to the dir of the mounted image
     if (usb_keyboard_report.keycode[0] == KEY_ESC || (joyL & SC_BTN_A) || (joyR & SC_BTN_A) || ((joyL | joyR) & UI_JOY_ESC)) {
-      core_file_slot_t &fs = file_slots[core.osd[curr_osd_item].slot_id];
-      if (strcmp(fs.dir, filebrowser_dir) != 0) {
-        memcpy(fs.dir, filebrowser_dir, sizeof(filebrowser_dir));
+      core_file_slot_t *fs = &file_slots[core.osd[curr_osd_item].slot_id];
+      if (strcmp(fs->dir, filebrowser_dir) != 0) {
+        memcpy(fs->dir, filebrowser_dir, sizeof(filebrowser_dir));
         filebrowser_slot = -1;
       }
       is_filebrowser = false;
@@ -592,7 +590,7 @@ int app_core_init_filebrowser() {
 
   d_printf("Files count %u", files_len); d_println();
 
-  std::sort(files, files + files_len);
+  files_sort(files, files_len);
 
   // preselect file in browser after sorting; not the eject or physical drive entries (they sort
   // first) if the image is in another dir: enter must not eject by accident

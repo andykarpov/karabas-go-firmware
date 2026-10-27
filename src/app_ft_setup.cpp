@@ -158,15 +158,15 @@ static void draw_value(uint8_t id, int16_t y, bool focused, bool arrows) {
   int16_t right = PANEL_X + panel_w() - 16;
   const setting_t *st = &settings[id];
   if (st->kind == SET_KIND_BOOL) {
-    bool on = settings_bool(id, s);
+    bool on = settings_bool(id, &s);
     ft_draw_toggle(right - 52, y + ROW_H / 2 - 8, 40, FONT_SMALL, s.color_text, s.color_text,
       on ? s.color_active : s.color_copyright, ft_opt(), on, "\xff");
     return;
   }
   if (st->kind == SET_KIND_COLOR) {
     char hex[8];
-    settings_value_text(id, s, hex, sizeof(hex));
-    ft_draw_rect(right - 48, y + 6, 48, ROW_H - 12, 2, *settings_color(id, s));
+    settings_value_text(id, &s, hex, sizeof(hex));
+    ft_draw_rect(right - 48, y + 6, 48, ROW_H - 12, 2, *settings_color(id, &s));
     ft_draw_text(right - 60, y + ROW_H / 2, FONT_SMALL, s.color_text, FT81x_OPT_RIGHTX | FT81x_OPT_CENTERY, hex);
     return;
   }
@@ -176,7 +176,7 @@ static void draw_value(uint8_t id, int16_t y, bool focused, bool arrows) {
   }
   char v[14]; // a long core name is shortened to fit between the arrows
   if (id == SET_VIDEO_MODE) strlcpy(v, ft_mode_name(focused ? mode_pick : s.ft_video_mode), sizeof(v));
-  else settings_value_text(id, s, v, sizeof(v));
+  else settings_value_text(id, &s, v, sizeof(v));
   ft_draw_text(right - VALUE_W / 2, y + ROW_H / 2, FONT, s.color_text, FT81x_OPT_CENTER, v);
   if (arrows) {
     ft_draw_text(right - VALUE_W + 12, y + ROW_H / 2, FONT, s.color_text, FT81x_OPT_CENTER, "<");
@@ -225,20 +225,20 @@ static void draw_custom() {
   c.opt = ft_opt();
   c.focused = focus == F_CUSTOM;
   if (!c.focused) ft_hit_add(c.x, c.y, c.w, c.h, HIT_PANEL); // a click opens it
-  custom_page()->draw(c);
+  custom_page()->draw(&c);
 }
 
 // the editor of one color: R, G, B sliders
 static void draw_color() {
   uint8_t id = cur_id();
-  uint32_t c = *settings_color(id, s);
+  uint32_t c = *settings_color(id, &s);
   int16_t w = panel_w();
   char b[40];
   snprintf(b, sizeof(b), "Theme > %s", settings[id].label);
   ft_draw_text(PANEL_X + 16, TOP + TAB_H / 2, 29, s.color_text, FT81x_OPT_CENTERY, b);
   ft_draw_rect(PANEL_X + 16, TOP + TAB_H + 2, w - 32, 1, 1, s.color_copyright);
   ft_draw_rect(PANEL_X + 16, TOP + 48, 96, 64, 4, c);
-  settings_value_text(id, s, b, sizeof(b));
+  settings_value_text(id, &s, b, sizeof(b));
   ft_draw_text(PANEL_X + 128, TOP + 80, 30, s.color_text, FT81x_OPT_CENTERY, b);
 
   static const char *const names[3] = { "R", "G", "B" };
@@ -325,11 +325,11 @@ void app_ft_setup_draw() {
   settings_preview(focus == F_PAGE && mx_page ? cur_id() : SET_COUNT);
   ft_begin_display_list();
   ft_hit_clear();
-  app_core_browser_ft_background(s);
+  app_core_browser_ft_background(&s);
   bool page = tab < T_PAGES;
   // the picture only where it does not cover the settings
   bool show_char = (!page && !custom_page()) || PANEL_X + panel_w() < ft_width() - BG_WIDTH - 8;
-  app_core_browser_ft_decor(s, show_char);
+  app_core_browser_ft_decor(&s, show_char);
   draw_tabs();
   if (focus == F_COLOR) draw_color();
   else if (page) draw_page();
@@ -358,7 +358,7 @@ void app_ft_setup_overlay() {
   ft_mouse_hide();
   dragging = false;
   s = hw_setup;
-  settings_begin(s);
+  settings_begin(&s);
   focus = F_TABS;
   tab = T_SYSTEM;
   shown = nullptr;
@@ -418,7 +418,7 @@ void app_ft_setup_tick() {
 static void open_tab() {
   switch (tab) {
     case T_SAVE:
-      if (save_setup(s)) { leave(); return; }
+      if (save_setup(&s)) { leave(); return; }
       error = "Can't save karabas.ini";
       break;
     case T_CANCEL:
@@ -459,7 +459,7 @@ static void change(int d) {
     mode_pick = (mode_pick + d + n) % n;
     return;
   }
-  settings_change(id, s, d);
+  settings_change(id, &s, d);
   if (id == SET_SOUND && s.ft_sound > 0) app_core_browser_ft_sound(s.ft_sound, false);
 }
 
@@ -468,7 +468,7 @@ static void enter_row() {
   if (settings[id].kind == SET_KIND_COLOR) {
     focus = F_COLOR;
     color_ch = 0;
-    color_old = *settings_color(id, s);
+    color_old = *settings_color(id, &s);
   } else if (id == SET_VIDEO_MODE) {
     if (mode_pick == mode_cur) return;
     mode_old = mode_cur;
@@ -487,7 +487,7 @@ static void enter_row() {
 }
 
 static void change_color(int d) {
-  uint32_t *c = settings_color(cur_id(), s);
+  uint32_t *c = settings_color(cur_id(), &s);
   uint8_t shift = 16 - 8 * color_ch;
   int v = ((*c >> shift) & 0xff) + d;
   v = v < 0 ? 0 : v > 255 ? 255 : v;
@@ -498,23 +498,23 @@ typedef struct {
   bool up, down, left, right, enter, esc, back, tab, shift;
 } keys_t;
 
-static void handle(const keys_t &k) {
-  bool up = k.up, down = k.down, left = k.left, right = k.right, enter = k.enter, esc = k.esc, back = k.back, shift = k.shift;
+static void handle(const keys_t *k) {
+  bool up = k->up, down = k->down, left = k->left, right = k->right, enter = k->enter, esc = k->esc, back = k->back, shift = k->shift;
   error = nullptr;
 
   switch (focus) {
     case F_TABS:
       if (up) tab = (tab + T_COUNT - 1) % T_COUNT;
-      else if (down || k.tab) tab = (tab + 1) % T_COUNT;
+      else if (down || k->tab) tab = (tab + 1) % T_COUNT;
       else if (enter || (right && tab < T_SAVE)) open_tab();
-      else if ((esc || (left && !ui_repeat)) && settings_differ(s, hw_setup)) { focus = F_DIALOG; dialog = D_DROP; dialog_left = false; }
+      else if ((esc || (left && !ui_repeat)) && settings_differ(&s, &hw_setup)) { focus = F_DIALOG; dialog = D_DROP; dialog_left = false; }
       else if (esc || (left && !ui_repeat)) leave(); // Left: the tabs are the top level
       break;
     case F_PAGE: {
       uint8_t n = cur_page()->len;
       if (up) row = (row + n - 1) % n;
       else if (down) row = (row + 1) % n;
-      else if (k.tab) { tab = (tab + 1) % T_PAGES; row = 0; mx_page = false; }
+      else if (k->tab) { tab = (tab + 1) % T_PAGES; row = 0; mx_page = false; }
       else if (left || right) change(left ? -1 : 1);
       else if (enter) enter_row();
       else if (back && mx_page) close_mx_page();
@@ -525,10 +525,10 @@ static void handle(const keys_t &k) {
     }
     case F_COLOR:
       if (up) color_ch = (color_ch + 2) % 3;
-      else if (down || k.tab) color_ch = (color_ch + 1) % 3;
+      else if (down || k->tab) color_ch = (color_ch + 1) % 3;
       else if (left || right) change_color((left ? -1 : 1) * (shift ? 1 : COLOR_STEP));
       else if (enter) focus = F_PAGE;
-      else if (back) { *settings_color(cur_id(), s) = color_old; focus = F_PAGE; }
+      else if (back) { *settings_color(cur_id(), &s) = color_old; focus = F_PAGE; }
       break;
     case F_DIALOG:
       if (left || right) dialog_left = !dialog_left;
@@ -586,7 +586,7 @@ void app_ft_setup_on_keyboard() {
   k.shift = usb_keyboard_report.modifier & (KEY_MOD_LSHIFT | KEY_MOD_RSHIFT);
   if (!(k.up || k.down || k.left || k.right || k.enter || k.back || k.tab)) return;
   ft_mouse_hide(); // the keys move the focus
-  handle(k);
+  handle(&k);
 }
 
 // ---------------- the mouse ----------------
@@ -595,7 +595,7 @@ static void slider_set(int16_t x) {
   int16_t sx = PANEL_X + 48, sw = panel_w() - 48 - 72;
   int v = (int) (x - sx) * 255 / sw;
   v = v < 0 ? 0 : v > 255 ? 255 : v;
-  uint32_t *c = settings_color(cur_id(), s);
+  uint32_t *c = settings_color(cur_id(), &s);
   uint8_t shift = 16 - 8 * color_ch;
   *c = (*c & ~(0xfful << shift)) | ((uint32_t) v << shift);
 }
@@ -640,7 +640,7 @@ static bool click(int16_t id) {
     dialog_left = id == HIT_DLG_LEFT;
     keys_t k = {};
     k.enter = true;
-    handle(k);
+    handle(&k);
     return true;
   }
   return false;
@@ -675,7 +675,7 @@ static void mouse_tick() {
   if (ev.pressed & FT_MOUSE_RIGHT) {
     keys_t k = {};
     k.esc = k.back = true;
-    handle(k); // draws
+    handle(&k); // draws
     return;
   }
   if (ev.pressed || ev.wheel) {

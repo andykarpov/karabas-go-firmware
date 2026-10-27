@@ -7,8 +7,6 @@
 #include "osd.h"
 #include "input/sega.h"
 #include "usb_hid_keys.h"
-#include <algorithm>
-#include <tuple>
 #include "app_core_browser.h"
 #include "app_setup.h"
 #include "sorts.h"
@@ -171,30 +169,30 @@ void app_core_browser_ft_overlay() {
   app_core_browser_ft_menu(0);
 }
 
-void app_core_browser_ft_background(const setup_t &t) {
-  ft_clear(t.color_bg);
+void app_core_browser_ft_background(const setup_t *t) {
+  ft_clear(t->color_bg);
   // from the top to 3/4 of the height, as CMD_GRADIENT drew it; below is the clear color
   uint16_t h = ft_height() - ft_height() / 4;
   if (h > GRADIENT_MAX_H) h = GRADIENT_MAX_H;
-  if (h != gradient_h || t.color_gradient != gradient_from || t.color_bg != gradient_to) {
-    gradient_load(t.color_gradient, t.color_bg, h);
+  if (h != gradient_h || t->color_gradient != gradient_from || t->color_bg != gradient_to) {
+    gradient_load(t->color_gradient, t->color_bg, h);
   }
   ft_draw_bitmap_rgb565_repeat_x(GRADIENT_OFFSET + gradient_buf * GRADIENT_BUF, 0, 0, GRADIENT_W, h, ft_width());
 }
 
-void app_core_browser_ft_decor(const setup_t &t, bool show_char) {
-  if (t.ft_time) {
+void app_core_browser_ft_decor(const setup_t *t, bool show_char) {
+  if (t->ft_time) {
     char time[9];
     sprintf(time, "%02d:%02d:%02d", rtc_get_hour(), rtc_get_minute(), rtc_get_second());
-    ft_draw_text(ft_width()-88, 30, 30, t.color_text, FT81x_OPT_CENTER, time);
+    ft_draw_text(ft_width()-88, 30, 30, t->color_text, FT81x_OPT_CENTER, time);
   }
-  if (t.ft_date) {
+  if (t->ft_date) {
     char date[9];
     sprintf(date, "%02d/%02d/%02d", rtc_get_day(), rtc_get_month(), rtc_get_year() % 100);
-    ft_draw_text(ft_width()-88, 60, 30, t.color_text, FT81x_OPT_CENTER, date);
+    ft_draw_text(ft_width()-88, 60, 30, t->color_text, FT81x_OPT_CENTER, date);
   }
   ft_draw_bitmap(0, 8, 8, LOGO_WIDTH, LOGO_HEIGHT, 4, 0);  // logo scaled 4x
-  if (t.ft_char && show_char) {
+  if (t->ft_char && show_char) {
     ft_draw_bitmap(LOGO_BITMAP_SIZE, ft_width()-BG_WIDTH-8, ft_height()-BG_HEIGHT-8, BG_WIDTH, BG_HEIGHT, 1, 0); // bg image
   }
 }
@@ -244,7 +242,7 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
   uint32_t color_text_active = hw_setup.color_text_active;
   uint32_t color_copyright = hw_setup.color_copyright;
 
-  app_core_browser_ft_background(hw_setup);
+  app_core_browser_ft_background(&hw_setup);
   ft_hit_clear();
 
   uint8_t ft_page = ft_core_page_size();
@@ -312,7 +310,7 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
   ft_draw_text(36, 104, 29, setup_focus ? color_text_active : color_text, FT81x_OPT_CENTER, "S");
   ft_draw_text(62, 104, 28, color_text, FT81x_OPT_CENTERY, "Setup");
 
-  app_core_browser_ft_decor(hw_setup, true);
+  app_core_browser_ft_decor(&hw_setup, true);
 
   hover = ft_hover();
   ft_frame_end();
@@ -351,7 +349,7 @@ void app_core_browser_read_list() {
     }
   }
   // sort by core order number
-  std::sort(cores, cores + cores_len);
+  cores_sort(cores, cores_len);
   
   autoload_enabled = false;
   // pre-select autoload core

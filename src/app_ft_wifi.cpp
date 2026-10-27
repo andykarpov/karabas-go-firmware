@@ -229,24 +229,24 @@ static bool tick() {
 
 // ---------------- drawing ----------------
 
-static void draw_info(const ft_page_ctx_t &c, int16_t y, const char *label, const char *value, uint32_t color) {
-  ft_draw_text(c.x + 16, y, FT_PAGE_FONT, c.s->color_text, FT81x_OPT_CENTERY, label);
-  ft_page_text(c.x + INFO_X, y, FT_PAGE_FONT, color, FT81x_OPT_CENTERY, value, (c.w - INFO_X - 16) / 12);
+static void draw_info(const ft_page_ctx_t *c, int16_t y, const char *label, const char *value, uint32_t color) {
+  ft_draw_text(c->x + 16, y, FT_PAGE_FONT, c->s->color_text, FT81x_OPT_CENTERY, label);
+  ft_page_text(c->x + INFO_X, y, FT_PAGE_FONT, color, FT81x_OPT_CENTERY, value, (c->w - INFO_X - 16) / 12);
 }
 
-static void draw_message(const ft_page_ctx_t &c, int16_t y, const char *msg, uint32_t color) {
-  ft_page_text(c.x + 16, y, FT_PAGE_FONT, color, FT81x_OPT_CENTERY, msg);
+static void draw_message(const ft_page_ctx_t *c, int16_t y, const char *msg, uint32_t color) {
+  ft_page_text(c->x + 16, y, FT_PAGE_FONT, color, FT81x_OPT_CENTERY, msg);
 }
 
 // the text field: one char per CHAR_W (the fonts are not monospaced), the tail that fits,
 // a cyan cursor at the end
-static void draw_field(const ft_page_ctx_t &c, int16_t y, const char *text, bool hidden) {
-  int16_t fx = c.x + 16, fw = c.w - 32;
+static void draw_field(const ft_page_ctx_t *c, int16_t y, const char *text, bool hidden) {
+  int16_t fx = c->x + 16, fw = c->w - 32;
   uint8_t width = (fw - 16) / CHAR_W;
   size_t len = strlen(text);
   size_t from = len >= width ? len - width + 1 : 0;
-  ft_page_rect(fx - 2, y - 2, fw + 4, FT_PAGE_FIELD_H + 4, 4, c.s->color_active);
-  ft_page_rect(fx, y, fw, FT_PAGE_FIELD_H, 4, c.s->color_bg);
+  ft_page_rect(fx - 2, y - 2, fw + 4, FT_PAGE_FIELD_H + 4, 4, c->s->color_active);
+  ft_page_rect(fx, y, fw, FT_PAGE_FIELD_H, 4, c->s->color_bg);
   for (size_t i = from; i <= len; i++) {
     int16_t cx = fx + 8 + (i - from) * CHAR_W;
     if (i == len) {
@@ -255,12 +255,12 @@ static void draw_field(const ft_page_ctx_t &c, int16_t y, const char *text, bool
     }
     char ch[2] = { hidden ? '*' : text[i], '\0' };
     if (ch[0] < 32 || ch[0] >= 127) ch[0] = '?';
-    ft_draw_text(cx + CHAR_W / 2, y + FT_PAGE_FIELD_H / 2, FT_PAGE_FONT_SMALL, c.s->color_text, FT81x_OPT_CENTER, ch);
+    ft_draw_text(cx + CHAR_W / 2, y + FT_PAGE_FIELD_H / 2, FT_PAGE_FONT_SMALL, c->s->color_text, FT81x_OPT_CENTER, ch);
   }
 }
 
-static void draw_status(const ft_page_ctx_t &c, int16_t y) {
-  uint32_t value = c.s->color_text, dim = c.s->color_copyright;
+static void draw_status(const ft_page_ctx_t *c, int16_t y) {
+  uint32_t value = c->s->color_text, dim = c->s->color_copyright;
   draw_info(c, y + INFO_STEP / 2, "Module", version[0] ? version : "?", value);
   draw_info(c, y + INFO_STEP * 3 / 2, "CTS", cts == CTS_ON ? "on" : cts == CTS_OFF ? "could not turn on" : "unknown",
     cts == CTS_ON ? value : FT_PAGE_ERROR);
@@ -268,140 +268,140 @@ static void draw_status(const ft_page_ctx_t &c, int16_t y) {
   draw_info(c, y + INFO_STEP * 7 / 2, "IP", ip[0] && strcmp(ip, "0.0.0.0") != 0 ? ip : "-", value);
 }
 
-static void draw_list(const ft_page_ctx_t &c) {
-  ft_draw_text(c.x + 16, c.y + FT_PAGE_BTN_H / 2, FT_PAGE_FONT_SMALL, c.s->color_copyright, FT81x_OPT_CENTERY, "dBm      Network");
+static void draw_list(const ft_page_ctx_t *c) {
+  ft_draw_text(c->x + 16, c->y + FT_PAGE_BTN_H / 2, FT_PAGE_FONT_SMALL, c->s->color_copyright, FT81x_OPT_CENTERY, "dBm      Network");
   if (aps_len > 0) {
     char b[8];
     snprintf(b, sizeof(b), "%u/%u", sel + 1, aps_len);
-    ft_draw_text(c.x + c.w - 16 - 140 - 16, c.y + FT_PAGE_BTN_H / 2, FT_PAGE_FONT_SMALL, c.s->color_copyright, FT81x_OPT_RIGHTX | FT81x_OPT_CENTERY, b);
+    ft_draw_text(c->x + c->w - 16 - 140 - 16, c->y + FT_PAGE_BTN_H / 2, FT_PAGE_FONT_SMALL, c->s->color_copyright, FT81x_OPT_RIGHTX | FT81x_OPT_CENTERY, b);
   }
-  ft_page_button(c, c.x + c.w - 16 - 140, c.y, 140, "Rescan", c.focused && (on_rescan || aps_len == 0), HIT_RESCAN);
-  int16_t y0 = c.y + FT_PAGE_BTN_H + 8;
-  list_rows = (c.h - (y0 - c.y)) / LIST_ROW_H;
+  ft_page_button(c, c->x + c->w - 16 - 140, c->y, 140, "Rescan", c->focused && (on_rescan || aps_len == 0), HIT_RESCAN);
+  int16_t y0 = c->y + FT_PAGE_BTN_H + 8;
+  list_rows = (c->h - (y0 - c->y)) / LIST_ROW_H;
   if (list_rows < 1) list_rows = 1;
   if (aps_len == 0) {
-    draw_message(c, y0 + LIST_ROW_H / 2, "No networks found", c.s->color_text);
+    draw_message(c, y0 + LIST_ROW_H / 2, "No networks found", c->s->color_text);
     return;
   }
   if (sel < top) top = sel;
   if (sel >= top + list_rows) top = sel - list_rows + 1;
   for (uint8_t row = 0; row < list_rows && top + row < aps_len; row++) {
-    const kg_wifi_ap_t &ap = aps[top + row];
+    const kg_wifi_ap_t *ap = &aps[top + row];
     int16_t y = y0 + row * LIST_ROW_H;
-    bool hovered = ft_page_hit(c.x, y, c.w, LIST_ROW_H - 2, HIT_AP + top + row);
-    ft_page_row(c, c.x, y, c.w, LIST_ROW_H - 2, top + row == sel && !on_rescan, hovered);
+    bool hovered = ft_page_hit(c->x, y, c->w, LIST_ROW_H - 2, HIT_AP + top + row);
+    ft_page_row(c, c->x, y, c->w, LIST_ROW_H - 2, top + row == sel && !on_rescan, hovered);
     char b[8];
-    snprintf(b, sizeof(b), "%d", ap.rssi);
+    snprintf(b, sizeof(b), "%d", ap->rssi);
     int16_t cy = y + (LIST_ROW_H - 2) / 2;
-    ft_draw_text(c.x + 60, cy, FT_PAGE_FONT, c.s->color_text, FT81x_OPT_RIGHTX | FT81x_OPT_CENTERY, b);
-    if (ap.ecn) ft_draw_text(c.x + 76, cy, FT_PAGE_FONT, c.s->color_copyright, FT81x_OPT_CENTERY, "*");
-    bool joined = strcmp(ap.ssid, cur_ssid) == 0;
-    ft_page_text(c.x + 96, cy, FT_PAGE_FONT, joined ? c.s->color_active : c.s->color_text, FT81x_OPT_CENTERY, ap.ssid, (c.w - 112) / 12);
+    ft_draw_text(c->x + 60, cy, FT_PAGE_FONT, c->s->color_text, FT81x_OPT_RIGHTX | FT81x_OPT_CENTERY, b);
+    if (ap->ecn) ft_draw_text(c->x + 76, cy, FT_PAGE_FONT, c->s->color_copyright, FT81x_OPT_CENTERY, "*");
+    bool joined = strcmp(ap->ssid, cur_ssid) == 0;
+    ft_page_text(c->x + 96, cy, FT_PAGE_FONT, joined ? c->s->color_active : c->s->color_text, FT81x_OPT_CENTERY, ap->ssid, (c->w - 112) / 12);
   }
 }
 
-static void draw(const ft_page_ctx_t &c) {
-  int16_t x = c.x + 16;
-  uint32_t text = c.s->color_text, dim = c.s->color_copyright;
+static void draw(const ft_page_ctx_t *c) {
+  int16_t x = c->x + 16;
+  uint32_t text = c->s->color_text, dim = c->s->color_copyright;
   char buf[48];
 
   switch (screen) {
     case W_INIT:
-      draw_message(c, c.y + INFO_STEP / 2, "Talking to ESP8266...", text);
+      draw_message(c, c->y + INFO_STEP / 2, "Talking to ESP8266...", text);
       break;
     case W_NO_ESP:
-      draw_message(c, c.y + INFO_STEP / 2, "ESP8266 is not responding", FT_PAGE_ERROR);
-      ft_page_button(c, x, c.y + 2 * INFO_STEP, BTN_W, "Retry", true, HIT_RETRY);
+      draw_message(c, c->y + INFO_STEP / 2, "ESP8266 is not responding", FT_PAGE_ERROR);
+      ft_page_button(c, x, c->y + 2 * INFO_STEP, BTN_W, "Retry", true, HIT_RETRY);
       break;
     case W_STATUS: {
-      draw_status(c, c.y);
-      int16_t y = c.y + 4 * INFO_STEP + 16;
+      draw_status(c, c->y);
+      int16_t y = c->y + 4 * INFO_STEP + 16;
       // two columns: five buttons do not fit one under the other in 640x480
       uint8_t ids[M_COUNT], n = menu_items(ids), rows = (n + 1) / 2;
-      int16_t bw = (c.w - 32 - 16) / 2 < BTN_W ? (c.w - 32 - 16) / 2 : BTN_W;
+      int16_t bw = (c->w - 32 - 16) / 2 < BTN_W ? (c->w - 32 - 16) / 2 : BTN_W;
       for (uint8_t i = 0; i < n; i++) {
         ft_page_button(c, x + (i / rows) * (bw + 16), y + (i % rows) * BTN_STEP, bw, menu_names[ids[i]], sel == i, HIT_STATUS + i);
       }
       break;
     }
     case W_SCAN:
-      draw_message(c, c.y + INFO_STEP / 2, "Scanning...", text);
+      draw_message(c, c->y + INFO_STEP / 2, "Scanning...", text);
       break;
     case W_LIST:
       draw_list(c);
       break;
     case W_SSID:
-      draw_message(c, c.y + INFO_STEP / 2, "Network name:", text);
-      draw_field(c, c.y + INFO_STEP + 4, ssid, false);
-      ft_page_button(c, x, c.y + INFO_STEP + 4 + BTN_STEP + 8, 140, "Next", false, HIT_NEXT);
+      draw_message(c, c->y + INFO_STEP / 2, "Network name:", text);
+      draw_field(c, c->y + INFO_STEP + 4, ssid, false);
+      ft_page_button(c, x, c->y + INFO_STEP + 4 + BTN_STEP + 8, 140, "Next", false, HIT_NEXT);
       break;
     case W_PASS:
-      draw_info(c, c.y + INFO_STEP / 2, "Network", ssid, text);
-      draw_message(c, c.y + INFO_STEP * 3 / 2, "Password:", text);
-      draw_field(c, c.y + 2 * INFO_STEP + 4, pass, !show_pass);
-      ft_page_button(c, x, c.y + 2 * INFO_STEP + 4 + BTN_STEP + 8, 140, "Connect", false, HIT_CONNECT);
-      ft_page_button(c, x + 156, c.y + 2 * INFO_STEP + 4 + BTN_STEP + 8, 140, show_pass ? "Hide" : "Show", false, HIT_SHOW);
+      draw_info(c, c->y + INFO_STEP / 2, "Network", ssid, text);
+      draw_message(c, c->y + INFO_STEP * 3 / 2, "Password:", text);
+      draw_field(c, c->y + 2 * INFO_STEP + 4, pass, !show_pass);
+      ft_page_button(c, x, c->y + 2 * INFO_STEP + 4 + BTN_STEP + 8, 140, "Connect", false, HIT_CONNECT);
+      ft_page_button(c, x + 156, c->y + 2 * INFO_STEP + 4 + BTN_STEP + 8, 140, show_pass ? "Hide" : "Show", false, HIT_SHOW);
       break;
     case W_JOIN:
       snprintf(buf, sizeof(buf), "Connecting to %s...", ssid);
-      draw_message(c, c.y + INFO_STEP / 2, buf, text);
+      draw_message(c, c->y + INFO_STEP / 2, buf, text);
       break;
     case W_RESULT:
       if (result_error) {
-        draw_message(c, c.y + INFO_STEP / 2, result_error, FT_PAGE_ERROR);
+        draw_message(c, c->y + INFO_STEP / 2, result_error, FT_PAGE_ERROR);
       } else {
-        draw_message(c, c.y + INFO_STEP / 2, "Connected", FT_PAGE_OK);
-        draw_info(c, c.y + INFO_STEP * 3 / 2, "Network", cur_ssid, text);
-        draw_info(c, c.y + INFO_STEP * 5 / 2, "IP", ip[0] ? ip : "-", text);
-        draw_message(c, c.y + INFO_STEP * 7 / 2, "The ESP8266 remembers it", dim);
+        draw_message(c, c->y + INFO_STEP / 2, "Connected", FT_PAGE_OK);
+        draw_info(c, c->y + INFO_STEP * 3 / 2, "Network", cur_ssid, text);
+        draw_info(c, c->y + INFO_STEP * 5 / 2, "IP", ip[0] ? ip : "-", text);
+        draw_message(c, c->y + INFO_STEP * 7 / 2, "The ESP8266 remembers it", dim);
       }
-      ft_page_button(c, x, c.y + 4 * INFO_STEP + 16, 140, "OK", true, HIT_OK);
+      ft_page_button(c, x, c->y + 4 * INFO_STEP + 16, 140, "OK", true, HIT_OK);
       break;
     case W_FORGET:
-      draw_message(c, c.y + INFO_STEP / 2, "Forget this network?", text);
-      draw_info(c, c.y + INFO_STEP * 3 / 2, "Network", cur_ssid, text);
-      draw_message(c, c.y + INFO_STEP * 5 / 2, "The ESP8266 will not join it", dim);
-      ft_page_button(c, x, c.y + 3 * INFO_STEP + 16, 140, "Forget", sel == 0, HIT_FORGET);
-      ft_page_button(c, x + 156, c.y + 3 * INFO_STEP + 16, 140, "Cancel", sel == 1, HIT_CANCEL);
+      draw_message(c, c->y + INFO_STEP / 2, "Forget this network?", text);
+      draw_info(c, c->y + INFO_STEP * 3 / 2, "Network", cur_ssid, text);
+      draw_message(c, c->y + INFO_STEP * 5 / 2, "The ESP8266 will not join it", dim);
+      ft_page_button(c, x, c->y + 3 * INFO_STEP + 16, 140, "Forget", sel == 0, HIT_FORGET);
+      ft_page_button(c, x + 156, c->y + 3 * INFO_STEP + 16, 140, "Cancel", sel == 1, HIT_CANCEL);
       break;
     case W_UPD_ASK:
       if (restoring) {
-        draw_message(c, c.y + INFO_STEP / 2, "Erase the ESP8266 settings?", text);
-        draw_message(c, c.y + INFO_STEP * 3 / 2, "For modules that lose settings", dim);
-        draw_message(c, c.y + INFO_STEP * 5 / 2, "The network is forgotten too,", dim);
-        draw_message(c, c.y + INFO_STEP * 7 / 2, "join it again after it", dim);
+        draw_message(c, c->y + INFO_STEP / 2, "Erase the ESP8266 settings?", text);
+        draw_message(c, c->y + INFO_STEP * 3 / 2, "For modules that lose settings", dim);
+        draw_message(c, c->y + INFO_STEP * 5 / 2, "The network is forgotten too,", dim);
+        draw_message(c, c->y + INFO_STEP * 7 / 2, "join it again after it", dim);
       } else {
-        draw_message(c, c.y + INFO_STEP / 2, "Update the ESP8266 firmware?", text);
-        draw_info(c, c.y + INFO_STEP * 3 / 2, "Module", version[0] ? version : "?", text);
-        draw_message(c, c.y + INFO_STEP * 5 / 2, "From the Espressif server, ~30 s", dim);
-        draw_message(c, c.y + INFO_STEP * 7 / 2, "Do not power off the board", dim);
+        draw_message(c, c->y + INFO_STEP / 2, "Update the ESP8266 firmware?", text);
+        draw_info(c, c->y + INFO_STEP * 3 / 2, "Module", version[0] ? version : "?", text);
+        draw_message(c, c->y + INFO_STEP * 5 / 2, "From the Espressif server, ~30 s", dim);
+        draw_message(c, c->y + INFO_STEP * 7 / 2, "Do not power off the board", dim);
       }
-      ft_page_button(c, x, c.y + 4 * INFO_STEP + 16, 140, restoring ? "Erase" : "Update", sel == 0, HIT_UPDATE);
-      ft_page_button(c, x + 156, c.y + 4 * INFO_STEP + 16, 140, "Cancel", sel == 1, HIT_CANCEL);
+      ft_page_button(c, x, c->y + 4 * INFO_STEP + 16, 140, restoring ? "Erase" : "Update", sel == 0, HIT_UPDATE);
+      ft_page_button(c, x + 156, c->y + 4 * INFO_STEP + 16, 140, "Cancel", sel == 1, HIT_CANCEL);
       break;
     case W_UPD: {
       upd_percent = esp_update_progress();
       upd_message = esp_update_message();
-      draw_message(c, c.y + INFO_STEP / 2, upd_message ? upd_message : "", text);
-      int16_t bw = c.w - 32 - 64, by = c.y + INFO_STEP + 8;
+      draw_message(c, c->y + INFO_STEP / 2, upd_message ? upd_message : "", text);
+      int16_t bw = c->w - 32 - 64, by = c->y + INFO_STEP + 8;
       ft_page_rect(x, by, bw, BAR_H, 4, dim);
-      ft_page_rect(x + 2, by + 2, bw - 4, BAR_H - 4, 3, c.s->color_bg);
-      if (upd_percent > 0) ft_page_rect(x + 2, by + 2, (bw - 4) * upd_percent / 100, BAR_H - 4, 3, c.s->color_active);
+      ft_page_rect(x + 2, by + 2, bw - 4, BAR_H - 4, 3, c->s->color_bg);
+      if (upd_percent > 0) ft_page_rect(x + 2, by + 2, (bw - 4) * upd_percent / 100, BAR_H - 4, 3, c->s->color_active);
       snprintf(buf, sizeof(buf), "%u%%", upd_percent);
       ft_draw_text(x + bw + 56, by + BAR_H / 2, FT_PAGE_FONT, text, FT81x_OPT_RIGHTX | FT81x_OPT_CENTERY, buf);
-      draw_message(c, c.y + INFO_STEP * 3 + 4, "Do not power off the board", dim);
+      draw_message(c, c->y + INFO_STEP * 3 + 4, "Do not power off the board", dim);
       break;
     }
     case W_UPD_END: {
       bool ok = esp_update_poll() == ESP_UPD_OK;
-      draw_message(c, c.y + INFO_STEP / 2, esp_update_message(), ok ? FT_PAGE_OK : FT_PAGE_ERROR);
+      draw_message(c, c->y + INFO_STEP / 2, esp_update_message(), ok ? FT_PAGE_OK : FT_PAGE_ERROR);
       if (!restoring) {
-        draw_info(c, c.y + INFO_STEP * 3 / 2, ok ? "Was" : "Module", old_version[0] ? old_version : "?", text);
-        if (ok) draw_info(c, c.y + INFO_STEP * 5 / 2, "Now", esp_update_version()[0] ? esp_update_version() : "?", text);
+        draw_info(c, c->y + INFO_STEP * 3 / 2, ok ? "Was" : "Module", old_version[0] ? old_version : "?", text);
+        if (ok) draw_info(c, c->y + INFO_STEP * 5 / 2, "Now", esp_update_version()[0] ? esp_update_version() : "?", text);
       } else if (ok) {
-        draw_message(c, c.y + INFO_STEP * 3 / 2, "Join the network again", dim);
+        draw_message(c, c->y + INFO_STEP * 3 / 2, "Join the network again", dim);
       }
-      ft_page_button(c, x, c.y + 4 * INFO_STEP + 16, 140, "OK", true, HIT_OK);
+      ft_page_button(c, x, c->y + 4 * INFO_STEP + 16, 140, "OK", true, HIT_OK);
       break;
     }
   }

@@ -91,9 +91,9 @@ static void draw_footer(const char *line1, const char *line2) {
 static bool can_forget() { return pads[port].source == USB_PAD_DRIVER; }
 
 // the source of a pad, at most 17 chars
-static void pad_source(const usb_pad_t &p, char *out, size_t size) {
-  switch (p.source) {
-    case USB_PAD_DRIVER: snprintf(out, size, "%.17s", p.file); break;
+static void pad_source(const usb_pad_t *p, char *out, size_t size) {
+  switch (p->source) {
+    case USB_PAD_DRIVER: snprintf(out, size, "%.17s", p->file); break;
     case USB_PAD_DEFAULT: strlcpy(out, "default map", size); break;
     case USB_PAD_XINPUT: strlcpy(out, "XInput", size); break;
     default: strlcpy(out, "no map", size);
@@ -105,17 +105,17 @@ static void draw_list() {
   osd_fill(0, 8, 31, 22, ' ');
   osd_set_pos(1, 8); osd_print("Port Pad       Mapped by");
   for (uint8_t i = 0; i < 2; i++) {
-    const usb_pad_t &p = pads[i];
+    const usb_pad_t *p = &pads[i];
     bool chosen = i == port;
     osd_set_color(chosen ? OSD_COLOR_BLACK : OSD_COLOR_WHITE, chosen ? OSD_COLOR_WHITE : OSD_COLOR_BLACK);
     osd_fill(0, 10 + i, 31, 10 + i, ' ');
     osd_set_pos(1, 10 + i);
     char src[18], buf[33];
-    if (p.source == USB_PAD_NONE && p.vid == 0) {
+    if (p->source == USB_PAD_NONE && p->vid == 0) {
       snprintf(buf, sizeof(buf), "%u    -", i + 1);
     } else {
       pad_source(p, src, sizeof(src));
-      snprintf(buf, sizeof(buf), "%u    %04x:%04x %s", i + 1, p.vid, p.pid, src);
+      snprintf(buf, sizeof(buf), "%u    %04x:%04x %s", i + 1, p->vid, p->pid, src);
     }
     osd_print(buf);
   }

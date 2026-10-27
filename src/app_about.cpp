@@ -5,8 +5,6 @@
 #include "osd.h"
 #include "usb_hid_keys.h"
 #include "input/sega.h"
-#include <algorithm>
-#include <tuple>
 #include "app_about.h"
 #include "app_core.h"
 #include "sorts.h"

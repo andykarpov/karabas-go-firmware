@@ -8,23 +8,23 @@ bool ft_page_hit(int16_t x, int16_t y, int16_t w, int16_t h, int16_t id) {
   return ft_hit_add(x, y, w, h, FT_PAGE_HIT + id);
 }
 
-void ft_page_button(const ft_page_ctx_t &c, int16_t x, int16_t y, int16_t w, const char *label, bool focused, int16_t id) {
-  bool lit = focused && c.focused;
-  if (c.focused && ft_page_hit(x, y, w, FT_PAGE_BTN_H, id)) {
-    ft_draw_rect(x, y, w, FT_PAGE_BTN_H, 2, c.s->color_active); // hovered: a 2 px frame
+void ft_page_button(const ft_page_ctx_t *c, int16_t x, int16_t y, int16_t w, const char *label, bool focused, int16_t id) {
+  bool lit = focused && c->focused;
+  if (c->focused && ft_page_hit(x, y, w, FT_PAGE_BTN_H, id)) {
+    ft_draw_rect(x, y, w, FT_PAGE_BTN_H, 2, c->s->color_active); // hovered: a 2 px frame
   }
-  ft_draw_button(x, y, w, FT_PAGE_BTN_H, FT_PAGE_FONT, lit ? c.s->color_text_active : c.s->color_text,
-    lit ? c.s->color_active : c.s->color_button, c.opt, label);
+  ft_draw_button(x, y, w, FT_PAGE_BTN_H, FT_PAGE_FONT, lit ? c->s->color_text_active : c->s->color_text,
+    lit ? c->s->color_active : c->s->color_button, c->opt, label);
 }
 
 void ft_page_rect(int16_t x, int16_t y, int16_t w, int16_t h, uint8_t r, uint32_t color) {
   ft_draw_rect(x + r, y + r, w - 2 * r, h - 2 * r, r, color);
 }
 
-void ft_page_row(const ft_page_ctx_t &c, int16_t x, int16_t y, int16_t w, int16_t h, bool focused, bool hovered) {
-  if (!c.focused) return;
-  if (focused || hovered) ft_draw_rect(x, y, w, h, 4, c.s->color_button);
-  if (focused) ft_page_marker(x, y, h, c.s->color_active, c.opt);
+void ft_page_row(const ft_page_ctx_t *c, int16_t x, int16_t y, int16_t w, int16_t h, bool focused, bool hovered) {
+  if (!c->focused) return;
+  if (focused || hovered) ft_draw_rect(x, y, w, h, 4, c->s->color_button);
+  if (focused) ft_page_marker(x, y, h, c->s->color_active, c->opt);
 }
 
 // a channel of the color scaled by num / 256, plus add (the light of the 3D dot)

@@ -20,7 +20,7 @@ void board_init_io();
 uint8_t board_usb_pinout();
 
 // read on-board joystick ports (0 when the board has none)
-void board_joy_read(uint16_t &left, uint16_t &right);
+void board_joy_read(uint16_t *left, uint16_t *right);
 
 // pulse reset of the on-board peripherals that follow the core reset (ESP, MIDI)
 void board_reset_peripherals();

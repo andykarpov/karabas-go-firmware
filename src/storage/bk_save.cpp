@@ -116,21 +116,21 @@ void bk_tick() {
   uint32_t size = req_size;
   if (slot >= MAX_FILE_SLOTS) return;
   if (bk_slot >= 0 && bk_slot != slot) bk_close();
-  core_file_slot_t &fs = file_slots[slot];
-  fs.is_mounted = false;
+  core_file_slot_t *fs = &file_slots[slot];
+  fs->is_mounted = false;
   if (size > 0 && size <= BK_MAX_SECTORS && game_name[0]) {
-    char dir[sizeof(fs.dir)], name[sizeof(fs.filename)];
+    char dir[sizeof(fs->dir)], name[sizeof(fs->filename)];
     bk_dir(dir, sizeof(dir));
     bk_file_name(req_kind, name, sizeof(name));
     if (bk_make_file(dir, name, size * IMG_SECTOR_SIZE)) {
-      strlcpy(fs.dir, dir, sizeof(fs.dir));
-      strlcpy(fs.filename, name, sizeof(fs.filename));
-      fs.is_mounted = true;
+      strlcpy(fs->dir, dir, sizeof(fs->dir));
+      strlcpy(fs->filename, name, sizeof(fs->filename));
+      fs->is_mounted = true;
     }
   }
   // the size of the file, or 0: the core goes on without a save
   img_mount(slot);
-  bk_slot = fs.is_mounted ? slot : -1;
+  bk_slot = fs->is_mounted ? slot : -1;
 }
 
 bool bk_flush() {

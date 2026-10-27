@@ -28,10 +28,10 @@ enum {
 };
 
 // which global hotkey (if any) the keyboard report / joysticks match
-static int hotkey_find(const hid_keyboard_report_t &kbd, uint16_t jl, uint16_t jr) {
+static int hotkey_find(const hid_keyboard_report_t *kbd, uint16_t jl, uint16_t jr) {
   // menu+esc (joy start+c, start+select) to toggle osd only for osd supported cores
   if (core.type != CORE_TYPE_BOOT && core.type != CORE_TYPE_HIDDEN &&
-      ((((kbd.modifier & KEY_MOD_LMETA) || (kbd.modifier & KEY_MOD_RMETA)) && kbd.keycode[0] == KEY_ESC) ||
+      ((((kbd->modifier & KEY_MOD_LMETA) || (kbd->modifier & KEY_MOD_RMETA)) && kbd->keycode[0] == KEY_ESC) ||
        ((jl & SC_BTN_START) && (jl & UI_JOY_ESC)) ||
        ((jr & SC_BTN_START) && (jr & UI_JOY_ESC))
       )
@@ -41,9 +41,9 @@ static int hotkey_find(const hid_keyboard_report_t &kbd, uint16_t jl, uint16_t j
 
   // ctrl+alt+backspace (joy start+x) to global reset rp2040
   if (
-      (((kbd.modifier & KEY_MOD_LCTRL) || (kbd.modifier & KEY_MOD_RCTRL)) &&
-      ((kbd.modifier & KEY_MOD_LALT) || (kbd.modifier & KEY_MOD_RALT)) &&
-        kbd.keycode[0] == KEY_BACKSPACE) ||
+      (((kbd->modifier & KEY_MOD_LCTRL) || (kbd->modifier & KEY_MOD_RCTRL)) &&
+      ((kbd->modifier & KEY_MOD_LALT) || (kbd->modifier & KEY_MOD_RALT)) &&
+        kbd->keycode[0] == KEY_BACKSPACE) ||
         (((jl & SC_BTN_START) && (jl & SC_BTN_X))) ||
         (((jr & SC_BTN_START) && (jr & SC_BTN_X)))
         ) {
@@ -53,8 +53,8 @@ static int hotkey_find(const hid_keyboard_report_t &kbd, uint16_t jl, uint16_t j
   // osd hotkey
   for (uint8_t i=0; i<core.osd_len; i++) {
     // modifier matches (or the hotkey has no modifier)
-    if ((core.osd[i].keys[0] != 0 && (kbd.modifier & core.osd[i].keys[0])) || (core.osd[i].keys[0] == 0)) {
-      if (core.osd[i].keys[1] != 0 && (kbd.keycode[0] == core.osd[i].keys[1])) {
+    if ((core.osd[i].keys[0] != 0 && (kbd->modifier & core.osd[i].keys[0])) || (core.osd[i].keys[0] == 0)) {
+      if (core.osd[i].keys[1] != 0 && (kbd->keycode[0] == core.osd[i].keys[1])) {
         return i;
       }
     }
@@ -117,13 +117,13 @@ void input_tick_buttons() {
   static uint32_t debounce[CORE_BUTTONS] = {}, pressed_for[CORE_BUTTONS] = {};
 
   for (uint8_t i=0; i<CORE_BUTTONS; i++) {
-    const core_btn_t &b = core.btn[i];
+    const core_btn_t *b = &core.btn[i];
     bool pressed = btn_read(i);
     if (pressed == state[i]) {
       debounce[i] = ms_now();
-      if (pressed && b.hold != BTN_ACTION_NONE && !held[i] && ms_since(pressed_for[i]) >= b.hold_ms) {
+      if (pressed && b->hold != BTN_ACTION_NONE && !held[i] && ms_since(pressed_for[i]) >= b->hold_ms) {
         held[i] = true;
-        btn_run(i, b.hold);
+        btn_run(i, b->hold);
       }
       continue;
     }
@@ -135,20 +135,20 @@ void input_tick_buttons() {
       held[i] = false;
       pressed_for[i] = ms_now();
     }
-    if (b.press == BTN_ACTION_CORE) {
+    if (b->press == BTN_ACTION_CORE) {
       spi_send(CMD_BTN, i, pressed);
-    } else if (pressed ? b.hold == BTN_ACTION_NONE : (b.hold != BTN_ACTION_NONE && !held[i])) {
-      btn_run(i, b.press);
+    } else if (pressed ? b->hold == BTN_ACTION_NONE : (b->hold != BTN_ACTION_NONE && !held[i])) {
+      btn_run(i, b->press);
     }
   }
 }
 
 // read on-board joysticks and merge the usb ones; true if a side changed
-static void joy_poll(bool &changedL, bool &changedR) {
+static void joy_poll(bool *changedL, bool *changedR) {
   static uint16_t prevJoyL = 0;
   static uint16_t prevJoyR = 0;
   uint16_t l, r;
-  board_joy_read(l, r);
+  board_joy_read(&l, &r);
 
   // merge the usb pads (HID and XInput share the two ports)
   uint16_t usb[2];
@@ -159,12 +159,12 @@ static void joy_poll(bool &changedL, bool &changedR) {
   joyL = l;
   joyR = r;
 
-  changedL = (l != prevJoyL);
-  changedR = (r != prevJoyR);
+  (*changedL) = (l != prevJoyL);
+  (*changedR) = (r != prevJoyR);
   prevJoyL = l;
   prevJoyR = r;
-  if (changedL) { d_printf("SEGA L: %u", l); d_println(); }
-  if (changedR) { d_printf("SEGA R: %u", r); d_println(); }
+  if ((*changedL)) { d_printf("SEGA L: %u", l); d_println(); }
+  if ((*changedR)) { d_printf("SEGA R: %u", r); d_println(); }
 }
 
 static void joy_send(bool changedL, bool changedR) {
@@ -181,18 +181,18 @@ static void joy_send(bool changedL, bool changedR) {
 
 // forward one event from core1 to the fpga (keys, joysticks and the mouse are not forwarded while
 // the OSD is open)
-static void event_forward(const queue_spi_t &packet) {
-  switch (packet.cmd) {
+static void event_forward(const queue_spi_t *packet) {
+  switch (packet->cmd) {
     case CMD_USB_KBD:
     case CMD_PS2_SCANCODE:
     case CMD_JOYSTICK:
     case CMD_USB_MOUSE:
       if (!is_osd) {
-        spi_send(packet.cmd, packet.addr, packet.data);
+        spi_send(packet->cmd, packet->addr, packet->data);
       }
       break;
     default:
-      spi_send(packet.cmd, packet.addr, packet.data);
+      spi_send(packet->cmd, packet->addr, packet->data);
   }
 }
 
@@ -249,12 +249,12 @@ static void post_to_app(bool wait) {
   input_waiting = false;
 }
 
-static void input_route(const queue_spi_t &packet) {
-  if (packet.cmd == CMD_USB_KBD && packet.addr == 1 && packet.data != 0) {
+static void input_route(const queue_spi_t *packet) {
+  if (packet->cmd == CMD_USB_KBD && packet->addr == 1 && packet->data != 0) {
     // key press: APP runs on_keyboard(); for a hotkey wait for it, since it may open the OSD
     hid_keyboard_report_t kbd;
     hid_kbd_report_get(&kbd);
-    bool hotkey = !is_osd && hotkey_find(kbd, joyL, joyR) != HOTKEY_NONE;
+    bool hotkey = !is_osd && hotkey_find(&kbd, joyL, joyR) != HOTKEY_NONE;
     post_to_app(hotkey);
   }
   event_forward(packet);
@@ -272,14 +272,14 @@ static void input_task(void *param) {
     }
 
     bool changedL, changedR;
-    joy_poll(changedL, changedR);
+    joy_poll(&changedL, &changedR);
     if (changedL) post_to_app(false);
     if (changedR) post_to_app(false);
     joy_send(changedL, changedR);
 
     queue_spi_t packet;
     while (link_queue_pop(&packet)) {
-      input_route(packet);
+      input_route(&packet);
     }
   }
 }
@@ -314,7 +314,7 @@ void input_tick_ui() {
 bool on_global_hotkeys() {
 
   bool joy = ui_joy_hotkeys();
-  int hotkey = hotkey_find(usb_keyboard_report, joy ? joyL : 0, joy ? joyR : 0);
+  int hotkey = hotkey_find(&usb_keyboard_report, joy ? joyL : 0, joy ? joyR : 0);
 
   if (hotkey == HOTKEY_OSD_TOGGLE) {
     osd_toggle();

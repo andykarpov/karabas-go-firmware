@@ -130,20 +130,20 @@ void img_close_all() {
 
 // the path of the image of a slot
 static void img_path(uint8_t slot, char *out, size_t size) {
-  core_file_slot_t &fs = file_slots[slot];
-  char dir[sizeof(fs.dir) + 1];
-  snprintf(dir, sizeof(dir), "%s%s", fs.dir[0] == '/' ? "" : "/", fs.dir);
-  kg_path_join(out, size, dir, fs.filename);
+  core_file_slot_t *fs = &file_slots[slot];
+  char dir[sizeof(fs->dir) + 1];
+  snprintf(dir, sizeof(dir), "%s%s", fs->dir[0] == '/' ? "" : "/", fs->dir);
+  kg_path_join(out, size, dir, fs->filename);
 }
 
 void img_mount(uint8_t slot) {
   if (slot >= MAX_FILE_SLOTS) return;
-  core_file_slot_t &fs = file_slots[slot];
-  sd_close(&fs.file); // f_close syncs
+  core_file_slot_t *fs = &file_slots[slot];
+  sd_close(&fs->file); // f_close syncs
   img_dirty[slot] = false;
   matrix_drive_mount(slot, 0);
   uint64_t fsize = 0;
-  int phys = fs.is_mounted ? kg_phys_drive(fs.filename) : -1;
+  int phys = fs->is_mounted ? kg_phys_drive(fs->filename) : -1;
   if (phys >= 0) {
     // a physical floppy drive: the core gets no image, then the drive
     d_printf("Mount slot %d: physical drive DS%d", slot, phys); d_println();
@@ -153,15 +153,15 @@ void img_mount(uint8_t slot) {
     spi_send(CMD_IMG_PHYS, slot, phys + 1);
     return;
   }
-  if (fs.is_mounted) {
+  if (fs->is_mounted) {
     char fname[KG_PATH_MAX];
     img_path(slot, fname, sizeof(fname));
     // read-write, so the core can write sectors back; read only if the file is write protected
-    if (!sd_open(&fs.file, fname, FA_READ | FA_WRITE) && !sd_open(&fs.file, fname, FA_READ)) {
+    if (!sd_open(&fs->file, fname, FA_READ | FA_WRITE) && !sd_open(&fs->file, fname, FA_READ)) {
       d_printf("Mount slot %d: unable to open %s", slot, fname); d_println();
-      fs.is_mounted = false;
+      fs->is_mounted = false;
     } else {
-      fsize = f_size(&fs.file);
+      fsize = f_size(&fs->file);
       d_printf("Mount slot %d: %s, %llu bytes", slot, fname, (unsigned long long) fsize); d_println();
     }
   }

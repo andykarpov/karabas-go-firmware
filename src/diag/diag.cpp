@@ -17,18 +17,18 @@ typedef struct {
 
 static diag_core_t diag[2];
 
-static inline void diag_loop(diag_core_t &d) {
+static inline void diag_loop(diag_core_t *d) {
   uint32_t now = time_us_32();
-  if (d.last_us != 0) {
-    uint32_t gap = now - d.last_us;
-    if (gap > d.max_gap_us) d.max_gap_us = gap;
+  if (d->last_us != 0) {
+    uint32_t gap = now - d->last_us;
+    if (gap > d->max_gap_us) d->max_gap_us = gap;
   }
-  d.last_us = now;
-  d.loops++;
+  d->last_us = now;
+  d->loops++;
 }
 
-void diag_loop_core0() { diag_loop(diag[0]); }
-void diag_loop_core1() { diag_loop(diag[1]); }
+void diag_loop_core0() { diag_loop(&diag[0]); }
+void diag_loop_core1() { diag_loop(&diag[1]); }
 
 void diag_tick() {
   static uint32_t timer = 0;

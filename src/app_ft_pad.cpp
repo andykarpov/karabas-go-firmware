@@ -163,7 +163,7 @@ static void close() {
 // ---------------- drawing ----------------
 
 // lit: asked for or held
-static uint32_t key_color(const ft_page_ctx_t &c, bool lit) { return lit ? c.s->color_active : PAD_KEY; }
+static uint32_t key_color(const ft_page_ctx_t *c, bool lit) { return lit ? c->s->color_active : PAD_KEY; }
 
 static bool lit(uint8_t i) {
   if (state == ST_TEST) return test_joy[draw_port] & hid_joy_btns[i];
@@ -172,30 +172,30 @@ static bool lit(uint8_t i) {
   return false;
 }
 
-static uint32_t label_color(const ft_page_ctx_t &c, uint8_t i) {
-  if (lit(i)) return c.s->color_text_active;
+static uint32_t label_color(const ft_page_ctx_t *c, uint8_t i) {
+  if (lit(i)) return c->s->color_text_active;
   return state >= ST_PRESS && !mapped[i] && (state >= ST_DONE || i < btn) ? PAD_LABEL_OFF : PAD_LABEL;
 }
 
 // the pad is drawn in units of a 400 x 130 picture, at 3/4
 #define K(v) ((v) * 3 / 4)
 
-static void draw_round(const ft_page_ctx_t &c, int16_t x, int16_t y, uint8_t r, uint8_t i) {
+static void draw_round(const ft_page_ctx_t *c, int16_t x, int16_t y, uint8_t r, uint8_t i) {
   ft_draw_circle(x, y, K(r), key_color(c, lit(i)));
   ft_draw_text(x, y, r > 14 ? 27 : 26, label_color(c, i), FT81x_OPT_CENTER, btn_names[i]);
 }
 
-static void draw_small(const ft_page_ctx_t &c, int16_t x, int16_t y, uint8_t i, const char *label) {
+static void draw_small(const ft_page_ctx_t *c, int16_t x, int16_t y, uint8_t i, const char *label) {
   ft_page_rect(x, y, K(60), K(18), 6, key_color(c, lit(i)));
   ft_draw_text(x + K(30), y + K(9), 20, label_color(c, i), FT81x_OPT_CENTER, label);
 }
 
-static void draw_key(const ft_page_ctx_t &c, int16_t x, int16_t y, int16_t w, int16_t h, uint8_t i) {
+static void draw_key(const ft_page_ctx_t *c, int16_t x, int16_t y, int16_t w, int16_t h, uint8_t i) {
   ft_page_rect(x, y, w, h, 2, key_color(c, lit(i)));
 }
 
 // a Mega Drive pad, PAD_W x PAD_H
-static void draw_pad(const ft_page_ctx_t &c, int16_t px, int16_t py) {
+static void draw_pad(const ft_page_ctx_t *c, int16_t px, int16_t py) {
   ft_page_rect(px, py, PAD_W, PAD_H, K(30), PAD_EDGE);
   ft_page_rect(px + 3, py + 3, PAD_W - 6, PAD_H - 6, K(30) - 3, PAD_BODY);
 
@@ -218,53 +218,53 @@ static void draw_pad(const ft_page_ctx_t &c, int16_t px, int16_t py) {
 }
 
 // the source of a pad
-static void pad_source(const usb_pad_t &p, char *out, size_t size) {
-  switch (p.source) {
-    case USB_PAD_DRIVER: strlcpy(out, p.file, size); break;
+static void pad_source(const usb_pad_t *p, char *out, size_t size) {
+  switch (p->source) {
+    case USB_PAD_DRIVER: strlcpy(out, p->file, size); break;
     case USB_PAD_DEFAULT: strlcpy(out, "default map", size); break;
     case USB_PAD_XINPUT: strlcpy(out, "XInput", size); break;
     default: strlcpy(out, "no map", size);
   }
 }
 
-static void draw_list(const ft_page_ctx_t &c) {
-  int16_t x = c.x + 16;
-  uint32_t dim = c.s->color_copyright;
-  int16_t y = c.y + 4;
+static void draw_list(const ft_page_ctx_t *c) {
+  int16_t x = c->x + 16;
+  uint32_t dim = c->s->color_copyright;
+  int16_t y = c->y + 4;
   ft_draw_text(x, y + ROW_H / 2, FT_PAGE_FONT_SMALL, dim, FT81x_OPT_CENTERY, "Port");
   ft_draw_text(x + COL_PAD, y + ROW_H / 2, FT_PAGE_FONT_SMALL, dim, FT81x_OPT_CENTERY, "Pad");
   ft_draw_text(x + COL_SRC, y + ROW_H / 2, FT_PAGE_FONT_SMALL, dim, FT81x_OPT_CENTERY, "Mapped by");
   for (uint8_t i = 0; i < 2; i++) {
-    const usb_pad_t &p = pads[i];
+    const usb_pad_t *p = &pads[i];
     int16_t ry = y + ROW_H * (i + 1);
-    bool hovered = c.focused && ft_page_hit(c.x, ry, c.w, ROW_H - 2, HIT_PORT + i);
-    ft_page_row(c, c.x, ry, c.w, ROW_H - 2, i == port, hovered);
+    bool hovered = c->focused && ft_page_hit(c->x, ry, c->w, ROW_H - 2, HIT_PORT + i);
+    ft_page_row(c, c->x, ry, c->w, ROW_H - 2, i == port, hovered);
     int16_t cy = ry + (ROW_H - 2) / 2;
     char b[32];
     snprintf(b, sizeof(b), "%u", i + 1);
-    ft_draw_text(x + 8, cy, FT_PAGE_FONT, c.s->color_text, FT81x_OPT_CENTERY, b);
-    if (p.source == USB_PAD_NONE && p.vid == 0) {
+    ft_draw_text(x + 8, cy, FT_PAGE_FONT, c->s->color_text, FT81x_OPT_CENTERY, b);
+    if (p->source == USB_PAD_NONE && p->vid == 0) {
       ft_draw_text(x + COL_PAD, cy, FT_PAGE_FONT, dim, FT81x_OPT_CENTERY, "-");
       continue;
     }
-    snprintf(b, sizeof(b), "%04x:%04x", p.vid, p.pid);
-    ft_draw_text(x + COL_PAD, cy, FT_PAGE_FONT, c.s->color_text, FT81x_OPT_CENTERY, b);
+    snprintf(b, sizeof(b), "%04x:%04x", p->vid, p->pid);
+    ft_draw_text(x + COL_PAD, cy, FT_PAGE_FONT, c->s->color_text, FT81x_OPT_CENTERY, b);
     pad_source(p, b, sizeof(b));
-    ft_page_text(x + COL_SRC, cy, FT_PAGE_FONT, p.source == USB_PAD_DRIVER ? c.s->color_text : dim,
-      FT81x_OPT_CENTERY, b, (c.w - COL_SRC - 32) / 12);
+    ft_page_text(x + COL_SRC, cy, FT_PAGE_FONT, p->source == USB_PAD_DRIVER ? c->s->color_text : dim,
+      FT81x_OPT_CENTERY, b, (c->w - COL_SRC - 32) / 12);
   }
   int16_t by = y + ROW_H * 3 + 12;
   ft_page_button(c, x, by, LIST_BTN_W, "Map", list_btn == 0, HIT_MAP);
   ft_page_button(c, x + LIST_BTN_W + 12, by, LIST_BTN_W, "Test", list_btn == 1, HIT_TEST);
   if (can_forget()) ft_page_button(c, x + 2 * (LIST_BTN_W + 12), by, LIST_BTN_W, "Forget", list_btn == 2, HIT_FORGET);
-  if (list_msg && c.focused) {
+  if (list_msg && c->focused) {
     ft_draw_text(x, by + FT_PAGE_BTN_H + 20, FT_PAGE_FONT, list_msg_ok ? FT_PAGE_OK : FT_PAGE_ERROR, FT81x_OPT_CENTERY, list_msg);
   }
 }
 
-static void draw_mapper(const ft_page_ctx_t &c) {
-  uint32_t text = c.s->color_text, dim = c.s->color_copyright;
-  int16_t x = c.x + 16;
+static void draw_mapper(const ft_page_ctx_t *c) {
+  uint32_t text = c->s->color_text, dim = c->s->color_copyright;
+  int16_t x = c->x + 16;
   char line1[40] = "", line2[40] = "";
   uint32_t color1 = text;
 
@@ -299,24 +299,24 @@ static void draw_mapper(const ft_page_ctx_t &c) {
       strcpy(line2, "Could not write the SD card");
       break;
   }
-  ft_draw_text(x, c.y + FT_PAGE_BTN_H / 2, FT_PAGE_FONT, color1, FT81x_OPT_CENTERY, line1);
-  ft_draw_text(x, c.y + FT_PAGE_BTN_H + 12, FT_PAGE_FONT_SMALL, dim, FT81x_OPT_CENTERY, line2);
+  ft_draw_text(x, c->y + FT_PAGE_BTN_H / 2, FT_PAGE_FONT, color1, FT81x_OPT_CENTERY, line1);
+  ft_draw_text(x, c->y + FT_PAGE_BTN_H + 12, FT_PAGE_FONT_SMALL, dim, FT81x_OPT_CENTERY, line2);
 
   // the buttons for the mouse, right of the first line
-  int16_t bx = c.x + c.w - 16 - BTN_W, bx2 = bx - BTN_W - 8;
+  int16_t bx = c->x + c->w - 16 - BTN_W, bx2 = bx - BTN_W - 8;
   if (state == ST_PRESS) {
-    ft_page_button(c, bx, c.y, BTN_W, "Skip", true, HIT_SKIP);
-    if (btn > 0) ft_page_button(c, bx2, c.y, BTN_W, "Back", false, HIT_BACK);
+    ft_page_button(c, bx, c->y, BTN_W, "Skip", true, HIT_SKIP);
+    if (btn > 0) ft_page_button(c, bx2, c->y, BTN_W, "Back", false, HIT_BACK);
   } else if (state == ST_DONE) {
-    ft_page_button(c, bx, c.y, BTN_W, "Save", true, HIT_SAVE);
-    ft_page_button(c, bx2, c.y, BTN_W, "Back", false, HIT_BACK);
+    ft_page_button(c, bx, c->y, BTN_W, "Save", true, HIT_SAVE);
+    ft_page_button(c, bx2, c->y, BTN_W, "Back", false, HIT_BACK);
   } else if (state == ST_SAVED || state == ST_FAILED) {
-    ft_page_button(c, bx, c.y, BTN_W, "Done", true, HIT_DONE);
+    ft_page_button(c, bx, c->y, BTN_W, "Done", true, HIT_DONE);
   }
 
-  int16_t py = c.y + FT_PAGE_BTN_H + 28;
-  int16_t pw = c.w - 32 < PAD_W ? c.w - 32 : PAD_W;
-  draw_pad(c, c.x + 16 + (c.w - 32 - pw) / 2, py);
+  int16_t py = c->y + FT_PAGE_BTN_H + 28;
+  int16_t pw = c->w - 32 < PAD_W ? c->w - 32 : PAD_W;
+  draw_pad(c, c->x + 16 + (c->w - 32 - pw) / 2, py);
   if (last_btn >= 0 && state >= ST_PRESS && state <= ST_DONE) {
     char b[40], r[24] = "-";
     if (mapped[last_btn]) hid_learn_format_rule(&rules[last_btn], r, sizeof(r));
@@ -326,26 +326,26 @@ static void draw_mapper(const ft_page_ctx_t &c) {
 }
 
 // the two ports, one pad under the other
-static void draw_test(const ft_page_ctx_t &c) {
-  int16_t pw = c.w - 32 < PAD_W ? c.w - 32 : PAD_W;
-  int16_t px = c.x + 16 + (c.w - 32 - pw) / 2;
+static void draw_test(const ft_page_ctx_t *c) {
+  int16_t pw = c->w - 32 < PAD_W ? c->w - 32 : PAD_W;
+  int16_t px = c->x + 16 + (c->w - 32 - pw) / 2;
   for (uint8_t i = 0; i < 2; i++) {
-    const usb_pad_t &p = pads[i];
-    int16_t y = c.y + i * (TEST_LABEL_H + PAD_H + 10);
+    const usb_pad_t *p = &pads[i];
+    int16_t y = c->y + i * (TEST_LABEL_H + PAD_H + 10);
     char src[24], b[48];
-    if (p.source == USB_PAD_NONE && p.vid == 0) {
+    if (p->source == USB_PAD_NONE && p->vid == 0) {
       snprintf(b, sizeof(b), "Port %u: no USB pad", i + 1);
     } else {
       pad_source(p, src, sizeof(src));
-      snprintf(b, sizeof(b), "Port %u: %04x:%04x, %s", i + 1, p.vid, p.pid, src);
+      snprintf(b, sizeof(b), "Port %u: %04x:%04x, %s", i + 1, p->vid, p->pid, src);
     }
-    ft_page_text(px, y + TEST_LABEL_H / 2 - 2, FT_PAGE_FONT_SMALL, c.s->color_text, FT81x_OPT_CENTERY, b, pw / 10);
+    ft_page_text(px, y + TEST_LABEL_H / 2 - 2, FT_PAGE_FONT_SMALL, c->s->color_text, FT81x_OPT_CENTERY, b, pw / 10);
     draw_port = i;
     draw_pad(c, px, y + TEST_LABEL_H);
   }
 }
 
-static void draw(const ft_page_ctx_t &c) {
+static void draw(const ft_page_ctx_t *c) {
   if (state == ST_LIST) draw_list(c);
   else if (state == ST_TEST) draw_test(c);
   else draw_mapper(c);

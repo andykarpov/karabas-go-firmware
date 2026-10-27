@@ -363,13 +363,13 @@ void matrix_drive_access(uint8_t slot, uint32_t lba, bool write) {
   else drives[slot].reads++;
 }
 
-void matrix_setup(const setup_t &s) {
+void matrix_setup(const setup_t *s) {
   if (!has_matrix) return;
   I2cGuard i2c;
-  bool restart = s.matrix_enabled != mx_enabled;
-  mx_enabled = s.matrix_enabled;
-  mx_brightness = s.matrix_brightness;
-  mx_style = s.matrix_style; // the next frame draws with it
+  bool restart = s->matrix_enabled != mx_enabled;
+  mx_enabled = s->matrix_enabled;
+  mx_brightness = s->matrix_brightness;
+  mx_style = s->matrix_style; // the next frame draws with it
   if (matrix_mode == MATRIX_MODE_ICON || matrix_mode == MATRIX_MODE_LOADING) return;
   matrix_init();
   if (restart) matrix_start(cfg.mode);

@@ -144,7 +144,7 @@ static bool save_tz() {
   if (tz == hw_setup.tz) return true;
   setup_t n = hw_setup;
   n.tz = tz;
-  if (save_setup(n)) return true;
+  if (save_setup(&n)) return true;
   error = "Can't save karabas.ini";
   return false;
 }

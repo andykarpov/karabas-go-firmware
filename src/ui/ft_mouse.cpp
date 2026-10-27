@@ -81,11 +81,11 @@ int16_t ft_mouse_x() { return px; }
 int16_t ft_mouse_y() { return py; }
 
 // the speed 1..5 of karabas.ini: x0.5, x0.75, x1, x1.5, x2
-static int32_t scale(int32_t d, int32_t &rem) {
+static int32_t scale(int32_t d, int32_t *rem) {
   static const uint8_t mul[5] = { 2, 3, 4, 6, 8 };
   uint8_t sp = hw_setup.ft_mouse_speed;
-  int32_t v = d * mul[(sp >= 1 && sp <= 5 ? sp : 3) - 1] + rem;
-  rem = v % 4;
+  int32_t v = d * mul[(sp >= 1 && sp <= 5 ? sp : 3) - 1] + (*rem);
+  (*rem) = v % 4;
   return v / 4;
 }
 
@@ -93,7 +93,7 @@ bool ft_mouse_poll(ft_mouse_event_t *ev) {
   memset(ev, 0, sizeof(*ev));
   hid_mouse_move_t m;
   if (hid_mouse_take(&m)) {
-    int32_t dx = scale(m.dx, rx), dy = scale(m.dy, ry);
+    int32_t dx = scale(m.dx, &rx), dy = scale(m.dy, &ry);
     bool was_visible = visible;
     if (dx || dy || m.pressed || m.wheel) {
       idle_timer = ms_now();

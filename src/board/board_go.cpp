@@ -47,9 +47,9 @@ uint8_t board_usb_pinout() {
   return PIO_USB_PINOUT_DMDP;
 }
 
-void board_joy_read(uint16_t &left, uint16_t &right) {
-  left = sega_state(true);
-  right = sega_state(false);
+void board_joy_read(uint16_t *left, uint16_t *right) {
+  (*left) = sega_state(true);
+  (*right) = sega_state(false);
 }
 
 void board_reset_peripherals() {
