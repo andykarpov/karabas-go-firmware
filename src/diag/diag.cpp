@@ -1,5 +1,6 @@
 #include "main.h"
 #include "diag.h"
+#include "usb_diag.h"
 
 #if DIAG_STATS
 
@@ -57,6 +58,7 @@ void diag_tick() {
     (unsigned long) (input ? uxTaskGetStackHighWaterMark(input) : 0),
     (unsigned long) (matrix ? uxTaskGetStackHighWaterMark(matrix) : 0),
     (unsigned long) (oled ? uxTaskGetStackHighWaterMark(oled) : 0));
+  usb_diag_print();
   d_println();
 }
 

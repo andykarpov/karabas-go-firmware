@@ -1,5 +1,6 @@
 #include "main.h"
 #include "usb_device.h"
+#include "diag/usb_diag.h"
 #include "tusb.h"
 #include "pico/mutex.h"
 
@@ -36,6 +37,7 @@ static void usbd_task(void *param) {
     // events wait in TinyUSB's queue; when APP held the mutex, try again on the next tick
     ulTaskNotifyTake(pdTRUE, missed ? 1 : portMAX_DELAY);
     missed = !mutex_try_enter(&__usb_mutex, NULL);
+    if (missed) usb_diag_device_missed();
     if (!missed) {
       tud_task();
       mutex_exit(&__usb_mutex);

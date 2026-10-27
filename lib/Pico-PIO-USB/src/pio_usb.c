@@ -27,6 +27,7 @@
 
 usb_device_t pio_usb_device[PIO_USB_DEVICE_CNT];
 pio_port_t pio_port[1];
+pio_usb_diag_t pio_usb_diag;
 root_port_t pio_usb_root_port[PIO_USB_ROOT_PORT_CNT];
 endpoint_t pio_usb_ep_pool[PIO_USB_EP_POOL_CNT];
 
@@ -176,11 +177,21 @@ int __no_inline_not_in_flash_func(pio_usb_bus_receive_packet_and_handshake)(
           crc_prev2 = crc_prev;
           crc_prev = crc;
           crc = update_usb_crc16(crc, data);
-          pp->usb_rx_buffer[idx++] = data;
+          // karabas: babble longer than the buffer ran over the globals after pio_port
+          // (pio_usb_device, the endpoint pool, the root ports)
+          if (idx < sizeof(pp->usb_rx_buffer)) {
+            pp->usb_rx_buffer[idx] = data;
+          }
+          idx++;
           crc_receive = (crc_receive >> 8) | (data << 8);
           crc_receive_inverse = crc_receive ^ 0xffff;
           crc_match = (crc_receive_inverse == crc_prev2);
         }
+      }
+
+      if (idx > sizeof(pp->usb_rx_buffer)) {
+        pio_usb_diag.rx_overflows++;
+        return -1;
       }
 
       if (idx >= 4 && crc_match) {
