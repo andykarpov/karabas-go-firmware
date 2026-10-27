@@ -25,7 +25,7 @@ The rewrite removes the workarounds that exist only because of the Arduino layer
 
 ## Starting point
 
-- `src/`: ~14.7k lines (without `bitmaps.h`), `lib/KarabasCommon`: ~2.5k, own libraries (`FT812`, `OSD`, `RTC`, `IniFile`, `PioSPI`, `EspSerial`, `SegaController`, `MultiMatrixDisplay`, `GyverMenuExt`, `ElapsedTimer`): ~4k. `lib/Pico-PIO-USB` is a patched local copy and stays.
+- `src/`: ~14.7k lines (without `bitmaps.h`), `lib/KarabasCommon`: ~2.5k, own libraries (`FT812`, `OSD`, `RTC`, `IniFile`, `PioSPI`, `EspSerial`, `SegaController`, `MultiMatrixDisplay`, `GyverMenuExt`, `ElapsedTimer`): ~4k. `lib/Pico-PIO-USB` is upstream 0.7.3 with our diagnostics (#59) and stays.
 - minig: 620 KB text, 138 KB bss.
 - `KarabasCommon` is C already in all but the file names (only `usb_joy_slots.h` has a class). The C++ in `src/` is `String` (~60 uses: paths, trim, extensions), ~24 lambdas (mostly `link_on` handlers), a little `std::` / `<algorithm>`, the library wrapper classes and `PrinterTrace`.
 
@@ -47,10 +47,10 @@ What replaces each dependency:
 ## Phase 0: preparation
 
 1. **Baseline on Mini G**, to compare against later: boot time, core load time, MSC speed SD1 / SD2 (454 / 249 KB/s), file loader speed, the `DIAG` line, firmware size.
-2. **Hardware checklist** (`docs/hw_checklist.md`): cores, OSD, file mounter, `.sav`, msc / msc2 and eject, gamepads / XInput / printer, PS/2, Sega, RTC / NTP, Wi-Fi, FT pages, matrix, OLED, `AT+KARABAS=`.
+2. **Hardware checklist** (`docs/hw_checklist.md`, the baseline table is at its end): cores, OSD, file mounter, `.sav`, msc / msc2 and eject, gamepads / XInput / printer, PS/2, Sega, RTC / NTP, Wi-Fi, FT pages, matrix, OLED, `AT+KARABAS=`.
 3. **Spike** (a separate directory, Mini G): a minimal pico-sdk project with FreeRTOS SMP and the interop, TinyUSB device CDC + MSC on a RAM disk, and our Pico-PIO-USB host with a keyboard behind the hub. This is the biggest risk and the biggest gain: if the PIO-USB host is stable here, without the `ccount` hack and the patches, with an even SOF, the rest is predictable.
    - **Result (2026-10-27, Mini G, `spike/`):** it works. SOF 1000/s with a max gap of 1005..1014 us, no disconnects, no `own`. A CDC flood from `APP` (5.4 MB in 20 s, no lost line, no `__usb_mutex`) with keys typed all the time: core0 does not stop, no key is lost. The MSC RAM disk mounts and keeps a file written by the PC. 7 hardware spinlocks free when the USB host starts, the PIO-USB programs fit without the `ccount` hack.
-   - **Upstream Pico-PIO-USB 0.7.3** (same day, `spike/README.md`): works as well, with the whole usb host on pio1 (tx + rx + eop share one block, 32 words; upstream's main path since its hw rx arm at our EOP). SOF gap 1003..1015 us, the frame handler 52..100 us (216 us with a low-speed gamepad behind the hub), flood + keys clean, MSC fine, `own` 0 with the low-speed gamepad (the SE0 bug of 0.5.3 is fixed upstream). It already has our rx buffer guard, `endpoint_close`, the SE0 fix and 3 retries of a transaction (instead of our bulk OUT retry for the printer); only the diagnostics (`pio-usb-0.7.3-diag.patch`) stay ours. Plan: take 0.7.3 + the patch, the usb host on pio1, pio0 for the firmware (`ccount` then needs only pio1 reserved before `main()`). The printer (bulk OUT) is not tested with it yet.
+   - **Upstream Pico-PIO-USB 0.7.3** (same day, `spike/README.md`): works as well, with the whole usb host on pio1 (tx + rx + eop share one block, 32 words; upstream's main path since its hw rx arm at our EOP). SOF gap 1003..1015 us, the frame handler 52..100 us (216 us with a low-speed gamepad behind the hub), flood + keys clean, MSC fine, `own` 0 with the low-speed gamepad (the SE0 bug of 0.5.3 is fixed upstream). It already has our rx buffer guard, `endpoint_close`, the SE0 fix and 3 retries of a transaction (instead of our bulk OUT retry for the printer); only the diagnostics stay ours. Taken into the firmware on master in #59 (the usb host on pio1, pio0 for the firmware), the spike uses that copy now. The printer (bulk OUT) is not tested with it yet.
 
 ## Phase 1: clean up inside the current build
 
