@@ -44,7 +44,9 @@ void usb_diag_tick() {
   if (d != disconnects) {
     char pins[48];
     pins_state(pins, sizeof(pins));
-    d_printf("USB root: disconnect (%lu in all), line %s, %s\r\n", (unsigned long) d, line_names[(root >> 4) & 3], pins);
+    // own: our tx held SE0 (stopped in its EOP), the lines were let go for a reconnect
+    d_printf("USB root: disconnect (%lu in all, %lu own), line %s, %s\r\n", (unsigned long) d,
+      (unsigned long) pio_usb_diag.own_se0, line_names[(root >> 4) & 3], pins);
   }
   if (o != overflows) {
     d_printf("USB root: %lu packets longer than the rx buffer (%lu in all)\r\n", (unsigned long) (o - overflows), (unsigned long) o);
@@ -63,11 +65,12 @@ void usb_diag_print() {
   pio_usb_diag.max_frame_us = 0;
   char pins[48];
   pins_state(pins, sizeof(pins));
-  d_printf(" | usb sof %lu/s, max gap %lu us, max frame %lu us, root %s%s%s line %s (%s), conn %lu disc %lu ovf %lu | usbd missed %lu",
+  d_printf(" | usb sof %lu/s, max gap %lu us, max frame %lu us, root %s%s%s line %s (%s), conn %lu disc %lu own %lu ovf %lu | usbd missed %lu",
     (unsigned long) sof, (unsigned long) sof_gap, (unsigned long) frame_us,
     (root & 1) ? "" : "uninit ", (root & 2) ? "connected" : "empty", (root & 4) ? " suspended" : "",
     line_names[(root >> 4) & 3], pins,
     (unsigned long) pio_usb_diag.connects, (unsigned long) pio_usb_diag.disconnects,
+    (unsigned long) pio_usb_diag.own_se0,
     (unsigned long) pio_usb_diag.rx_overflows,
     (unsigned long) device_missed);
 }

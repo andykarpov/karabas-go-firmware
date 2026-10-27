@@ -12,6 +12,7 @@
 #include <string.h>
 
 #include "hardware/sync.h"
+#include "hardware/structs/iobank0.h"
 
 #include "pio_usb.h"
 #include "pio_usb_ll.h"
@@ -168,6 +169,10 @@ static void __no_inline_not_in_flash_func(restore_fs_bus)(const pio_port_t *pp) 
   // change bus speed to full-speed
   pio_sm_set_enabled(pp->pio_usb_tx, pp->sm_tx, false);
   SM_SET_CLKDIV(pp->pio_usb_tx, pp->sm_tx, pp->clk_div_fs_tx);
+  // karabas (upstream 0.6.0): the last transfer returned at the start of its EOP, and a tx stopped
+  // there keeps D+ / D- driven in SE0. The next SOF then sees a disconnect, and with no more
+  // transfers nothing lets the lines go: the usb host stays dead until a reboot
+  pio_sm_set_enabled(pp->pio_usb_tx, pp->sm_tx, true);
 
   pio_sm_set_enabled(pp->pio_usb_rx, pp->sm_rx, false);
   SM_SET_CLKDIV_MAXSPEED(pp->pio_usb_rx, pp->sm_rx);
@@ -194,6 +199,14 @@ static bool __no_inline_not_in_flash_func(connection_check)(root_port_t *port) {
       busy_wait_1_us();
       // device disconnect
       pio_usb_diag.disconnects++;
+      // karabas: SE0 from our own tx (stopped in its EOP) is no disconnect, but the line stays so
+      // for good: let D+ / D- go, then the hub shows up again as a new connect
+      if (io_bank0_hw->io[port->pin_dp].status & IO_BANK0_GPIO0_STATUS_OETOPAD_BITS) {
+        pio_usb_diag.own_se0++;
+        pio_port_t *pp = PIO_USB_PIO_PORT(0);
+        pio_sm_set_pindirs_with_mask(pp->pio_usb_tx, pp->sm_tx, 0,
+                                     (1 << port->pin_dp) | (1 << port->pin_dm));
+      }
       port->connected = false;
       port->suspended = true;
       port->ints |= PIO_USB_INTS_DISCONNECT_BITS;

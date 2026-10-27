@@ -36,6 +36,15 @@ static bool img_dirty[MAX_FILE_SLOTS];
 static uint32_t img_last_write_ms = 0;
 #define IMG_SYNC_IDLE_MS 500
 
+// the log: a failed request at once, the others summed up (a line per sector flooded the debug
+// buffer, and the boot log or a usb disconnect line with it)
+#define IMG_LOG_IDLE_MS 1000   // a summary once the requests stop for this long
+#define IMG_LOG_EVERY_MS 10000 // or this often while they go on
+static uint32_t log_rd = 0, log_wr = 0;
+static uint32_t log_max_wait_us = 0, log_max_serve_us = 0;
+static uint32_t log_first_ms = 0, log_last_ms = 0;
+static uint8_t log_slots = 0; // slots in the summary, one bit each
+
 #define IMG_WRITE_POLLS 4000 // NOPs to pull one sector of write data (519 frames with the request)
 #define IMG_REQ_POLLS 32     // NOPs to pull the rest of a request (5 frames)
 #define IMG_FOLLOW_US 2000   // after a request, poll for the next one (the next sector of a track)
@@ -224,10 +233,33 @@ static bool img_serve() {
   spi_send(CMD_IMG_SEC, slot, ok ? IMG_RES_DONE : IMG_RES_ERROR);
   if (req_complete) matrix_drive_access(slot, lba, req_op == IMG_REQ_WRITE);
   uint32_t end_us = micros();
-  d_printf("Image slot %d: %s %lu%s, wait %lu us, %lu us", slot, what, (unsigned long) lba, ok ? "" : " FAILED",
-    (unsigned long) (serve_us - req_start_us), (unsigned long) (end_us - serve_us));
-  d_println();
+  uint32_t wait_us = serve_us - req_start_us, took_us = end_us - serve_us;
+  if (!ok) {
+    d_printf("Image slot %d: %s %lu FAILED, wait %lu us, %lu us", slot, what, (unsigned long) lba,
+      (unsigned long) wait_us, (unsigned long) took_us);
+    d_println();
+  } else {
+    if (log_rd + log_wr == 0) log_first_ms = millis();
+    if (req_op == IMG_REQ_WRITE) log_wr++; else log_rd++;
+    if (slot < 8) log_slots |= 1 << slot;
+    if (wait_us > log_max_wait_us) log_max_wait_us = wait_us;
+    if (took_us > log_max_serve_us) log_max_serve_us = took_us;
+  }
+  log_last_ms = millis();
   return true;
+}
+
+static void img_log_summary() {
+  if (log_rd + log_wr == 0) return;
+  uint32_t now = millis();
+  if (now - log_last_ms < IMG_LOG_IDLE_MS && now - log_first_ms < IMG_LOG_EVERY_MS) return;
+  d_printf("Image slots %02x: %lu rd, %lu wr in %lu ms, max wait %lu us, max %lu us", log_slots,
+    (unsigned long) log_rd, (unsigned long) log_wr, (unsigned long) (log_last_ms - log_first_ms),
+    (unsigned long) log_max_wait_us, (unsigned long) log_max_serve_us);
+  d_println();
+  log_rd = log_wr = 0;
+  log_max_wait_us = log_max_serve_us = 0;
+  log_slots = 0;
 }
 
 static void img_sync_idle() {
@@ -243,6 +275,7 @@ static void img_sync_idle() {
 }
 
 void img_tick() {
+  img_log_summary();
   if (!req_pending && !req_started) {
     img_sync_idle();
     return;

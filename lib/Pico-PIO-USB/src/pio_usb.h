@@ -21,6 +21,7 @@ uint32_t pio_usb_host_get_frame_number(void);
 typedef struct {
   volatile uint32_t connects;     // the root port went from SE0 to an idle line
   volatile uint32_t disconnects;  // SE0 on the root port at a SOF
+  volatile uint32_t own_se0;      // of these, SE0 driven by our own tx (released, so the hub comes back)
   volatile uint32_t rx_overflows; // a packet longer than usb_rx_buffer, dropped
   volatile uint32_t max_sof_gap_us;   // the longest time between two frames (1000 if on time)
   volatile uint32_t max_frame_us;     // the longest frame handler
