@@ -250,7 +250,8 @@ void app_core_menu(uint8_t vpos) {
   if (core.osd_len <= 19) osd_fill(0, 23, 31, 23, ' ');
   if (core.osd_len <= 18) osd_fill(0, 22, 31, 22, ' ');
   if (core.osd_len <= 17) osd_fill(0, 21, 31, 21, ' ');
-  osd_update();
+  // no osd_update() here: app_core_overlay() draws the footer over these rows first, else the
+  // cleared footer went out and came back on every move
 }
 
 void app_core_save(uint8_t pos)
