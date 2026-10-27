@@ -30,6 +30,7 @@
 #include "app_core_browser.h"
 #include "diag/diag.h"
 #include "diag/hang_diag.h"
+#include "diag/usb_diag.h"
 #include "usb/printer_host.h"
 #include "periph/printer_usb.h"
 #include "periph/printer_link.h"
@@ -261,6 +262,7 @@ static void usb_host_loop()
 {
   diag_loop_core1();
   hang_beat_core1();
+  usb_diag_tick();
   tuh_task();
   printer_host_tick(millis());
   printer_usb_tick();

@@ -193,6 +193,7 @@ static bool __no_inline_not_in_flash_func(connection_check)(root_port_t *port) {
     if (pio_usb_bus_get_line_state(port) == PORT_PIN_SE0) {
       busy_wait_1_us();
       // device disconnect
+      pio_usb_diag.disconnects++;
       port->connected = false;
       port->suspended = true;
       port->ints |= PIO_USB_INTS_DISCONNECT_BITS;
@@ -215,6 +216,14 @@ void __not_in_flash_func(pio_usb_host_frame)(void) {
     return;
   }
   static uint8_t sof_packet[4] = {USB_SYNC, USB_PID_SOF, 0x00, 0x10};
+
+  // karabas: how late the frames come (a delayed timer irq on core1)
+  static uint32_t last_frame_us = 0;
+  uint32_t const frame_start_us = timer_hw->timerawl;
+  if (last_frame_us != 0 && frame_start_us - last_frame_us > pio_usb_diag.max_sof_gap_us) {
+    pio_usb_diag.max_sof_gap_us = frame_start_us - last_frame_us;
+  }
+  last_frame_us = frame_start_us;
 
   pio_port_t *pp = PIO_USB_PIO_PORT(0);
 
@@ -288,6 +297,7 @@ void __not_in_flash_func(pio_usb_host_frame)(void) {
       port_pin_status_t const line_state = pio_usb_bus_get_line_state(root);
       if (line_state == PORT_PIN_FS_IDLE || line_state == PORT_PIN_LS_IDLE) {
         root->is_fullspeed = (line_state == PORT_PIN_FS_IDLE);
+        pio_usb_diag.connects++;
         root->connected = true;
         root->suspended = true; // need a bus reset before operating
         root->ints |= PIO_USB_INTS_CONNECT_BITS;
@@ -303,6 +313,10 @@ void __not_in_flash_func(pio_usb_host_frame)(void) {
   }
 
   sof_count++;
+
+  if (timer_hw->timerawl - frame_start_us > pio_usb_diag.max_frame_us) {
+    pio_usb_diag.max_frame_us = timer_hw->timerawl - frame_start_us;
+  }
 
   // SOF counter is 11-bit
   uint16_t const sof_count_11b = sof_count & 0x7ff;
@@ -324,6 +338,12 @@ static bool __no_inline_not_in_flash_func(sof_timer)(repeating_timer_t *_rt) {
 
 uint32_t pio_usb_host_get_frame_number(void) {
   return sof_count;
+}
+
+uint8_t pio_usb_host_root_state(void) {
+  root_port_t *root = PIO_USB_ROOT_PORT(0);
+  return (root->initialized ? 1 : 0) | (root->connected ? 2 : 0) | (root->suspended ? 4 : 0) |
+         (root->is_fullspeed ? 8 : 0) | ((root->initialized ? pio_usb_bus_get_line_state(root) & 3 : 0) << 4);
 }
 
 void pio_usb_host_port_reset_start(uint8_t root_idx) {
