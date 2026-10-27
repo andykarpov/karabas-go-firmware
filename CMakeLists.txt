@@ -39,7 +39,7 @@ project(karabas_go_firmware C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 pico_sdk_init()
 
-# BUILD_VER: the date stamp of a release (build*.sh, CI), shown in About
+# BUILD_VER: the date stamp of a release (CI), shown in About
 set(BUILD_VER "" CACHE STRING "firmware version")
 
 # lib/: our libraries; third_party/: upstream code (with our changes marked `karabas`)

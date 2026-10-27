@@ -10,11 +10,11 @@ This is the RP2040 (Raspberry Pi Pico) MCU firmware for the Karabas Go family of
 
 Each board is a CMake target, which sets `HW_ID`:
 
-| Target | HW_ID | Board | Core file ext | Release script |
+| Target | HW_ID | Board | Core file ext | Release file |
 |---|---|---|---|---|
-| `karabas_go` | 1 | Karabas Go | `.kg1` | `build.sh` |
-| `karabas_mini` | 2 | Karabas Mini | `.kg2` | `build_mini.sh` |
-| `karabas_minig` | 3 | Karabas Mini G | `.kg3` | `build_minig.sh` |
+| `karabas_go` | 1 | Karabas Go | `.kg1` | `karabas-go/firmware/firmware.uf2` |
+| `karabas_mini` | 2 | Karabas Mini | `.kg2` | `karabas-mini/firmware/firmware.uf2` |
+| `karabas_minig` | 3 | Karabas Mini G | `.kg3` | `karabas-mini/firmware/firmware_g.uf2` |
 
 The firmware was verified on Mini G hardware; Go and Mini have not been checked on hardware since the move to FreeRTOS. The last Arduino / PlatformIO build is the `pico-sdk` branch before phase 2 (`e6d1726`); the last plain (non-FreeRTOS) build is `72d6f36` on master.
 
@@ -43,7 +43,7 @@ The firmware was verified on Mini G hardware; Go and Mini have not been checked 
 - `DIAG_STATS=1` prints a `DIAG` line every 10 s when `debug=1`. It shows the loop rate and worst loop gap per core, the free heap and the free stack of the tasks.
 - To run the unit tests: `cmake -S test -B build-test -G Ninja && ninja -C build-test && ctest --test-dir build-test`; a single suite: `ctest --test-dir build-test -R test_kg_format`, or run `build-test/test_kg_format`. Every `test/test_<name>/` is one executable on Unity (fetched by CMake). The tests cover only `lib/common`, built for the host.
 - To upload: put the board into BOOTSEL (`AT+KARABAS=boot`, a 1200 baud open of the CDC port, the `bootsel` button action, or BOOT at power on) and copy `build/karabas_<board>.uf2` to the `RPI-RP2` drive.
-- `BUILD_VER` (shown in About) is the `-DBUILD_VER=...` of the CMake configure. The `build*.sh` scripts set it to a date stamp, build in `build-release/`, then copy the uf2 and `src/karabas.ini` (as an example, into `firmware/` only) into sibling repos (`../karabas-go/...`, `../../karabas-mini/...`). They are release scripts, not dev loops; CI does the same on master.
+- `BUILD_VER` (shown in About) is the `-DBUILD_VER=...` of the CMake configure. Releases are made by CI only: a master build with firmware changes gets a date stamp version, becomes a GitHub release and is committed into the sibling repos `karabas-go` / `karabas-mini` with `src/karabas.ini` as an example (into `firmware/` only), see `.github/workflows/build.yml` (the `SIBLING_REPOS_TOKEN` secret).
 - To debug, set `debug=1` in `karabas.ini`, which enables the `d_print*` macros. `-DCMAKE_C_FLAGS=-DWAIT_SERIAL=1` makes the boot wait for a terminal on the CDC port.
 
 ## Architecture

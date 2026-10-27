@@ -84,7 +84,7 @@ Done in branch `pico-cmake` (2026-10-27): CMake with the pico-sdk 2.2.0 (TinyUSB
 - **`debug_out`** straight on `tud_cdc_write` / `tud_cdc_write_flush` (also fixes the full-packets issue of #52).
 - **`hang_diag`:** `--wrap=panic` stays, the watchdog scratch layout does not change.
 - **Removed:** `platformio.ini`, `apply_patches.py`, `patches/`, the `ccount` reservation, the timer task priority assert (check first that no wakeups are lost).
-- **CI:** GitHub Actions with arm-none-eabi-gcc and the pico-sdk (cached), all three boards, ctest. The release job and `build*.sh` take the uf2 from the CMake build dir.
+- **CI:** GitHub Actions with arm-none-eabi-gcc and the pico-sdk (cached), all three boards, ctest. The release job takes the uf2 from the CMake build dir (`build*.sh` removed in phase 3).
 
 ## Phase 3: finishing
 

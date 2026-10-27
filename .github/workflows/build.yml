@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      # Same date stamp as build*.sh. A second build in the same hour gets the
+      # A date stamp (yymmddhh). A second build in the same hour gets the
       # run number appended, so its release tag does not collide.
       - id: ver
         run: |
@@ -82,7 +82,7 @@ jobs:
 
   # A master build with firmware changes (or a manual run) that builds and
   # passes the tests becomes a release and goes to the karabas-go and
-  # karabas-mini repos, as build*.sh did by hand.
+  # karabas-mini repos.
   release:
     if: github.ref == 'refs/heads/master' && needs.version.outputs.release == 'true'
     needs: [version, test, firmware]
