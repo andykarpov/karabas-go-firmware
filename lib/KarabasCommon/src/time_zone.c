@@ -1,5 +1,6 @@
 #include "time_zone.h"
 #include <stdio.h>
+#include <string.h>
 
 static bool is_digit(char c) {
   return c >= '0' && c <= '9';
@@ -67,4 +68,47 @@ void kg_datetime_add_minutes(kg_datetime_t *t, int minutes) {
   civil_from_days(days + dd, &t->year, &t->month, &t->day);
   t->hour = m / 60;
   t->minute = m % 60;
+}
+
+static int days_in_month(int y, int m) {
+  static const uint8_t days[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+  bool leap = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0;
+  return m == 2 && leap ? 29 : days[m - 1];
+}
+
+bool kg_datetime_valid(const kg_datetime_t *t) {
+  return t->year >= 2000 && t->year <= 2099 && t->month >= 1 && t->month <= 12 &&
+         t->day >= 1 && t->day <= days_in_month(t->year, t->month) &&
+         t->hour >= 0 && t->hour <= 23 && t->minute >= 0 && t->minute <= 59 &&
+         t->second >= 0 && t->second <= 59;
+}
+
+int kg_datetime_weekday(const kg_datetime_t *t) {
+  long days = days_from_civil(t->year, t->month, t->day); // 1970-01-01 was a Thursday
+  return (int) (((days + 4) % 7 + 7) % 7);
+}
+
+static bool two_digits(const char *s, int *v) {
+  if (!is_digit(s[1])) return false;
+  *v = (s[0] == ' ' ? 0 : is_digit(s[0]) ? (s[0] - '0') * 10 : -1000) + (s[1] - '0');
+  return *v >= 0;
+}
+
+bool kg_datetime_parse_build(const char *date, const char *time, kg_datetime_t *t) {
+  static const char months[] = "JanFebMarAprMayJunJulAugSepOctNovDec";
+  if (strlen(date) != 11 || strlen(time) != 8 || time[2] != ':' || time[5] != ':') return false;
+  kg_datetime_t r = {0, 0, 0, 0, 0, 0};
+  for (int i = 0; i < 12; i++) {
+    if (strncmp(date, months + 3 * i, 3) == 0) r.month = i + 1;
+  }
+  int c, y;
+  if (!r.month || !two_digits(date + 4, &r.day) || !two_digits(date + 7, &c) ||
+      !two_digits(date + 9, &y) || !two_digits(time, &r.hour) || !two_digits(time + 3, &r.minute) ||
+      !two_digits(time + 6, &r.second)) {
+    return false;
+  }
+  r.year = c * 100 + y;
+  if (!kg_datetime_valid(&r)) return false;
+  *t = r;
+  return true;
 }

@@ -10,8 +10,7 @@
 #define __RTC_H__
 
 #include <Arduino.h>
-#include <SparkFun_External_EEPROM.h>
-#include <RTClib.h>
+#include "time_zone.h"
 
 /****************************************************************************/
 
@@ -37,8 +36,6 @@ class RTC
 
 private:
 
-  RTC_DS3231 rtc_clock;
-  ExternalEEPROM eeprom;
   spi_cb action;
   osd_cb event;
   bool is_started = false;
@@ -83,6 +80,7 @@ protected:
   uint8_t get_year(int year); 
   void msm_time_regs(uint8_t *regs);
   void msm_commit();
+  void adjust(); // the time fields into the clock chip
 
 public:
 
@@ -91,7 +89,7 @@ public:
   void begin(spi_cb act, osd_cb evt);
   bool started();
   bool hasClock(); // the DS3231 answered at begin()
-  bool now(DateTime &dt); // the last time read, false without a clock
+  bool now(kg_datetime_t &dt); // the last time read, false without a clock
   void handle();
 
   void save();

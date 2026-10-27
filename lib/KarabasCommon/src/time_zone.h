@@ -27,6 +27,12 @@ void kg_tz_format(int minutes, char *out, size_t size);
 int kg_tz_step(int minutes, int d);
 // t + minutes, over days, months and years
 void kg_datetime_add_minutes(kg_datetime_t *t, int minutes);
+// a real date and time of 2000..2099 (the years of the RTC chip)
+bool kg_datetime_valid(const kg_datetime_t *t);
+// the day of the week, 0 = Sunday
+int kg_datetime_weekday(const kg_datetime_t *t);
+// the compiler's __DATE__ ("Oct 27 2026") and __TIME__ ("17:05:09"); false if they do not parse
+bool kg_datetime_parse_build(const char *date, const char *time, kg_datetime_t *t);
 
 #ifdef __cplusplus
 }
