@@ -7,15 +7,8 @@
 static const char *const line_names[4] = {"SE0", "FS idle", "LS idle", "SE1"};
 
 static volatile uint32_t device_missed = 0;
-static volatile uint32_t device_mounts = 0;
 
 void usb_diag_device_missed() { device_missed++; }
-
-// the device side: the PC configured us (after a plug in or a bus reset by the PC)
-extern "C" void tud_mount_cb(void) {
-  device_mounts++;
-  d_println("USB device: configured by the host");
-}
 
 // who drives D+ / D- (DPDM pinout: D- is D+ + 1): "pio0 out 0" when a PIO state machine drives
 // the pin low (the host's bus reset, or a stuck transmit), "in 0" when nothing on our side does
@@ -41,7 +34,8 @@ static void pins_state(char *buf, size_t size) {
   snprintf(buf, size, "D+ %s, D- %s", dp, dm);
 }
 
-// root port events, as the SOF irq counted them
+// root port events, as the SOF irq counted them. Connects are only counted: a log line from
+// core1 at boot made the FT812 picture of the Mini G start black 4 times out of 7 (not found why)
 void usb_diag_tick() {
   static uint32_t connects = 0, disconnects = 0, overflows = 0;
   uint32_t c = pio_usb_diag.connects, d = pio_usb_diag.disconnects, o = pio_usb_diag.rx_overflows;
@@ -51,10 +45,6 @@ void usb_diag_tick() {
     char pins[48];
     pins_state(pins, sizeof(pins));
     d_printf("USB root: disconnect (%lu in all), line %s, %s\r\n", (unsigned long) d, line_names[(root >> 4) & 3], pins);
-  }
-  if (c != connects) {
-    d_printf("USB root: connect (%lu in all), %s speed, line %s\r\n", (unsigned long) c,
-      (root & 8) ? "full" : "low", line_names[(root >> 4) & 3]);
   }
   if (o != overflows) {
     d_printf("USB root: %lu packets longer than the rx buffer (%lu in all)\r\n", (unsigned long) (o - overflows), (unsigned long) o);
@@ -73,22 +63,11 @@ void usb_diag_print() {
   pio_usb_diag.max_frame_us = 0;
   char pins[48];
   pins_state(pins, sizeof(pins));
-  d_printf(" | usb sof %lu/s, max gap %lu us, max frame %lu us, root %s%s%s line %s (%s), conn %lu disc %lu ovf %lu | usbd mounts %lu missed %lu",
+  d_printf(" | usb sof %lu/s, max gap %lu us, max frame %lu us, root %s%s%s line %s (%s), conn %lu disc %lu ovf %lu | usbd missed %lu",
     (unsigned long) sof, (unsigned long) sof_gap, (unsigned long) frame_us,
     (root & 1) ? "" : "uninit ", (root & 2) ? "connected" : "empty", (root & 4) ? " suspended" : "",
     line_names[(root >> 4) & 3], pins,
     (unsigned long) pio_usb_diag.connects, (unsigned long) pio_usb_diag.disconnects,
     (unsigned long) pio_usb_diag.rx_overflows,
-    (unsigned long) device_mounts, (unsigned long) device_missed);
-}
-
-// TinyUSB's log (tu_printf is printf): asserts that failed, errors
-extern "C" int __wrap_printf(const char *fmt, ...) {
-  char buf[160];
-  va_list ap;
-  va_start(ap, fmt);
-  int len = vsnprintf(buf, sizeof(buf), fmt, ap);
-  va_end(ap);
-  d_print(buf);
-  return len;
+    (unsigned long) device_missed);
 }

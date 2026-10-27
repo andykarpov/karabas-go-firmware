@@ -1,8 +1,9 @@
 #pragma once
 
 // USB diagnostics (printed with debug=1): the root port events of the PIO-USB host, logged from
-// core1, and a summary for the DIAG line. TinyUSB's error log (CFG_TUSB_DEBUG=1, its printf goes
-// through -Wl,--wrap=printf) goes to d_print too.
+// core1, and a summary for the DIAG line.
+// Not CFG_TUSB_DEBUG: Adafruit's log_printf then starts Serial1 (UART0 on GPIO 0 / 1, the SD card
+// pins of the Mini boards) at the first message.
 
 #include <Arduino.h>
 
