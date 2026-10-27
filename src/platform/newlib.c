@@ -12,6 +12,11 @@
 
 #include <reent.h>
 #include <sys/lock.h>
+
+// a newlib with static reent or default locks would build too, and share errno and the locks
+#if !defined(__DYNAMIC_REENT__) || !defined(_RETARGETABLE_LOCKING)
+#error "newlib needs dynamic reent and retargetable locks: the earlephilhower toolchain (pico-quick-toolchain 4.1.0)"
+#endif
 #include "pico/mutex.h"
 #include "hardware/sync.h"
 #include "FreeRTOS.h"
