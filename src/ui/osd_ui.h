@@ -38,6 +38,13 @@ void on_time();
 uint8_t ui_pressed_keys(hid_keyboard_report_t *prev, uint8_t *keys);
 // the joystick (both ports) as a key: KEY_UP / DOWN / LEFT / RIGHT, KEY_ENTER (A, B), KEY_ESC (C, Select); 0 if none
 uint8_t ui_joy_key();
+// the key of a menu event: the key pressed on the keyboard (keypad Enter as Enter), else the
+// joystick's (ui_joy_key). Every screen reads its navigation through this, so the pad means the
+// same everywhere: A / B Enter, C / Mode Esc.
+uint8_t ui_nav_key();
+// a list cursor moved by a navigation key (kg_list): Up / Down by one around the ends, Left /
+// Right a page. true if the key was one of these (the selection may stay).
+bool ui_list_key(uint16_t *sel, uint16_t len, uint16_t page, uint8_t key);
 // a joystick key in a free text field: Up / Down turn the last char, Right adds one, Left
 // deletes it. false if the key is not one of these.
 bool ui_joy_edit(char *text, size_t max, uint8_t key);

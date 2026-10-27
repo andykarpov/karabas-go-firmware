@@ -77,25 +77,21 @@ void app_setup_overlay() {
   osd_update();
 }
 
-void app_setup_on_keyboard() 
-{
-  if (usb_keyboard_report.keycode[0] == KEY_DOWN || (joyL & SC_BTN_DOWN) || (joyR & SC_BTN_DOWN)) {
-    if (setup_sel + 1 < setup_count()) setup_sel++;
-  }
-
-  if (usb_keyboard_report.keycode[0] == KEY_UP || (joyL & SC_BTN_UP) || (joyR & SC_BTN_UP)) {
-    if (setup_sel > 0) setup_sel--;
-  }
+void app_setup_on_keyboard() {
+  uint8_t key = ui_nav_key();
+  uint16_t sel = setup_sel;
+  // up / down (no pages: Left goes back)
+  if (key == KEY_UP || key == KEY_DOWN) ui_list_key(&sel, setup_count(), 1, key);
+  setup_sel = sel;
 
   // enter (right does nothing: the items are all buttons)
-  if (usb_keyboard_report.keycode[0] == KEY_ENTER || (joyL & SC_BTN_A) || (joyR & SC_BTN_A) || (joyL & SC_BTN_B) || (joyR & SC_BTN_B)) {
+  if (key == KEY_ENTER) {
     const setup_item_t *item = setup_item(setup_sel);
     if (item) osd_state = item->state;
   }
 
   // esc, left (the menu has only buttons)
-  bool left = usb_keyboard_report.keycode[0] == KEY_LEFT || ((joyL | joyR) & SC_BTN_LEFT);
-  if (usb_keyboard_report.keycode[0] == KEY_ESC || ((joyL | joyR) & UI_JOY_ESC) || (left && !ui_repeat)) {
+  if (key == KEY_ESC || (key == KEY_LEFT && !ui_repeat)) {
     osd_state = osd_return_state;
   }
 

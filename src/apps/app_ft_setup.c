@@ -572,14 +572,14 @@ void app_ft_setup_on_keyboard() {
     custom_on_keyboard(keys, n);
     return;
   }
-  uint8_t key = usb_keyboard_report.keycode[0];
+  uint8_t key = ui_nav_key();
   keys_t k;
-  k.up = key == KEY_UP || (joyL & SC_BTN_UP) || (joyR & SC_BTN_UP);
-  k.down = key == KEY_DOWN || (joyL & SC_BTN_DOWN) || (joyR & SC_BTN_DOWN);
-  k.left = key == KEY_LEFT || (joyL & SC_BTN_LEFT) || (joyR & SC_BTN_LEFT);
-  k.right = key == KEY_RIGHT || (joyL & SC_BTN_RIGHT) || (joyR & SC_BTN_RIGHT);
-  k.enter = key == KEY_ENTER || key == KEY_KPENTER || (joyL & SC_BTN_A) || (joyR & SC_BTN_A) || (joyL & SC_BTN_B) || (joyR & SC_BTN_B);
-  k.esc = key == KEY_ESC || ((joyL | joyR) & UI_JOY_ESC);
+  k.up = key == KEY_UP;
+  k.down = key == KEY_DOWN;
+  k.left = key == KEY_LEFT;
+  k.right = key == KEY_RIGHT;
+  k.enter = key == KEY_ENTER;
+  k.esc = key == KEY_ESC;
   k.back = k.esc || key == KEY_BACKSPACE;
   k.tab = key == KEY_TAB;
   k.shift = usb_keyboard_report.modifier & (KEY_MOD_LSHIFT | KEY_MOD_RSHIFT);

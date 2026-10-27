@@ -14,6 +14,7 @@
 #include "apps/app_ft_pages.h"
 #include "apps/app_msc.h"
 #include "masked_input.h"
+#include "kg_list.h"
 
 // OSD state and the app screens (one per osd_state)
 
@@ -179,6 +180,22 @@ uint8_t ui_joy_key() {
   return (joy & SC_BTN_UP) ? KEY_UP : (joy & SC_BTN_DOWN) ? KEY_DOWN :
          (joy & SC_BTN_LEFT) ? KEY_LEFT : (joy & SC_BTN_RIGHT) ? KEY_RIGHT :
          (joy & (SC_BTN_A | SC_BTN_B)) ? KEY_ENTER : (joy & UI_JOY_ESC) ? KEY_ESC : 0;
+}
+
+uint8_t ui_nav_key() {
+  uint8_t key = usb_keyboard_report.keycode[0];
+  if (key == KEY_KPENTER) return KEY_ENTER;
+  return key ? key : ui_joy_key();
+}
+
+bool ui_list_key(uint16_t *sel, uint16_t len, uint16_t page, uint8_t key) {
+  switch (key) {
+    case KEY_UP:    kg_list_move(sel, len, page, KG_LIST_UP); return true;
+    case KEY_DOWN:  kg_list_move(sel, len, page, KG_LIST_DOWN); return true;
+    case KEY_LEFT:  kg_list_move(sel, len, page, KG_LIST_PAGE_UP); return true;
+    case KEY_RIGHT: kg_list_move(sel, len, page, KG_LIST_PAGE_DOWN); return true;
+  }
+  return false;
 }
 
 bool ui_joy_edit(char *text, size_t max, uint8_t key) {

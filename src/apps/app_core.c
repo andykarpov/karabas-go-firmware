@@ -280,52 +280,15 @@ void app_core_save(uint8_t pos)
 
 void app_core_on_keyboard() {
 
+  uint8_t key = ui_nav_key();
+
   if (is_filebrowser) {
 
-    // down
-    if (usb_keyboard_report.keycode[0] == KEY_DOWN || (joyL & SC_BTN_DOWN) || (joyR & SC_BTN_DOWN)) {
-      if (files_len > 0) {
-        if (file_sel < files_len-1) {
-          file_sel++;
-        } else {
-          file_sel = 0;
-        }
-      }
-      need_redraw = true;
-    }
-
-    // up
-    if (usb_keyboard_report.keycode[0] == KEY_UP || (joyL & SC_BTN_UP) || (joyR & SC_BTN_UP)) {
-      if (file_sel > 0) {
-        file_sel--;
-      } else {
-        file_sel = files_len-1;
-      }
-      need_redraw = true;
-    }
-
-    // right
-    if (usb_keyboard_report.keycode[0] == KEY_RIGHT || (joyL & SC_BTN_RIGHT) || (joyR & SC_BTN_RIGHT)) {
-      if (file_sel + file_page_size <= files_len-1) {
-        file_sel += file_page_size;
-      } else {
-        file_sel = files_len-1;
-      }
-      need_redraw = true;
-    }
-
-    // left
-    if (usb_keyboard_report.keycode[0] == KEY_LEFT || (joyL & SC_BTN_LEFT) || (joyR & SC_BTN_LEFT)) {
-      if (file_sel - file_page_size >= 0) {
-        file_sel -= file_page_size;
-      } else {
-        file_sel = 0;
-      }
-      need_redraw = true;
-    }
+    // up / down, left / right a page
+    if (ui_list_key(&file_sel, files_len, file_page_size, key)) need_redraw = true;
 
     // enter
-    if (usb_keyboard_report.keycode[0] == KEY_ENTER || (joyL & SC_BTN_B) || (joyR & SC_BTN_B) ) {
+    if (key == KEY_ENTER) {
       if (files_len > 0) {
         sd_close(&file1);
         const char *hash = files[file_sel].hash;
@@ -412,7 +375,7 @@ void app_core_on_keyboard() {
     }
 
     // esc: back to the dir of the mounted image
-    if (usb_keyboard_report.keycode[0] == KEY_ESC || (joyL & SC_BTN_A) || (joyR & SC_BTN_A) || ((joyL | joyR) & UI_JOY_ESC)) {
+    if (key == KEY_ESC) {
       core_file_slot_t *fs = &file_slots[core.osd[curr_osd_item].slot_id];
       if (strcmp(fs->dir, filebrowser_dir) != 0) {
         memcpy(fs->dir, filebrowser_dir, sizeof(filebrowser_dir));
@@ -425,19 +388,19 @@ void app_core_on_keyboard() {
   } else {
 
         // down
-        if (usb_keyboard_report.keycode[0] == KEY_DOWN || (joyL & SC_BTN_DOWN) || (joyR & SC_BTN_DOWN)) {
+        if (key == KEY_DOWN) {
           curr_osd_item = find_next_item();
           need_redraw = true;
         }
 
         // up
-        if (usb_keyboard_report.keycode[0] == KEY_UP || (joyL & SC_BTN_UP) || (joyR & SC_BTN_UP)) {
+        if (key == KEY_UP) {
           curr_osd_item = find_prev_item();
           need_redraw = true;
         }
 
         // right, enter
-        if (usb_keyboard_report.keycode[0] == KEY_RIGHT || usb_keyboard_report.keycode[0] == KEY_ENTER  || (joyL & SC_BTN_A) || (joyR & SC_BTN_A) || (joyL & SC_BTN_B) || (joyR & SC_BTN_B) || (joyL & SC_BTN_RIGHT) || (joyR & SC_BTN_RIGHT) ) {
+        if (key == KEY_RIGHT || key == KEY_ENTER) {
           if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILELOADER) {
             filebrowser_open();
           } else {
@@ -454,7 +417,7 @@ void app_core_on_keyboard() {
         }
 
         // left
-        if (usb_keyboard_report.keycode[0] == KEY_LEFT || (joyL & SC_BTN_LEFT) || (joyR & SC_BTN_LEFT)) {
+        if (key == KEY_LEFT) {
           if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILELOADER) {
             filebrowser_open();
           } else {
@@ -472,7 +435,7 @@ void app_core_on_keyboard() {
         }
 
         // delete, backspace: eject the image of a file mounter item
-        if (usb_keyboard_report.keycode[0] == KEY_DELETE || usb_keyboard_report.keycode[0] == KEY_BACKSPACE) {
+        if (key == KEY_DELETE || key == KEY_BACKSPACE) {
           if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER && file_slots[core.osd[curr_osd_item].slot_id].is_mounted) {
             app_core_eject(curr_osd_item);
             need_redraw = true;
@@ -480,13 +443,13 @@ void app_core_on_keyboard() {
         }
 
         // s
-        if (usb_keyboard_report.keycode[0] == KEY_S) {
+        if (key == KEY_S) {
           osd_return_state = state_main;
           osd_state = state_setup;
         }
 
         // a
-        if (usb_keyboard_report.keycode[0] == KEY_A) {
+        if (key == KEY_A) {
           osd_return_state = state_main;
           osd_state = state_about;
         }

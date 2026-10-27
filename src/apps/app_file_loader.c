@@ -301,68 +301,34 @@ uint32_t c1 = 0;
   app_file_loader_overlay(false, false);
 }
 
-void app_file_loader_on_keyboard() 
-{
-          if (files_len > 0) {
-        // down
-        if (usb_keyboard_report.keycode[0] == KEY_DOWN || (joyL & SC_BTN_DOWN) || (joyR & SC_BTN_DOWN)) {
-          if (file_sel < files_len-1) {
-            file_sel++;
-          } else {
-            file_sel = 0;
-          }
-        }
+void app_file_loader_on_keyboard() {
+  if (files_len == 0) return;
+  uint8_t key = ui_nav_key();
 
-        // up
-        if (usb_keyboard_report.keycode[0] == KEY_UP || (joyL & SC_BTN_UP) || (joyR & SC_BTN_UP)) {
-          if (file_sel > 0) {
-            file_sel--;
-          } else {
-            file_sel = files_len-1;
-          }
-        }
+  // up / down, left / right a page
+  ui_list_key(&file_sel, files_len, file_page_size, key);
 
-        // right
-        if (usb_keyboard_report.keycode[0] == KEY_RIGHT || (joyL & SC_BTN_RIGHT) || (joyR & SC_BTN_RIGHT)) {
-          if (file_sel + file_page_size <= files_len-1) {
-            file_sel += file_page_size;
-          } else {
-            file_sel = files_len-1;
-          }
-        }
+  // R = recreate file index
+  if (key == KEY_R) {
+    file_sel = 0;
+    app_file_loader_overlay(true, true);
+  }
 
-        // left
-        if (usb_keyboard_report.keycode[0] == KEY_LEFT || (joyL & SC_BTN_LEFT) || (joyR & SC_BTN_LEFT)) {
-          if (file_sel - file_page_size >= 0) {
-            file_sel -= file_page_size;
-          } else {
-            file_sel = 0;
-          }
-        }
+  if (key == KEY_ENTER) {
+    app_file_loader_save();
+    app_file_loader_send_file(files[file_sel].file_id);
+    // hide osd
+    if (!is_osd_hiding) {
+      is_osd_hiding = true;
+      hide_timer = ms_now();
+      osd_hide_menu();
+    }
+  }
 
-        // R = recreate file index
-        if (usb_keyboard_report.keycode[0] == KEY_R) {
-            file_sel = 0;
-            app_file_loader_overlay(true, true);
-        }
-        
-        // enter
-        if (usb_keyboard_report.keycode[0] == KEY_ENTER || (joyL & SC_BTN_A) || (joyR & SC_BTN_A) || (joyL & SC_BTN_B) || (joyR & SC_BTN_B)) {
-          app_file_loader_save();
-          app_file_loader_send_file(files[file_sel].file_id);
-          // hide osd
-          if (!is_osd_hiding) {
-            is_osd_hiding = true;
-            hide_timer = ms_now();
-            osd_hide_menu();
-          }
-        }
-
-        // redraw file loader on keypress
-        if (osd_state == state_file_loader) {
-          app_file_loader_menu(APP_COREBROWSER_MENU_OFFSET);
-        }
-      }
+  // redraw file loader on keypress
+  if (osd_state == state_file_loader) {
+    app_file_loader_menu(APP_COREBROWSER_MENU_OFFSET);
+  }
 }
 
 void app_file_loader_send_byte(uint32_t addr, uint8_t data, bool force_bank) {

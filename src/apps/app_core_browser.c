@@ -392,14 +392,12 @@ static void open_setup() {
 
 // the graphic browser with the keys on the Setup button: Enter opens it, Right / Up / Down go
 // back to the cores. true if the key was taken.
-static bool setup_focus_key() {
-  uint8_t key = usb_keyboard_report.keycode[0];
-  uint16_t joy = joyL | joyR;
-  if (key == KEY_ENTER || key == KEY_KPENTER || (joy & (SC_BTN_A | SC_BTN_B))) {
+static bool setup_focus_key(uint8_t key) {
+  if (key == KEY_ENTER) {
     open_setup();
     return true;
   }
-  if (key == KEY_RIGHT || key == KEY_UP || key == KEY_DOWN || (joy & (SC_BTN_RIGHT | SC_BTN_UP | SC_BTN_DOWN))) {
+  if (key == KEY_RIGHT || key == KEY_UP || key == KEY_DOWN) {
     setup_focus = false;
     app_core_browser_ft_menu(1);
     return true;
@@ -408,73 +406,28 @@ static bool setup_focus_key() {
 }
 
 void app_core_browser_on_keyboard() {
+      uint8_t key = ui_nav_key();
       if (has_ft) ft_mouse_hide(); // the keys move the selection
       if (!has_ft) setup_focus = false;
-      if (setup_focus && setup_focus_key()) return;
+      if (setup_focus && setup_focus_key(key)) return;
       if (cores_len > 0) {
-        // down
-        if (usb_keyboard_report.keycode[0] == KEY_DOWN || (joyL & SC_BTN_DOWN) || (joyR & SC_BTN_DOWN)) {
+        if (key == KEY_LEFT && has_ft && core_sel == 0) {
+          // already on the first core: onto the Setup button (not by a held Left)
           autoload_enabled = false;
-          if (core_sel < cores_len-1) {
-            core_sel++;
-          } else {
-            core_sel = 0;
-          }
+          if (!ui_repeat) setup_focus = true;
+        } else {
+          // up / down, left / right a page
+          uint16_t sel = core_sel;
+          if (ui_list_key(&sel, cores_len, page_size(), key)) autoload_enabled = false;
+          core_sel = sel;
         }
 
-        // up
-        if (usb_keyboard_report.keycode[0] == KEY_UP  || (joyL & SC_BTN_UP) || (joyR & SC_BTN_UP)) {
-          autoload_enabled = false;
-          if (core_sel > 0) {
-            core_sel--;
-          } else {
-            core_sel = cores_len-1;
-          }
-        }
-
-        // right
-        if (usb_keyboard_report.keycode[0] == KEY_RIGHT || (joyL & SC_BTN_RIGHT) || (joyR & SC_BTN_RIGHT)) {
-          autoload_enabled = false;
-          if (core_sel + page_size() <= cores_len-1) {
-            core_sel += page_size();
-          } else {
-            core_sel = cores_len-1;
-          }
-        }
-
-        // left
-        if (usb_keyboard_report.keycode[0] == KEY_LEFT || (joyL & SC_BTN_LEFT) || (joyR & SC_BTN_LEFT)) {
-          autoload_enabled = false;
-          if (has_ft && core_sel == 0) {
-            // already on the first core: onto the Setup button (not by a held Left)
-            if (!ui_repeat) setup_focus = true;
-          } else if (core_sel - page_size() >= 0) {
-            core_sel -= page_size();
-          } else {
-            core_sel = 0;
-          }
-        }
-        
-        // enter
-        if (usb_keyboard_report.keycode[0] == KEY_ENTER || (joyL & SC_BTN_A) || (joyR & SC_BTN_A) || (joyL & SC_BTN_B) || (joyR & SC_BTN_B)) {
+        if (key == KEY_ENTER) {
           start_core();
         }
 
-        if (usb_keyboard_report.keycode[0] == KEY_V && hw_setup.debug_enabled && has_ft) {
-          autoload_enabled = false;
-          uint8_t old_vmode = hw_setup.ft_video_mode;
-          hw_setup.ft_video_mode = (hw_setup.ft_video_mode + 1) % ft_mode_count();
-          d_printf("Changing video mode from %d to %d", old_vmode, hw_setup.ft_video_mode); d_println();
-          if (ft_init(hw_setup.ft_video_mode)) {
-            d_printf("FT81x system clock %lu kHz, attempt %u", (unsigned long) (ft_init_clock_hz() / 1000), ft_init_attempts()); d_println();
-          } else {
-            d_println("FT81x did not come up in the new video mode");
-          }
-          app_core_browser_ft_overlay();
-        }
-
         // enter setup mode (S, joy start)
-        if (usb_keyboard_report.keycode[0] == KEY_S || (joyL & SC_BTN_START) || (joyR & SC_BTN_START)) {
+        if (key == KEY_S || ((joyL | joyR) & SC_BTN_START)) {
           open_setup();
         }
 
@@ -489,7 +442,7 @@ void app_core_browser_on_keyboard() {
       }
 
       // return back to classic osd
-      if (usb_keyboard_report.keycode[0] == KEY_SPACE && has_ft) {
+      if (key == KEY_SPACE && has_ft) {
         has_ft = false;
         ft_vga(false);
         ft_spi(false);
@@ -497,7 +450,7 @@ void app_core_browser_on_keyboard() {
       }
 
       // the graphic menu, also when it is off in karabas.ini (until the next start)
-      if (usb_keyboard_report.keycode[0] == KEY_G && !has_ft) {
+      if (key == KEY_G && !has_ft) {
         autoload_enabled = false;
         ft_spi(true);
         has_ft = ft_init(hw_setup.ft_video_mode);
