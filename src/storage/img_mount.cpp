@@ -119,9 +119,7 @@ void img_register_handlers() {
 
 void img_close_all() {
   for (uint8_t i = 0; i < MAX_FILE_SLOTS; i++) {
-    if (file_slots[i].file.isOpen()) {
-      file_slots[i].file.close(); // close() syncs
-    }
+    sd_close(&file_slots[i].file); // f_close syncs
     img_dirty[i] = false;
     matrix_drive_mount(i, 0);
   }
@@ -133,9 +131,7 @@ void img_close_all() {
 void img_mount(uint8_t slot) {
   if (slot >= MAX_FILE_SLOTS) return;
   core_file_slot_t &fs = file_slots[slot];
-  if (fs.file.isOpen()) {
-    fs.file.close(); // close() syncs
-  }
+  sd_close(&fs.file); // f_close syncs
   img_dirty[slot] = false;
   matrix_drive_mount(slot, 0);
   uint64_t fsize = 0;
@@ -154,11 +150,11 @@ void img_mount(uint8_t slot) {
     snprintf(dir, sizeof(dir), "%s%s", fs.dir[0] == '/' ? "" : "/", fs.dir);
     kg_path_join(fname, sizeof(fname), dir, fs.filename);
     // read-write, so the core can write sectors back; read only if the file is write protected
-    if (!fs.file.open(&sd1, fname, O_RDWR) && !fs.file.open(&sd1, fname, O_RDONLY)) {
+    if (!sd_open(&fs.file, fname, FA_READ | FA_WRITE) && !sd_open(&fs.file, fname, FA_READ)) {
       d_printf("Mount slot %d: unable to open %s", slot, fname); d_println();
       fs.is_mounted = false;
     } else {
-      fsize = fs.file.fileSize();
+      fsize = f_size(&fs.file);
       d_printf("Mount slot %d: %s, %llu bytes", slot, fname, (unsigned long long) fsize); d_println();
     }
   }
@@ -172,11 +168,18 @@ void img_mount(uint8_t slot) {
   }
 }
 
-static bool img_read_sector(FsFile &f, uint32_t lba) {
+// the file position of a sector of the image; false past its end (f_lseek would grow a file
+// open for writing, SdFat's seekSet failed there)
+static bool img_seek(FIL *f, uint32_t lba) {
+  FSIZE_t pos = (FSIZE_t) lba * IMG_SECTOR_SIZE;
+  return sd_is_open(f) && pos < f_size(f) && f_lseek(f, pos) == FR_OK;
+}
+
+static bool img_read_sector(FIL *f, uint32_t lba) {
   memset(img_buf, 0, IMG_SECTOR_SIZE);
-  if (!f.isOpen() || !f.seekSet((uint64_t) lba * IMG_SECTOR_SIZE)) return false;
+  if (!img_seek(f, lba)) return false;
   // a short last sector is padded with zeros
-  return f.read(img_buf, IMG_SECTOR_SIZE) > 0;
+  return sd_read(f, img_buf, IMG_SECTOR_SIZE) > 0;
 }
 
 static void img_send_sector() {
@@ -222,7 +225,7 @@ static bool img_serve() {
   if (!req_complete) {
     what = "incomplete request"; // a lost IMG_LBA byte: the core asks again
   } else if (slot < MAX_FILE_SLOTS) {
-    FsFile &f = file_slots[slot].file;
+    FIL *f = &file_slots[slot].file;
     if (req_op == IMG_REQ_READ) {
       ok = img_read_sector(f, lba);
       img_send_sector();
@@ -230,8 +233,7 @@ static bool img_serve() {
       if (!img_receive_sector()) {
         what = "wr, data lost";
       } else {
-        ok = f.isOpen() && f.seekSet((uint64_t) lba * IMG_SECTOR_SIZE) &&
-             f.write(img_buf, IMG_SECTOR_SIZE) == IMG_SECTOR_SIZE;
+        ok = img_seek(f, lba) && sd_write(f, img_buf, IMG_SECTOR_SIZE) == IMG_SECTOR_SIZE;
         img_dirty[slot] = true;
         img_last_write_ms = ms_now();
       }
@@ -274,8 +276,8 @@ static void img_sync_idle() {
   for (uint8_t i = 0; i < MAX_FILE_SLOTS; i++) {
     if (img_dirty[i]) {
       img_dirty[i] = false;
-      if (file_slots[i].file.isOpen()) {
-        file_slots[i].file.sync();
+      if (sd_is_open(&file_slots[i].file)) {
+        f_sync(&file_slots[i].file);
       }
     }
   }

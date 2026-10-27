@@ -5,7 +5,6 @@
 #include "FT812.h"
 #include "bitmaps.h"
 #include "OSD.h"
-#include "SdFat.h"
 #include "input/sega.h"
 #include "usb_hid_keys.h"
 #include <algorithm>
@@ -320,9 +319,10 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
 }
 
 
-core_list_item_t app_core_browser_get_item() {
+// the header of the open core file (file1)
+core_list_item_t app_core_browser_get_item(const char *filename) {
   core_list_item_t core;
-  file1.getName(core.filename, sizeof(core.filename));
+  snprintf(core.filename, sizeof(core.filename), "%s", filename);
   core.flash = false;
   file_seek(FILE_POS_CORE_ID); file_read_bytes(core.id, 32); core.id[32] = '\0';
   file_seek(FILE_POS_CORE_NAME); file_read_bytes(core.name, 32); core.name[32] = '\0';
@@ -337,20 +337,17 @@ void app_core_browser_read_list() {
 
   // files from sd card
   if (has_sd) {
-    if (root1.isOpen()) {
-      root1.close();
-    }
-    if (!root1.open(&sd1, "/")) {
+    if (!sd_opendir(&root1, "/")) {
       return;
     }
-    root1.rewind();
-    while (file1.openNext(&root1, O_RDONLY)) {
-      char filename[32]; file1.getName(filename, sizeof(filename));
-      if (kg_name_has_ext(filename, CORE_EXT)) {
-        cores[cores_len] = app_core_browser_get_item();
+    FILINFO fi;
+    while (f_readdir(&root1, &fi) == FR_OK && fi.fname[0]) {
+      if (!(fi.fattrib & AM_DIR) && strlen(fi.fname) < 32 && kg_name_has_ext(fi.fname, CORE_EXT) &&
+          sd_open(&file1, fi.fname, FA_READ)) {
+        cores[cores_len] = app_core_browser_get_item(fi.fname);
         cores_len++;
+        sd_close(&file1);
       }
-      file1.close();
     }
   }
   // sort by core order number

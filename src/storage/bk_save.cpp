@@ -81,30 +81,30 @@ static void bk_file_name(uint8_t kind, char *out, size_t size) {
 
 // open or create the file with at least size bytes (new bytes 0): the core writes any sector of it
 static bool bk_make_file(const char *dir, const char *name, uint32_t size) {
-  if (!sd1.exists(dir) && !sd1.mkdir(dir, true)) {
+  if (!sd_mkdirs(dir)) {
     d_printf("Save: unable to make dir %s", dir); d_println();
     return false;
   }
   char path[KG_PATH_MAX];
   kg_path_join(path, sizeof(path), dir, name);
-  FsFile f;
-  if (!f.open(&sd1, path, O_RDWR | O_CREAT)) {
+  static FIL f; // not on the stack: a FIL has its own sector buffer
+  if (!sd_open(&f, path, FA_READ | FA_WRITE | FA_OPEN_ALWAYS)) {
     d_printf("Save: unable to open %s", path); d_println();
     return false;
   }
-  uint64_t have = f.fileSize();
+  uint64_t have = f_size(&f);
   bool ok = true;
   if (have < size) {
     static uint8_t zeros[IMG_SECTOR_SIZE];
     memset(zeros, 0, sizeof(zeros));
-    ok = f.seekSet(have);
+    ok = f_lseek(&f, have) == FR_OK;
     while (ok && have < size) {
       uint32_t n = size - have < IMG_SECTOR_SIZE ? size - have : IMG_SECTOR_SIZE;
-      ok = f.write(zeros, n) == n;
+      ok = sd_write(&f, zeros, n) == n;
       have += n;
     }
   }
-  f.close();
+  sd_close(&f);
   d_printf("Save: %s, %lu bytes%s", path, (unsigned long) size, ok ? "" : ", FAILED to extend"); d_println();
   return ok;
 }
@@ -147,7 +147,7 @@ bool bk_flush() {
   bool ok = flush_result == IMG_RES_DONE;
   d_printf("Save: flush slot %d %s in %lu ms", bk_slot, flush_result == 0 ? "no answer" : ok ? "done" : "FAILED",
     (unsigned long) ms_since(timer)); d_println();
-  if (file_slots[bk_slot].file.isOpen()) file_slots[bk_slot].file.sync();
+  if (sd_is_open(&file_slots[bk_slot].file)) f_sync(&file_slots[bk_slot].file);
   return ok;
 }
 

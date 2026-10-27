@@ -10,7 +10,6 @@
 // C headers
 // Framework headers
 // Library headers
-#include <SPI.h>
 // Project headers
 // This component's header
 #include <OSD.h>

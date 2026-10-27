@@ -71,29 +71,30 @@ void serial_data(uint8_t addr, uint8_t data) {
 }
 
 // header string of a core file without the padding
-static void read_core_str(FsFile &f, uint32_t pos, char *out, size_t len) {
-  f.seekSet(pos);
-  int n = f.read(out, len);
-  out[n > 0 ? n : 0] = '\0';
+static void read_core_str(FIL *f, uint32_t pos, char *out, size_t len) {
+  f_lseek(f, pos);
+  UINT n = sd_read(f, out, len);
+  out[n] = '\0';
   for (int i = strlen(out) - 1; i >= 0 && (out[i] == ' ' || out[i] == '\0'); i--) out[i] = '\0';
 }
 
 static void at_list_cores() {
+  static DIR root; // not on the stack: a FIL has its own sector buffer
+  static FIL f;
   if (!has_sd) { Serial.print("ERROR\r\n"); return; }
-  FsFile root, f;
-  if (!root.open("/", O_RDONLY)) { Serial.print("ERROR\r\n"); return; }
-  while (f.openNext(&root, O_RDONLY)) {
-    char filename[64]; f.getName(filename, sizeof(filename));
-    if (!f.isDir() && kg_name_has_ext(filename, CORE_EXT)) {
+  if (!sd_opendir(&root, "/")) { Serial.print("ERROR\r\n"); return; }
+  FILINFO fi;
+  while (f_readdir(&root, &fi) == FR_OK && fi.fname[0]) {
+    if (!(fi.fattrib & AM_DIR) && kg_name_has_ext(fi.fname, CORE_EXT) && sd_open(&f, fi.fname, FA_READ)) {
       char id[33], name[33], build[9];
-      read_core_str(f, FILE_POS_CORE_ID, id, 32);
-      read_core_str(f, FILE_POS_CORE_NAME, name, 32);
-      read_core_str(f, FILE_POS_CORE_BUILD, build, 8);
-      Serial.printf("+KARABAS:%s;%s;%s;%s\r\n", filename, id, name, build);
+      read_core_str(&f, FILE_POS_CORE_ID, id, 32);
+      read_core_str(&f, FILE_POS_CORE_NAME, name, 32);
+      read_core_str(&f, FILE_POS_CORE_BUILD, build, 8);
+      Serial.printf("+KARABAS:%s;%s;%s;%s\r\n", fi.fname, id, name, build);
+      sd_close(&f);
     }
-    f.close();
   }
-  root.close();
+  sd_closedir(&root);
   Serial.print("OK\r\n");
 }
 

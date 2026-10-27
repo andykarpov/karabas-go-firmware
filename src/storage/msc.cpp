@@ -73,7 +73,7 @@ void msc_start() {
     }
     block_count = sd2_sector_count();
   } else {
-    block_count = sd1.card()->sectorCount();
+    block_count = sd_card_sectors(sd1_card());
   }
   usb_msc.setCapacity(0, block_count, 512);
   usb_msc.setUnitReady(0, true);
@@ -130,7 +130,7 @@ int32_t msc_read_cb_sd (uint32_t lba, void* buffer, uint32_t bufsize)
   if (!expose_msc) return -1; // ejected: the card is being handed back to the firmware
   bool rc;
   if (card == 2) rc = sd2_read(lba, (uint8_t*) buffer, bufsize/512);
-  else rc = sd1.card()->readSectors(lba, (uint8_t*) buffer, bufsize/512);
+  else rc = sd_card_read(sd1_card(), lba, (uint8_t*) buffer, bufsize/512);
   return rc ? bufsize : -1;
 }
 
@@ -142,7 +142,7 @@ int32_t msc_write_cb_sd (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
   if (!expose_msc) return -1;
   bool rc;
   if (card == 2) rc = sd2_write(lba, buffer, bufsize/512);
-  else rc = sd1.card()->writeSectors(lba, buffer, bufsize/512);
+  else rc = sd_card_write(sd1_card(), lba, buffer, bufsize/512);
   return rc ? bufsize : -1;
 }
 
@@ -151,8 +151,7 @@ int32_t msc_write_cb_sd (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
 void msc_flush_cb_sd (void)
 {
   if (card == 2) sd2_sync();
-  else sd1.card()->syncDevice();
-  //sd1.cacheClear();
+  else sd_card_sync(sd1_card());
 }
 
 bool msc_start_stop_cb_sd(uint8_t power_condition, bool start, bool load_eject) {
@@ -168,13 +167,13 @@ bool msc_start_stop_cb_sd(uint8_t power_condition, bool start, bool load_eject) 
     {
       // unload disk storage
       if (expose_msc) {
-        // DEDICATED_SPI keeps a multi-sector read / write open between the calls: end it, or
+        // sd_card keeps a multi-sector read / write open between the calls: end it, or
         // the card is still in it after the reboot and the bitstream read of the boot core
         // stops half way (CONF_DONE timeout). The read / write callbacks run in this task too.
         expose_msc = false;
         usb_msc.setUnitReady(0, false);
         if (card == 2) sd2_sync();
-        else sd1.card()->syncDevice();
+        else sd_card_sync(sd1_card());
         eject_ms = ms_now();
         ejected = true;
       }

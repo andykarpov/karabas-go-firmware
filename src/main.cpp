@@ -51,7 +51,7 @@ static uint32_t led_timer = 0;
 #define USB_HOST_PIO pio1
 
 // The usb host takes all of pio1: tx, rx and eop (5 + 10 + 17 = all 32 instruction words,
-// sm0..2). The firmware's own programs (ccount, PioSPI of the SD card, fpga_serial) go to pio0.
+// sm0..2). The firmware's own programs (ccount, the PIO SPI of the SD card, fpga_serial) go to pio0.
 // Under FreeRTOS SysTick belongs to the scheduler, so the core runs its cycle counter (ccount,
 // 2 instructions) on a PIO state machine, allocated in main() before setup(); on pio1 it would
 // leave no room for the usb programs and the host would fail silently. Reserve the state
@@ -162,14 +162,14 @@ static void karabas_setup()
   if (msc_active()) {
     // the boot core shows the msc screen; the card is read before the PC gets it
     osd_state = state_msc;
-    if (has_sd && sd1.exists(FILENAME_BOOT)) do_configure(FILENAME_BOOT);
+    if (has_sd && sd_exists(FILENAME_BOOT)) do_configure(FILENAME_BOOT);
     msc_start();
   } else {
     osd_state = state_main;
     if (hw_setup.debug_enabled) hang_diag_start();
 
     // load boot from SD or flashfs
-    if (has_sd && sd1.exists(FILENAME_BOOT)) {  
+    if (has_sd && sd_exists(FILENAME_BOOT)) {  
       do_configure(FILENAME_BOOT);
     } else {
       halt("Boot file not found. System stopped");
@@ -305,7 +305,7 @@ static void app_task(void *param) {
   // and only this task writes to the usb serial port
   debug_set_owner_task(xTaskGetCurrentTaskHandle());
   // let PIO-USB claim its PIO memory, state machines and DMA channel first:
-  // the SD card driver (PioSPI) would otherwise take PIO memory that the usb programs need (all of pio1)
+  // the SD card driver (lib/SdSpi sd_pio) would otherwise take PIO memory that the usb programs need (all of pio1)
   uint32_t wait = ms_now();
   while (!usb_host_ready && ms_since(wait) < 2000) { ms_delay(1); }
   karabas_setup();

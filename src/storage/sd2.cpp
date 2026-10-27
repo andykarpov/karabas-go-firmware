@@ -2,35 +2,32 @@
 #include "diag/hang_diag.h"
 #include "crc32.h"
 #include "spi0_bus.h"
+#include "sd_card.h"
 
-// The card shares SPI0 with the link and the FT812, which use their own clocks (spi0_bus).
-// SdFat still goes through Arduino's SPI, which keeps its own copy of the clock: every access
-// sets the card's clock with spi0_bus first (so that copy is right) and makes spi0_bus forget
-// its clock after (SdFat may have changed it, the next user sets its own).
-// USER_SPI_BEGIN: SdFat must not call SPI.begin() (the link set up SPI0), and sd2.end() must
-// never be called (SPI.end() would stop the link).
-// The pass-through of the FPGA works up to 12 MHz (SPI0 runs at 48 MHz / an even divider: a
-// 16 MHz request gives 12 too); at 24 MHz every read failed (Mini G, sd2test).
+// The card shares SPI0 with the link and the FT812, which use their own clocks (spi0_bus):
+// sd_card on a shared bus, each transfer under the SPI bus lock at the card's clock.
+// The pass-through of the FPGA works up to 12 MHz; at 24 MHz every read failed (Mini G,
+// sd2test).
 
 #define SD2_MHZ 12
 #define SD2_BLOCK 8           // sectors in a multi-sector transfer of the test (4 KB, an MSC request)
 #define SD2_TEST_SECTORS 1024 // read from sector 0 at each clock, in each mode (512 KB)
 #define SD2_HANG_STEP 0xD2
 
-static SdSpiCard sd2;
-static uint32_t sd2_hz = SD2_MHZ * 1000000UL;
+static sd_card_t sd2;
+static uint32_t sd2_hz;
 
-// the bus for one SdFat call: locked, at the card's clock
-struct Sd2Bus {
-  SpiBusGuard lock;
-  Sd2Bus() { spi0_bus_clock(sd2_hz); }
-  ~Sd2Bus() { spi0_bus_forget_clock(); }
-};
+static void bus_acquire(void *ctx) { (void) ctx; spi_bus_lock(); spi0_bus_clock(sd2_hz); }
+static void bus_release(void *ctx) { (void) ctx; spi_bus_unlock(); }
+static void bus_cs(void *ctx, bool selected) { (void) ctx; gpio_put(PIN_MCU_SD2_CS, !selected); }
+static void bus_clock(void *ctx, uint32_t hz) { (void) ctx; sd2_hz = hz; }
+static void bus_send(void *ctx, const uint8_t *buf, size_t n) { (void) ctx; spi0_bus_xfer(buf, nullptr, n); }
+static void bus_recv(void *ctx, uint8_t *buf, size_t n) { (void) ctx; spi0_bus_read(buf, n); }
+
+static const sd_spi_bus_t sd2_bus = { bus_acquire, bus_release, bus_cs, bus_clock, bus_send, bus_recv, nullptr, false };
 
 static bool sd2_begin_mhz(uint8_t mhz) {
-  sd2_hz = mhz * 1000000UL;
-  Sd2Bus g;
-  return sd2.begin(SdSpiConfig(PIN_MCU_SD2_CS, SHARED_SPI | USER_SPI_BEGIN, SD_SCK_MHZ(mhz), &SPI));
+  return sd_card_begin(&sd2, &sd2_bus, mhz * 1000000UL);
 }
 
 bool sd2_begin() {
@@ -38,28 +35,25 @@ bool sd2_begin() {
 }
 
 uint32_t sd2_sector_count() {
-  Sd2Bus g;
-  return sd2.sectorCount();
+  return sd_card_sectors(&sd2);
 }
 
 static bool read_once(uint32_t sector, uint8_t *dst, uint32_t count) {
-  Sd2Bus g;
-  return count == 1 ? sd2.readSector(sector, dst) : sd2.readSectors(sector, dst, count);
+  return sd_card_read(&sd2, sector, dst, count);
 }
 
 static bool write_once(uint32_t sector, const uint8_t *src, uint32_t count) {
-  Sd2Bus g;
-  return count == 1 ? sd2.writeSector(sector, src) : sd2.writeSectors(sector, src, count);
+  return sd_card_write(&sd2, sector, src, count);
 }
 
 // a failed transfer: logged, the card is set up again (begin() only reads its registers) and
 // the transfer is tried once more
 static bool recover(const char *op, uint32_t sector, uint32_t count) {
   d_printf("SD2: %s %lu+%lu failed, error 0x%02X data 0x%lX", op, (unsigned long) sector,
-           (unsigned long) count, sd2.errorCode(), (unsigned long) sd2.errorData());
+           (unsigned long) count, sd_card_error(&sd2), (unsigned long) sd_card_error_data(&sd2));
   d_println();
   if (sd2_begin()) return true;
-  d_printf("SD2: init failed, error 0x%02X data 0x%lX", sd2.errorCode(), (unsigned long) sd2.errorData());
+  d_printf("SD2: init failed, error 0x%02X data 0x%lX", sd_card_error(&sd2), (unsigned long) sd_card_error_data(&sd2));
   d_println();
   return false;
 }
@@ -81,8 +75,7 @@ bool sd2_write(uint32_t sector, const uint8_t *src, uint32_t count) {
 }
 
 void sd2_sync() {
-  Sd2Bus g;
-  sd2.syncDevice();
+  sd_card_sync(&sd2);
 }
 
 // ---- AT+KARABAS=sd2test ----
@@ -90,7 +83,7 @@ void sd2_sync() {
 static const uint8_t test_mhz[] = { 4, 8, 12, 24 };
 
 static void print_error(Print &out) {
-  out.printf(" (error 0x%02X, data 0x%lX)", sd2.errorCode(), (unsigned long) sd2.errorData());
+  out.printf(" (error 0x%02X, data 0x%lX)", sd_card_error(&sd2), (unsigned long) sd_card_error_data(&sd2));
 }
 
 // Reads SD2_TEST_SECTORS in transfers of n sectors. A link frame after each one switches SPI0
@@ -126,16 +119,14 @@ void sd2_test(Print &out) {
     return;
   }
   uint32_t sectors = sd2_sector_count();
-  cid_t cid;
-  bool cid_ok;
-  {
-    Sd2Bus g;
-    cid_ok = sd2.readCID(&cid);
-  }
+  uint8_t cid[16];
+  bool cid_ok = sd_card_cid(&sd2, cid);
   static const char *types[] = { "?", "SD1", "SD2", "SDHC" };
-  out.printf("+SD2:%s, %lu MB", types[sd2.type() < 4 ? sd2.type() : 0], (unsigned long) (sectors / 2048));
+  out.printf("+SD2:%s, %lu MB", types[sd2.type < 4 ? sd2.type : 0], (unsigned long) (sectors / 2048));
   if (cid_ok) {
-    out.printf(", mid %02X oid %.2s pnm %.5s psn %08lX", cid.mid, cid.oid, cid.pnm, (unsigned long) cid.psn());
+    // CID: manufacturer, OEM (2 chars), product (5 chars), revision, serial number
+    uint32_t psn = ((uint32_t) cid[9] << 24) | ((uint32_t) cid[10] << 16) | ((uint32_t) cid[11] << 8) | cid[12];
+    out.printf(", mid %02X oid %.2s pnm %.5s psn %08lX", cid[0], (const char *) cid + 1, (const char *) cid + 3, (unsigned long) psn);
   }
   out.print("\r\n");
 

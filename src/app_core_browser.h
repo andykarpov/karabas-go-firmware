@@ -24,7 +24,7 @@ void app_core_browser_ft_decor(const setup_t &t, bool show_char);
 // the start sound 1..4; wait: until it ends
 void app_core_browser_ft_sound(uint8_t sound, bool wait);
 
-core_list_item_t app_core_browser_get_item();
+core_list_item_t app_core_browser_get_item(const char *filename);
 void app_core_browser_read_list();
 
 void app_core_browser_on_keyboard();

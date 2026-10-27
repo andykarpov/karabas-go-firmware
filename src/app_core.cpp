@@ -4,7 +4,6 @@
 #include "OSD.h"
 #include "usb_hid_keys.h"
 #include "input/sega.h"
-#include "SdFat.h"
 #include "app_core.h"
 #include <algorithm>
 #include <tuple>
@@ -259,17 +258,8 @@ void app_core_menu(uint8_t vpos) {
 
 void app_core_save(uint8_t pos)
 {
-    sd1.chvol();
-    sd1.chdir("/");
-    if (file1.isOpen()) {
-      file1.close();
-    }
-    if (!file1.open(&sd1, core.filename, FILE_WRITE)) {
+    if (!sd_open(&file1, core.filename, FA_READ | FA_WRITE)) {
       d_println("Unable to open bitstream file to write");
-      return;
-    }  
-    if (!file1.isWritable()) {
-      d_println("File is not writable");
       return;
     }
     core.osd_need_save = false;
@@ -284,10 +274,10 @@ void app_core_save(uint8_t pos)
     } else {
       // save switch state into the core
       core.osd[pos].prev_val = core.osd[pos].val;
-      file1.seek(FILE_POS_SWITCHES_DATA + pos);
-      file1.write(core.osd[pos].val);
+      file_seek(FILE_POS_SWITCHES_DATA + pos);
+      sd_write(&file1, &core.osd[pos].val, 1);
     }
-    file1.close();  
+    sd_close(&file1);
 }
 
 void app_core_on_keyboard() {
@@ -339,10 +329,9 @@ void app_core_on_keyboard() {
     // enter
     if (usb_keyboard_report.keycode[0] == KEY_ENTER || (joyL & SC_BTN_B) || (joyR & SC_BTN_B) ) {
       if (files_len > 0) {
-        if (file1.isOpen()) {
-          file1.close();
-        }
+        sd_close(&file1);
         const char *hash = files[file_sel].hash;
+        FILINFO fi;
         // eject
         if (is_eject_entry(file_sel)) {
           app_core_eject(curr_osd_item);
@@ -379,11 +368,10 @@ void app_core_on_keyboard() {
           return;
         }
         // open file / dir
-        else if (sd_open_id(file1, &root1, files[file_sel].file_id)) {
+        else if (sd_find_id(&root1, files[file_sel].file_id, &fi)) {
           // goto new dir name
-          if (file1.isDir()) {
-            char dirname[255];
-            file1.getName(dirname, sizeof(dirname));
+          if (fi.fattrib & AM_DIR) {
+            const char *dirname = fi.fname;
             char *dir = file_slots[core.osd[curr_osd_item].slot_id].dir;
             char path[KG_PATH_MAX];
             kg_path_join(path, sizeof(path), dir, dirname);
@@ -392,7 +380,6 @@ void app_core_on_keyboard() {
             file_sel = 0;
             cached_file_from = 0;
             cached_file_to = 0;
-            file1.close();
             app_core_init_filebrowser();
             app_core_filebrowser(APP_COREBROWSER_MENU_OFFSET);
             return;
@@ -400,8 +387,7 @@ void app_core_on_keyboard() {
           // file selection (if ext matches)
           else {
             d_printf("Selecting file id %d", files[file_sel].file_id); d_println();
-            char filename[256];
-            file1.getName(filename, sizeof(filename));
+            const char *filename = fi.fname;
             d_printf("Filename %s", filename);
             // check file ext match
             char exts[sizeof(file_slots[0].ext)];
@@ -420,7 +406,6 @@ void app_core_on_keyboard() {
               d_println("File extension does not match");
             }
           }
-          file1.close();
         }
 
         core.osd_need_save = true;
@@ -545,20 +530,13 @@ int app_core_init_filebrowser() {
   // working dir
   char *dir = file_slots[core.osd[curr_osd_item].slot_id].dir;
   kg_path_root(dir, sizeof(file_slots[0].dir));
-  sd1.chdir(dir);
 
-  if (root1.isOpen()) {
-    root1.close();
-  }
-  root1 = sd1.open(dir);
+  sd_opendir(&root1, dir);
   d_print("Open dir "); d_print(dir); d_println();
 
-  if (file1.isOpen()) {
-    file1.close();
-  }
+  sd_close(&file1);
 
   d_println("Read file list");
-  root1.rewind();
   files_clear();
   file_sel = 0;
   memset(cached_names, 0, sizeof(cached_names));
@@ -594,10 +572,11 @@ int app_core_init_filebrowser() {
 
   uint16_t presel_id = 0;
   uint16_t after_id = 0; // the image of another slot (presel_after): the next file is preselected
-  while (file1.openNext(&root1, O_RDONLY)) {
-    char filename[256]; file1.getName(filename, sizeof(filename));
+  FILINFO fi;
+  while (sd_dir_is_open(&root1) && f_readdir(&root1, &fi) == FR_OK && fi.fname[0]) {
+    const char *filename = fi.fname;
     uint16_t id;
-    item = sd_file_id(file1, id) ? files_append() : nullptr;
+    item = sd_file_id(&fi, &id) ? files_append() : nullptr;
     if (item) {
       memcpy(item->hash, filename, SORT_HASH_LEN);
       item->file_id = id;
@@ -609,7 +588,6 @@ int app_core_init_filebrowser() {
         after_id = item->file_id;
       }
     }
-    file1.close();
   }
 
   d_print("Files count "); d_print(files_len); d_println();
@@ -647,11 +625,8 @@ void app_core_filebrowser(uint8_t vpos) {
   uint16_t pos = vpos;
   uint16_t j = 0;
 
-  if (root1.isOpen()){
-    root1.close();
-  }
-
-  root1 = sd1.open(file_slots[core.osd[curr_osd_item].slot_id].dir);
+  sd_opendir(&root1, file_slots[core.osd[curr_osd_item].slot_id].dir);
+  FILINFO fi;
 
   if (files_len > 0) {
     for(uint16_t i=file_from; i < file_to; i++) {
@@ -680,13 +655,11 @@ void app_core_filebrowser(uint8_t vpos) {
           strcpy(name, h);
           strcpy(cached_names[j].name, name);
         }
-        else if (sd_open_id(file1, &root1, files[i].file_id)) {
-          char filename[255];
-          file1.getName(filename, sizeof(filename));
+        else if (sd_find_id(&root1, files[i].file_id, &fi)) {
+          char *filename = fi.fname;
           kg_trim(filename);
           snprintf(name, sizeof(name), "%s", filename);
           snprintf(cached_names[j].name, sizeof(cached_names[j].name), "%s", filename);
-          file1.close();
         }
       }
 

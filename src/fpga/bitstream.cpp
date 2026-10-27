@@ -118,8 +118,7 @@ uint32_t fpga_send(const char* filename) {
 
   d_print("Configuring FPGA by "); d_println(filename);
 
-  sd1.chvol();
-  if (!file1.open(filename, FILE_READ)) {
+  if (!sd_open(&file1, filename, FA_READ)) {
     halt("Unable to open bitstream file to read");
   }
 
@@ -156,7 +155,7 @@ uint32_t fpga_send(const char* filename) {
     bitstream_send_bitbang(total, sent);
   }
   hang_step(0x91);
-  file1.close();
+  sd_close(&file1);
 
   // give the pins back to SIO
   pin_input(PIN_CONF_CLK);
