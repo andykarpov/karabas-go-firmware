@@ -61,7 +61,7 @@ void ft_mouse_load() {
       pix[y * POINTER_W + x] = c == 'X' ? 0xF000 : c == '.' ? 0xFFFF : 0x0000; // ARGB4
     }
   }
-  ft.writeGRAM(POINTER_OFFSET, sizeof(pix), (const uint8_t *) pix, false);
+  ft_write_gram(POINTER_OFFSET, sizeof(pix), (const uint8_t *) pix);
   frame_len = 0;
 }
 
@@ -71,8 +71,8 @@ void ft_mouse_reset() {
   visible = false;
   frame_pending = false;
   rx = ry = 0;
-  if (px >= ft.width()) px = ft.width() - 1;
-  if (py >= ft.height()) py = ft.height() - 1;
+  if (px >= ft_width()) px = ft_width() - 1;
+  if (py >= ft_height()) py = ft_height() - 1;
 }
 
 void ft_mouse_hide() { visible = false; }
@@ -101,8 +101,8 @@ bool ft_mouse_poll(ft_mouse_event_t *ev) {
     }
     if (dx || dy) {
       int32_t x = px + dx, y = py + dy;
-      px = x < 0 ? 0 : x >= ft.width() ? ft.width() - 1 : x;
-      py = y < 0 ? 0 : y >= ft.height() ? ft.height() - 1 : y;
+      px = x < 0 ? 0 : x >= ft_width() ? ft_width() - 1 : x;
+      py = y < 0 ? 0 : y >= ft_height() ? ft_height() - 1 : y;
       frame_pending = true;
     }
     if (!was_visible && visible) frame_pending = true;
@@ -140,7 +140,7 @@ int16_t ft_hit_at(int16_t x, int16_t y) {
 int16_t ft_hover() { return visible ? ft_hit_at(px, py) : FT_HIT_NONE; }
 
 static void draw_pointer() {
-  if (visible) ft.drawBitmapARGB4(POINTER_OFFSET, px, py, POINTER_W, POINTER_H);
+  if (visible) ft_draw_bitmap_argb4(POINTER_OFFSET, px, py, POINTER_W, POINTER_H);
   frame_timer = ms_now();
 }
 
@@ -149,7 +149,7 @@ static void ft_mark(uint8_t step) { hang_step(step); }
 
 void ft_frame_end() {
   ft_mark(0x51);
-  uint16_t len = ft.displayListSize();
+  uint16_t len = ft_display_list_size();
   static uint16_t len_max = 0;
   if (len > len_max) { // how close a screen gets to the 8 KB of the display list
     len_max = len;
@@ -157,23 +157,23 @@ void ft_frame_end() {
   }
   ft_mark(0x52);
   if (len > 0 && len <= FRAME_MAX) {
-    ft.cmdMemcpy(FRAME_OFFSET, FT81x_RAM_DL, len);
+    ft_cmd_memcpy(FRAME_OFFSET, FT81x_RAM_DL, len);
     frame_len = len;
   } else {
     frame_len = 0;
   }
   draw_pointer();
-  ft.swapScreen();
+  ft_swap_screen();
   ft_mark(0x53);
 }
 
 void ft_pointer_frame() {
   if (!frame_len) return;
   ft_mark(0x61);
-  ft.beginDisplayList();
-  ft.cmdAppend(FRAME_OFFSET, frame_len);
+  ft_begin_display_list();
+  ft_cmd_append(FRAME_OFFSET, frame_len);
   ft_mark(0x62);
   draw_pointer();
-  ft.swapScreen();
+  ft_swap_screen();
   ft_mark(0x63);
 }

@@ -2,7 +2,7 @@
 #include "config.h"
 #include "types.h"
 #include "main.h"
-#include "FT812.h"
+#include "ft812.h"
 #include "usb_hid_keys.h"
 #include "masked_input.h"
 #include "time_zone.h"
@@ -94,20 +94,20 @@ static void draw_field(const ft_page_ctx_t &c, uint8_t i, int16_t y, const char 
   for (uint8_t j = 0; j < f->len && c.focused; j++) ft_page_hit(fx + 8 + j * CHAR_W, y, CHAR_W, ROW_H, HIT_CHAR + 20 * i + j);
   bool hovered = c.focused && ft_page_hit(c.x, y, c.w, ROW_H, HIT_FIELD + i);
   ft_page_row(c, c.x, y, c.w, ROW_H, focused, hovered);
-  ft.drawText(c.x + 16, y + ROW_H / 2, FT_PAGE_FONT, c.s->color_text, FT81x_OPT_CENTERY, label);
+  ft_draw_text(c.x + 16, y + ROW_H / 2, FT_PAGE_FONT, c.s->color_text, FT81x_OPT_CENTERY, label);
   if (focused) ft_page_rect(fx - 2, y - 2, fw + 4, ROW_H + 4, 4, c.s->color_active);
   ft_page_rect(fx, y, fw, ROW_H, 4, c.s->color_bg);
   for (uint8_t j = 0; j < f->len; j++) {
     int16_t cx = fx + 8 + j * CHAR_W;
     uint32_t color = c.s->color_text;
     if (focused && j == f->pos) {
-      ft.drawRect(cx, y + 4, CHAR_W, ROW_H - 8, 1, CURSOR_COLOR);
+      ft_draw_rect(cx, y + 4, CHAR_W, ROW_H - 8, 1, CURSOR_COLOR);
       color = 0x000000;
     }
     char ch[2] = { f->text[j], '\0' };
-    ft.drawText(cx + CHAR_W / 2, y + ROW_H / 2, FT_PAGE_FONT_SMALL, color, FT81x_OPT_CENTER, ch);
+    ft_draw_text(cx + CHAR_W / 2, y + ROW_H / 2, FT_PAGE_FONT_SMALL, color, FT81x_OPT_CENTER, ch);
   }
-  ft.drawText(fx + fw + 16, y + ROW_H / 2, FT_PAGE_FONT_SMALL, c.s->color_copyright, FT81x_OPT_CENTERY, hint);
+  ft_draw_text(fx + fw + 16, y + ROW_H / 2, FT_PAGE_FONT_SMALL, c.s->color_copyright, FT81x_OPT_CENTERY, hint);
 }
 
 // the time zone: '<' UTC+03:00 '>'
@@ -122,13 +122,13 @@ static void draw_tz(const ft_page_ctx_t &c, int16_t y) {
     hovered |= ft_page_hit(c.x, y, c.w, ROW_H, HIT_TZ);
   }
   ft_page_row(c, c.x, y, c.w, ROW_H, focused, hovered);
-  ft.drawText(c.x + 16, y + ROW_H / 2, FT_PAGE_FONT, c.s->color_text, FT81x_OPT_CENTERY, "Time zone");
+  ft_draw_text(c.x + 16, y + ROW_H / 2, FT_PAGE_FONT, c.s->color_text, FT81x_OPT_CENTERY, "Time zone");
   char v[12] = "UTC";
   kg_tz_format(tz, v + 3, sizeof(v) - 3);
-  ft.drawText(vx + TZ_W / 2, y + ROW_H / 2, FT_PAGE_FONT, c.s->color_text, FT81x_OPT_CENTER, v);
+  ft_draw_text(vx + TZ_W / 2, y + ROW_H / 2, FT_PAGE_FONT, c.s->color_text, FT81x_OPT_CENTER, v);
   if (focused || hovered) {
-    ft.drawText(vx + 12, y + ROW_H / 2, FT_PAGE_FONT, c.s->color_text, FT81x_OPT_CENTER, "<");
-    ft.drawText(vx + TZ_W - 12, y + ROW_H / 2, FT_PAGE_FONT, c.s->color_text, FT81x_OPT_CENTER, ">");
+    ft_draw_text(vx + 12, y + ROW_H / 2, FT_PAGE_FONT, c.s->color_text, FT81x_OPT_CENTER, "<");
+    ft_draw_text(vx + TZ_W - 12, y + ROW_H / 2, FT_PAGE_FONT, c.s->color_text, FT81x_OPT_CENTER, ">");
   }
 }
 
@@ -147,7 +147,7 @@ static void draw(const ft_page_ctx_t &c) {
   if (message && c.focused) {
     // under the buttons: the panel is not wide enough beside them
     uint32_t color = message_busy ? c.s->color_text : message_ok ? FT_PAGE_OK : FT_PAGE_ERROR;
-    ft.drawText(c.x + 16, y + FT_PAGE_BTN_H + 24, FT_PAGE_FONT, color, FT81x_OPT_CENTERY, message);
+    ft_draw_text(c.x + 16, y + FT_PAGE_BTN_H + 24, FT_PAGE_FONT, color, FT81x_OPT_CENTERY, message);
   }
 }
 

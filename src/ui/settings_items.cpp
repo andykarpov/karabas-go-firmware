@@ -168,7 +168,7 @@ void settings_value_text(uint8_t id, const setup_t &s, char *out, size_t size) {
       kg_short_name(name[0] ? name : "-", out, size - 1);
       break;
     }
-    case SET_VIDEO_MODE: strlcpy(out, FT812::modeName(s.ft_video_mode), size); break;
+    case SET_VIDEO_MODE: strlcpy(out, ft_mode_name(s.ft_video_mode), size); break;
     case SET_MOUSE_SPEED: snprintf(out, size, "%u", s.ft_mouse_speed); break;
     case SET_MATRIX_BRIGHTNESS:
       if (s.matrix_brightness == 0) strlcpy(out, "Core", size);
@@ -207,7 +207,7 @@ void settings_change(uint8_t id, setup_t &s, int d) {
       break;
     }
     case SET_VIDEO_MODE: {
-      uint8_t n = FT812::modeCount();
+      uint8_t n = ft_mode_count();
       s.ft_video_mode = (s.ft_video_mode + d + n) % n;
       break;
     }

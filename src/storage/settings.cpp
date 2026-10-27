@@ -94,7 +94,7 @@ void load_setup() {
     if (ini_get("ft812", "video_mode", buffer, bufferLen)) {
       hw_setup.ft_video_mode = strtoul(buffer, 0, 10);
       // 0 640x480@60, 1 800x600@60; the other modes of older firmware are gone
-      if (hw_setup.ft_video_mode >= FT812::modeCount()) hw_setup.ft_video_mode = 0;
+      if (hw_setup.ft_video_mode >= ft_mode_count()) hw_setup.ft_video_mode = 0;
     }
     hw_setup.ft_sound = (ini_get("ft812", "sound", buffer, bufferLen)) ? strtoul(buffer, 0, 10) : 0;
     if (hw_setup.ft_sound > 4) hw_setup.ft_sound = 1;

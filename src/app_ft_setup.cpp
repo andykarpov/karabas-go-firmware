@@ -2,7 +2,7 @@
 #include "config.h"
 #include "types.h"
 #include "main.h"
-#include "FT812.h"
+#include "ft812.h"
 #include "bitmaps.h"
 #include "usb_hid_keys.h"
 #include "input/sega.h"
@@ -106,7 +106,7 @@ static const ft_page_t *shown;  // the custom page whose tab is chosen (show / h
 static uint16_t ft_opt() { return s.ft_3d_buttons ? FT81x_OPT_3D : FT81x_OPT_FLAT; }
 
 static uint16_t panel_w() {
-  int w = ft.width() - PANEL_X - 16;
+  int w = ft_width() - PANEL_X - 16;
   return w > PANEL_MAX_W ? PANEL_MAX_W : w;
 }
 
@@ -130,7 +130,7 @@ static uint8_t page_row(uint8_t id) {
 static const ft_page_t *custom_page() { return tab >= T_PAGES && tab < T_SAVE ? custom_pages[tab - T_PAGES] : nullptr; }
 
 static int16_t tab_step() {
-  int16_t step = (ft.height() - FOOTER_H - TOP - TAB_GAP) / T_COUNT;
+  int16_t step = (ft_height() - FOOTER_H - TOP - TAB_GAP) / T_COUNT;
   return step > TAB_STEP ? TAB_STEP : step;
 }
 
@@ -146,9 +146,9 @@ static void draw_tabs() {
     uint32_t fg = lit ? s.color_text_active : s.color_text;
     int16_t h = tab_h();
     if (ft_hit_add(TAB_X, tab_y(i), TAB_W, h, HIT_TAB + i)) {
-      ft.drawRect(TAB_X, tab_y(i), TAB_W, h, 2, s.color_active); // hovered: a 2 px frame (the corner radius)
+      ft_draw_rect(TAB_X, tab_y(i), TAB_W, h, 2, s.color_active); // hovered: a 2 px frame (the corner radius)
     }
-    ft.drawButton(TAB_X, tab_y(i), TAB_W, h, h < TAB_H ? FONT_SMALL : FONT, fg, bg, ft_opt(), tab_names[i]);
+    ft_draw_button(TAB_X, tab_y(i), TAB_W, h, h < TAB_H ? FONT_SMALL : FONT, fg, bg, ft_opt(), tab_names[i]);
     if (chosen && !lit) ft_page_marker(TAB_X, tab_y(i), h, s.color_active, ft_opt());
   }
 }
@@ -159,36 +159,36 @@ static void draw_value(uint8_t id, int16_t y, bool focused, bool arrows) {
   const setting_t *st = &settings[id];
   if (st->kind == SET_KIND_BOOL) {
     bool on = settings_bool(id, s);
-    ft.drawToggle(right - 52, y + ROW_H / 2 - 8, 40, FONT_SMALL, s.color_text, s.color_text,
+    ft_draw_toggle(right - 52, y + ROW_H / 2 - 8, 40, FONT_SMALL, s.color_text, s.color_text,
       on ? s.color_active : s.color_copyright, ft_opt(), on, "\xff");
     return;
   }
   if (st->kind == SET_KIND_COLOR) {
     char hex[8];
     settings_value_text(id, s, hex, sizeof(hex));
-    ft.drawRect(right - 48, y + 6, 48, ROW_H - 12, 2, *settings_color(id, s));
-    ft.drawText(right - 60, y + ROW_H / 2, FONT_SMALL, s.color_text, FT81x_OPT_RIGHTX | FT81x_OPT_CENTERY, hex);
+    ft_draw_rect(right - 48, y + 6, 48, ROW_H - 12, 2, *settings_color(id, s));
+    ft_draw_text(right - 60, y + ROW_H / 2, FONT_SMALL, s.color_text, FT81x_OPT_RIGHTX | FT81x_OPT_CENTERY, hex);
     return;
   }
   if (st->kind == SET_KIND_PAGE) {
-    ft.drawText(right - 12, y + ROW_H / 2, FONT, s.color_text, FT81x_OPT_CENTER, ">");
+    ft_draw_text(right - 12, y + ROW_H / 2, FONT, s.color_text, FT81x_OPT_CENTER, ">");
     return;
   }
   char v[14]; // a long core name is shortened to fit between the arrows
-  if (id == SET_VIDEO_MODE) strlcpy(v, FT812::modeName(focused ? mode_pick : s.ft_video_mode), sizeof(v));
+  if (id == SET_VIDEO_MODE) strlcpy(v, ft_mode_name(focused ? mode_pick : s.ft_video_mode), sizeof(v));
   else settings_value_text(id, s, v, sizeof(v));
-  ft.drawText(right - VALUE_W / 2, y + ROW_H / 2, FONT, s.color_text, FT81x_OPT_CENTER, v);
+  ft_draw_text(right - VALUE_W / 2, y + ROW_H / 2, FONT, s.color_text, FT81x_OPT_CENTER, v);
   if (arrows) {
-    ft.drawText(right - VALUE_W + 12, y + ROW_H / 2, FONT, s.color_text, FT81x_OPT_CENTER, "<");
-    ft.drawText(right - 12, y + ROW_H / 2, FONT, s.color_text, FT81x_OPT_CENTER, ">");
+    ft_draw_text(right - VALUE_W + 12, y + ROW_H / 2, FONT, s.color_text, FT81x_OPT_CENTER, "<");
+    ft_draw_text(right - 12, y + ROW_H / 2, FONT, s.color_text, FT81x_OPT_CENTER, ">");
   }
 }
 
 static void draw_page() {
   const page_t *p = cur_page();
   int16_t w = panel_w();
-  ft.drawText(PANEL_X + 16, TOP + TAB_H / 2, 29, s.color_text, FT81x_OPT_CENTERY, p->name);
-  ft.drawRect(PANEL_X + 16, TOP + TAB_H + 2, w - 32, 1, 1, s.color_copyright);
+  ft_draw_text(PANEL_X + 16, TOP + TAB_H / 2, 29, s.color_text, FT81x_OPT_CENTERY, p->name);
+  ft_draw_rect(PANEL_X + 16, TOP + TAB_H + 2, w - 32, 1, 1, s.color_copyright);
   for (uint8_t i = 0; i < p->len; i++) {
     int16_t y = TOP + 40 + i * ROW_STEP;
     int16_t right = PANEL_X + w - 16;
@@ -203,25 +203,25 @@ static void draw_page() {
       hovered |= ft_hit_add(right - 28, y, 44, ROW_H, HIT_MORE + i);
     }
     hovered |= ft_hit_add(PANEL_X, y, w, ROW_H, HIT_ROW + i);
-    if (focused || hovered) ft.drawRect(PANEL_X, y, w, ROW_H, 4, s.color_button);
+    if (focused || hovered) ft_draw_rect(PANEL_X, y, w, ROW_H, 4, s.color_button);
     if (focused) ft_page_marker(PANEL_X, y, ROW_H, s.color_active, ft_opt());
     const char *label = settings[p->ids[i]].label;
     if (p->ids[i] == SET_AUTOLOAD) label = "Autoload";
-    ft.drawText(PANEL_X + 16, y + ROW_H / 2, FONT, s.color_text, FT81x_OPT_CENTERY, label);
+    ft_draw_text(PANEL_X + 16, y + ROW_H / 2, FONT, s.color_text, FT81x_OPT_CENTERY, label);
     draw_value(p->ids[i], y, focused, focused || hovered);
   }
 }
 
 static void draw_custom() {
   int16_t w = panel_w();
-  ft.drawText(PANEL_X + 16, TOP + TAB_H / 2, 29, s.color_text, FT81x_OPT_CENTERY, tab_names[tab]);
-  ft.drawRect(PANEL_X + 16, TOP + TAB_H + 2, w - 32, 1, 1, s.color_copyright);
+  ft_draw_text(PANEL_X + 16, TOP + TAB_H / 2, 29, s.color_text, FT81x_OPT_CENTERY, tab_names[tab]);
+  ft_draw_rect(PANEL_X + 16, TOP + TAB_H + 2, w - 32, 1, 1, s.color_copyright);
   ft_page_ctx_t c;
   c.s = &s;
   c.x = PANEL_X;
   c.y = TOP + 40;
   c.w = w;
-  c.h = ft.height() - FOOTER_H - c.y;
+  c.h = ft_height() - FOOTER_H - c.y;
   c.opt = ft_opt();
   c.focused = focus == F_CUSTOM;
   if (!c.focused) ft_hit_add(c.x, c.y, c.w, c.h, HIT_PANEL); // a click opens it
@@ -235,11 +235,11 @@ static void draw_color() {
   int16_t w = panel_w();
   char b[40];
   snprintf(b, sizeof(b), "Theme > %s", settings[id].label);
-  ft.drawText(PANEL_X + 16, TOP + TAB_H / 2, 29, s.color_text, FT81x_OPT_CENTERY, b);
-  ft.drawRect(PANEL_X + 16, TOP + TAB_H + 2, w - 32, 1, 1, s.color_copyright);
-  ft.drawRect(PANEL_X + 16, TOP + 48, 96, 64, 4, c);
+  ft_draw_text(PANEL_X + 16, TOP + TAB_H / 2, 29, s.color_text, FT81x_OPT_CENTERY, b);
+  ft_draw_rect(PANEL_X + 16, TOP + TAB_H + 2, w - 32, 1, 1, s.color_copyright);
+  ft_draw_rect(PANEL_X + 16, TOP + 48, 96, 64, 4, c);
   settings_value_text(id, s, b, sizeof(b));
-  ft.drawText(PANEL_X + 128, TOP + 80, 30, s.color_text, FT81x_OPT_CENTERY, b);
+  ft_draw_text(PANEL_X + 128, TOP + 80, 30, s.color_text, FT81x_OPT_CENTERY, b);
 
   static const char *const names[3] = { "R", "G", "B" };
   static const uint32_t fills[3] = { 0xd02020, 0x20b020, 0x3050ff };
@@ -248,12 +248,12 @@ static void draw_color() {
     uint8_t v = (c >> (16 - 8 * i)) & 0xff;
     bool hovered = ft_hit_add(PANEL_X + 40, y, w - 48 - 56, ROW_H, HIT_SLIDER + i);
     hovered |= ft_hit_add(PANEL_X, y, w, ROW_H, HIT_CHAN + i);
-    if (i == color_ch || hovered) ft.drawRect(PANEL_X, y, w, ROW_H, 4, s.color_button);
+    if (i == color_ch || hovered) ft_draw_rect(PANEL_X, y, w, ROW_H, 4, s.color_button);
     if (i == color_ch) ft_page_marker(PANEL_X, y, ROW_H, s.color_active, ft_opt());
-    ft.drawText(PANEL_X + 16, y + ROW_H / 2, FONT, s.color_text, FT81x_OPT_CENTERY, names[i]);
-    ft.drawSlider(PANEL_X + 48, y + ROW_H / 2 - 5, w - 48 - 72, 10, fills[i], s.color_text, s.color_copyright, ft_opt(), v, 255);
+    ft_draw_text(PANEL_X + 16, y + ROW_H / 2, FONT, s.color_text, FT81x_OPT_CENTERY, names[i]);
+    ft_draw_slider(PANEL_X + 48, y + ROW_H / 2 - 5, w - 48 - 72, 10, fills[i], s.color_text, s.color_copyright, ft_opt(), v, 255);
     snprintf(b, sizeof(b), "%u", v);
-    ft.drawText(PANEL_X + w - 16, y + ROW_H / 2, FONT, s.color_text, FT81x_OPT_RIGHTX | FT81x_OPT_CENTERY, b);
+    ft_draw_text(PANEL_X + w - 16, y + ROW_H / 2, FONT, s.color_text, FT81x_OPT_RIGHTX | FT81x_OPT_CENTERY, b);
   }
 }
 
@@ -261,14 +261,14 @@ static void draw_color() {
 // clock is the pixel clock (800x600), parts of the lines are left out
 static void draw_dialog() {
   int16_t w = 400, h = 160;
-  int16_t x = (ft.width() - w) / 2, y = (ft.height() - h) / 2;
+  int16_t x = (ft_width() - w) / 2, y = (ft_height() - h) / 2;
   ft_hit_clear(); // only the buttons of the dialog take clicks
-  ft.drawRect(x - 3, y - 3, w + 6, h + 6, 8, s.color_active);
-  ft.drawRect(x, y, w, h, 8, s.color_button);
+  ft_draw_rect(x - 3, y - 3, w + 6, h + 6, 8, s.color_active);
+  ft_draw_rect(x, y, w, h, 8, s.color_button);
   char title[40], text[40];
   const char *left, *right;
   if (dialog == D_MODE) {
-    snprintf(title, sizeof(title), "Keep %s?", FT812::modeName(mode_cur));
+    snprintf(title, sizeof(title), "Keep %s?", ft_mode_name(mode_cur));
     uint32_t t = ms_since(mode_timer) < MODE_TEST_S * 1000 ? (MODE_TEST_S * 1000 - ms_since(mode_timer) + 999) / 1000 : 0;
     snprintf(text, sizeof(text), "Going back in %lu s", (unsigned long) t);
     left = "Keep";
@@ -279,13 +279,13 @@ static void draw_dialog() {
     left = "Drop";
     right = "Stay";
   }
-  ft.drawText(x + w / 2, y + 30, 29, s.color_text, FT81x_OPT_CENTER, title);
-  ft.drawText(x + w / 2, y + 66, FONT_SMALL, s.color_copyright, FT81x_OPT_CENTER, text);
-  if (ft_hit_add(x + 40, y + h - 56, 140, TAB_H, HIT_DLG_LEFT)) ft.drawRect(x + 40, y + h - 56, 140, TAB_H, 2, s.color_active);
-  if (ft_hit_add(x + w - 180, y + h - 56, 140, TAB_H, HIT_DLG_RIGHT)) ft.drawRect(x + w - 180, y + h - 56, 140, TAB_H, 2, s.color_active);
-  ft.drawButton(x + 40, y + h - 56, 140, TAB_H, FONT, dialog_left ? s.color_text_active : s.color_text,
+  ft_draw_text(x + w / 2, y + 30, 29, s.color_text, FT81x_OPT_CENTER, title);
+  ft_draw_text(x + w / 2, y + 66, FONT_SMALL, s.color_copyright, FT81x_OPT_CENTER, text);
+  if (ft_hit_add(x + 40, y + h - 56, 140, TAB_H, HIT_DLG_LEFT)) ft_draw_rect(x + 40, y + h - 56, 140, TAB_H, 2, s.color_active);
+  if (ft_hit_add(x + w - 180, y + h - 56, 140, TAB_H, HIT_DLG_RIGHT)) ft_draw_rect(x + w - 180, y + h - 56, 140, TAB_H, 2, s.color_active);
+  ft_draw_button(x + 40, y + h - 56, 140, TAB_H, FONT, dialog_left ? s.color_text_active : s.color_text,
     dialog_left ? s.color_active : s.color_bg, ft_opt(), left);
-  ft.drawButton(x + w - 180, y + h - 56, 140, TAB_H, FONT, !dialog_left ? s.color_text_active : s.color_text,
+  ft_draw_button(x + w - 180, y + h - 56, 140, TAB_H, FONT, !dialog_left ? s.color_text_active : s.color_text,
     !dialog_left ? s.color_active : s.color_bg, ft_opt(), right);
 }
 
@@ -315,20 +315,20 @@ static void draw_footer() {
       keys = custom_page()->keys();
       break;
   }
-  ft.drawText(TAB_X, ft.height() - 40, FONT_SMALL, error ? ERROR_COLOR : s.color_copyright, FT81x_OPT_CENTERY, error ? error : hint);
-  ft.drawText(TAB_X, ft.height() - 20, FONT_SMALL, s.color_copyright, FT81x_OPT_CENTERY, keys);
+  ft_draw_text(TAB_X, ft_height() - 40, FONT_SMALL, error ? ERROR_COLOR : s.color_copyright, FT81x_OPT_CENTERY, error ? error : hint);
+  ft_draw_text(TAB_X, ft_height() - 20, FONT_SMALL, s.color_copyright, FT81x_OPT_CENTERY, keys);
 }
 
 void app_ft_setup_draw() {
   if (!has_ft) return;
   // the matrix shows the plugin of the Matrix effects setting with the focus
   settings_preview(focus == F_PAGE && mx_page ? cur_id() : SET_COUNT);
-  ft.beginDisplayList();
+  ft_begin_display_list();
   ft_hit_clear();
   app_core_browser_ft_background(s);
   bool page = tab < T_PAGES;
   // the picture only where it does not cover the settings
-  bool show_char = (!page && !custom_page()) || PANEL_X + panel_w() < ft.width() - BG_WIDTH - 8;
+  bool show_char = (!page && !custom_page()) || PANEL_X + panel_w() < ft_width() - BG_WIDTH - 8;
   app_core_browser_ft_decor(s, show_char);
   draw_tabs();
   if (focus == F_COLOR) draw_color();
@@ -345,11 +345,11 @@ void app_ft_setup_tz_saved(int16_t tz) {
 }
 
 static void set_mode(uint8_t m) {
-  if (ft.init(m)) {
+  if (ft_init(m)) {
     mode_cur = m;
   } else {
     d_printf("FT81x did not come up in video mode %u", m); d_println();
-    ft.init(mode_cur);
+    ft_init(mode_cur);
   }
   app_core_browser_ft_load();
 }
@@ -455,7 +455,7 @@ static void change(int d) {
     return;
   }
   if (id == SET_VIDEO_MODE) {
-    uint8_t n = FT812::modeCount();
+    uint8_t n = ft_mode_count();
     mode_pick = (mode_pick + d + n) % n;
     return;
   }
@@ -543,7 +543,7 @@ static void handle(const keys_t &k) {
   }
 
   if (osd_state != state_ft_setup) return; // left the setup
-  if (s.ft_click) ft.playSound();
+  if (s.ft_click) ft_play_sound();
   app_ft_setup_draw();
 }
 
@@ -562,7 +562,7 @@ static void custom_on_keyboard(const uint8_t *keys, uint8_t n) {
     n = 1;
   }
   if (n == 0 || osd_state != state_ft_setup) return;
-  if (s.ft_click) ft.playSound();
+  if (s.ft_click) ft_play_sound();
   app_ft_setup_draw();
 }
 
@@ -683,7 +683,7 @@ static void mouse_tick() {
     if ((ev.pressed & FT_MOUSE_LEFT) && click(ft_hover())) return;
     if (ev.wheel) wheel(ft_hover(), ev.wheel);
     if (osd_state != state_ft_setup) return; // left the setup
-    if (s.ft_click) ft.playSound();
+    if (s.ft_click) ft_play_sound();
     redraw = true;
   }
   if (redraw || ft_hover() != hover) app_ft_setup_draw();

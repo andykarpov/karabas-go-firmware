@@ -7,11 +7,13 @@
 #include "board.h"
 #include "main.h"
 
+uint8_t board_ft_reset_pin() {
 #if HW_ID == HW_ID_MINIG
-FT812 ft(PIN_MCU_FT_CS, PIN_FT_RESET);
+  return PIN_FT_RESET;
 #else
-FT812 ft(PIN_MCU_FT_CS);
+  return FT_NO_RESET;
 #endif
+}
 
 void board_init_pins() {
   // unused MCU-FPGA pins (yet)

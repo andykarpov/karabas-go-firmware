@@ -5,9 +5,10 @@
 
 #include <Arduino.h>
 #include "config.h"
-#include "FT812.h"
+#include "ft812.h"
 
-extern FT812 ft;
+// the PD_N pin of the FT812 driven by the MCU, or FT_NO_RESET (driven by the FPGA)
+uint8_t board_ft_reset_pin();
 
 // early gpio setup: unused mcu-fpga lines, peripheral reset lines (before I2C)
 void board_init_pins();

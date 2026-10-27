@@ -2,7 +2,7 @@
 #include "config.h"
 #include "types.h"
 #include "main.h"
-#include "FT812.h"
+#include "ft812.h"
 #include "usb_hid_keys.h"
 #include "esp_at_parse.h"
 #include "hid_ascii.h"
@@ -230,7 +230,7 @@ static bool tick() {
 // ---------------- drawing ----------------
 
 static void draw_info(const ft_page_ctx_t &c, int16_t y, const char *label, const char *value, uint32_t color) {
-  ft.drawText(c.x + 16, y, FT_PAGE_FONT, c.s->color_text, FT81x_OPT_CENTERY, label);
+  ft_draw_text(c.x + 16, y, FT_PAGE_FONT, c.s->color_text, FT81x_OPT_CENTERY, label);
   ft_page_text(c.x + INFO_X, y, FT_PAGE_FONT, color, FT81x_OPT_CENTERY, value, (c.w - INFO_X - 16) / 12);
 }
 
@@ -250,12 +250,12 @@ static void draw_field(const ft_page_ctx_t &c, int16_t y, const char *text, bool
   for (size_t i = from; i <= len; i++) {
     int16_t cx = fx + 8 + (i - from) * CHAR_W;
     if (i == len) {
-      ft.drawRect(cx, y + 4, CHAR_W, FT_PAGE_FIELD_H - 8, 1, CURSOR_COLOR);
+      ft_draw_rect(cx, y + 4, CHAR_W, FT_PAGE_FIELD_H - 8, 1, CURSOR_COLOR);
       break;
     }
     char ch[2] = { hidden ? '*' : text[i], '\0' };
     if (ch[0] < 32 || ch[0] >= 127) ch[0] = '?';
-    ft.drawText(cx + CHAR_W / 2, y + FT_PAGE_FIELD_H / 2, FT_PAGE_FONT_SMALL, c.s->color_text, FT81x_OPT_CENTER, ch);
+    ft_draw_text(cx + CHAR_W / 2, y + FT_PAGE_FIELD_H / 2, FT_PAGE_FONT_SMALL, c.s->color_text, FT81x_OPT_CENTER, ch);
   }
 }
 
@@ -269,11 +269,11 @@ static void draw_status(const ft_page_ctx_t &c, int16_t y) {
 }
 
 static void draw_list(const ft_page_ctx_t &c) {
-  ft.drawText(c.x + 16, c.y + FT_PAGE_BTN_H / 2, FT_PAGE_FONT_SMALL, c.s->color_copyright, FT81x_OPT_CENTERY, "dBm      Network");
+  ft_draw_text(c.x + 16, c.y + FT_PAGE_BTN_H / 2, FT_PAGE_FONT_SMALL, c.s->color_copyright, FT81x_OPT_CENTERY, "dBm      Network");
   if (aps_len > 0) {
     char b[8];
     snprintf(b, sizeof(b), "%u/%u", sel + 1, aps_len);
-    ft.drawText(c.x + c.w - 16 - 140 - 16, c.y + FT_PAGE_BTN_H / 2, FT_PAGE_FONT_SMALL, c.s->color_copyright, FT81x_OPT_RIGHTX | FT81x_OPT_CENTERY, b);
+    ft_draw_text(c.x + c.w - 16 - 140 - 16, c.y + FT_PAGE_BTN_H / 2, FT_PAGE_FONT_SMALL, c.s->color_copyright, FT81x_OPT_RIGHTX | FT81x_OPT_CENTERY, b);
   }
   ft_page_button(c, c.x + c.w - 16 - 140, c.y, 140, "Rescan", c.focused && (on_rescan || aps_len == 0), HIT_RESCAN);
   int16_t y0 = c.y + FT_PAGE_BTN_H + 8;
@@ -293,8 +293,8 @@ static void draw_list(const ft_page_ctx_t &c) {
     char b[8];
     snprintf(b, sizeof(b), "%d", ap.rssi);
     int16_t cy = y + (LIST_ROW_H - 2) / 2;
-    ft.drawText(c.x + 60, cy, FT_PAGE_FONT, c.s->color_text, FT81x_OPT_RIGHTX | FT81x_OPT_CENTERY, b);
-    if (ap.ecn) ft.drawText(c.x + 76, cy, FT_PAGE_FONT, c.s->color_copyright, FT81x_OPT_CENTERY, "*");
+    ft_draw_text(c.x + 60, cy, FT_PAGE_FONT, c.s->color_text, FT81x_OPT_RIGHTX | FT81x_OPT_CENTERY, b);
+    if (ap.ecn) ft_draw_text(c.x + 76, cy, FT_PAGE_FONT, c.s->color_copyright, FT81x_OPT_CENTERY, "*");
     bool joined = strcmp(ap.ssid, cur_ssid) == 0;
     ft_page_text(c.x + 96, cy, FT_PAGE_FONT, joined ? c.s->color_active : c.s->color_text, FT81x_OPT_CENTERY, ap.ssid, (c.w - 112) / 12);
   }
@@ -388,7 +388,7 @@ static void draw(const ft_page_ctx_t &c) {
       ft_page_rect(x + 2, by + 2, bw - 4, BAR_H - 4, 3, c.s->color_bg);
       if (upd_percent > 0) ft_page_rect(x + 2, by + 2, (bw - 4) * upd_percent / 100, BAR_H - 4, 3, c.s->color_active);
       snprintf(buf, sizeof(buf), "%u%%", upd_percent);
-      ft.drawText(x + bw + 56, by + BAR_H / 2, FT_PAGE_FONT, text, FT81x_OPT_RIGHTX | FT81x_OPT_CENTERY, buf);
+      ft_draw_text(x + bw + 56, by + BAR_H / 2, FT_PAGE_FONT, text, FT81x_OPT_RIGHTX | FT81x_OPT_CENTERY, buf);
       draw_message(c, c.y + INFO_STEP * 3 + 4, "Do not power off the board", dim);
       break;
     }

@@ -2,7 +2,7 @@
 #include "config.h"
 #include "types.h"
 #include "main.h"
-#include "FT812.h"
+#include "ft812.h"
 #include "usb_hid_keys.h"
 #include "hid_driver.h"
 #include "hid_learn.h"
@@ -181,13 +181,13 @@ static uint32_t label_color(const ft_page_ctx_t &c, uint8_t i) {
 #define K(v) ((v) * 3 / 4)
 
 static void draw_round(const ft_page_ctx_t &c, int16_t x, int16_t y, uint8_t r, uint8_t i) {
-  ft.drawCircle(x, y, K(r), key_color(c, lit(i)));
-  ft.drawText(x, y, r > 14 ? 27 : 26, label_color(c, i), FT81x_OPT_CENTER, btn_names[i]);
+  ft_draw_circle(x, y, K(r), key_color(c, lit(i)));
+  ft_draw_text(x, y, r > 14 ? 27 : 26, label_color(c, i), FT81x_OPT_CENTER, btn_names[i]);
 }
 
 static void draw_small(const ft_page_ctx_t &c, int16_t x, int16_t y, uint8_t i, const char *label) {
   ft_page_rect(x, y, K(60), K(18), 6, key_color(c, lit(i)));
-  ft.drawText(x + K(30), y + K(9), 20, label_color(c, i), FT81x_OPT_CENTER, label);
+  ft_draw_text(x + K(30), y + K(9), 20, label_color(c, i), FT81x_OPT_CENTER, label);
 }
 
 static void draw_key(const ft_page_ctx_t &c, int16_t x, int16_t y, int16_t w, int16_t h, uint8_t i) {
@@ -204,7 +204,7 @@ static void draw_pad(const ft_page_ctx_t &c, int16_t px, int16_t py) {
   draw_key(c, cx - K(12), cy + K(12), K(24), K(30), B_DOWN);
   draw_key(c, cx - K(42), cy - K(12), K(30), K(24), B_LEFT);
   draw_key(c, cx + K(12), cy - K(12), K(30), K(24), B_RIGHT);
-  ft.drawRect(cx - K(12), cy - K(12), K(24), K(24), 0, PAD_EDGE);
+  ft_draw_rect(cx - K(12), cy - K(12), K(24), K(24), 0, PAD_EDGE);
 
   draw_small(c, px + K(170), py + K(34), B_MODE, "MODE");
   draw_small(c, px + K(170), py + K(70), B_START, "START");
@@ -231,9 +231,9 @@ static void draw_list(const ft_page_ctx_t &c) {
   int16_t x = c.x + 16;
   uint32_t dim = c.s->color_copyright;
   int16_t y = c.y + 4;
-  ft.drawText(x, y + ROW_H / 2, FT_PAGE_FONT_SMALL, dim, FT81x_OPT_CENTERY, "Port");
-  ft.drawText(x + COL_PAD, y + ROW_H / 2, FT_PAGE_FONT_SMALL, dim, FT81x_OPT_CENTERY, "Pad");
-  ft.drawText(x + COL_SRC, y + ROW_H / 2, FT_PAGE_FONT_SMALL, dim, FT81x_OPT_CENTERY, "Mapped by");
+  ft_draw_text(x, y + ROW_H / 2, FT_PAGE_FONT_SMALL, dim, FT81x_OPT_CENTERY, "Port");
+  ft_draw_text(x + COL_PAD, y + ROW_H / 2, FT_PAGE_FONT_SMALL, dim, FT81x_OPT_CENTERY, "Pad");
+  ft_draw_text(x + COL_SRC, y + ROW_H / 2, FT_PAGE_FONT_SMALL, dim, FT81x_OPT_CENTERY, "Mapped by");
   for (uint8_t i = 0; i < 2; i++) {
     const usb_pad_t &p = pads[i];
     int16_t ry = y + ROW_H * (i + 1);
@@ -242,13 +242,13 @@ static void draw_list(const ft_page_ctx_t &c) {
     int16_t cy = ry + (ROW_H - 2) / 2;
     char b[32];
     snprintf(b, sizeof(b), "%u", i + 1);
-    ft.drawText(x + 8, cy, FT_PAGE_FONT, c.s->color_text, FT81x_OPT_CENTERY, b);
+    ft_draw_text(x + 8, cy, FT_PAGE_FONT, c.s->color_text, FT81x_OPT_CENTERY, b);
     if (p.source == USB_PAD_NONE && p.vid == 0) {
-      ft.drawText(x + COL_PAD, cy, FT_PAGE_FONT, dim, FT81x_OPT_CENTERY, "-");
+      ft_draw_text(x + COL_PAD, cy, FT_PAGE_FONT, dim, FT81x_OPT_CENTERY, "-");
       continue;
     }
     snprintf(b, sizeof(b), "%04x:%04x", p.vid, p.pid);
-    ft.drawText(x + COL_PAD, cy, FT_PAGE_FONT, c.s->color_text, FT81x_OPT_CENTERY, b);
+    ft_draw_text(x + COL_PAD, cy, FT_PAGE_FONT, c.s->color_text, FT81x_OPT_CENTERY, b);
     pad_source(p, b, sizeof(b));
     ft_page_text(x + COL_SRC, cy, FT_PAGE_FONT, p.source == USB_PAD_DRIVER ? c.s->color_text : dim,
       FT81x_OPT_CENTERY, b, (c.w - COL_SRC - 32) / 12);
@@ -258,7 +258,7 @@ static void draw_list(const ft_page_ctx_t &c) {
   ft_page_button(c, x + LIST_BTN_W + 12, by, LIST_BTN_W, "Test", list_btn == 1, HIT_TEST);
   if (can_forget()) ft_page_button(c, x + 2 * (LIST_BTN_W + 12), by, LIST_BTN_W, "Forget", list_btn == 2, HIT_FORGET);
   if (list_msg && c.focused) {
-    ft.drawText(x, by + FT_PAGE_BTN_H + 20, FT_PAGE_FONT, list_msg_ok ? FT_PAGE_OK : FT_PAGE_ERROR, FT81x_OPT_CENTERY, list_msg);
+    ft_draw_text(x, by + FT_PAGE_BTN_H + 20, FT_PAGE_FONT, list_msg_ok ? FT_PAGE_OK : FT_PAGE_ERROR, FT81x_OPT_CENTERY, list_msg);
   }
 }
 
@@ -299,8 +299,8 @@ static void draw_mapper(const ft_page_ctx_t &c) {
       strcpy(line2, "Could not write the SD card");
       break;
   }
-  ft.drawText(x, c.y + FT_PAGE_BTN_H / 2, FT_PAGE_FONT, color1, FT81x_OPT_CENTERY, line1);
-  ft.drawText(x, c.y + FT_PAGE_BTN_H + 12, FT_PAGE_FONT_SMALL, dim, FT81x_OPT_CENTERY, line2);
+  ft_draw_text(x, c.y + FT_PAGE_BTN_H / 2, FT_PAGE_FONT, color1, FT81x_OPT_CENTERY, line1);
+  ft_draw_text(x, c.y + FT_PAGE_BTN_H + 12, FT_PAGE_FONT_SMALL, dim, FT81x_OPT_CENTERY, line2);
 
   // the buttons for the mouse, right of the first line
   int16_t bx = c.x + c.w - 16 - BTN_W, bx2 = bx - BTN_W - 8;
@@ -321,7 +321,7 @@ static void draw_mapper(const ft_page_ctx_t &c) {
     char b[40], r[24] = "-";
     if (mapped[last_btn]) hid_learn_format_rule(&rules[last_btn], r, sizeof(r));
     snprintf(b, sizeof(b), "%s = %s", btn_names[last_btn], r);
-    ft.drawText(x, py + PAD_H + 16, FT_PAGE_FONT_SMALL, dim, FT81x_OPT_CENTERY, b);
+    ft_draw_text(x, py + PAD_H + 16, FT_PAGE_FONT_SMALL, dim, FT81x_OPT_CENTERY, b);
   }
 }
 

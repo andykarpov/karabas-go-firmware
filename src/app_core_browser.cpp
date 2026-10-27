@@ -2,7 +2,7 @@
 #include "config.h"
 #include "types.h"
 #include "main.h"
-#include "FT812.h"
+#include "ft812.h"
 #include "bitmaps.h"
 #include "osd.h"
 #include "input/sega.h"
@@ -30,7 +30,7 @@ uint8_t core_pages = 1;
 uint8_t core_page = 1;
 
 static uint8_t ft_core_page_size() {
-  int n = (ft.height() - FT_CORE_BOTTOM - FT_CORE_TOP) / FT_CORE_STEP;
+  int n = (ft_height() - FT_CORE_BOTTOM - FT_CORE_TOP) / FT_CORE_STEP;
   return n < 1 ? 1 : n;
 }
 
@@ -142,7 +142,7 @@ static void gradient_load(uint32_t from, uint32_t to, uint16_t h) {
     }
   }
   gradient_buf ^= 1;
-  ft.writeGRAM(GRADIENT_OFFSET + gradient_buf * GRADIENT_BUF, GRADIENT_W * 2 * h, (const uint8_t *) gradient_px, false);
+  ft_write_gram(GRADIENT_OFFSET + gradient_buf * GRADIENT_BUF, GRADIENT_W * 2 * h, (const uint8_t *) gradient_px);
   gradient_from = from;
   gradient_to = to;
   gradient_h = h;
@@ -155,13 +155,13 @@ static_assert(KEY4_PCM_START + KEY4_PCM_SIZE <= sizeof(key4Data), "sound 4 is pa
 
 void app_core_browser_ft_load() {
   gradient_h = 0; // the GRAM is cleared by a reset of the FT812
-  ft.setSound(FT81x_SOUND_COWBELL, 60);
-  ft.loadImage(LOGO_OFFSET, LOGO_SIZE, logoData, false); // karabas logo, starts from 0 in GRAM
-  ft.loadImage(BG_OFFSET, BG_SIZE, bgData, false); // karabas bg, starts after logo in GRAM
-  ft.writeGRAM(KEY1_OFFSET, KEY1_PCM_SIZE, key1Data + KEY1_PCM_START); // pcm sound, starts from after logo and bg in GRAM
-  ft.writeGRAM(KEY2_OFFSET, KEY2_PCM_SIZE, key2Data + KEY2_PCM_START); // pcm sound, starts from after logo and bg in GRAM
-  ft.writeGRAM(KEY3_OFFSET, KEY3_PCM_SIZE, key3Data + KEY3_PCM_START); // pcm sound, starts from after logo and bg in GRAM
-  ft.writeGRAM(KEY4_OFFSET, KEY4_PCM_SIZE, key4Data + KEY4_PCM_START); // pcm sound, starts from after logo and bg in GRAM
+  ft_set_sound(FT81x_SOUND_COWBELL, 60);
+  ft_load_image(LOGO_OFFSET, LOGO_SIZE, logoData); // karabas logo, starts from 0 in GRAM
+  ft_load_image(BG_OFFSET, BG_SIZE, bgData); // karabas bg, starts after logo in GRAM
+  ft_write_gram(KEY1_OFFSET, KEY1_PCM_SIZE, key1Data + KEY1_PCM_START); // pcm sound, starts from after logo and bg in GRAM
+  ft_write_gram(KEY2_OFFSET, KEY2_PCM_SIZE, key2Data + KEY2_PCM_START); // pcm sound, starts from after logo and bg in GRAM
+  ft_write_gram(KEY3_OFFSET, KEY3_PCM_SIZE, key3Data + KEY3_PCM_START); // pcm sound, starts from after logo and bg in GRAM
+  ft_write_gram(KEY4_OFFSET, KEY4_PCM_SIZE, key4Data + KEY4_PCM_START); // pcm sound, starts from after logo and bg in GRAM
   ft_mouse_load();
 }
 
@@ -172,30 +172,30 @@ void app_core_browser_ft_overlay() {
 }
 
 void app_core_browser_ft_background(const setup_t &t) {
-  ft.clear(t.color_bg);
+  ft_clear(t.color_bg);
   // from the top to 3/4 of the height, as CMD_GRADIENT drew it; below is the clear color
-  uint16_t h = ft.height() - ft.height() / 4;
+  uint16_t h = ft_height() - ft_height() / 4;
   if (h > GRADIENT_MAX_H) h = GRADIENT_MAX_H;
   if (h != gradient_h || t.color_gradient != gradient_from || t.color_bg != gradient_to) {
     gradient_load(t.color_gradient, t.color_bg, h);
   }
-  ft.drawBitmapRGB565RepeatX(GRADIENT_OFFSET + gradient_buf * GRADIENT_BUF, 0, 0, GRADIENT_W, h, ft.width());
+  ft_draw_bitmap_rgb565_repeat_x(GRADIENT_OFFSET + gradient_buf * GRADIENT_BUF, 0, 0, GRADIENT_W, h, ft_width());
 }
 
 void app_core_browser_ft_decor(const setup_t &t, bool show_char) {
   if (t.ft_time) {
     char time[9];
     sprintf(time, "%02d:%02d:%02d", rtc_get_hour(), rtc_get_minute(), rtc_get_second());
-    ft.drawText(ft.width()-88, 30, 30, t.color_text, FT81x_OPT_CENTER, time);
+    ft_draw_text(ft_width()-88, 30, 30, t.color_text, FT81x_OPT_CENTER, time);
   }
   if (t.ft_date) {
     char date[9];
     sprintf(date, "%02d/%02d/%02d", rtc_get_day(), rtc_get_month(), rtc_get_year() % 100);
-    ft.drawText(ft.width()-88, 60, 30, t.color_text, FT81x_OPT_CENTER, date);
+    ft_draw_text(ft_width()-88, 60, 30, t.color_text, FT81x_OPT_CENTER, date);
   }
-  ft.drawBitmap(0, 8, 8, LOGO_WIDTH, LOGO_HEIGHT, 4, 0);  // logo scaled 4x
+  ft_draw_bitmap(0, 8, 8, LOGO_WIDTH, LOGO_HEIGHT, 4, 0);  // logo scaled 4x
   if (t.ft_char && show_char) {
-    ft.overlayBitmap(LOGO_BITMAP_SIZE, ft.width()-BG_WIDTH-8, ft.height()-BG_HEIGHT-8, BG_WIDTH, BG_HEIGHT, 1, 0); // bg image
+    ft_draw_bitmap(LOGO_BITMAP_SIZE, ft_width()-BG_WIDTH-8, ft_height()-BG_HEIGHT-8, BG_WIDTH, BG_HEIGHT, 1, 0); // bg image
   }
 }
 
@@ -227,16 +227,16 @@ void app_core_browser_ft_sound(uint8_t sound, bool wait) {
       key_offset = KEY1_OFFSET;
   }
   // a length that is not a multiple of 8 plays on past the sound (the last few samples go)
-  ft.playAudio(key_offset, key_size & ~7u, key_samplerate, FT81x_AUDIO_FORMAT_ULAW, false);
+  ft_play_audio(key_offset, key_size & ~7u, key_samplerate, FT81x_AUDIO_FORMAT_ULAW, false);
   if (wait) {
     ms_delay(key_duration);
-    ft.stopAudio(); // not stopSound(): that silences the click effect (REG_SOUND) instead
+    ft_stop_audio(); // not stopSound(): that silences the click effect (REG_SOUND) instead
   }
 }
 
 void app_core_browser_ft_menu(uint8_t play_sounds) {
 
-  ft.beginDisplayList();
+  ft_begin_display_list();
 
   uint32_t color_button = hw_setup.color_button;
   uint32_t color_button_active = hw_setup.color_active;
@@ -261,56 +261,56 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
     const bool sel = i == core_sel && !setup_focus;
     const uint32_t colorb = sel ? color_button_active : color_button;
     const uint32_t colort = sel ? color_text_active : color_text;
-    if (ft_hit_add(ft.width()/4 + 8, offset + pos*FT_CORE_STEP, ft.width()/2-16, 32, i)) {
+    if (ft_hit_add(ft_width()/4 + 8, offset + pos*FT_CORE_STEP, ft_width()/2-16, 32, i)) {
       // hovered: a rect grows by its corner radius, so this is a 2 px frame around the button
-      ft.drawRect(ft.width()/4 + 8, offset + pos*FT_CORE_STEP, ft.width()/2-16, 32, 2, color_button_active);
+      ft_draw_rect(ft_width()/4 + 8, offset + pos*FT_CORE_STEP, ft_width()/2-16, 32, 2, color_button_active);
     }
-    ft.drawButton(ft.width()/4 + 8, offset + pos*FT_CORE_STEP, ft.width()/2-16, 32, 28, colort, colorb, (hw_setup.ft_3d_buttons) ? FT81x_OPT_3D : FT81x_OPT_FLAT , name);
+    ft_draw_button(ft_width()/4 + 8, offset + pos*FT_CORE_STEP, ft_width()/2-16, 32, 28, colort, colorb, (hw_setup.ft_3d_buttons) ? FT81x_OPT_3D : FT81x_OPT_FLAT , name);
     if (cores[i].flash) {
-      ft.drawText(ft.width()/4+ft.width()/2-16-24, offset + pos*FT_CORE_STEP + 16, 28, colort, FT81x_OPT_CENTERY, "F\0");
+      ft_draw_text(ft_width()/4+ft_width()/2-16-24, offset + pos*FT_CORE_STEP + 16, 28, colort, FT81x_OPT_CENTERY, "F\0");
     }
     if (autoload_enabled && i==core_sel) {
       uint32_t diff = (ms_since(autoload_timer) < autoload_countdown * 1000) ? ceil((autoload_countdown * 1000 - ms_since(autoload_timer))/1000) : 0;
-      ft.drawGauge(ft.width()/4+16+12, offset + pos*FT_CORE_STEP + 16, 12, colort, colorb, 0, 1, 1, diff, autoload_countdown);
+      ft_draw_gauge(ft_width()/4+16+12, offset + pos*FT_CORE_STEP + 16, 12, colort, colorb, 0, 1, 1, diff, autoload_countdown);
     }
     pos++;
   }
 
   char b[40]; 
 
-  //ft.drawText(112, ft.height()-40, 27, color_copyright, FT81x_OPT_CENTER, "www.karabas.uk\0");
+  //ft_draw_text(112, ft_height()-40, 27, color_copyright, FT81x_OPT_CENTER, "www.karabas.uk\0");
   sprintf(b, "FW build: %s\0", STRINGIZE_VALUE_OF(BUILD_VER));
-  ft.drawText(112, ft.height()-40, 27, color_copyright, FT81x_OPT_CENTER, b);
-  ft.drawText(112, ft.height()-20, 27, color_copyright, FT81x_OPT_CENTER, "(c) 2026 andykarpov\0");
+  ft_draw_text(112, ft_height()-40, 27, color_copyright, FT81x_OPT_CENTER, b);
+  ft_draw_text(112, ft_height()-20, 27, color_copyright, FT81x_OPT_CENTER, "(c) 2026 andykarpov\0");
   sprintf(b, "Page %d of %d\0", core_page, core_pages);
-  ft.drawText(ft.width()/2, ft.height()-40, 27, color_copyright, FT81x_OPT_CENTER, b);
+  ft_draw_text(ft_width()/2, ft_height()-40, 27, color_copyright, FT81x_OPT_CENTER, b);
   if (core_pages > 1) {
-    bool h = ft_hit_add(ft.width()/2 - 96, ft.height()-54, 32, 28, HIT_PREV);
-    ft.drawText(ft.width()/2 - 80, ft.height()-40, 28, h ? color_text : color_copyright, FT81x_OPT_CENTER, "<");
-    h = ft_hit_add(ft.width()/2 + 64, ft.height()-54, 32, 28, HIT_NEXT);
-    ft.drawText(ft.width()/2 + 80, ft.height()-40, 28, h ? color_text : color_copyright, FT81x_OPT_CENTER, ">");
+    bool h = ft_hit_add(ft_width()/2 - 96, ft_height()-54, 32, 28, HIT_PREV);
+    ft_draw_text(ft_width()/2 - 80, ft_height()-40, 28, h ? color_text : color_copyright, FT81x_OPT_CENTER, "<");
+    h = ft_hit_add(ft_width()/2 + 64, ft_height()-54, 32, 28, HIT_NEXT);
+    ft_draw_text(ft_width()/2 + 80, ft_height()-40, 28, h ? color_text : color_copyright, FT81x_OPT_CENTER, ">");
   }
 
   if (autoload_enabled) {
     uint32_t diff = (ms_since(autoload_timer) < autoload_countdown * 1000) ? ceil((autoload_countdown * 1000 - ms_since(autoload_timer))/1000) : 0;
     sprintf(b, "Autoloading core in %d s\0", diff);
-    ft.drawText(ft.width()/2, ft.height()-20, 27, color_copyright, FT81x_OPT_CENTER, b);
+    ft_draw_text(ft_width()/2, ft_height()-20, 27, color_copyright, FT81x_OPT_CENTER, b);
   } else {
     sprintf(b, "Autoload disabled\0");
-    ft.drawText(ft.width()/2, ft.height()-20, 27, color_copyright, FT81x_OPT_CENTER, b);
+    ft_draw_text(ft_width()/2, ft_height()-20, 27, color_copyright, FT81x_OPT_CENTER, b);
   }
 
   if (play_sounds == 1 && hw_setup.ft_click) {
-      ft.playSound();
+      ft_play_sound();
   } else if (play_sounds == 2 && hw_setup.ft_sound > 0) {
     app_core_browser_ft_sound(hw_setup.ft_sound, true);
   }
 
   // the Setup button (S) under the logo
-  if (ft_hit_add(14, 82, 120, 44, HIT_SETUP)) ft.drawCircle(36, 104, 20, color_button_active);
-  ft.drawCircle(36, 104, 18, setup_focus ? color_button_active : color_button);
-  ft.drawText(36, 104, 29, setup_focus ? color_text_active : color_text, FT81x_OPT_CENTER, "S");
-  ft.drawText(62, 104, 28, color_text, FT81x_OPT_CENTERY, "Setup");
+  if (ft_hit_add(14, 82, 120, 44, HIT_SETUP)) ft_draw_circle(36, 104, 20, color_button_active);
+  ft_draw_circle(36, 104, 18, setup_focus ? color_button_active : color_button);
+  ft_draw_text(36, 104, 29, setup_focus ? color_text_active : color_text, FT81x_OPT_CENTER, "S");
+  ft_draw_text(62, 104, 28, color_text, FT81x_OPT_CENTERY, "Setup");
 
   app_core_browser_ft_decor(hw_setup, true);
 
@@ -468,10 +468,10 @@ void app_core_browser_on_keyboard() {
         if (usb_keyboard_report.keycode[0] == KEY_V && hw_setup.debug_enabled && has_ft) {
           autoload_enabled = false;
           uint8_t old_vmode = hw_setup.ft_video_mode;
-          hw_setup.ft_video_mode = (hw_setup.ft_video_mode + 1) % FT812::modeCount();
+          hw_setup.ft_video_mode = (hw_setup.ft_video_mode + 1) % ft_mode_count();
           d_printf("Changing video mode from %d to %d", old_vmode, hw_setup.ft_video_mode); d_println();
-          if (ft.init(hw_setup.ft_video_mode)) {
-            d_printf("FT81x system clock %lu kHz, attempt %u", (unsigned long) (ft.initClockHz() / 1000), ft.initAttempts()); d_println();
+          if (ft_init(hw_setup.ft_video_mode)) {
+            d_printf("FT81x system clock %lu kHz, attempt %u", (unsigned long) (ft_init_clock_hz() / 1000), ft_init_attempts()); d_println();
           } else {
             d_println("FT81x did not come up in the new video mode");
           }
@@ -496,23 +496,23 @@ void app_core_browser_on_keyboard() {
       // return back to classic osd
       if (usb_keyboard_report.keycode[0] == KEY_SPACE && has_ft) {
         has_ft = false;
-        ft.vga(false);
-        ft.spi(false);
+        ft_vga(false);
+        ft_spi(false);
         app_core_browser_overlay();
       }
 
       // the graphic menu, also when it is off in karabas.ini (until the next start)
       if (usb_keyboard_report.keycode[0] == KEY_G && !has_ft) {
         autoload_enabled = false;
-        ft.spi(true);
-        has_ft = ft.init(hw_setup.ft_video_mode);
+        ft_spi(true);
+        has_ft = ft_init(hw_setup.ft_video_mode);
         if (has_ft) {
-          d_printf("FT81x started (system clock %lu kHz), switching to FT OSD", (unsigned long) (ft.initClockHz() / 1000)); d_println();
-          ft.vga(true);
+          d_printf("FT81x started (system clock %lu kHz), switching to FT OSD", (unsigned long) (ft_init_clock_hz() / 1000)); d_println();
+          ft_vga(true);
           app_core_browser_ft_overlay();
         } else {
           d_println("FT81x did not come up");
-          ft.spi(false);
+          ft_spi(false);
         }
       }
 }

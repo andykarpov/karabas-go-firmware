@@ -40,16 +40,16 @@ static const char *const *msc_lines() {
 
 // the graphic screen; on_time() redraws it for the clock
 void app_msc_ft_draw() {
-  ft.beginDisplayList();
+  ft_begin_display_list();
   app_core_browser_ft_background(hw_setup);
   app_core_browser_ft_decor(hw_setup, true);
-  uint16_t y = ft.height() / 2 - 80;
-  ft.drawText(ft.width() / 2, y, 30, hw_setup.color_text, FT81x_OPT_CENTER, "USB mass storage");
+  uint16_t y = ft_height() / 2 - 80;
+  ft_draw_text(ft_width() / 2, y, 30, hw_setup.color_text, FT81x_OPT_CENTER, "USB mass storage");
   const char *const *l = msc_lines();
   for (uint8_t i = 0; i < MSC_LINES; i++) {
-    ft.drawText(ft.width() / 2, y + 50 + i * 24, 28, hw_setup.color_text, FT81x_OPT_CENTER, l[i]);
+    ft_draw_text(ft_width() / 2, y + 50 + i * 24, 28, hw_setup.color_text, FT81x_OPT_CENTER, l[i]);
   }
-  ft.swapScreen();
+  ft_swap_screen();
 }
 
 void app_msc_overlay() {

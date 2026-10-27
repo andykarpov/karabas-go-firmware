@@ -119,7 +119,7 @@ void core_trigger(uint8_t pos)
   // todo: replace hardcode with something else
   if (memcmp(core.osd[pos].name, "Rese", 4) == 0) {
     d_println("Reset FT812");
-    ft.reset();
+    ft_reset();
     // reset ESP and MIDI on soft reset (mini revG)
     board_reset_peripherals();
     ms_delay(100);
@@ -170,8 +170,8 @@ void do_configure(const char* filename) {
   link_set_rx_enabled(false);
   link_burst_reset(); // the new core may not support bursts
   hang_step(0x85);
-  ft.vga(false); // FT off
-  ft.spi(false);
+  ft_vga(false); // FT off
+  ft_spi(false);
   hang_step(0x86);
   kb_reset(); // reset to ps/2 defaults
 
@@ -402,7 +402,7 @@ void read_core(const char* filename) {
 
   // hw ft reset for other cores types
   if (core.type != CORE_TYPE_BOOT) {
-    ft.reset();
+    ft_reset();
   }
 
   // reset ESP and MIDI (mini revG)
@@ -416,25 +416,25 @@ void read_core(const char* filename) {
       if (usb_keyboard_report.keycode[0] == KEY_SPACE) {
         d_println("Space pressed: skip FT81x detection, fallback to classic OSD");
       } else {
-        ft.spi(true);
-        has_ft = ft.init(hw_setup.ft_video_mode);
-        if (ft.initFailures()[0]) {
-          d_printf("FT81x failed attempts: %s", ft.initFailures()); d_println();
+        ft_spi(true);
+        has_ft = ft_init(hw_setup.ft_video_mode);
+        if (ft_init_failures()[0]) {
+          d_printf("FT81x failed attempts: %s", ft_init_failures()); d_println();
         }
         if (has_ft) {
           d_printf("Found FT81x IC (system clock %lu kHz, attempt %u), switching to FT OSD",
-            (unsigned long) (ft.initClockHz() / 1000), ft.initAttempts()); d_println();
+            (unsigned long) (ft_init_clock_hz() / 1000), ft_init_attempts()); d_println();
           // with no picture: 0 frames is the chip's side, running frames the video path of the core
           // (on the Mini boards its hdmi_pll locks to the FT812 pixel clock)
           if (hw_setup.debug_enabled) {
-            d_printf("FT81x scanout: %lu frames in 100 ms", (unsigned long) ft.framesIn(100)); d_println();
+            d_printf("FT81x scanout: %lu frames in 100 ms", (unsigned long) ft_frames_in(100)); d_println();
           }
-          ft.vga(true);
+          ft_vga(true);
         } else {
-          d_printf("FT81x IC did not found (%u attempts, last system clock %lu kHz)", ft.initAttempts(),
-            (unsigned long) (ft.initClockHz() / 1000)); d_println();
-          ft.vga(false);
-          ft.spi(false);
+          d_printf("FT81x IC did not found (%u attempts, last system clock %lu kHz)", ft_init_attempts(),
+            (unsigned long) (ft_init_clock_hz() / 1000)); d_println();
+          ft_vga(false);
+          ft_spi(false);
         }
       }
     }

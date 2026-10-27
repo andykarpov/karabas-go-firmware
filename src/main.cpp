@@ -140,7 +140,7 @@ static void karabas_setup()
 
   rtc_begin(spi_send, on_time);
   osd_begin(spi_send);
-  ft.begin(spi_send);
+  ft_begin(spi_send, PIN_MCU_FT_CS, board_ft_reset_pin());
 
   storage_begin();
 

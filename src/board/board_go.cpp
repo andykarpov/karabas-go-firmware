@@ -10,7 +10,9 @@
 #include "main.h"
 #include "periph/i2c_bus.h"
 
-FT812 ft(PIN_MCU_FT_CS, PIN_FT_RESET);
+uint8_t board_ft_reset_pin() {
+  return PIN_FT_RESET;
+}
 
 static bool has_extender = false;
 

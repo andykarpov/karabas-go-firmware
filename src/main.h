@@ -7,7 +7,7 @@
 #include "i2c_dev.h"
 #include "config.h"
 #include "types.h"
-#include "FT812.h"
+#include "ft812.h"
 #include "osd.h"
 #include "rtc.h"
 #include "input/sega.h"

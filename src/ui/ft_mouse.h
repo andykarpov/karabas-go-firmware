@@ -3,7 +3,7 @@
 #include <Arduino.h>
 
 // The mouse pointer of the graphic menus (FT812, APP only).
-// A screen ends its frame with ft_frame_end() instead of ft.swapScreen(): the frame is kept in
+// A screen ends its frame with ft_frame_end() instead of ft_swap_screen(): the frame is kept in
 // GRAM, so a move of the pointer only appends the kept frame and draws the pointer at its new
 // place (ft_pointer_frame), a few bytes over SPI. While drawing, the screen adds its clickable
 // areas with ft_hit_add(); ft_hover() is the one under the pointer. The pointer hides after a
