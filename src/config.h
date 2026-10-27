@@ -306,7 +306,7 @@
 #endif
 
 
-// debug output goes through src/diag/debug_out (single Serial writer, see there)
+// debug output goes through src/diag/debug_out (one CDC writer, see there)
 #include "diag/debug_out.h"
 
 #ifdef __cplusplus

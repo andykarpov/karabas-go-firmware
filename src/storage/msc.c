@@ -1,6 +1,5 @@
-#include <Arduino.h>
 #include "main.h"
-#include "Adafruit_TinyUSB.h"
+#include "tusb.h"
 #include "hardware/watchdog.h"
 
 // Expose an SD card as USB mass storage (AT+KARABAS=msc / msc2, the msc / msc2 button actions):
@@ -12,8 +11,11 @@
 #define MSC_FAILED_REBOOT_MS 5000     // no second card: the screen says so, then back to the menu
 #define MSC_EJECT_REBOOT_MS 5000      // after an eject, at the latest
 
-static Adafruit_USBD_MSC usb_msc;
 static bool expose_msc = false;
+// read by the USB stack (USBD task): the SD card is ready for the host, its size and USB name
+static volatile bool unit_ready = false;
+static uint32_t block_count = 0;
+static const char *product = "SD Card";
 static uint8_t card = 1;
 static bool failed = false;
 static uint32_t failed_timer = 0;
@@ -26,20 +28,9 @@ static volatile bool host_gone = false; // the host let the device go after the 
 static bool msc_blink = false;
 static uint32_t msc_blink_timer = 0;
 
-int32_t msc_read_cb_sd (uint32_t lba, void* buffer, uint32_t bufsize);
-int32_t msc_write_cb_sd (uint32_t lba, uint8_t* buffer, uint32_t bufsize);
-void msc_flush_cb_sd (void);
-bool msc_start_stop_cb_sd(uint8_t power_condition, bool start, bool load_eject);
-
 void msc_init() {
-#if ENABLE_MSC
   // the PC asks the name when USB comes up, before msc_start(): the request is still in scratch 0
-  usb_msc.setID(0, "Karabas", watchdog_hw->scratch[0] == MSC2_REQUEST_MAGIC ? "SD Card 2" : "SD Card", "1.0");
-  usb_msc.setReadWriteCallback(0, msc_read_cb_sd, msc_write_cb_sd, msc_flush_cb_sd);
-  usb_msc.setStartStopCallback(0, msc_start_stop_cb_sd);
-  usb_msc.setUnitReady(0, false);
-  usb_msc.begin();
-#endif
+  if (watchdog_hw->scratch[0] == MSC2_REQUEST_MAGIC) product = "SD Card 2";
 }
 
 void msc_reboot_to_msc(uint8_t sd_card) {
@@ -64,7 +55,6 @@ void msc_start() {
   if (!expose_msc) return;
   matrix_icon(MATRIX_ICON_MSC);
   ejected = false;
-  uint32_t block_count;
   if (card == 2) {
     if (!sd2_begin()) {
       d_println("MSC: no second SD card");
@@ -76,8 +66,7 @@ void msc_start() {
   } else {
     block_count = sd_card_sectors(sd1_card());
   }
-  usb_msc.setCapacity(0, block_count, 512);
-  usb_msc.setUnitReady(0, true);
+  unit_ready = true;
 #endif
 }
 
@@ -122,79 +111,86 @@ bool msc_tick() {
   return false;
 }
 
-#if ENABLE_MSC
-// Callback invoked when received READ10 command.
-// Copy disk's data to buffer (up to bufsize) and
-// return number of copied bytes (must be multiple of block size)
-int32_t msc_read_cb_sd (uint32_t lba, void* buffer, uint32_t bufsize)
-{
+// The TinyUSB MSC callbacks, in the USBD task. The interface is there in normal mode too, with
+// no medium (the unit is not ready), as with Adafruit's MSC class before.
+
+void tud_msc_inquiry_cb(uint8_t lun, uint8_t vendor_id[8], uint8_t product_id[16], uint8_t product_rev[4]) {
+  (void) lun;
+  memcpy(vendor_id, "Karabas", 7);
+  memcpy(product_id, product, strlen(product));
+  memcpy(product_rev, "1.0", 3);
+}
+
+bool tud_msc_test_unit_ready_cb(uint8_t lun) {
+  if (!unit_ready) tud_msc_set_sense(lun, SCSI_SENSE_NOT_READY, 0x3a, 0x00); // medium not present
+  return unit_ready;
+}
+
+void tud_msc_capacity_cb(uint8_t lun, uint32_t *count, uint16_t *size) {
+  (void) lun;
+  *count = block_count;
+  *size = 512;
+}
+
+// the SCSI commands TinyUSB does not answer itself
+int32_t tud_msc_scsi_cb(uint8_t lun, uint8_t const scsi_cmd[16], void *buffer, uint16_t bufsize) {
+  (void) scsi_cmd; (void) buffer; (void) bufsize;
+  tud_msc_set_sense(lun, SCSI_SENSE_ILLEGAL_REQUEST, 0x20, 0x00); // invalid command
+  return -1;
+}
+
+// READ10: the sectors from lba, bufsize bytes (up to CFG_TUD_MSC_EP_BUFSIZE, whole sectors)
+int32_t tud_msc_read10_cb(uint8_t lun, uint32_t lba, uint32_t offset, void *buffer, uint32_t bufsize) {
+  (void) lun; (void) offset;
   if (!expose_msc) return -1; // ejected: the card is being handed back to the firmware
   bool rc;
   if (card == 2) rc = sd2_read(lba, (uint8_t*) buffer, bufsize/512);
   else rc = sd_card_read(sd1_card(), lba, (uint8_t*) buffer, bufsize/512);
-  return rc ? bufsize : -1;
+  return rc ? (int32_t) bufsize : -1;
 }
 
-// Callback invoked when received WRITE10 command.
-// Process data in buffer to disk's storage and 
-// return number of written bytes (must be multiple of block size)
-int32_t msc_write_cb_sd (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
-{
+int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset, uint8_t *buffer, uint32_t bufsize) {
+  (void) lun; (void) offset;
   if (!expose_msc) return -1;
   bool rc;
   if (card == 2) rc = sd2_write(lba, buffer, bufsize/512);
   else rc = sd_card_write(sd1_card(), lba, buffer, bufsize/512);
-  return rc ? bufsize : -1;
+  return rc ? (int32_t) bufsize : -1;
 }
 
-// Callback invoked when WRITE10 command is completed (status received and accepted by host).
-// used to flush any pending cache.
-void msc_flush_cb_sd (void)
-{
+// the host has the status of the WRITE10
+void tud_msc_write10_complete_cb(uint8_t lun) {
+  (void) lun;
   if (card == 2) sd2_sync();
   else sd_card_sync(sd1_card());
 }
 
-bool msc_start_stop_cb_sd(uint8_t power_condition, bool start, bool load_eject) {
+bool tud_msc_start_stop_cb(uint8_t lun, uint8_t power_condition, bool start, bool load_eject) {
+  (void) lun;
   d_printf("MSC: start/stop, power condition %u, start %u, eject %u", power_condition, start, load_eject);
   d_println();
-
-  if ( load_eject )
-  {
-    if (start)
-    {
-      // load disk storage
-    }else
-    {
-      // unload disk storage
-      if (expose_msc) {
-        // sd_card keeps a multi-sector read / write open between the calls: end it, or
-        // the card is still in it after the reboot and the bitstream read of the boot core
-        // stops half way (CONF_DONE timeout). The read / write callbacks run in this task too.
-        expose_msc = false;
-        usb_msc.setUnitReady(0, false);
-        if (card == 2) sd2_sync();
-        else sd_card_sync(sd1_card());
-        eject_ms = ms_now();
-        ejected = true;
-      }
-    }
+  if (load_eject && !start && expose_msc) {
+    // sd_card keeps a multi-sector read / write open between the calls: end it, or
+    // the card is still in it after the reboot and the bitstream read of the boot core
+    // stops half way (CONF_DONE timeout). The read / write callbacks run in this task too.
+    expose_msc = false;
+    unit_ready = false;
+    if (card == 2) sd2_sync();
+    else sd_card_sync(sd1_card());
+    eject_ms = ms_now();
+    ejected = true;
   }
-
   return true;
 }
 
-// TinyUSB, in the USBD task: the host let the device go
-extern "C" void tud_umount_cb(void) {
+// the host let the device go
+void tud_umount_cb(void) {
   d_println("USB: unmounted by the host");
   if (ejected) host_gone = true;
 }
 
-extern "C" void tud_suspend_cb(bool remote_wakeup_en) {
+void tud_suspend_cb(bool remote_wakeup_en) {
   (void) remote_wakeup_en;
   d_println("USB: suspended by the host");
   if (ejected) host_gone = true;
 }
-#endif
-
-/////////

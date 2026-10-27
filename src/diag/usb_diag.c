@@ -8,10 +8,6 @@
 
 static const char *const line_names[4] = {"SE0", "FS idle", "LS idle", "SE1"};
 
-static volatile uint32_t device_missed = 0;
-
-void usb_diag_device_missed() { device_missed++; }
-
 // who drives D+ / D- (DPDM pinout: D- is D+ + 1): "pio1 out 0" when a PIO state machine drives
 // the pin low (the host's bus reset, or a stuck transmit), "in 0" when nothing on our side does
 static void pin_state(char *buf, size_t size, uint pin) {
@@ -67,12 +63,11 @@ void usb_diag_print() {
   pio_usb_diag.max_frame_us = 0;
   char pins[48];
   pins_state(pins, sizeof(pins));
-  d_printf(" | usb sof %lu/s, max gap %lu us, max frame %lu us, root %s%s%s line %s (%s), conn %lu disc %lu own %lu ovf %lu | usbd missed %lu",
+  d_printf(" | usb sof %lu/s, max gap %lu us, max frame %lu us, root %s%s%s line %s (%s), conn %lu disc %lu own %lu ovf %lu",
     (unsigned long) sof, (unsigned long) sof_gap, (unsigned long) frame_us,
     (root & 1) ? "" : "uninit ", (root & 2) ? "connected" : "empty", (root & 4) ? " suspended" : "",
     line_names[(root >> 4) & 3], pins,
     (unsigned long) pio_usb_diag.connects, (unsigned long) pio_usb_diag.disconnects,
     (unsigned long) pio_usb_diag.own_se0,
-    (unsigned long) pio_usb_diag.rx_overflows,
-    (unsigned long) device_missed);
+    (unsigned long) pio_usb_diag.rx_overflows);
 }
