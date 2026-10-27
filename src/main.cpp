@@ -275,14 +275,16 @@ static void karabas_loop()
   link_poll();
 }
 
-// usb host loop, runs on core1
-static void usb_host_loop()
+// usb host loop, runs on core1. It never blocks, so all of it runs from RAM: from flash,
+// each turn of it took code of APP out of the 16 KB flash cache that both cores share,
+// and the misses made core0 2-3 times slower (phase 1.6, the text OSD drew visibly).
+static void __not_in_flash_func(usb_host_loop)()
 {
   diag_loop_core1();
   hang_beat_core1();
   usb_diag_tick();
-  tuh_task();
-  printer_host_tick(ms_now());
+  if (tuh_task_event_ready()) tuh_task();
+  printer_host_tick();
   printer_usb_tick();
 }
 
@@ -320,7 +322,7 @@ static void app_task(void *param) {
   }
 }
 
-static void usb_task(void *param) {
+static void __not_in_flash_func(usb_task)(void *param) {
   usb_host_setup();
   for (;;) {
     usb_host_loop();

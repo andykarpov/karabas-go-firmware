@@ -20,8 +20,8 @@ __attribute__((constructor)) static void printer_lock_init(void) {
   lock = spin_lock_init(spin_lock_claim_unused(true));
 }
 
-static bool writable(void) { return connected && !fault && !resetting; }
-static bool paused(void) { return status_valid && (port_status & 0x38) != 0x18; }
+static __force_inline bool writable(void) { return connected && !fault && !resetting; }
+static __force_inline bool paused(void) { return status_valid && (port_status & 0x38) != 0x18; }
 static void discard(void) {
   discarded += used;
   head = used = 0;
@@ -123,7 +123,7 @@ void printer_usb_event(printer_event_t event, xfer_result_t result, uint32_t cou
   spin_unlock(lock, saved);
 }
 
-void printer_usb_tick(void) {
+void __not_in_flash_func(printer_usb_tick)(void) { // the USB loop runs from RAM
   bool do_reset = false;
   size_t length = 0;
   uint32_t saved = spin_lock_blocking(lock);

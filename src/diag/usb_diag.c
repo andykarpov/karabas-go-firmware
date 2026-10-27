@@ -38,7 +38,7 @@ static void pins_state(char *buf, size_t size) {
 
 // root port events, as the SOF irq counted them. Connects are only counted: a log line from
 // core1 at boot made the FT812 picture of the Mini G start black 4 times out of 7 (not found why)
-void usb_diag_tick() {
+void __not_in_flash_func(usb_diag_tick)() { // the USB loop runs from RAM
   static uint32_t connects = 0, disconnects = 0, overflows = 0;
   uint32_t c = pio_usb_diag.connects, d = pio_usb_diag.disconnects, o = pio_usb_diag.rx_overflows;
   if (c == connects && d == disconnects && o == overflows) return;

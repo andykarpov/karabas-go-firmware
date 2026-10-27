@@ -1,5 +1,6 @@
 #include "printer_host.h"
 #include <string.h>
+#include "ms_time.h"
 
 typedef enum { CONTROL_IDLE, CONTROL_ID, CONTROL_STATUS, CONTROL_RESET } control_t;
 static printer_info_t info;
@@ -216,8 +217,10 @@ bool printer_host_read(void) {
   info.rx_busy = false;
   return false;
 }
-void printer_host_tick(uint32_t now_ms) {
+// the USB loop runs from RAM; the time is read only with a printer
+void __not_in_flash_func(printer_host_tick)(void) {
   if (!info.mounted || control != CONTROL_IDLE || !tuh_mounted(info.address)) return;
+  uint32_t now_ms = ms_now();
   if (id_pending) {
     if (printer_host_get_id()) id_pending = false;
   } else if ((uint32_t) (now_ms - last_poll) >= 1000) {

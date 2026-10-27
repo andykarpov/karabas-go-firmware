@@ -27,7 +27,7 @@ typedef struct {
 
 extern usbh_class_driver_t const usbh_printer_driver;
 const printer_info_t *printer_host_info(void);
-void printer_host_tick(uint32_t now_ms);
+void printer_host_tick(void);
 void printer_host_config_index(uint8_t address, uint8_t index);
 
 // true = submitted, false = busy/disconnected/fault/invalid input; never blocks.

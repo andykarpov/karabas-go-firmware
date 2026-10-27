@@ -2,6 +2,7 @@
 #include "hang_diag.h"
 #include "hardware/watchdog.h"
 #include "hardware/structs/watchdog.h"
+#include "hardware/divider.h"
 
 #include <FreeRTOS.h>
 #include <task.h>
@@ -32,8 +33,9 @@ static uint8_t task_tag() {
 
 static volatile uint8_t beat_last[4] = { 0xff, 0xff, 0xff, 0xff }; // one writer each
 
-static void beat(uint8_t i) {
-  uint8_t s = (uint8_t) (time_us_32() / 1000000);
+// in RAM, as the USB loop that calls it; the inlined divider, not the division of the sdk in flash
+static void __not_in_flash_func(beat)(uint8_t i) {
+  uint8_t s = (uint8_t) hw_divider_u32_quotient_inlined(time_us_32(), 1000000);
   if (beat_last[i] == s) return; // the loops run many times a second
   beat_last[i] = s;
   hw_clear_bits(&watchdog_hw->scratch[3], 0xffu << (8 * i));
@@ -46,7 +48,7 @@ void hang_mark(uint16_t where) {
   beat(1);
 }
 
-void hang_beat_core1() { if (armed) beat(2); } // the USB task starts before the report is read
+void __not_in_flash_func(hang_beat_core1)() { if (armed) beat(2); } // the USB task starts before the report is read
 
 static repeating_timer_t irq_timer;
 static bool irq_beat(repeating_timer_t *t) { beat(3); return true; }

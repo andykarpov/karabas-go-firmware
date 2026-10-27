@@ -6,6 +6,8 @@
 
 #include <FreeRTOS.h>
 #include <task.h>
+#include "hardware/structs/xip_ctrl.h"
+#include "hardware/clocks.h"
 
 #define DIAG_PERIOD_MS 10000
 
@@ -28,7 +30,7 @@ static inline void diag_loop(diag_core_t *d) {
 }
 
 void diag_loop_core0() { diag_loop(&diag[0]); }
-void diag_loop_core1() { diag_loop(&diag[1]); }
+void __not_in_flash_func(diag_loop_core1)() { diag_loop(&diag[1]); } // the USB loop runs from RAM
 
 void diag_tick() {
   static uint32_t timer = 0;
@@ -45,6 +47,12 @@ void diag_tick() {
     (unsigned long) (loops0 * 1000ULL / elapsed), (unsigned long) gap0,
     (unsigned long) (loops1 * 1000ULL / elapsed), (unsigned long) gap1,
     chip_free_heap());
+  // the flash cache: both cores run from it, misses stall them
+  uint32_t hit = xip_ctrl_hw->ctr_hit, acc = xip_ctrl_hw->ctr_acc;
+  xip_ctrl_hw->ctr_hit = 0; xip_ctrl_hw->ctr_acc = 0; // a write clears a counter
+  d_printf(" | xip hit %lu.%lu%% of %lu k/s, clk %lu MHz", (unsigned long) (acc ? hit * 1000ULL / acc / 10 : 0),
+    (unsigned long) (acc ? hit * 1000ULL / acc % 10 : 0), (unsigned long) (acc / elapsed),
+    (unsigned long) (clock_get_hz(clk_sys) / 1000000));
   TaskHandle_t app = xTaskGetHandle("APP");
   TaskHandle_t usb = xTaskGetHandle("USB");
   TaskHandle_t input = xTaskGetHandle("INPUT");
