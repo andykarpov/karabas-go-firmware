@@ -95,6 +95,18 @@ Done (2026-10-28): 3.1 (#72) the repository cleanup (PlatformIO / LittleFS lefto
 - Compare with the phase 0 baseline. Run Go and Mini too: they are not checked with FreeRTOS yet.
 - Merge `pico-sdk` into master.
 
+## Phase 4: the UI code
+
+From the review of the OSD apps (2026-10-28). One branch and PR per step, checked on hardware.
+
+1. **One navigation key.** `ui_nav_key()`: UP / DOWN / LEFT / RIGHT / ENTER / ESC from the keyboard and both pads, used by every screen instead of `keycode[0] == KEY_X || (joyL & SC_BTN_X) || ...` (~33 places in `app_core`, `app_core_browser`, `app_file_loader`, `app_setup`). The pad means the same everywhere: A / B = Enter, C / Mode = Esc, Left / Right change the value of a core menu option; A is no longer Esc in the file browser of the core menu.
+2. **One list cursor.** `ui_list_t` (selection, length, page) and `ui_list_move()` in `lib/common` (tested): up / down wrap around, left / right a page; for the file browsers, the core browser (text and FT), Setup and Settings.
+3. **Drawing helpers** as in karabas-pro's `zxosd.c`: `ui_row()` (a 32-char row, selected or not), `ui_hint()`, `ui_footer()`, no hand padding and no magic footer rows.
+4. **One file browser** (`ui/file_browser`): the browser of the F / FL slots (`app_core`) and of the file loader (`app_file_loader`) share the directory read, the pages, the name cache and the drawing; integer page math.
+5. **Data-driven menus** as karabas-pro's `MenuItem`: `menu_item_t` (label, hint, count, labels, get, set, visible) with `menu_draw()` / `menu_key()` for Setup, the core menu (built from `core.osd` when a core loads), About and MSC; `settings_items` on the same struct. The shared file list globals of `main.h` and `need_redraw` / `curr_osd_item` go with 4 and 5.
+6. **Text and FT screens share their logic**: `app_wifi` / `app_ft_wifi`, `app_rtc` / `app_ft_clock`, `app_pad_mapper` / `app_ft_pad` split into a model (states, actions, no drawing) and two views.
+7. **Small things**: the debug key V (FT video mode) of the core browser goes; the float page math; magic numbers.
+
 ## Risks
 
 - **PIO-USB under plain FreeRTOS SMP:** SOF timing and irqs on core 1. Hence the spike first.
