@@ -1,5 +1,5 @@
 #pragma once
-// The LED matrix add-on (MATRIX.md): two HT16K33 (0x70 left, 0x71 right), each driving a
+// The LED matrix add-on (docs/matrix.md): two HT16K33 (0x70 left, 0x71 right), each driving a
 // bi-color 8x8 matrix, as one 16x8 display. The pixels are drawn into a buffer and sent with
 // ht16k33_show(). The caller holds the I2C bus lock. Pure C.
 

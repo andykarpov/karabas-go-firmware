@@ -179,19 +179,20 @@ USB mass storage (удержание 2 с — со второй SD-картой)
 
 ## Сборка из исходников
 
-Прошивка собирается в [PlatformIO](https://platformio.org/) (Arduino framework, ядро RP2040 от
-earlephilhower, FreeRTOS). Версии платформы и библиотек зафиксированы.
+Прошивка написана на C11 на pico-sdk с FreeRTOS SMP и TinyUSB, собирается CMake и тулчейном
+arm-none-eabi от earlephilhower ([pico-quick-toolchain](https://github.com/earlephilhower/pico-quick-toolchain)
+4.1.0: нужен его newlib). Версии pico-sdk и FreeRTOS зафиксированы в `CMakeLists.txt` и
+скачиваются сами, если `PICO_SDK_PATH` / `FREERTOS_KERNEL_PATH` не заданы.
 
 ```sh
-pio run -e go                    # Karabas Go
-pio run -e mini                  # Karabas Mini
-pio run -e minig                 # Karabas Mini G (сборка по умолчанию)
-pio run -e go -e mini -e minig   # все платы
-pio test -e native               # юнит-тесты lib/KarabasCommon
-pio run -e minig -t upload       # собрать и залить по USB
+cmake -S . -B build -G Ninja                  # -DPICO_TOOLCHAIN_PATH=..., если тулчейна нет в PATH
+ninja -C build                                # все платы
+ninja -C build karabas_minig                  # одна плата: karabas_go, karabas_mini, karabas_minig
+cmake -S test -B build-test -G Ninja && ninja -C build-test && ctest --test-dir build-test   # юнит-тесты
 ```
 
-Результат: `.pio/build/<env>/firmware.uf2`. CI ([build.yml](.github/workflows/build.yml))
+Результат: `build/karabas_<плата>.uf2`, его копируют на диск `RPI-RP2` платы в режиме BOOTSEL
+(туда переводит `AT+KARABAS=boot` по USB). CI ([build.yml](.github/workflows/build.yml))
 собирает все платы, запускает тесты и выпускает релизы. Маппер геймпадов лежит в
 [`tools/hidmapper`](tools/hidmapper) и публикуется в GitHub Pages через
 [hidmapper.yml](.github/workflows/hidmapper.yml).
@@ -208,7 +209,7 @@ pio run -e minig -t upload       # собрать и залить по USB
 - [Протокол MCU ↔ FPGA](docs/protocol.ru.md) ([in English](docs/protocol.md)): SPI-кадры, все
   команды, последовательности загрузки.
 - [Пакетная передача](docs/burst_protocol.md): быстрый режим передачи ПЗУ и файлов.
-- [LED-матрица](MATRIX.md).
+- [LED-матрица](docs/matrix.md).
 - Файлы ядер (`.kg1` / `.kg2` / `.kg3`) и `core.json`:
   [karabas-go-tools/make_core](https://github.com/andykarpov/karabas-go-tools/tree/master/make_core).
 

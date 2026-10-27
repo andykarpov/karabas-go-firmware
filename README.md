@@ -181,19 +181,20 @@ answered by the firmware:
 
 ## Building from source
 
-The firmware is a [PlatformIO](https://platformio.org/) project (Arduino framework, earlephilhower
-RP2040 core, FreeRTOS). Platform and library versions are pinned.
+The firmware is C11 on the pico-sdk with FreeRTOS SMP and TinyUSB, built with CMake and the
+earlephilhower arm-none-eabi toolchain ([pico-quick-toolchain](https://github.com/earlephilhower/pico-quick-toolchain)
+4.1.0: its newlib is needed). The pico-sdk and FreeRTOS versions are pinned in
+`CMakeLists.txt` and fetched unless `PICO_SDK_PATH` / `FREERTOS_KERNEL_PATH` point to them.
 
 ```sh
-pio run -e go                    # Karabas Go
-pio run -e mini                  # Karabas Mini
-pio run -e minig                 # Karabas Mini G (also the default)
-pio run -e go -e mini -e minig   # all boards
-pio test -e native               # unit tests of lib/KarabasCommon
-pio run -e minig -t upload       # build and upload over USB
+cmake -S . -B build -G Ninja                  # add -DPICO_TOOLCHAIN_PATH=... if the toolchain is not on PATH
+ninja -C build                                # all boards
+ninja -C build karabas_minig                  # one board: karabas_go, karabas_mini, karabas_minig
+cmake -S test -B build-test -G Ninja && ninja -C build-test && ctest --test-dir build-test   # unit tests
 ```
 
-The result is `.pio/build/<env>/firmware.uf2`. CI
+The result is `build/karabas_<board>.uf2`: copy it to the `RPI-RP2` drive of the board in
+BOOTSEL mode (`AT+KARABAS=boot` gets there over USB). CI
 ([build.yml](.github/workflows/build.yml)) builds all boards, runs the tests and makes the
 releases. The gamepad mapper lives in [`tools/hidmapper`](tools/hidmapper) and is published to
 GitHub Pages by [hidmapper.yml](.github/workflows/hidmapper.yml).
@@ -210,7 +211,7 @@ and the conventions of the code.
 - [MCU ↔ FPGA protocol](docs/protocol.md) ([по-русски](docs/protocol.ru.md)): SPI frames, all
   commands, load sequences.
 - [Burst transfers](docs/burst_protocol.md): the fast ROM / file transfer mode.
-- [LED matrix add-on](MATRIX.md).
+- [LED matrix add-on](docs/matrix.md).
 - Core files (`.kg1` / `.kg2` / `.kg3`) and `core.json`:
   [karabas-go-tools/make_core](https://github.com/andykarpov/karabas-go-tools/tree/master/make_core).
 
