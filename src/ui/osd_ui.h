@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
-#include "OSD.h"
+#include "osd.h"
 #include "ms_time.h"
 #include "Adafruit_TinyUSB.h"
 #include "input/sega.h"
@@ -9,7 +9,6 @@
 // the joystick Esc of the menus: C, or Select (Mode) on pads without C
 #define UI_JOY_ESC (SC_BTN_C | SC_BTN_MODE)
 
-extern OSD zxosd;
 extern volatile bool is_osd;
 extern volatile bool is_osd_hiding;
 extern bool need_redraw;

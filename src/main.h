@@ -8,7 +8,7 @@
 #include "config.h"
 #include "types.h"
 #include "FT812.h"
-#include "OSD.h"
+#include "osd.h"
 #include "RTC.h"
 #include "input/sega.h"
 #include "hid_app.h"

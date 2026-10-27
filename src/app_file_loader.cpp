@@ -3,7 +3,7 @@
 #include "config.h"
 #include "types.h"
 #include "main.h"
-#include "OSD.h"
+#include "osd.h"
 #include "usb_hid_keys.h"
 #include "input/sega.h"
 #include <algorithm>
@@ -22,16 +22,16 @@ static void core_dir_path(char *out, size_t size) {
 
 void app_file_loader_read_list(bool forceIndex = false) {
 
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.frame(8,8,24,12, 1);
-  zxosd.fill(9,9,23,11, 32);
-  zxosd.setColor(OSD::COLOR_GREEN_I, OSD::COLOR_BLACK);
-  zxosd.setPos(9, 9);
-  zxosd.print("Scanning files");
-  zxosd.setColor(OSD::COLOR_MAGENTA_I, OSD::COLOR_BLACK);
-  zxosd.setPos(9,10);
-  zxosd.print("Please wait...");
-  zxosd.update();
+  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+  osd_frame(8,8,24,12);
+  osd_fill(9,9,23,11, 32);
+  osd_set_color(OSD_COLOR_GREEN_I, OSD_COLOR_BLACK);
+  osd_set_pos(9, 9);
+  osd_print("Scanning files");
+  osd_set_color(OSD_COLOR_MAGENTA_I, OSD_COLOR_BLACK);
+  osd_set_pos(9,10);
+  osd_print("Please wait...");
+  osd_update();
   ms_delay(100);
 
   // files from sd1 card
@@ -41,17 +41,17 @@ void app_file_loader_read_list(bool forceIndex = false) {
     core_dir_path(d, sizeof(d));
     if (!sd_opendir(&root1, d)) {
 
-        zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-        zxosd.frame(8,8,24,12, 1);
-        zxosd.fill(9,9,23,11, 32);
-        zxosd.setColor(OSD::COLOR_RED_I, OSD::COLOR_BLACK);
-        zxosd.setPos(9, 9);
-        zxosd.print("Error occured");
-        zxosd.setPos(9,10);
+        osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+        osd_frame(8,8,24,12);
+        osd_fill(9,9,23,11, 32);
+        osd_set_color(OSD_COLOR_RED_I, OSD_COLOR_BLACK);
+        osd_set_pos(9, 9);
+        osd_print("Error occured");
+        osd_set_pos(9,10);
         char b[255];
         sprintf(b, "Bad dir %s", d); 
-        zxosd.print(b);
-        zxosd.update();
+        osd_print(b);
+        osd_update();
         ms_delay(1000);
         app_file_loader_read_list(forceIndex);
         return;
@@ -76,15 +76,15 @@ void app_file_loader_read_list(bool forceIndex = false) {
     }
 
   } else {
-    zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-    zxosd.frame(8,8,24,12, 1);
-    zxosd.fill(9,9,23,11, 32);
-    zxosd.setColor(OSD::COLOR_RED_I, OSD::COLOR_BLACK);
-    zxosd.setPos(9, 9);
-    zxosd.print("Error occured");
-    zxosd.setPos(9,10);
-    zxosd.print("Check SD card");
-    zxosd.update();
+    osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+    osd_frame(8,8,24,12);
+    osd_fill(9,9,23,11, 32);
+    osd_set_color(OSD_COLOR_RED_I, OSD_COLOR_BLACK);
+    osd_set_pos(9, 9);
+    osd_print("Error occured");
+    osd_set_pos(9,10);
+    osd_print("Check SD card");
+    osd_update();
     ms_delay(1000);
     app_file_loader_read_list(forceIndex);
     return;
@@ -95,9 +95,9 @@ void app_file_loader_read_list(bool forceIndex = false) {
   
   // cleanup error messages
   if (has_sd) {
-    zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-    zxosd.fill(8,8,24,12, 32);
-    zxosd.update();
+    osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+    osd_fill(8,8,24,12, 32);
+    osd_update();
   }
 
   // select and load prev file on boot
@@ -115,7 +115,7 @@ void app_file_loader_read_list(bool forceIndex = false) {
           if (!is_osd_hiding) {
             is_osd_hiding = true;
             hide_timer = ms_now();
-            zxosd.hideMenu();
+            osd_hide_menu();
           }
       }
     }
@@ -133,11 +133,11 @@ void app_file_loader_menu(uint8_t vpos) {
 
   if (files_len > 0) {    
     for(uint16_t i=file_from; i < file_to; i++) {
-      zxosd.setPos(0, pos);
+      osd_set_pos(0, pos);
       if (file_sel == i) {
-        zxosd.setColor(OSD::COLOR_BLACK, OSD::COLOR_WHITE);
+        osd_set_color(OSD_COLOR_BLACK, OSD_COLOR_WHITE);
       } else {
-        zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+        osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
       }
       // display 32 chars
       char name[32+1]; 
@@ -157,12 +157,12 @@ void app_file_loader_menu(uint8_t vpos) {
         }
       }
 
-      zxosd.print(name);
+      osd_print(name);
       // fill name with spaces
       uint8_t l = strlen(name);
       if (l < 32) {
         for (uint8_t ll=l; ll<32; ll++) {
-          zxosd.print(" ");
+          osd_print(" ");
         }
       }
       pos++;
@@ -173,24 +173,24 @@ void app_file_loader_menu(uint8_t vpos) {
   }
   if (file_fill > file_to) {
     for (uint16_t i=file_to; i<file_fill; i++) {
-      zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+      osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
       for (uint16_t j=0; j<32; j++) {
-        zxosd.print(" ");
+        osd_print(" ");
       }
     }
   }
-  zxosd.setPos(8, vpos + file_page_size + 1); zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+  osd_set_pos(8, vpos + file_page_size + 1); osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
   char b[40];
   sprintf(b, "Page %03d of %03d", file_page, file_pages); 
-  zxosd.print(b);
-  zxosd.update();
+  osd_print(b);
+  osd_update();
 }
 
 void app_file_loader_overlay(bool initSD = true, bool recreateIndex = false) {
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.clear();
+  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+  osd_clear();
 
-  zxosd.header(core.build, core.id, HW_ID);
+  osd_header(core.build, core.id, HW_ID);
   print_time();
 
   // collect files from sd
@@ -198,15 +198,15 @@ void app_file_loader_overlay(bool initSD = true, bool recreateIndex = false) {
       app_file_loader_read_list(recreateIndex);
   }
 
-  zxosd.setPos(0,5);
+  osd_set_pos(0,5);
   app_file_loader_menu(APP_COREBROWSER_MENU_OFFSET);  
 
   // footer
-  zxosd.line(21);
-  zxosd.line(23);
-  zxosd.setPos(1,24); zxosd.print("Please use arrows to navigate");
-  zxosd.setPos(1,25); zxosd.print("Press Enter to load selection");
-  zxosd.update();
+  osd_line(21);
+  osd_line(23);
+  osd_set_pos(1,24); osd_print("Please use arrows to navigate");
+  osd_set_pos(1,25); osd_print("Press Enter to load selection");
+  osd_update();
 }
 
 void app_file_loader_save()
@@ -222,8 +222,8 @@ void app_file_loader_save()
 
 void app_file_loader_send_file(uint16_t file_id) {
 
-  zxosd.loadingPopup();
-  zxosd.update();
+  osd_loading_popup(0, 100);
+  osd_update();
 
   // the save of the game before: written and closed before the core loads another one
   bk_flush();
@@ -284,12 +284,12 @@ uint32_t c1 = 0;
     c1 += c;
     if (c1 >= 16384) {
       c1 = 0;
-      zxosd.loadingPopup(cnt, file_size);
-      zxosd.update();
+      osd_loading_popup(cnt, file_size);
+      osd_update();
     }
   }
-  zxosd.loadingPopup(file_size, file_size);
-  zxosd.update();
+  osd_loading_popup(file_size, file_size);
+  osd_update();
   
   // 00 - active = 0, reset = 0
   spi_send(CMD_FILELOADER, 0, 0);
@@ -357,7 +357,7 @@ void app_file_loader_on_keyboard()
           if (!is_osd_hiding) {
             is_osd_hiding = true;
             hide_timer = ms_now();
-            zxosd.hideMenu();
+            osd_hide_menu();
           }
         }
 

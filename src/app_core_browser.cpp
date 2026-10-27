@@ -4,7 +4,7 @@
 #include "main.h"
 #include "FT812.h"
 #include "bitmaps.h"
-#include "OSD.h"
+#include "osd.h"
 #include "input/sega.h"
 #include "usb_hid_keys.h"
 #include <algorithm>
@@ -47,24 +47,24 @@ static int16_t hover = FT_HIT_NONE; // under the pointer at the last draw
 static bool setup_focus = false;    // the graphic browser: the keys are on the Setup button
 
 void app_core_browser_overlay() {
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.clear();
-  zxosd.header(core.build, core.id, HW_ID);
+  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+  osd_clear();
+  osd_header(core.build, core.id, HW_ID);
   print_time();
-  zxosd.setPos(0,5);
+  osd_set_pos(0,5);
   app_core_browser_menu(APP_COREBROWSER_MENU_OFFSET);  
   // footer
-  zxosd.line(21);
-  zxosd.setPos(0, 22); 
-  zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_FLASH); zxosd.print("S");
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK); zxosd.print("etup");
-  zxosd.setPos(29, 22); // right of the page number
-  zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_FLASH); zxosd.print("G");
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK); zxosd.print("UI");
-  zxosd.line(23);
-  zxosd.setPos(1,24); zxosd.print("Please use arrows to navigate");
-  zxosd.setPos(1,25); zxosd.print("Press Enter to load selection");
-  zxosd.update();
+  osd_line(21);
+  osd_set_pos(0, 22); 
+  osd_set_color(OSD_COLOR_CYAN_I, OSD_COLOR_FLASH); osd_print("S");
+  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK); osd_print("etup");
+  osd_set_pos(29, 22); // right of the page number
+  osd_set_color(OSD_COLOR_CYAN_I, OSD_COLOR_FLASH); osd_print("G");
+  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK); osd_print("UI");
+  osd_line(23);
+  osd_set_pos(1,24); osd_print("Please use arrows to navigate");
+  osd_set_pos(1,25); osd_print("Press Enter to load selection");
+  osd_update();
 }
 
 void app_core_browser_menu(uint8_t vpos) {
@@ -75,34 +75,34 @@ void app_core_browser_menu(uint8_t vpos) {
   uint8_t core_fill = core_page*core_page_size;
   uint8_t pos = vpos;
   for(uint8_t i=core_from; i < core_to; i++) {
-    zxosd.setPos(0, pos);
+    osd_set_pos(0, pos);
     if (core_sel == i) {
-      zxosd.setColor(OSD::COLOR_BLACK, OSD::COLOR_WHITE);
+      osd_set_color(OSD_COLOR_BLACK, OSD_COLOR_WHITE);
     } else {
-      zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+      osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
     }
     char name[18]; memcpy(name, cores[i].name, 17); name[17] = '\0';
     char b[40];
     sprintf(b, "%-3d ", i+1); 
-    zxosd.print(b);
-    zxosd.print(name);
-    zxosd.print(cores[i].build);
-    zxosd.print(cores[i].flash ? "  F" : " SD");
+    osd_print(b);
+    osd_print(name);
+    osd_print(cores[i].build);
+    osd_print(cores[i].flash ? "  F" : " SD");
     pos++;
   }
   if (core_fill > core_to) {
     for (uint8_t i=core_to; i<core_fill; i++) {
-      zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+      osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
       for (uint8_t j=0; j<32; j++) {
-        zxosd.print(" ");
+        osd_print(" ");
       }
     }
   }
-  zxosd.setPos(8, vpos + core_page_size + 1); zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+  osd_set_pos(8, vpos + core_page_size + 1); osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
   char b[40];
   sprintf(b, "Page %02d of %02d", core_page, core_pages); 
-  zxosd.print(b);
-  zxosd.update();
+  osd_print(b);
+  osd_update();
 }
 
 // The background gradient as a bitmap in GRAM, after the kept frame of ft_mouse (0xF0400 + 8 KB):

@@ -67,11 +67,11 @@ static void osd_toggle() {
   if (core.type == CORE_TYPE_BOOT || core.type == CORE_TYPE_HIDDEN) return;
   if (!is_osd) {
     is_osd = true;
-    zxosd.showMenu();
+    osd_show_menu();
   } else if (!is_osd_hiding) {
     is_osd_hiding = true;
     hide_timer = ms_now();
-    zxosd.hideMenu();
+    osd_hide_menu();
   }
 }
 
@@ -338,14 +338,14 @@ bool on_global_hotkeys() {
         }
         core_send(i);
         if (!is_osd) {
-          zxosd.clear();
-          zxosd.logo(0, 0, HW_ID);
-          zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-          zxosd.setPos(0, 5);
-          zxosd.print(core.osd[i].name);
-          zxosd.setPos(0,6);
-          zxosd.print(core.osd[i].options[core.osd[i].val].name);
-          zxosd.update();
+          osd_clear();
+          osd_logo(0, 0, HW_ID);
+          osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+          osd_set_pos(0, 5);
+          osd_print(core.osd[i].name);
+          osd_set_pos(0,6);
+          osd_print(core.osd[i].options[core.osd[i].val].name);
+          osd_update();
           ui_popup_start(i);
         }
         if (core.osd[i].type == CORE_OSD_TYPE_SWITCH) {
@@ -357,7 +357,7 @@ bool on_global_hotkeys() {
     } else if (core.osd[i].type == CORE_OSD_TYPE_FILELOADER || core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER) {
       is_osd = true;
       curr_osd_item = i;
-      zxosd.showMenu();
+      osd_show_menu();
     }
     return true;
   }

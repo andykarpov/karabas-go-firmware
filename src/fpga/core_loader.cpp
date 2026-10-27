@@ -39,8 +39,8 @@ void core_ioctl_send(uint8_t slot, bool popup)
 {
   if (slot >= MAX_FILE_SLOTS) return;
   if (popup) {
-    zxosd.loadingPopup();
-    zxosd.update();
+    osd_loading_popup(0, 100);
+    osd_update();
   }
 
   // send ioctl slot id, file data for file loader type
@@ -74,8 +74,8 @@ void core_ioctl_send(uint8_t slot, bool popup)
   send_timer = ms_now();
   while (i < fsize && (c = sd_read(&file, buf, sizeof(buf))) > 0) {
     if (popup && i % 8192 == 0) {
-      zxosd.loadingPopup(i, fsize);
-      zxosd.update();
+      osd_loading_popup(i, fsize);
+      osd_update();
     }
     // bursts if the core supports them; classic frames for whatever they did not send
     int done = link_burst_write(CMD_IOCTL_DATA, (uint32_t) i, buf, c);
@@ -94,8 +94,8 @@ void core_ioctl_send(uint8_t slot, bool popup)
   d_println();
 
   if (popup) {
-    zxosd.loadingPopup(fsize, fsize);
-    zxosd.update();
+    osd_loading_popup(fsize, fsize);
+    osd_update();
   }
 }
 
@@ -188,28 +188,28 @@ void do_configure(const char* filename) {
   spi_send(CMD_HW_SETUP, 1, hw_setup.dvi_only); // dvi only flag
   // trigger font loader reset
   hang_step(0xa2);
-  zxosd.fontReset();
+  osd_font_reset();
   // send font data
   for (int i=0; i<OSD_FONT_SIZE; i++) {
-    zxosd.fontSend(osd_font[i]);
+    osd_font_send(osd_font[i]);
   }
   hang_step(0xa3);
   read_core(filename);
   hang_step(0xa4);
   if (!is_osd) {
-    zxosd.clear();
-    zxosd.logo(0,0, HW_ID);
-    zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-    zxosd.setPos(0,5);
-    zxosd.print("ROM ");
-    zxosd.update();
-    zxosd.showPopup();
+    osd_clear();
+    osd_logo(0,0, HW_ID);
+    osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+    osd_set_pos(0,5);
+    osd_print("ROM ");
+    osd_update();
+    osd_show_popup(0);
   }
   hang_step(0xa5);
   read_roms(filename);
   hang_step(0xa6);
   if (!is_osd) {
-    zxosd.hidePopup();
+    osd_hide_popup();
     osd_handle(true); // reinit osd
   }
   for (uint8_t i=0; i<7; i++) { // cleanup kbd: modifier + 6 keycodes
@@ -476,11 +476,11 @@ void read_core(const char* filename) {
     }
   }
 
-  zxosd.hidePopup();
+  osd_hide_popup();
   if (is_osd) {
-    zxosd.showMenu();
+    osd_show_menu();
   } else {
-    zxosd.hideMenu();
+    osd_hide_menu();
   }
 
   osd_handle(true);
@@ -507,11 +507,11 @@ void rom_send(uint32_t addr, const uint8_t* buf, size_t len) {
 }
 
 void rom_progress(uint32_t rom_idx, uint32_t sent) {
-  zxosd.setPos(4,5+rom_idx);
-  zxosd.print(rom_idx+1); zxosd.print(": ");
+  osd_set_pos(4,5+rom_idx);
+  osd_printf("%lu: ", (unsigned long) rom_idx + 1);
   char b[40];
-  sprintf(b, "%05lu", (unsigned long) sent); zxosd.print(b); zxosd.print(" ");
-  zxosd.update();
+  sprintf(b, "%05lu", (unsigned long) sent); osd_print(b); osd_print(" ");
+  osd_update();
 }
 
 #define ROM_CHUNK 4096           // SD read size per rom_send (bursts split it into 512-byte bursts)
@@ -579,10 +579,9 @@ void read_roms(const char* filename) {
         rom_progress(rom_idx, sent);
         sd_close(&file2);
       } else {
-        zxosd.setPos(4,5+rom_idx);
-        zxosd.print(rom_idx+1); zxosd.print(": ");
-        zxosd.print(" NO FILE");
-        zxosd.update();
+        osd_set_pos(4,5+rom_idx);
+        osd_printf("%lu:  NO FILE", (unsigned long) rom_idx + 1);
+        osd_update();
       }
     } else {
       file_seek(rom_pos + KG_ROM_BLOCK_HEADER_SIZE);
@@ -605,9 +604,9 @@ void read_roms(const char* filename) {
     rom_idx++;
     if (roms_len > 0) {
       // next rom
-      zxosd.setPos(0, 5+rom_idx);
-      zxosd.print("ROM ");
-      zxosd.update();
+      osd_set_pos(0, 5+rom_idx);
+      osd_print("ROM ");
+      osd_update();
     }
   }
   //delay(100);

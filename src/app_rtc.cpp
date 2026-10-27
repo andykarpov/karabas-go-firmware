@@ -2,7 +2,7 @@
 #include "config.h"
 #include "types.h"
 #include "main.h"
-#include "OSD.h"
+#include "osd.h"
 #include "usb_hid_keys.h"
 #include "input/sega.h"
 #include "masked_input.h"
@@ -45,41 +45,41 @@ static uint8_t focus_step(uint8_t f, int d) {
 }
 
 static void draw_field(uint8_t y, const char *label, const char *hint, const kg_field_t *f, bool focused) {
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.setPos(1, y); zxosd.print(label);
-  zxosd.setPos(FIELD_X, y);
+  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+  osd_set_pos(1, y); osd_print(label);
+  osd_set_pos(FIELD_X, y);
   for (uint8_t i = 0; i < f->len; i++) {
     if (focused && i == f->pos) {
-      zxosd.setColor(OSD::COLOR_BLACK, OSD::COLOR_CYAN_I);
+      osd_set_color(OSD_COLOR_BLACK, OSD_COLOR_CYAN_I);
     } else if (focused) {
-      zxosd.setColor(OSD::COLOR_BLACK, OSD::COLOR_WHITE);
+      osd_set_color(OSD_COLOR_BLACK, OSD_COLOR_WHITE);
     } else {
-      zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+      osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
     }
-    zxosd.print(f->text[i]);
+    osd_putc(f->text[i]);
   }
-  zxosd.setColor(OSD::COLOR_GREY, OSD::COLOR_BLACK);
-  zxosd.setPos(FIELD_X + f->len + 2, y); zxosd.print(hint);
+  osd_set_color(OSD_COLOR_GREY, OSD_COLOR_BLACK);
+  osd_set_pos(FIELD_X + f->len + 2, y); osd_print(hint);
 }
 
 // as a choice of Settings: '<' UTC+03:00 '>'
 static void draw_tz(bool focused) {
   char v[10];
   kg_tz_format(tz, v, sizeof(v));
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.setPos(1, ROW_TZ); zxosd.print("Zone");
+  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+  osd_set_pos(1, ROW_TZ); osd_print("Zone");
   // the value under the digits of the fields, the arrows around it
-  zxosd.fill(FIELD_X - 1, ROW_TZ, FIELD_X + 9, ROW_TZ, ' ');
+  osd_fill(FIELD_X - 1, ROW_TZ, FIELD_X + 9, ROW_TZ, ' ');
   if (focused) {
-    zxosd.setPos(FIELD_X - 1, ROW_TZ); zxosd.print("<");
-    zxosd.setPos(FIELD_X + 9, ROW_TZ); zxosd.print(">");
-    zxosd.setColor(OSD::COLOR_BLACK, OSD::COLOR_YELLOW_I);
+    osd_set_pos(FIELD_X - 1, ROW_TZ); osd_print("<");
+    osd_set_pos(FIELD_X + 9, ROW_TZ); osd_print(">");
+    osd_set_color(OSD_COLOR_BLACK, OSD_COLOR_YELLOW_I);
   } else {
-    zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_BLACK);
+    osd_set_color(OSD_COLOR_CYAN_I, OSD_COLOR_BLACK);
   }
-  zxosd.setPos(FIELD_X, ROW_TZ); zxosd.print("UTC"); zxosd.print(v);
-  zxosd.setColor(OSD::COLOR_GREY, OSD::COLOR_BLACK);
-  zxosd.setPos(FIELD_X + 11, ROW_TZ); zxosd.print("for NTP sync");
+  osd_set_pos(FIELD_X, ROW_TZ); osd_print("UTC"); osd_print(v);
+  osd_set_color(OSD_COLOR_GREY, OSD_COLOR_BLACK);
+  osd_set_pos(FIELD_X + 11, ROW_TZ); osd_print("for NTP sync");
 }
 
 static void draw() {
@@ -96,15 +96,15 @@ static void draw() {
   }
   const char *status = error ? error : ntp_sync_message();
   uint8_t ntp = ntp_sync_state();
-  zxosd.setColor(error || ntp == NTP_ERROR ? OSD::COLOR_RED_I : ntp == NTP_OK ? OSD::COLOR_GREEN_I : OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.fill(0, ROW_ERROR, 31, ROW_ERROR, ' ');
-  if (status) { zxosd.setPos(1, ROW_ERROR); zxosd.print(status); }
-  zxosd.setColor(OSD::COLOR_GREY, OSD::COLOR_BLACK);
-  zxosd.fill(0, ROW_HINT, 31, ROW_HINT, ' ');
-  zxosd.setPos(1, ROW_HINT);
-  if (focus == F_TZ) zxosd.print("UTC offset, no summer time");
-  else if (focus == F_SYNC) zxosd.print("The time from NTP over Wi-Fi");
-  zxosd.update();
+  osd_set_color(error || ntp == NTP_ERROR ? OSD_COLOR_RED_I : ntp == NTP_OK ? OSD_COLOR_GREEN_I : OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+  osd_fill(0, ROW_ERROR, 31, ROW_ERROR, ' ');
+  if (status) { osd_set_pos(1, ROW_ERROR); osd_print(status); }
+  osd_set_color(OSD_COLOR_GREY, OSD_COLOR_BLACK);
+  osd_fill(0, ROW_HINT, 31, ROW_HINT, ' ');
+  osd_set_pos(1, ROW_HINT);
+  if (focus == F_TZ) osd_print("UTC offset, no summer time");
+  else if (focus == F_SYNC) osd_print("The time from NTP over Wi-Fi");
+  osd_update();
 }
 
 // the fields from the RTC
@@ -117,13 +117,13 @@ static void init_fields() {
 }
 
 void app_rtc_overlay() {
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.clear();
-  zxosd.header(core.build, core.id, HW_ID);
+  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+  osd_clear();
+  osd_header(core.build, core.id, HW_ID);
   print_time();
-  zxosd.setPos(0, 5);
-  zxosd.print("Setup RTC");
-  zxosd.line(6);
+  osd_set_pos(0, 5);
+  osd_print("Setup RTC");
+  osd_line(6);
 
   init_fields();
   focus = F_DATE;
@@ -132,10 +132,10 @@ void app_rtc_overlay() {
   ntp_sync_cancel();
 
   // footer
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.line(23);
-  zxosd.setPos(1, 24); zxosd.print("Digits: edit, Up/Down: next");
-  zxosd.setPos(1, 25); zxosd.print("Enter: OK, Esc: cancel");
+  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+  osd_line(23);
+  osd_set_pos(1, 24); osd_print("Digits: edit, Up/Down: next");
+  osd_set_pos(1, 25); osd_print("Enter: OK, Esc: cancel");
   draw();
 }
 

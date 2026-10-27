@@ -2,7 +2,7 @@
 #include "config.h"
 #include "types.h"
 #include "main.h"
-#include "OSD.h"
+#include "osd.h"
 #include "usb_hid_keys.h"
 #include "input/sega.h"
 #include "ui/settings_items.h"
@@ -47,51 +47,51 @@ static bool mx_page;     // the Matrix effects page is shown
 static uint8_t mx_focus; // its setting with the focus
 
 static void draw_item(uint8_t id, uint8_t row, bool focused) {
-  zxosd.setColor(focused ? OSD::COLOR_YELLOW_I : OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.setPos(LABEL_X, row); zxosd.print(id == SET_FT ? "Enabled" : settings[id].label);
+  osd_set_color(focused ? OSD_COLOR_YELLOW_I : OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+  osd_set_pos(LABEL_X, row); osd_print(id == SET_FT ? "Enabled" : settings[id].label);
 
   char value[VALUE_WIDTH + 1];
   settings_value_text(id, s, value, sizeof(value));
   if (settings[id].kind == SET_KIND_PAGE) strlcpy(value, "...", sizeof(value));
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.fill(VALUE_X, row, VALUE_X + VALUE_WIDTH + 1, row, ' ');
+  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+  osd_fill(VALUE_X, row, VALUE_X + VALUE_WIDTH + 1, row, ' ');
   if (focused && settings[id].kind != SET_KIND_PAGE) {
-    zxosd.setPos(VALUE_X, row); zxosd.print("<");
-    zxosd.setPos(VALUE_X + VALUE_WIDTH + 1, row); zxosd.print(">");
-    zxosd.setColor(OSD::COLOR_BLACK, OSD::COLOR_YELLOW_I);
+    osd_set_pos(VALUE_X, row); osd_print("<");
+    osd_set_pos(VALUE_X + VALUE_WIDTH + 1, row); osd_print(">");
+    osd_set_color(OSD_COLOR_BLACK, OSD_COLOR_YELLOW_I);
   } else if (focused) {
-    zxosd.setColor(OSD::COLOR_BLACK, OSD::COLOR_YELLOW_I);
+    osd_set_color(OSD_COLOR_BLACK, OSD_COLOR_YELLOW_I);
   } else {
-    zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_BLACK);
+    osd_set_color(OSD_COLOR_CYAN_I, OSD_COLOR_BLACK);
   }
-  zxosd.setPos(VALUE_X + 1, row); zxosd.print(value);
+  osd_set_pos(VALUE_X + 1, row); osd_print(value);
 }
 
 static void section(uint8_t row, const char *title) {
-  zxosd.setColor(OSD::COLOR_GREEN_I, OSD::COLOR_BLACK);
-  zxosd.setPos(1, row); zxosd.print(title);
+  osd_set_color(OSD_COLOR_GREEN_I, OSD_COLOR_BLACK);
+  osd_set_pos(1, row); osd_print(title);
 }
 
 static void footer(const char *line1, const char *line2) {
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.fill(0, 24, 31, 25, ' ');
-  zxosd.setPos(1, 24); zxosd.print(line1);
-  zxosd.setPos(1, 25); zxosd.print(line2);
+  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+  osd_fill(0, 24, 31, 25, ' ');
+  osd_set_pos(1, 24); osd_print(line1);
+  osd_set_pos(1, 25); osd_print(line2);
 }
 
 // the sections and the footer of the main page or of the Matrix effects page
 static void draw_frame() {
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.fill(0, 5, 31, 5, ' ');
-  zxosd.fill(0, 7, 31, 22, ' ');
-  zxosd.setPos(0, 5);
+  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+  osd_fill(0, 5, 31, 5, ' ');
+  osd_fill(0, 7, 31, 22, ' ');
+  osd_set_pos(0, 5);
   if (mx_page) {
-    zxosd.print("Settings > Matrix effects");
+    osd_print("Settings > Matrix effects");
     section(ROW_CLOCK, "Clock");
     section(ROW_METERS, "Audio meters");
     footer("Up/Down: select, Left/Right:", "change, Esc: back");
   } else {
-    zxosd.print("Settings");
+    osd_print("Settings");
     section(ROW_SYSTEM, "System");
     section(ROW_AUTOLOAD, "Autoload");
     section(ROW_FT, "Graphic menu (FT812)");
@@ -112,12 +112,12 @@ static void draw() {
   }
   settings_preview(mx_page ? hint_id : SET_COUNT);
 
-  zxosd.setColor(error ? OSD::COLOR_RED_I : OSD::COLOR_GREY, OSD::COLOR_BLACK);
-  zxosd.fill(0, ROW_HINT, 31, ROW_HINT, ' ');
-  zxosd.setPos(1, ROW_HINT);
-  if (error) zxosd.print(error);
-  else if (hint_id < SET_COUNT) zxosd.print(settings[hint_id].hint);
-  zxosd.update();
+  osd_set_color(error ? OSD_COLOR_RED_I : OSD_COLOR_GREY, OSD_COLOR_BLACK);
+  osd_fill(0, ROW_HINT, 31, ROW_HINT, ' ');
+  osd_set_pos(1, ROW_HINT);
+  if (error) osd_print(error);
+  else if (hint_id < SET_COUNT) osd_print(settings[hint_id].hint);
+  osd_update();
 }
 
 static void show_page(bool mx) {
@@ -128,12 +128,12 @@ static void show_page(bool mx) {
 }
 
 void app_settings_overlay() {
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.clear();
-  zxosd.header(core.build, core.id, HW_ID);
+  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+  osd_clear();
+  osd_header(core.build, core.id, HW_ID);
   print_time();
-  zxosd.line(6);
-  zxosd.line(23);
+  osd_line(6);
+  osd_line(23);
 
   s = hw_setup;
   settings_begin(s);

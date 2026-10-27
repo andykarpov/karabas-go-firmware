@@ -6,7 +6,7 @@
 #include "main.h"
 #include "FT812.h"
 #include "bitmaps.h"
-#include "OSD.h"
+#include "osd.h"
 
 extern core_list_item_t cores[MAX_CORES];
 extern uint8_t cores_len;

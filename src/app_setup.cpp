@@ -2,7 +2,7 @@
 #include "config.h"
 #include "types.h"
 #include "main.h"
-#include "OSD.h"
+#include "osd.h"
 #include "usb_hid_keys.h"
 #include "input/sega.h"
 #include <algorithm>
@@ -49,35 +49,35 @@ static const setup_item_t *setup_item(uint8_t pos) {
 
 static void setup_menu_draw() {
   char line[33];
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.setPos(0, SETUP_MENU_TOP);
+  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+  osd_set_pos(0, SETUP_MENU_TOP);
   snprintf(line, sizeof(line), "%-32s", "Setup");
-  zxosd.print(line);
+  osd_print(line);
   uint8_t n = setup_count();
   for (uint8_t pos = 0; pos < n; pos++) {
     bool sel = pos == setup_sel;
-    zxosd.setPos(0, SETUP_MENU_TOP + 2 + pos);
-    zxosd.setColor(sel ? OSD::COLOR_BLACK : OSD::COLOR_WHITE, sel ? OSD::COLOR_WHITE : OSD::COLOR_BLACK);
+    osd_set_pos(0, SETUP_MENU_TOP + 2 + pos);
+    osd_set_color(sel ? OSD_COLOR_BLACK : OSD_COLOR_WHITE, sel ? OSD_COLOR_WHITE : OSD_COLOR_BLACK);
     snprintf(line, sizeof(line), "%-32s", setup_item(pos)->label);
-    zxosd.print(line);
+    osd_print(line);
   }
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
 }
 
 void app_setup_overlay() {
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.clear();
-  zxosd.header(core.build, core.id, HW_ID);
+  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+  osd_clear();
+  osd_header(core.build, core.id, HW_ID);
   print_time();
 
   if (setup_sel >= setup_count()) setup_sel = 0;
   setup_menu_draw();
 
   // footer
-  zxosd.line(23);
-  zxosd.setPos(1,24); zxosd.print("Please use arrows to navigate");
-  zxosd.setPos(1,25); zxosd.print("Press Esc to exit setup");
-  zxosd.update();
+  osd_line(23);
+  osd_set_pos(1,24); osd_print("Please use arrows to navigate");
+  osd_set_pos(1,25); osd_print("Press Esc to exit setup");
+  osd_update();
 }
 
 void app_setup_on_keyboard() 
@@ -103,5 +103,5 @@ void app_setup_on_keyboard()
   }
 
   setup_menu_draw();
-  zxosd.update();
+  osd_update();
 }

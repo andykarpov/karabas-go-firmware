@@ -140,7 +140,7 @@ static void karabas_setup()
   oled_begin();
 
   zxrtc.begin(spi_send, on_time);
-  zxosd.begin(spi_send);
+  osd_begin(spi_send);
   ft.begin(spi_send);
 
   storage_begin();

@@ -2,7 +2,7 @@
 #include "config.h"
 #include "types.h"
 #include "main.h"
-#include "OSD.h"
+#include "osd.h"
 #include "usb_hid_keys.h"
 #include "input/sega.h"
 #include "ps2kbd.h"
@@ -229,27 +229,27 @@ void app_wifi_tick() {
 static void print_text(const char *s, uint8_t width) {
   for (uint8_t i = 0; s[i] && i < width; i++) {
     char c = s[i];
-    zxosd.print((c >= 32 && c < 127) ? c : '?');
+    osd_putc((c >= 32 && c < 127) ? c : '?');
   }
 }
 
-static void draw_info(uint8_t y, const char *label, const char *value, uint8_t color = OSD::COLOR_CYAN_I) {
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.setPos(1, y); zxosd.print(label);
-  zxosd.setColor(color, OSD::COLOR_BLACK);
-  zxosd.setPos(10, y); print_text(value, 21);
+static void draw_info(uint8_t y, const char *label, const char *value, uint8_t color = OSD_COLOR_CYAN_I) {
+  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+  osd_set_pos(1, y); osd_print(label);
+  osd_set_color(color, OSD_COLOR_BLACK);
+  osd_set_pos(10, y); print_text(value, 21);
 }
 
 static void draw_message(uint8_t y, const char *msg, uint8_t color) {
-  zxosd.setColor(color, OSD::COLOR_BLACK);
-  zxosd.setPos(1, y); print_text(msg, 30);
+  osd_set_color(color, OSD_COLOR_BLACK);
+  osd_set_pos(1, y); print_text(msg, 30);
 }
 
 static void draw_footer(const char *line1, const char *line2) {
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.fill(0, 24, 31, 25, ' ');
-  zxosd.setPos(1, 24); zxosd.print(line1);
-  zxosd.setPos(1, 25); zxosd.print(line2);
+  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+  osd_fill(0, 24, 31, 25, ' ');
+  osd_set_pos(1, 24); osd_print(line1);
+  osd_set_pos(1, 25); osd_print(line2);
 }
 
 // the text field: the tail that fits, a cyan cursor at the end
@@ -257,18 +257,18 @@ static void draw_field(uint8_t y, const char *text, bool hidden) {
   const uint8_t width = 30;
   size_t len = strlen(text);
   size_t from = len >= width ? len - width + 1 : 0;
-  zxosd.setColor(OSD::COLOR_BLACK, OSD::COLOR_WHITE);
-  zxosd.setPos(1, y);
+  osd_set_color(OSD_COLOR_BLACK, OSD_COLOR_WHITE);
+  osd_set_pos(1, y);
   for (size_t i = from; i < from + width; i++) {
     if (i == len) {
-      zxosd.setColor(OSD::COLOR_BLACK, OSD::COLOR_CYAN_I);
-      zxosd.print(' ');
-      zxosd.setColor(OSD::COLOR_BLACK, OSD::COLOR_WHITE);
+      osd_set_color(OSD_COLOR_BLACK, OSD_COLOR_CYAN_I);
+      osd_putc(' ');
+      osd_set_color(OSD_COLOR_BLACK, OSD_COLOR_WHITE);
     } else if (i < len) {
       char c = hidden ? '*' : text[i];
-      zxosd.print((c >= 32 && c < 127) ? c : '?');
+      osd_putc((c >= 32 && c < 127) ? c : '?');
     } else {
-      zxosd.print(' ');
+      osd_putc(' ');
     }
   }
 }
@@ -276,7 +276,7 @@ static void draw_field(uint8_t y, const char *text, bool hidden) {
 static void draw_list() {
   ui_button(1, ROW_RESCAN, BTN_WIDTH, "Rescan", on_rescan || aps_len == 0);
   if (aps_len == 0) {
-    draw_message(LIST_ROW, "No networks found", OSD::COLOR_YELLOW_I);
+    draw_message(LIST_ROW, "No networks found", OSD_COLOR_YELLOW_I);
     return;
   }
   if (sel < top) top = sel;
@@ -284,39 +284,39 @@ static void draw_list() {
   for (uint8_t row = 0; row < LIST_ROWS && top + row < aps_len; row++) {
     const kg_wifi_ap_t &ap = aps[top + row];
     bool focused = top + row == sel && !on_rescan;
-    zxosd.setColor(focused ? OSD::COLOR_BLACK : OSD::COLOR_WHITE, focused ? OSD::COLOR_YELLOW_I : OSD::COLOR_BLACK);
-    zxosd.fill(0, LIST_ROW + row, 31, LIST_ROW + row, ' ');
-    zxosd.setPos(0, LIST_ROW + row);
-    zxosd.print(strcmp(ap.ssid, cur_ssid) == 0 ? '>' : ' ');
-    zxosd.printf("%4d %c ", ap.rssi, ap.ecn ? '*' : ' ');
+    osd_set_color(focused ? OSD_COLOR_BLACK : OSD_COLOR_WHITE, focused ? OSD_COLOR_YELLOW_I : OSD_COLOR_BLACK);
+    osd_fill(0, LIST_ROW + row, 31, LIST_ROW + row, ' ');
+    osd_set_pos(0, LIST_ROW + row);
+    osd_putc(strcmp(ap.ssid, cur_ssid) == 0 ? '>' : ' ');
+    osd_printf("%4d %c ", ap.rssi, ap.ecn ? '*' : ' ');
     print_text(ap.ssid, 24);
   }
   if (aps_len > LIST_ROWS) {
-    zxosd.setColor(OSD::COLOR_GREY, OSD::COLOR_BLACK);
-    zxosd.setPos(24, 7); zxosd.printf("%2u/%-2u", sel + 1, aps_len);
+    osd_set_color(OSD_COLOR_GREY, OSD_COLOR_BLACK);
+    osd_set_pos(24, 7); osd_printf("%2u/%-2u", sel + 1, aps_len);
   }
 }
 
 static void draw() {
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.fill(0, 7, 31, 22, ' ');
+  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+  osd_fill(0, 7, 31, 22, ' ');
   char buf[40];
 
   switch (screen) {
     case W_INIT:
-      draw_message(8, "Talking to ESP8266...", OSD::COLOR_YELLOW_I);
+      draw_message(8, "Talking to ESP8266...", OSD_COLOR_YELLOW_I);
       draw_footer("Please wait", "Esc: back");
       break;
     case W_NO_ESP:
-      draw_message(8, "ESP8266 is not responding", OSD::COLOR_RED_I);
+      draw_message(8, "ESP8266 is not responding", OSD_COLOR_RED_I);
       ui_button(1, 11, BTN_WIDTH, "Retry", true);
       draw_footer("Enter: retry", "Esc: back");
       break;
     case W_STATUS:
       draw_info(8, "Module", version[0] ? version : "?");
       draw_info(9, "CTS", cts == CTS_ON ? "on" : cts == CTS_OFF ? "could not turn on" : "unknown",
-                cts == CTS_ON ? OSD::COLOR_CYAN_I : OSD::COLOR_RED_I);
-      draw_info(10, "Network", cur_ssid[0] ? cur_ssid : "not connected", cur_ssid[0] ? OSD::COLOR_CYAN_I : OSD::COLOR_GREY);
+                cts == CTS_ON ? OSD_COLOR_CYAN_I : OSD_COLOR_RED_I);
+      draw_info(10, "Network", cur_ssid[0] ? cur_ssid : "not connected", cur_ssid[0] ? OSD_COLOR_CYAN_I : OSD_COLOR_GREY);
       draw_info(11, "IP", ip[0] && strcmp(ip, "0.0.0.0") != 0 ? ip : "-");
       {
         uint8_t ids[M_COUNT], n = menu_items(ids);
@@ -325,66 +325,66 @@ static void draw() {
       draw_footer("Enter: select", "Esc: back");
       break;
     case W_SCAN:
-      draw_message(8, "Scanning...", OSD::COLOR_YELLOW_I);
+      draw_message(8, "Scanning...", OSD_COLOR_YELLOW_I);
       draw_footer("Please wait", "Esc: back");
       break;
     case W_LIST:
-      zxosd.setColor(OSD::COLOR_GREY, OSD::COLOR_BLACK);
-      zxosd.setPos(1, 7); zxosd.print("dBm   Network");
+      osd_set_color(OSD_COLOR_GREY, OSD_COLOR_BLACK);
+      osd_set_pos(1, 7); osd_print("dBm   Network");
       draw_list();
       draw_footer("Enter: connect, R: rescan", "* password, > joined; Esc: back");
       break;
     case W_SSID:
-      draw_message(8, "Network name:", OSD::COLOR_WHITE);
+      draw_message(8, "Network name:", OSD_COLOR_WHITE);
       draw_field(9, ssid, false);
       draw_footer("Enter: next", "Esc: back");
       break;
     case W_PASS:
-      zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-      zxosd.setPos(1, 8); zxosd.print("Network:");
-      zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_BLACK);
-      zxosd.setPos(10, 8); print_text(ssid, 21);
-      draw_message(10, "Password:", OSD::COLOR_WHITE);
+      osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+      osd_set_pos(1, 8); osd_print("Network:");
+      osd_set_color(OSD_COLOR_CYAN_I, OSD_COLOR_BLACK);
+      osd_set_pos(10, 8); print_text(ssid, 21);
+      draw_message(10, "Password:", OSD_COLOR_WHITE);
       draw_field(11, pass, !show_pass);
       draw_footer("Enter: connect, Esc: back", show_pass ? "Tab: hide the password" : "Tab: show the password");
       break;
     case W_JOIN:
       snprintf(buf, sizeof(buf), "Connecting to %s...", ssid);
-      draw_message(8, buf, OSD::COLOR_YELLOW_I);
+      draw_message(8, buf, OSD_COLOR_YELLOW_I);
       draw_footer("Please wait", "");
       break;
     case W_RESULT:
       if (result_error) {
-        draw_message(8, result_error, OSD::COLOR_RED_I);
+        draw_message(8, result_error, OSD_COLOR_RED_I);
       } else {
-        draw_message(8, "Connected", OSD::COLOR_GREEN_I);
+        draw_message(8, "Connected", OSD_COLOR_GREEN_I);
         draw_info(10, "Network", cur_ssid);
         draw_info(11, "IP", ip[0] ? ip : "-");
-        draw_message(13, "The ESP8266 remembers it", OSD::COLOR_GREY);
+        draw_message(13, "The ESP8266 remembers it", OSD_COLOR_GREY);
       }
       ui_button(1, 16, BTN_WIDTH, "OK", true);
       draw_footer("Enter: back", "");
       break;
     case W_FORGET:
-      draw_message(8, "Forget this network?", OSD::COLOR_YELLOW_I);
+      draw_message(8, "Forget this network?", OSD_COLOR_YELLOW_I);
       draw_info(10, "Network", cur_ssid);
-      draw_message(12, "The ESP8266 will not join it", OSD::COLOR_GREY);
+      draw_message(12, "The ESP8266 will not join it", OSD_COLOR_GREY);
       ui_button(1, 15, BTN_WIDTH, "Forget", sel == 0);
       ui_button(12, 15, BTN_WIDTH, "Cancel", sel == 1);
       draw_footer("Left/Right: select", "Enter: OK, Esc: back");
       break;
     case W_UPD_ASK:
       if (restoring) {
-        draw_message(8, "Erase the ESP8266 settings?", OSD::COLOR_YELLOW_I);
-        draw_message(10, "For modules that do not keep", OSD::COLOR_GREY);
-        draw_message(11, "their settings. It forgets", OSD::COLOR_GREY);
-        draw_message(12, "the network: join it again.", OSD::COLOR_GREY);
+        draw_message(8, "Erase the ESP8266 settings?", OSD_COLOR_YELLOW_I);
+        draw_message(10, "For modules that do not keep", OSD_COLOR_GREY);
+        draw_message(11, "their settings. It forgets", OSD_COLOR_GREY);
+        draw_message(12, "the network: join it again.", OSD_COLOR_GREY);
       } else {
-        draw_message(8, "Update the ESP8266 firmware?", OSD::COLOR_YELLOW_I);
+        draw_message(8, "Update the ESP8266 firmware?", OSD_COLOR_YELLOW_I);
         draw_info(10, "Module", version[0] ? version : "?");
-        draw_message(12, "From the Espressif server,", OSD::COLOR_GREY);
-        draw_message(13, "about half a minute.", OSD::COLOR_GREY);
-        draw_message(14, "Do not power off the board.", OSD::COLOR_GREY);
+        draw_message(12, "From the Espressif server,", OSD_COLOR_GREY);
+        draw_message(13, "about half a minute.", OSD_COLOR_GREY);
+        draw_message(14, "Do not power off the board.", OSD_COLOR_GREY);
       }
       ui_button(1, 17, BTN_WIDTH, restoring ? "Erase" : "Update", sel == 0);
       ui_button(12, 17, BTN_WIDTH, "Cancel", sel == 1);
@@ -393,28 +393,28 @@ static void draw() {
     case W_UPD:
       upd_percent = esp_update_progress();
       upd_message = esp_update_message();
-      draw_message(8, upd_message ? upd_message : "", OSD::COLOR_YELLOW_I);
-      zxosd.progress(1, 10, 26, upd_percent, 100, OSD::COLOR_CYAN_I, OSD::COLOR_BLACK);
-      zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-      zxosd.setPos(28, 10); zxosd.printf("%3u%%", upd_percent);
-      draw_message(12, "Do not power off the board", OSD::COLOR_GREY);
+      draw_message(8, upd_message ? upd_message : "", OSD_COLOR_YELLOW_I);
+      osd_progress(1, 10, 26, upd_percent, 100, OSD_COLOR_CYAN_I, OSD_COLOR_BLACK);
+      osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+      osd_set_pos(28, 10); osd_printf("%3u%%", upd_percent);
+      draw_message(12, "Do not power off the board", OSD_COLOR_GREY);
       draw_footer("Please wait", "");
       break;
     case W_UPD_END: {
       bool ok = esp_update_poll() == ESP_UPD_OK;
-      draw_message(8, esp_update_message(), ok ? OSD::COLOR_GREEN_I : OSD::COLOR_RED_I);
+      draw_message(8, esp_update_message(), ok ? OSD_COLOR_GREEN_I : OSD_COLOR_RED_I);
       if (!restoring) {
         draw_info(10, ok ? "Was" : "Module", old_version[0] ? old_version : "?");
         if (ok) draw_info(11, "Now", esp_update_version()[0] ? esp_update_version() : "?");
       } else if (ok) {
-        draw_message(10, "Join the network again", OSD::COLOR_GREY);
+        draw_message(10, "Join the network again", OSD_COLOR_GREY);
       }
       ui_button(1, 14, BTN_WIDTH, "OK", true);
       draw_footer("Enter: back", "");
       break;
     }
   }
-  zxosd.update();
+  osd_update();
 }
 
 // ---------------- screen ----------------
@@ -428,14 +428,14 @@ static void start_init() {
 }
 
 void app_wifi_overlay() {
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.clear();
-  zxosd.header(core.build, core.id, HW_ID);
+  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+  osd_clear();
+  osd_header(core.build, core.id, HW_ID);
   print_time();
-  zxosd.setPos(0, 5);
-  zxosd.print("Setup Wi-Fi");
-  zxosd.line(6);
-  zxosd.line(23);
+  osd_set_pos(0, 5);
+  osd_print("Setup Wi-Fi");
+  osd_line(6);
+  osd_line(23);
 
   hid_kbd_report_sync();
   prev_kbd = usb_keyboard_report; // the key that opened the screen is not a press here

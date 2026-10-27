@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include "types.h"
 #include "config.h"
-#include "OSD.h"
+#include "osd.h"
 #include "usb_hid_keys.h"
 #include "input/sega.h"
 #include "app_core.h"
@@ -165,12 +165,12 @@ void app_core_overlay(bool force)
   osd_state = state_main;
 
   // disable popup in overlay mode
-  zxosd.hidePopup();
+  osd_hide_popup();
 
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.clear();
+  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+  osd_clear();
 
-  zxosd.header(core.build, core.id, HW_ID);
+  osd_header(core.build, core.id, HW_ID);
   print_time();
 
   if (force) {
@@ -180,26 +180,26 @@ void app_core_overlay(bool force)
 
   // footer
   if (!is_filebrowser) {
-    zxosd.setPos(0, 23);
-    zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_FLASH); zxosd.print("S");
-    zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK); zxosd.print("etup");
-    zxosd.print(" ");
-    zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_FLASH); zxosd.print("A");
-    zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK); zxosd.print("bout");
+    osd_set_pos(0, 23);
+    osd_set_color(OSD_COLOR_CYAN_I, OSD_COLOR_FLASH); osd_print("S");
+    osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK); osd_print("etup");
+    osd_print(" ");
+    osd_set_color(OSD_COLOR_CYAN_I, OSD_COLOR_FLASH); osd_print("A");
+    osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK); osd_print("bout");
     // file mounter items: delete ejects the image
     for (uint8_t i=0; i<core.osd_len; i++) {
       if (core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER) {
-        zxosd.print(" ");
-        zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_FLASH); zxosd.print("Del");
-        zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK); zxosd.print(" eject");
+        osd_print(" ");
+        osd_set_color(OSD_COLOR_CYAN_I, OSD_COLOR_FLASH); osd_print("Del");
+        osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK); osd_print(" eject");
         break;
       }
     }
   }
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK); 
-  zxosd.line(24);
-  zxosd.setPos(0,25); zxosd.print("Press Menu+Esc to toggle OSD");
-  zxosd.update();
+  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK); 
+  osd_line(24);
+  osd_set_pos(0,25); osd_print("Press Menu+Esc to toggle OSD");
+  osd_update();
 }
 
 void app_core_menu(uint8_t vpos) {
@@ -207,16 +207,16 @@ void app_core_menu(uint8_t vpos) {
     const char *name = core.osd[i].name;
     const char *hotkey = core.osd[i].hotkey;
     char text[33];
-    zxosd.setPos(0, i+vpos);
-    zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+    osd_set_pos(0, i+vpos);
+    osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
     // text line (32 chars)
     if (core.osd[i].type == CORE_OSD_TYPE_TEXT) {
       snprintf(text, sizeof(text), "%s%s", name, hotkey);
-      zxosd.print(text);
+      osd_print(text);
     // normal osd line (name, option, hotkey)
     } else {
       snprintf(text, 11, "%s", name);
-      zxosd.print(text);
+      osd_print(text);
 
       char option[11];
       if (core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[i].type == CORE_OSD_TYPE_FILELOADER) {
@@ -231,29 +231,29 @@ void app_core_menu(uint8_t vpos) {
       } else {
         snprintf(option, sizeof(option), "%-10s", core.osd[i].options[core.osd[i].val].name);
       }
-      zxosd.setPos(11, i+vpos);
+      osd_set_pos(11, i+vpos);
       if (curr_osd_item == i) {
-        zxosd.setColor(OSD::COLOR_BLACK, OSD::COLOR_YELLOW_I);
+        osd_set_color(OSD_COLOR_BLACK, OSD_COLOR_YELLOW_I);
       } else {
-        zxosd.setColor(OSD::COLOR_YELLOW_I, OSD::COLOR_BLACK);
+        osd_set_color(OSD_COLOR_YELLOW_I, OSD_COLOR_BLACK);
       }
-      zxosd.print(option);
+      osd_print(option);
 
-      zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_BLACK);
+      osd_set_color(OSD_COLOR_CYAN_I, OSD_COLOR_BLACK);
       if (core.osd[i].options_len > 0 || core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[i].type == CORE_OSD_TYPE_FILELOADER) {
-        zxosd.setPos(22, i+vpos);
+        osd_set_pos(22, i+vpos);
         snprintf(text, 11, "%s", hotkey);
-        zxosd.print(text);
+        osd_print(text);
       } else {
-        zxosd.setPos(11, i+vpos);
-        zxosd.print(hotkey);
+        osd_set_pos(11, i+vpos);
+        osd_print(hotkey);
       }
     }
   }
-  if (core.osd_len <= 19) zxosd.fill(0, 23, 31, 23, ' ');
-  if (core.osd_len <= 18) zxosd.fill(0, 22, 31, 22, ' ');
-  if (core.osd_len <= 17) zxosd.fill(0, 21, 31, 21, ' ');
-  zxosd.update();
+  if (core.osd_len <= 19) osd_fill(0, 23, 31, 23, ' ');
+  if (core.osd_len <= 18) osd_fill(0, 22, 31, 22, ' ');
+  if (core.osd_len <= 17) osd_fill(0, 21, 31, 21, ' ');
+  osd_update();
 }
 
 void app_core_save(uint8_t pos)
@@ -499,7 +499,7 @@ void app_core_on_keyboard() {
     // cls screen while changing screen mode
     if (prev_is_filebrowser != is_filebrowser) {
       prev_is_filebrowser = is_filebrowser;
-      zxosd.fill(0, APP_COREBROWSER_MENU_OFFSET, 31, APP_COREBROWSER_MENU_OFFSET + 16, ' ');
+      osd_fill(0, APP_COREBROWSER_MENU_OFFSET, 31, APP_COREBROWSER_MENU_OFFSET + 16, ' ');
     }
     if (is_filebrowser) {
       if (filebrowser_slot == -1 || filebrowser_slot != core.osd[curr_osd_item].slot_id) {
@@ -520,7 +520,7 @@ void app_core_on_keyboard() {
   if (core.osd_need_save) {
     app_core_save(curr_osd_item);
   }
-  zxosd.update();
+  osd_update();
 }
 
 int app_core_init_filebrowser() {
@@ -630,11 +630,11 @@ void app_core_filebrowser(uint8_t vpos) {
 
   if (files_len > 0) {
     for(uint16_t i=file_from; i < file_to; i++) {
-      zxosd.setPos(0, pos);
+      osd_set_pos(0, pos);
       if (file_sel == i) {
-        zxosd.setColor(OSD::COLOR_BLACK, OSD::COLOR_WHITE);
+        osd_set_color(OSD_COLOR_BLACK, OSD_COLOR_WHITE);
       } else {
-        zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+        osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
       }
       // display 32 chars
       char name[33]; 
@@ -663,12 +663,12 @@ void app_core_filebrowser(uint8_t vpos) {
         }
       }
 
-      zxosd.print(name);
+      osd_print(name);
       // fill name with spaces
       uint8_t l = strlen(name);
       if (l < 32) {
         for (uint8_t ll=l; ll<32; ll++) {
-          zxosd.print(" ");
+          osd_print(" ");
         }
       }
       pos++;
@@ -679,29 +679,29 @@ void app_core_filebrowser(uint8_t vpos) {
   }
   if (file_fill > file_to) {
     for (uint16_t i=file_to; i<file_fill; i++) {
-      zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+      osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
       for (uint16_t j=0; j<32; j++) {
-        zxosd.print(" ");
+        osd_print(" ");
       }
     }
   }
   // display current dir
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.line(21);
-  zxosd.fill(0, vpos + file_page_size + 1, 31, vpos + file_page_size + 1, ' ');
-  zxosd.setPos(8, vpos + file_page_size + 1); 
+  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+  osd_line(21);
+  osd_fill(0, vpos + file_page_size + 1, 31, vpos + file_page_size + 1, ' ');
+  osd_set_pos(8, vpos + file_page_size + 1); 
   char dir[21];
   snprintf(dir, sizeof(dir), "%s", file_slots[core.osd[curr_osd_item].slot_id].dir);
-  zxosd.print("Dir "); zxosd.print(dir);
+  osd_print("Dir "); osd_print(dir);
   // display pager
-  zxosd.setPos(0, vpos + file_page_size + 2); zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.print("        ");
-  zxosd.setPos(8, vpos + file_page_size + 2); zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
+  osd_set_pos(0, vpos + file_page_size + 2); osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+  osd_print("        ");
+  osd_set_pos(8, vpos + file_page_size + 2); osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
   char b[40];
   sprintf(b, "Page %03d of %03d", file_page, file_pages); 
-  zxosd.print(b);
+  osd_print(b);
 
-  zxosd.update();
+  osd_update();
 }
 
 void app_core_on_select_file() {

@@ -2,7 +2,7 @@
 #include "config.h"
 #include "types.h"
 #include "main.h"
-#include "OSD.h"
+#include "osd.h"
 #include "app_msc.h"
 #include "app_core_browser.h"
 
@@ -59,18 +59,18 @@ void app_msc_overlay() {
     return;
   }
 
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.clear();
-  zxosd.header(core.build, core.id, HW_ID);
-  zxosd.setPos(0, 5);
-  zxosd.print("USB mass storage");
-  zxosd.line(6);
-  zxosd.setColor(OSD::COLOR_CYAN_I, OSD::COLOR_BLACK);
+  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+  osd_clear();
+  osd_header(core.build, core.id, HW_ID);
+  osd_set_pos(0, 5);
+  osd_print("USB mass storage");
+  osd_line(6);
+  osd_set_color(OSD_COLOR_CYAN_I, OSD_COLOR_BLACK);
   const char *const *l = msc_lines();
   for (uint8_t i = 0; i < MSC_LINES; i++) {
-    zxosd.setPos(0, 9 + i); zxosd.print(l[i]);
+    osd_set_pos(0, 9 + i); osd_print(l[i]);
   }
-  zxosd.update();
+  osd_update();
 }
 
 void app_msc_on_keyboard() {

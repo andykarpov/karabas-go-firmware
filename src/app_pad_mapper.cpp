@@ -2,7 +2,7 @@
 #include "config.h"
 #include "types.h"
 #include "main.h"
-#include "OSD.h"
+#include "osd.h"
 #include "usb_hid_keys.h"
 #include "hid_driver.h"
 #include "hid_learn.h"
@@ -57,35 +57,35 @@ static void set_state(uint8_t s) {
 }
 
 static void draw_status(const char *line1, const char *line2 = "") {
-  zxosd.setColor(OSD::COLOR_YELLOW_I, OSD::COLOR_BLACK);
-  zxosd.fill(0, 8, 31, 9, ' ');
-  zxosd.setPos(0, 8); zxosd.print(line1);
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.setPos(0, 9); zxosd.print(line2);
+  osd_set_color(OSD_COLOR_YELLOW_I, OSD_COLOR_BLACK);
+  osd_fill(0, 8, 31, 9, ' ');
+  osd_set_pos(0, 8); osd_print(line1);
+  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+  osd_set_pos(0, 9); osd_print(line2);
 }
 
 static void draw_buttons() {
   for (uint8_t i = 0; i < HID_JOY_BUTTONS; i++) {
     bool current = (state == ST_PRESS || state == ST_RELEASE) && i == btn;
-    zxosd.setColor(current ? OSD::COLOR_BLACK : OSD::COLOR_WHITE, current ? OSD::COLOR_WHITE : OSD::COLOR_BLACK);
-    zxosd.fill(0, 11 + i, 31, 11 + i, ' ');
-    zxosd.setPos(1, 11 + i); zxosd.print(btn_names[i]);
-    zxosd.setPos(8, 11 + i);
+    osd_set_color(current ? OSD_COLOR_BLACK : OSD_COLOR_WHITE, current ? OSD_COLOR_WHITE : OSD_COLOR_BLACK);
+    osd_fill(0, 11 + i, 31, 11 + i, ' ');
+    osd_set_pos(1, 11 + i); osd_print(btn_names[i]);
+    osd_set_pos(8, 11 + i);
     if (mapped[i]) {
       char buf[24];
       hid_learn_format_rule(&rules[i], buf, sizeof(buf));
-      zxosd.print(buf);
+      osd_print(buf);
     } else if (i < btn || state >= ST_DONE) {
-      zxosd.print("-");
+      osd_print("-");
     }
   }
 }
 
 static void draw_footer(const char *line1, const char *line2) {
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.fill(0, 24, 31, 25, ' ');
-  zxosd.setPos(1, 24); zxosd.print(line1);
-  zxosd.setPos(1, 25); zxosd.print(line2);
+  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+  osd_fill(0, 24, 31, 25, ' ');
+  osd_set_pos(1, 24); osd_print(line1);
+  osd_set_pos(1, 25); osd_print(line2);
 }
 
 static bool can_forget() { return pads[port].source == USB_PAD_DRIVER; }
@@ -101,15 +101,15 @@ static void pad_source(const usb_pad_t &p, char *out, size_t size) {
 }
 
 static void draw_list() {
-  zxosd.setColor(OSD::COLOR_GREY, OSD::COLOR_BLACK);
-  zxosd.fill(0, 8, 31, 22, ' ');
-  zxosd.setPos(1, 8); zxosd.print("Port Pad       Mapped by");
+  osd_set_color(OSD_COLOR_GREY, OSD_COLOR_BLACK);
+  osd_fill(0, 8, 31, 22, ' ');
+  osd_set_pos(1, 8); osd_print("Port Pad       Mapped by");
   for (uint8_t i = 0; i < 2; i++) {
     const usb_pad_t &p = pads[i];
     bool chosen = i == port;
-    zxosd.setColor(chosen ? OSD::COLOR_BLACK : OSD::COLOR_WHITE, chosen ? OSD::COLOR_WHITE : OSD::COLOR_BLACK);
-    zxosd.fill(0, 10 + i, 31, 10 + i, ' ');
-    zxosd.setPos(1, 10 + i);
+    osd_set_color(chosen ? OSD_COLOR_BLACK : OSD_COLOR_WHITE, chosen ? OSD_COLOR_WHITE : OSD_COLOR_BLACK);
+    osd_fill(0, 10 + i, 31, 10 + i, ' ');
+    osd_set_pos(1, 10 + i);
     char src[18], buf[33];
     if (p.source == USB_PAD_NONE && p.vid == 0) {
       snprintf(buf, sizeof(buf), "%u    -", i + 1);
@@ -117,20 +117,20 @@ static void draw_list() {
       pad_source(p, src, sizeof(src));
       snprintf(buf, sizeof(buf), "%u    %04x:%04x %s", i + 1, p.vid, p.pid, src);
     }
-    zxosd.print(buf);
+    osd_print(buf);
   }
   ui_button(1, 14, BTN_WIDTH, "Map", list_btn == 0);
   if (can_forget()) ui_button(12, 14, BTN_WIDTH, "Forget", list_btn == 1);
   if (list_msg) {
-    zxosd.setColor(list_msg_ok ? OSD::COLOR_GREEN_I : OSD::COLOR_RED_I, OSD::COLOR_BLACK);
-    zxosd.setPos(1, 16); zxosd.print(list_msg);
+    osd_set_color(list_msg_ok ? OSD_COLOR_GREEN_I : OSD_COLOR_RED_I, OSD_COLOR_BLACK);
+    osd_set_pos(1, 16); osd_print(list_msg);
   }
-  zxosd.setColor(OSD::COLOR_GREY, OSD::COLOR_BLACK);
-  zxosd.setPos(1, 18); zxosd.print("Map: learns the pad you press a");
-  zxosd.setPos(1, 19); zxosd.print("button on, also one not on a");
-  zxosd.setPos(1, 20); zxosd.print("port");
-  zxosd.setPos(1, 21); zxosd.print("Forget: the driver ini -> .bak,");
-  zxosd.setPos(1, 22); zxosd.print("the pad uses its default map");
+  osd_set_color(OSD_COLOR_GREY, OSD_COLOR_BLACK);
+  osd_set_pos(1, 18); osd_print("Map: learns the pad you press a");
+  osd_set_pos(1, 19); osd_print("button on, also one not on a");
+  osd_set_pos(1, 20); osd_print("port");
+  osd_set_pos(1, 21); osd_print("Forget: the driver ini -> .bak,");
+  osd_set_pos(1, 22); osd_print("the pad uses its default map");
   draw_footer("Up/Down: port, Left/Right: btn", "Enter: OK, Esc: return");
 }
 
@@ -138,7 +138,7 @@ static void draw() {
   char buf[33];
   if (state == ST_LIST) {
     draw_list();
-    zxosd.update();
+    osd_update();
     return;
   }
   switch (state) {
@@ -170,7 +170,7 @@ static void draw() {
   }
   draw_buttons();
   draw_footer(state >= ST_SAVED ? "Enter: back to the ports" : "", "Esc: back to the ports");
-  zxosd.update();
+  osd_update();
 }
 
 static void show_list() {
@@ -178,14 +178,14 @@ static void show_list() {
   usb_pads_get(pads);
   list_btn = 0;
   set_state(ST_LIST);
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.fill(0, 7, 31, 22, ' ');
+  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+  osd_fill(0, 7, 31, 22, ' ');
   draw();
 }
 
 static void start() {
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.fill(0, 7, 31, 22, ' ');
+  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+  osd_fill(0, 7, 31, 22, ' ');
   btn = 0;
   last_seq = 0;
   memset(mapped, 0, sizeof(mapped));
@@ -195,15 +195,15 @@ static void start() {
 }
 
 void app_pad_mapper_overlay() {
-  zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
-  zxosd.clear();
-  zxosd.header(core.build, core.id, HW_ID);
+  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+  osd_clear();
+  osd_header(core.build, core.id, HW_ID);
   print_time();
-  zxosd.setPos(0, 5);
-  zxosd.print("Map USB gamepad");
-  zxosd.line(6);
+  osd_set_pos(0, 5);
+  osd_print("Map USB gamepad");
+  osd_line(6);
 
-  zxosd.line(23);
+  osd_line(23);
   port = 0;
   list_msg = nullptr;
   show_list();
