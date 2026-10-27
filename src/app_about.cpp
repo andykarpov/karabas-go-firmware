@@ -12,7 +12,6 @@
 #include "app_core.h"
 #include <SPI.h>
 #include "sorts.h"
-#include <GyverMenu.h>
 
 void app_about_overlay() {
   zxosd.setColor(OSD::COLOR_WHITE, OSD::COLOR_BLACK);
