@@ -19,6 +19,7 @@
 #include "file.h"
 #include "MultiMatrixDisplay.h"
 #include "board/board.h"
+#include "board/pin.h"
 #include "fpga/link.h"
 #include "fpga/bitstream.h"
 #include "fpga/core_loader.h"

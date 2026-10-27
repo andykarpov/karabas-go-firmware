@@ -56,7 +56,7 @@ void usb_diag_tick() {
 
 void usb_diag_print() {
   static uint32_t last_ms = 0, last_frame = 0;
-  uint32_t now = millis(), frame = pio_usb_host_get_frame_number();
+  uint32_t now = ms_now(), frame = pio_usb_host_get_frame_number();
   uint32_t sof = last_ms ? (frame - last_frame) * 1000ULL / (now - last_ms) : 0;
   last_ms = now; last_frame = frame;
   uint8_t root = pio_usb_host_root_state();

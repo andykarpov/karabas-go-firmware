@@ -103,12 +103,12 @@ static void at_command(const char *arg) {
     at_list_cores();
   } else if (strcasecmp(arg, "boot") == 0) {
     bk_flush();
-    Serial.print("OK\r\n"); Serial.flush(); delay(100);
+    Serial.print("OK\r\n"); Serial.flush(); ms_delay(100);
     hang_diag_stop();
     matrix_icon(MATRIX_ICON_BOOTSEL); // the bootloader leaves the matrix as it is
     rp2040.rebootToBootloader();
   } else if (strcasecmp(arg, "msc") == 0 || strcasecmp(arg, "msc2") == 0) {
-    Serial.print("OK\r\n"); Serial.flush(); delay(100);
+    Serial.print("OK\r\n"); Serial.flush(); ms_delay(100);
     hang_diag_stop();
     msc_reboot_to_msc(strcasecmp(arg, "msc2") == 0 ? 2 : 1);
   } else if (strcasecmp(arg, "esp") == 0 && core.type == CORE_TYPE_BOOT) {
@@ -164,7 +164,7 @@ void serial_bridge_tick() {
 
   // receive at least on the serial_speed
   unsigned long uart_rx_delay = 30 * 1e6 / serial_speed;
-  if (micros() - uart_rx_last < uart_rx_delay) return;
+  if (us_now() - uart_rx_last < uart_rx_delay) return;
 
   if (tx_pos >= tx_len) {
     tx_pos = tx_len = 0;
@@ -185,6 +185,6 @@ void serial_bridge_tick() {
   }
 
   uart_idx++;
-  uart_rx_last = micros();
+  uart_rx_last = us_now();
   spi_send(CMD_UART, uart_idx, (uint8_t) tx_buf[tx_pos++]);
 }

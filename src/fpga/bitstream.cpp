@@ -46,7 +46,7 @@ static int claim_dma_channel() {
 static bool bitstream_send_pio(uint32_t total, uint32_t &sent) {
   // let core1 allocate its PIO-USB programs and DMA channel first
   uint32_t wait = ms_now();
-  while (!usb_host_ready && ms_since(wait) < 500) { delay(1); }
+  while (!usb_host_ready && ms_since(wait) < 500) { ms_delay(1); }
 
   PIOProgram pgm(&fpga_serial_program); // releases the SM when going out of scope
   PIO pio;
@@ -89,7 +89,7 @@ static bool bitstream_send_pio(uint32_t total, uint32_t &sent) {
 
   // wait for the last byte to be shifted out of the OSR
   while (!pio_sm_is_tx_fifo_empty(pio, sm)) { tight_loop_contents(); }
-  delayMicroseconds(10);
+  busy_wait_us_32(10);
 
   pio_sm_set_enabled(pio, sm, false);
   dma_channel_unclaim(dma);
@@ -103,10 +103,10 @@ static void bitstream_send_bitbang(uint32_t total, uint32_t &sent) {
       uint8_t c = chunk_buf[0][s];
       for (uint8_t j=0; j<8; ++j) {
         // Set bit of data
-        gpio_put(PIN_CONF_IO1, (c & (1<<(7-j))) ? HIGH : LOW);
+        gpio_put(PIN_CONF_IO1, (c & (1<<(7-j))) ? 1 : 0);
         // Latch bit of data by CCLK impulse
-        gpio_put(PIN_CONF_CLK, HIGH);
-        gpio_put(PIN_CONF_CLK, LOW);
+        gpio_put(PIN_CONF_CLK, 1);
+        gpio_put(PIN_CONF_CLK, 0);
       }
     }
     sent += n;
@@ -130,18 +130,18 @@ uint32_t fpga_send(const char* filename) {
   // seek to bitstream start
   file_seek(FILE_POS_BITSTREAM_START);
 
-  pinMode(PIN_CONF_CLK, OUTPUT);
-  pinMode(PIN_CONF_IO1, OUTPUT);
-  digitalWrite(PIN_CONF_CLK, LOW);
+  pin_output(PIN_CONF_CLK);
+  pin_output(PIN_CONF_IO1);
+  gpio_put(PIN_CONF_CLK, 0);
 
   // pulse PROG_B
-  digitalWrite(PIN_CONF_PRG_B, HIGH);
-  digitalWrite(PIN_CONF_PRG_B, LOW);
-  digitalWrite(PIN_CONF_PRG_B, HIGH);
+  gpio_put(PIN_CONF_PRG_B, 1);
+  gpio_put(PIN_CONF_PRG_B, 0);
+  gpio_put(PIN_CONF_PRG_B, 1);
 
   // wait for INIT_B = 0
-  delay(10);
-  bool init_ready = digitalRead(PIN_CONF_INIT_B); // the fpga has cleared its memory
+  ms_delay(10);
+  bool init_ready = gpio_get(PIN_CONF_INIT_B); // the fpga has cleared its memory
 
   uint32_t timer = ms_now();
   timer = ms_now();
@@ -156,8 +156,8 @@ uint32_t fpga_send(const char* filename) {
   file1.close();
 
   // give the pins back to SIO
-  pinMode(PIN_CONF_CLK, INPUT);
-  pinMode(PIN_CONF_IO1, INPUT);
+  pin_input(PIN_CONF_CLK);
+  pin_input(PIN_CONF_IO1);
 
   hang_step(0x92);
   d_print(sent, DEC); d_println(" bytes done");
@@ -172,15 +172,15 @@ uint32_t fpga_send(const char* filename) {
   d_print("Waiting for CONF_DONE... ");
   timer = ms_now();
   hang_step(0x94);
-  while(digitalRead(PIN_CONF_DONE) == LOW) {
+  while(!gpio_get(PIN_CONF_DONE)) {
     if (ms_since(timer) >= 1000) {
       // INIT_B low after the bitstream: a CRC error
       halt(!init_ready ? "FPGA configuration failed: CONF_DONE timeout, INIT_B low before the bitstream" :
            sent < total ? "FPGA configuration failed: CONF_DONE timeout, bitstream truncated" :
-           digitalRead(PIN_CONF_INIT_B) ? "FPGA configuration failed: CONF_DONE timeout, INIT_B high" :
+           gpio_get(PIN_CONF_INIT_B) ? "FPGA configuration failed: CONF_DONE timeout, INIT_B high" :
            "FPGA configuration failed: CONF_DONE timeout, INIT_B low (CRC error)");
     }
-    delay(10);
+    ms_delay(10);
   }
   hang_step(0x95);
   d_println("Done");

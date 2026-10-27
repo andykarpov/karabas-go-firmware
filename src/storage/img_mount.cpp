@@ -68,7 +68,7 @@ static uint16_t img_sum(const uint8_t *buf) {
 static void on_img_lba(uint8_t addr, uint8_t data) {
   if (addr == 0) {
     req_started = true;
-    req_start_us = micros();
+    req_start_us = us_now();
     lba_mask = 0;
   }
   if (addr < 4) {
@@ -213,7 +213,7 @@ static bool img_serve() {
   }
   if (!req_pending) return false;
   req_pending = false;
-  uint32_t serve_us = micros();
+  uint32_t serve_us = us_now();
   uint8_t slot = req_slot;
   uint32_t lba = req_lba;
   bool ok = false;
@@ -233,32 +233,32 @@ static bool img_serve() {
         ok = f.isOpen() && f.seekSet((uint64_t) lba * IMG_SECTOR_SIZE) &&
              f.write(img_buf, IMG_SECTOR_SIZE) == IMG_SECTOR_SIZE;
         img_dirty[slot] = true;
-        img_last_write_ms = millis();
+        img_last_write_ms = ms_now();
       }
     }
   }
   spi_send(CMD_IMG_SEC, slot, ok ? IMG_RES_DONE : IMG_RES_ERROR);
   if (req_complete) matrix_drive_access(slot, lba, req_op == IMG_REQ_WRITE);
-  uint32_t end_us = micros();
+  uint32_t end_us = us_now();
   uint32_t wait_us = serve_us - req_start_us, took_us = end_us - serve_us;
   if (!ok) {
     d_printf("Image slot %d: %s %lu FAILED, wait %lu us, %lu us", slot, what, (unsigned long) lba,
       (unsigned long) wait_us, (unsigned long) took_us);
     d_println();
   } else {
-    if (log_rd + log_wr == 0) log_first_ms = millis();
+    if (log_rd + log_wr == 0) log_first_ms = ms_now();
     if (req_op == IMG_REQ_WRITE) log_wr++; else log_rd++;
     if (slot < 8) log_slots |= 1 << slot;
     if (wait_us > log_max_wait_us) log_max_wait_us = wait_us;
     if (took_us > log_max_serve_us) log_max_serve_us = took_us;
   }
-  log_last_ms = millis();
+  log_last_ms = ms_now();
   return true;
 }
 
 static void img_log_summary() {
   if (log_rd + log_wr == 0) return;
-  uint32_t now = millis();
+  uint32_t now = ms_now();
   if (now - log_last_ms < IMG_LOG_IDLE_MS && now - log_first_ms < IMG_LOG_EVERY_MS) return;
   d_printf("Image slots %02x: %lu rd, %lu wr in %lu ms, max wait %lu us, max %lu us", log_slots,
     (unsigned long) log_rd, (unsigned long) log_wr, (unsigned long) (log_last_ms - log_first_ms),
@@ -270,7 +270,7 @@ static void img_log_summary() {
 }
 
 static void img_sync_idle() {
-  if (millis() - img_last_write_ms < IMG_SYNC_IDLE_MS) return;
+  if (ms_now() - img_last_write_ms < IMG_SYNC_IDLE_MS) return;
   for (uint8_t i = 0; i < MAX_FILE_SLOTS; i++) {
     if (img_dirty[i]) {
       img_dirty[i] = false;
@@ -289,18 +289,18 @@ void img_tick() {
   }
   if (!img_serve()) {
     // a request that started but never got its IMG_SEC: the core sends it again
-    if (req_started && micros() - req_start_us > 100000) {
+    if (req_started && us_now() - req_start_us > 100000) {
       req_started = false;
     }
     return;
   }
   // a track is read sector by sector: keep polling for the next request for a while, but give
   // the main loop its turn now and then
-  uint32_t t = micros();
+  uint32_t t = us_now();
   uint32_t start = t;
-  while (micros() - t < IMG_FOLLOW_US && micros() - start < IMG_TICK_MAX_US) {
+  while (us_now() - t < IMG_FOLLOW_US && us_now() - start < IMG_TICK_MAX_US) {
     if (req_started || req_pending) {
-      if (img_serve()) t = micros();
+      if (img_serve()) t = us_now();
     } else {
       spi_send(CMD_NOP, 0, 0);
     }

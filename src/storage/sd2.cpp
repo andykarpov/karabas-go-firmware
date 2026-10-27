@@ -89,9 +89,9 @@ static bool read_pass(Print &out, uint8_t *buf, uint8_t mhz, uint8_t n, uint32_t
   crc = KG_CRC32_INIT;
   for (uint32_t s = 0; s < SD2_TEST_SECTORS; s += n) {
     hang_step(SD2_HANG_STEP);
-    uint32_t t = micros();
+    uint32_t t = us_now();
     bool ok = read_once(s, buf, n);
-    us += micros() - t;
+    us += us_now() - t;
     if (!ok) {
       if (errors++ == 0) { out.printf(" x%u read of %lu failed", n, (unsigned long) s); print_error(out); }
       if (!sd2_begin_mhz(mhz)) { out.print(", init failed"); print_error(out); return false; }

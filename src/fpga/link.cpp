@@ -186,9 +186,9 @@ static void spi_xfer(uint8_t cmd, uint8_t addr, uint8_t data, uint8_t rx[3]) {
   SPI.beginTransaction(link_settings());
   // one 3-byte transfer keeps the SPI FIFO busy instead of 3 separate blocking calls
   const uint8_t tx[3] = {cmd, addr, data};
-  gpio_put(PIN_MCU_SPI_CS, LOW);
+  gpio_put(PIN_MCU_SPI_CS, 0);
   SPI.transfer(tx, rx, 3);
-  gpio_put(PIN_MCU_SPI_CS, HIGH);
+  gpio_put(PIN_MCU_SPI_CS, 1);
   SPI.endTransaction();
   link_tx_frames++;
   spi_bus_unlock();
@@ -246,7 +246,7 @@ void link_burst_reset() {
   burst_caps = 0;
   burst_mhz = 0;
   core_caps = 0;
-  pinMode(PIN_BURST_CS, INPUT_PULLUP); // only driven for cores that support bursts; idle high, so
+  pin_input_pullup(PIN_BURST_CS); // only driven for cores that support bursts; idle high, so
                                        // the burst receiver of a core never sees a floating chip select
 }
 
@@ -278,8 +278,8 @@ bool link_caps_query() {
   burst_caps = rx[1];
   burst_mhz = rx[2];
   if (burst_caps & CAPS_BURST_WRITE) {
-    pinMode(PIN_BURST_CS, OUTPUT);
-    digitalWrite(PIN_BURST_CS, HIGH);
+    pin_output(PIN_BURST_CS);
+    gpio_put(PIN_BURST_CS, 1);
   }
   return true;
 }
@@ -295,7 +295,7 @@ bool link_burst_available() {
 static bool burst_wait_ready() {
   if (!(burst_caps & CAPS_BURST_READY)) return true;
   uint32_t start = time_us_32();
-  while (!digitalRead(PIN_BURST_READY)) {
+  while (!gpio_get(PIN_BURST_READY)) {
     if (time_us_32() - start >= BURST_READY_TIMEOUT_US) return false;
   }
   return true;
@@ -320,10 +320,10 @@ size_t link_burst_write(uint8_t type, uint32_t addr, const uint8_t *data, size_t
     }
     uint32_t a = addr + sent;
     const uint8_t hdr[5] = { type, (uint8_t)(a >> 24), (uint8_t)(a >> 16), (uint8_t)(a >> 8), (uint8_t) a };
-    gpio_put(PIN_BURST_CS, LOW);
+    gpio_put(PIN_BURST_CS, 0);
     SPI.transfer(hdr, nullptr, sizeof(hdr));
     SPI.transfer(data + sent, nullptr, n);
-    gpio_put(PIN_BURST_CS, HIGH);
+    gpio_put(PIN_BURST_CS, 1);
     link_tx_frames++;
     sent += n;
   }

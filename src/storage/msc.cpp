@@ -95,7 +95,7 @@ bool msc_failed() {
 // returns true while in msc mode (the rest of the main loop is skipped)
 bool msc_tick() {
   // if eject event registered - reboot rp2040
-  if (ejected && (host_gone || millis() - eject_ms >= MSC_EJECT_REBOOT_MS)) {
+  if (ejected && (host_gone || ms_now() - eject_ms >= MSC_EJECT_REBOOT_MS)) {
     d_println(host_gone ? "MSC: the host let the device go, reboot" : "MSC: reboot after the eject");
     d_flush();
     rp2040.reboot();
@@ -175,7 +175,7 @@ bool msc_start_stop_cb_sd(uint8_t power_condition, bool start, bool load_eject) 
         usb_msc.setUnitReady(0, false);
         if (card == 2) sd2_sync();
         else sd1.card()->syncDevice();
-        eject_ms = millis();
+        eject_ms = ms_now();
         ejected = true;
       }
     }

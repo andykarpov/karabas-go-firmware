@@ -18,8 +18,8 @@ static bool has_extender = false;
 
 void board_init_pins() {
   // unused MCU-FPGA pins (yet)
-  pinMode(PIN_MCU_SPI_IO0, INPUT);
-  pinMode(PIN_MCU_SPI_IO1, INPUT_PULLDOWN); // burst READY from the fpga (undriven reads as not ready)
+  pin_input(PIN_MCU_SPI_IO0);
+  pin_input_pulldown(PIN_MCU_SPI_IO1); // burst READY from the fpga (undriven reads as not ready)
 }
 
 void board_init_io() {

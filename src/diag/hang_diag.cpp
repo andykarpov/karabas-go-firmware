@@ -42,7 +42,7 @@ static void beat(uint8_t i) {
 
 void hang_mark(uint16_t where) {
   watchdog_hw->scratch[1] = ((uint32_t) HANG_MAGIC << 24) | where;
-  app_alive_ms = millis();
+  app_alive_ms = ms_now();
   beat(1);
 }
 
@@ -134,7 +134,7 @@ extern "C" void __attribute__((noreturn)) __wrap_panic(const char *fmt, ...) {
 static void hang_task(void *param) {
   for (;;) {
     beat(0);
-    if (armed && millis() - app_alive_ms < HANG_APP_MS) watchdog_update();
+    if (armed && ms_now() - app_alive_ms < HANG_APP_MS) watchdog_update();
     vTaskDelay(pdMS_TO_TICKS(250));
   }
 }
@@ -147,7 +147,7 @@ void hang_diag_stop() {
 void hang_diag_start() {
   if (armed) return;
   armed = true;
-  app_alive_ms = millis();
+  app_alive_ms = ms_now();
   add_repeating_timer_ms(100, irq_beat, nullptr, &irq_timer); // on core0: APP runs this
   watchdog_enable(HANG_WDT_MS, true);
   if (xTaskCreateAffinitySet(hang_task, "WDOG", 256, nullptr, HANG_TASK_PRIORITY, 1 << 0, nullptr) != pdPASS) {
