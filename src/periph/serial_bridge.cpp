@@ -135,21 +135,21 @@ static void esp_tick() {
 
   uint8_t buf[64];
   int n = 0;
-  while (n < (int) sizeof(buf) && esp_serial.available() > 0) buf[n++] = (uint8_t) esp_serial.read();
+  while (n < (int) sizeof(buf) && esp_serial_available() > 0) buf[n++] = (uint8_t) esp_serial_read();
   if (n > 0) { Serial.write(buf, n); Serial.flush(); }
 
-  while (Serial.available() > 0 && esp_serial.availableForWrite() > (int) sizeof(at_parser.out)) {
+  while (Serial.available() > 0 && esp_serial_available_for_write() > (int) sizeof(at_parser.out)) {
     int c = Serial.read();
     if (c == -1) return;
     at_hold_timer = ms_now();
     switch (kg_at_feed(&at_parser, (char) c)) {
-      case KG_AT_PASS: esp_serial.write((const uint8_t *) at_parser.out, at_parser.out_len); break;
+      case KG_AT_PASS: esp_serial_write((const uint8_t *) at_parser.out, at_parser.out_len); break;
       case KG_AT_COMMAND: at_command(kg_at_arg(&at_parser)); return;
       default: break;
     }
   }
   if (at_parser.len > 0 && ms_since(at_hold_timer) >= AT_HOLD_TIMEOUT_MS && kg_at_flush(&at_parser) > 0) {
-    esp_serial.write((const uint8_t *) at_parser.out, at_parser.out_len);
+    esp_serial_write((const uint8_t *) at_parser.out, at_parser.out_len);
   }
 }
 

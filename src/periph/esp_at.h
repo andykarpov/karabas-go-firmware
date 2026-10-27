@@ -4,7 +4,7 @@
 
 // Non-blocking AT commands to the ESP8266 behind the FPGA (esp_serial, CMD_ESP_UART; only the
 // BOOT core bridges it). The bytes come and go in the main loop (link dispatch and
-// esp_serial.handle()), so a command is started and then polled from a tick: the reply lines
+// esp_serial_handle()), so a command is started and then polled from a tick: the reply lines
 // go to a callback until OK, ERROR / FAIL or the timeout.
 
 enum esp_at_result_e {

@@ -45,7 +45,6 @@ static_assert(configTIMER_TASK_PRIORITY == configMAX_PRIORITIES - 1, "FreeRTOS t
 
 RTC zxrtc;
 volatile bool usb_host_ready = false;
-EspSerial esp_serial;
 
 static uint32_t led_timer = 0;
 
@@ -70,7 +69,11 @@ static void on_flashboot(uint8_t addr, uint8_t data) {
 }
 
 static void on_esp_uart(uint8_t addr, uint8_t data) {
-  esp_serial.rx_queue_push(data);
+  esp_serial_rx_push(data);
+}
+
+static void esp_send(uint8_t c) {
+  spi_send(CMD_ESP_UART, 0, c);
 }
 
 static void on_rtc(uint8_t addr, uint8_t data) {
@@ -175,7 +178,7 @@ static void karabas_setup()
     }
 
     // the ESP8266 uart bridged by the boot core (Setup Wi-Fi, AT+KARABAS=esp)
-    esp_serial.begin(spi_send);
+    esp_serial_begin(esp_send);
 
     osd_state = state_core_browser;
     app_core_browser_read_list();
@@ -265,9 +268,9 @@ static void karabas_loop()
   hang_mark(0x0d00);
   serial_bridge_tick();
 
-  // send byte from esp tx fifo
+  // send a byte from the esp tx ring
   hang_mark(0x0e00);
-  esp_serial.handle();
+  esp_serial_handle();
 
   // let the fpga talk even when nothing else was sent
   hang_mark(0x0f00);

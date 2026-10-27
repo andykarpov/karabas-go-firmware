@@ -17,7 +17,6 @@
 #include "hid_app.h"
 #include "ms_time.h"
 #include "file.h"
-#include "EspSerial.h"
 #include "MultiMatrixDisplay.h"
 #include "board/board.h"
 #include "fpga/link.h"
@@ -28,6 +27,7 @@
 #include "periph/oled.h"
 #include "periph/serial_bridge.h"
 #include "periph/esp_at.h"
+#include "periph/esp_serial.h"
 #include "periph/ntp_sync.h"
 #include "periph/esp_update.h"
 #include "periph/periph.h"
@@ -43,7 +43,6 @@
 
 // main.cpp
 extern RTC zxrtc;
-extern EspSerial esp_serial;
 extern volatile bool usb_host_ready; // set by core1 once PIO-USB has claimed its PIO/DMA resources
 void halt(const char* msg);
 
