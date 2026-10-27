@@ -46,7 +46,7 @@ const keyboard: Collection[] = [{
 const sorted = (s: Set<string>) => [...s].sort();
 
 describe('AutoMap', () => {
-  it('maps the DragonRise layout like drivers/retrolink.ini', () => {
+  it('maps the DragonRise layout like the Retrolink driver ini', () => {
     const m = buildAutoMap(dragonrise);
     const idle = [0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x0f, 0x00, 0x00];
     expect(autoMapReport(m, 0, new Uint8Array(idle)).size).toBe(0);
