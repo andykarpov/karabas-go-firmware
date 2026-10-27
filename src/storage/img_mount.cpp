@@ -128,6 +128,14 @@ void img_close_all() {
   lba_mask = 0;
 }
 
+// the path of the image of a slot
+static void img_path(uint8_t slot, char *out, size_t size) {
+  core_file_slot_t &fs = file_slots[slot];
+  char dir[sizeof(fs.dir) + 1];
+  snprintf(dir, sizeof(dir), "%s%s", fs.dir[0] == '/' ? "" : "/", fs.dir);
+  kg_path_join(out, size, dir, fs.filename);
+}
+
 void img_mount(uint8_t slot) {
   if (slot >= MAX_FILE_SLOTS) return;
   core_file_slot_t &fs = file_slots[slot];
@@ -146,9 +154,8 @@ void img_mount(uint8_t slot) {
     return;
   }
   if (fs.is_mounted) {
-    char dir[sizeof(fs.dir) + 1], fname[KG_PATH_MAX];
-    snprintf(dir, sizeof(dir), "%s%s", fs.dir[0] == '/' ? "" : "/", fs.dir);
-    kg_path_join(fname, sizeof(fname), dir, fs.filename);
+    char fname[KG_PATH_MAX];
+    img_path(slot, fname, sizeof(fname));
     // read-write, so the core can write sectors back; read only if the file is write protected
     if (!sd_open(&fs.file, fname, FA_READ | FA_WRITE) && !sd_open(&fs.file, fname, FA_READ)) {
       d_printf("Mount slot %d: unable to open %s", slot, fname); d_println();
@@ -168,18 +175,52 @@ void img_mount(uint8_t slot) {
   }
 }
 
-// the file position of a sector of the image; false past its end (f_lseek would grow a file
-// open for writing, SdFat's seekSet failed there)
-static bool img_seek(FIL *f, uint32_t lba) {
-  FSIZE_t pos = (FSIZE_t) lba * IMG_SECTOR_SIZE;
-  return sd_is_open(f) && pos < f_size(f) && f_lseek(f, pos) == FR_OK;
+// FatFs marks a FIL after a disk error (fp->err) and fails everything on it from then on:
+// open it again, as it was (read-write, else read only)
+static void img_reopen(uint8_t slot) {
+  FIL *f = &file_slots[slot].file;
+  if (!sd_is_open(f) || !f->err) return;
+  char fname[KG_PATH_MAX];
+  img_path(slot, fname, sizeof(fname));
+  bool rw = f->flag & FA_WRITE;
+  f->obj.fs = nullptr; // f_close of a FIL with an error would try to sync it
+  bool ok = sd_open(f, fname, rw ? FA_READ | FA_WRITE : FA_READ);
+  d_printf("Image slot %u: open again after an error: %s", slot, ok ? "ok" : "FAILED"); d_println();
 }
 
-static bool img_read_sector(FIL *f, uint32_t lba) {
+static uint8_t img_diag_left = 16; // the failures logged in detail
+
+static void img_fail_log(uint8_t slot, uint32_t lba, const char *what, int res, UINT n) {
+  if (!img_diag_left) return;
+  img_diag_left--;
+  FIL *f = &file_slots[slot].file;
+  sd_card_t *c = sd1_card();
+  d_printf("Image slot %u: lba %lu: %s %d (%u bytes), size %llu, FIL err %u, card err %u data %02X",
+    slot, (unsigned long) lba, what, res, (unsigned) n, (unsigned long long) f_size(f), f->err,
+    sd_card_error(c), sd_card_error_data(c)); d_println();
+}
+
+// the file position of a sector of the image; false past its end (f_lseek would grow a file
+// open for writing, SdFat's seekSet failed there)
+static bool img_seek(uint8_t slot, uint32_t lba) {
+  FIL *f = &file_slots[slot].file;
+  img_reopen(slot);
+  FSIZE_t pos = (FSIZE_t) lba * IMG_SECTOR_SIZE;
+  if (!sd_is_open(f) || pos >= f_size(f)) return false;
+  FRESULT res = f_lseek(f, pos);
+  if (res != FR_OK) img_fail_log(slot, lba, "lseek", res, 0);
+  return res == FR_OK;
+}
+
+static bool img_read_sector(uint8_t slot, uint32_t lba) {
+  FIL *f = &file_slots[slot].file;
   memset(img_buf, 0, IMG_SECTOR_SIZE);
-  if (!img_seek(f, lba)) return false;
+  if (!img_seek(slot, lba)) return false;
   // a short last sector is padded with zeros
-  return sd_read(f, img_buf, IMG_SECTOR_SIZE) > 0;
+  UINT n = 0;
+  FRESULT res = f_read(f, img_buf, IMG_SECTOR_SIZE, &n);
+  if (res != FR_OK || n == 0) img_fail_log(slot, lba, "read", res, n);
+  return res == FR_OK && n > 0;
 }
 
 static void img_send_sector() {
@@ -227,13 +268,13 @@ static bool img_serve() {
   } else if (slot < MAX_FILE_SLOTS) {
     FIL *f = &file_slots[slot].file;
     if (req_op == IMG_REQ_READ) {
-      ok = img_read_sector(f, lba);
+      ok = img_read_sector(slot, lba);
       img_send_sector();
     } else if (req_op == IMG_REQ_WRITE) {
       if (!img_receive_sector()) {
         what = "wr, data lost";
       } else {
-        ok = img_seek(f, lba) && sd_write(f, img_buf, IMG_SECTOR_SIZE) == IMG_SECTOR_SIZE;
+        ok = img_seek(slot, lba) && sd_write(f, img_buf, IMG_SECTOR_SIZE) == IMG_SECTOR_SIZE;
         img_dirty[slot] = true;
         img_last_write_ms = ms_now();
       }

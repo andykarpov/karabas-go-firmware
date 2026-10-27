@@ -4537,6 +4537,17 @@ FRESULT f_lseek (
 				fp->clust = clst;
 			}
 			if (clst != 0) {
+#if FF_FS_EXFAT
+				/* karabas: a contiguous exFAT file (no FAT chain) needs no walk to an offset inside it:
+				/  the loop below costs a 64-bit division per cluster in get_fat (create_chain in write
+				/  mode), over a second at the end of a 14 GB disk image on a Cortex-M0+ */
+				if (fs->fs_type == FS_EXFAT && fp->obj.stat == 2 && ofs > bcs && fp->fptr + ofs <= fp->obj.objsize) {
+					DWORD n = (DWORD)((ofs - 1) / bcs);	/* Clusters to skip */
+					clst += n;
+					ofs -= (FSIZE_t)n * bcs; fp->fptr += (FSIZE_t)n * bcs;
+					fp->clust = clst;
+				}
+#endif
 				while (ofs > bcs) {						/* Cluster following loop */
 					ofs -= bcs; fp->fptr += bcs;
 #if !FF_FS_READONLY
