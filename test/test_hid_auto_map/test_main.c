@@ -44,7 +44,7 @@ static void test_dragonrise_rest() {
   TEST_ASSERT_EQUAL_UINT16(HID_SC_CTL_ON, hid_auto_map_report(&m, 0, r, sizeof(r), HID_SC_CTL_ON));
 }
 
-// same bits as drivers/retrolink.ini
+// same bits as the Retrolink driver ini of docs/usb_gamepads.md
 static void test_dragonrise_matches_retrolink_ini() {
   hid_auto_map_build(dragonrise, sizeof(dragonrise), &m);
   typedef struct { uint8_t byte, value; uint16_t btn; } value_case_t;
