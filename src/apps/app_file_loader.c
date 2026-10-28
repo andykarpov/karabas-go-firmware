@@ -26,7 +26,7 @@ static void read_error(const char *line2) {
   ms_delay(1000);
 }
 
-void app_file_loader_read_list(bool forceIndex) {
+void app_file_loader_read_list() {
 
   ui_box("Scanning files", OSD_COLOR_GREEN_I, "Please wait...", OSD_COLOR_MAGENTA_I);
   osd_update();
@@ -90,16 +90,14 @@ void app_file_loader_menu(uint8_t vpos) {
   fb_draw(vpos, d, false);
 }
 
-void app_file_loader_overlay(bool initSD, bool recreateIndex) {
+void app_file_loader_overlay() {
   osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
   osd_clear();
   osd_header(core.build, core.id, HW_ID);
   print_time();
 
   // collect files from sd
-  if (initSD) {
-      app_file_loader_read_list(recreateIndex);
-  }
+  app_file_loader_read_list();
 
   app_file_loader_menu(APP_COREBROWSER_MENU_OFFSET);
   ui_hint("Please use arrows to navigate", "Press Enter to load selection");

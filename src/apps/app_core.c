@@ -186,10 +186,10 @@ void app_core_save(uint8_t pos)
       // save file mounter data (dir, filename) into the core
       uint32_t offset = file_slots[core.osd[pos].slot_id].offset_dir;
       file_seek(offset); 
-      file_write_buf(file_slots[core.osd[pos].slot_id].dir, 256);
+      file_write_bytes(file_slots[core.osd[pos].slot_id].dir, 256);
       offset = file_slots[core.osd[pos].slot_id].offset_filename;
       file_seek(offset); 
-      file_write_buf(file_slots[core.osd[pos].slot_id].filename, 256);
+      file_write_bytes(file_slots[core.osd[pos].slot_id].filename, 256);
     } else {
       // save switch state into the core
       core.osd[pos].prev_val = core.osd[pos].val;
