@@ -6,6 +6,10 @@ The firmware uses [Ryzee119/tusb_xinput](https://github.com/Ryzee119/tusb_xinput
 copied into `third_party/tusb_xinput` (with its license), as an additional TinyUSB host class driver.
 The copy keeps the `bool open()` API that the class drivers of TinyUSB 0.18 (pico-sdk 2.2.0)
 have; the newer upstream `uint16_t open()` API is for a later TinyUSB.
+Our one change (marked `karabas`): before an Xbox 360 wired pad is mounted, the driver reads
+its string descriptors and sends the vendor request 0x01 (as Windows and Linux xpad do).
+Many third-party pads (8BitDo, Hori, ...) send no input before that, and TinyUSB 0.18
+does not read the strings while enumerating.
 The target device is an **8BitDo M30 2.4G connected by a USB data cable**.
 Bluetooth and the M30's 2.4G receiver are not implemented by this integration.
 The actual controller must enumerate in XInput mode; a HID-mode device still uses
