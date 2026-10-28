@@ -145,13 +145,72 @@ void core_trigger(uint8_t pos)
   spi_send(CMD_SWITCHES, pos, 0);
 }
 
+// The EEPROM of banks 4..254 is kept in the core file (FILE_POS_EEPROM_DATA, all 256 bytes in
+// the first sector of the file). Cores write the rtc / cmos registers often, mostly with the
+// values they already have, so the SD card is spared:
+// - prev_val is the byte in the file: a write of the same value, or a change undone, leaves
+//   nothing to save (eeprom_dirty counts the bytes that differ from the file);
+// - the save waits until the core stops writing (EEPROM_SAVE_QUIET_MS), or for a core that never
+//   stops, until a change is EEPROM_SAVE_MAX_MS old; never sooner than EEPROM_SAVE_GAP_MS after
+//   the save before, so a chatty core costs at most a write every 30 s;
+// - one write of the 256 bytes (one sector), and core_eeprom_flush() before another core, a
+//   reboot, BOOTSEL and USB MSC, so nothing waits in RAM then.
+#define EEPROM_SAVE_QUIET_MS 2000
+#define EEPROM_SAVE_MAX_MS 60000
+#define EEPROM_SAVE_GAP_MS 30000
+static uint16_t eeprom_dirty = 0;
+static uint32_t eeprom_first_change, eeprom_last_change, eeprom_last_save;
+static bool eeprom_saved = false; // eeprom_last_save is set
+
 uint8_t core_eeprom_get(uint8_t pos) {
   return core.eeprom[pos].val;
 }
 
 void core_eeprom_set(uint8_t pos, uint8_t val) {
-  core.eeprom[pos].val = val;
-  core.eeprom_need_save = true;
+  core_eeprom_t *e = &core.eeprom[pos];
+  if (e->val == val) return;
+  if (e->val == e->prev_val) {
+    if (eeprom_dirty == 0) eeprom_first_change = ms_now();
+    eeprom_dirty++;
+  } else if (val == e->prev_val) {
+    eeprom_dirty--;
+  }
+  e->val = val;
+  eeprom_last_change = ms_now();
+}
+
+bool core_eeprom_flush(void) {
+  if (eeprom_dirty == 0) return true;
+  eeprom_last_save = ms_now(); // a failed write is tried again after the gap too
+  eeprom_saved = true;
+  if (sd_is_open(&file1)) {
+    d_println("Core EEPROM: the core file is busy, saved later");
+    return false;
+  }
+  if (!sd_open(&file1, core.filename, FA_READ | FA_WRITE)) {
+    d_printf("Core EEPROM: unable to open %s to write", core.filename); d_println();
+    return false;
+  }
+  uint8_t buf[MAX_EEPROM_ITEMS];
+  for (uint16_t i = 0; i < MAX_EEPROM_ITEMS; i++) buf[i] = core.eeprom[i].val;
+  file_seek(FILE_POS_EEPROM_DATA);
+  bool ok = sd_write(&file1, buf, sizeof(buf)) == sizeof(buf);
+  sd_close(&file1);
+  if (!ok) {
+    d_println("Core EEPROM: write failed");
+    return false;
+  }
+  d_printf("Core EEPROM: saved, %u bytes changed", eeprom_dirty); d_println();
+  for (uint16_t i = 0; i < MAX_EEPROM_ITEMS; i++) core.eeprom[i].prev_val = core.eeprom[i].val;
+  eeprom_dirty = 0;
+  return true;
+}
+
+void core_eeprom_tick(void) {
+  if (eeprom_dirty == 0) return;
+  if (ms_since(eeprom_last_change) < EEPROM_SAVE_QUIET_MS && ms_since(eeprom_first_change) < EEPROM_SAVE_MAX_MS) return;
+  if (eeprom_saved && ms_since(eeprom_last_save) < EEPROM_SAVE_GAP_MS) return;
+  core_eeprom_flush();
 }
 
 void flashboot (uint8_t data) {
@@ -180,6 +239,7 @@ void do_configure(const char* filename) {
   hang_step(0x83);
   matrix_on_configure_start();
   bk_flush(); // the save of the game of the core before (it is still running)
+  core_eeprom_flush(); // and its eeprom (bank 4..254), before core is read again
   hang_step(0x84);
   link_set_rx_enabled(false);
   link_burst_reset(); // the new core may not support bursts
@@ -409,6 +469,7 @@ void read_core(const char* filename) {
 
   // read eeprom data from file (in case rombank = 4 and up)
   // 255 means no eeprom allowed by core
+  eeprom_dirty = 0;
   if (core.eeprom_bank >= MAX_EEPROM_BANKS && core.eeprom_bank != NO_EEPROM_BANK) {
     for (uint16_t i=0; i<MAX_EEPROM_ITEMS; i++) {
       file_seek(FILE_POS_EEPROM_DATA + i);

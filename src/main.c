@@ -260,6 +260,7 @@ static void karabas_loop()
   img_tick();
   // a backup RAM file the core asked for
   bk_tick();
+  core_eeprom_tick();
 
   hang_mark(0x0d00);
   serial_bridge_tick();

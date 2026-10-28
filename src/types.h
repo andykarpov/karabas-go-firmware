@@ -100,7 +100,6 @@ typedef struct {
 	uint8_t osd_len;
 	core_eeprom_t eeprom[MAX_EEPROM_ITEMS];
 	bool osd_need_save;
-	bool eeprom_need_save;
 	char dir[32+1];
 	char save_dir[32+1]; // backup RAM files (FILE_POS_SAVE_DIR)
 	core_btn_t btn[CORE_BUTTONS];

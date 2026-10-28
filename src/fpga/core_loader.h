@@ -35,6 +35,10 @@ bool core_osd_phys(uint8_t pos, const char *filename);
 void core_ioctl_send(uint8_t slot, bool popup);
 void core_send_all();
 void core_trigger(uint8_t pos);
+// the EEPROM of banks 4..254 (in the core file): saved by the tick when the core stops changing
+// it; flush before another core or a reboot. false: not saved (no card, a write error)
+void core_eeprom_tick(void);
+bool core_eeprom_flush(void);
 
 #ifdef __cplusplus
 }
