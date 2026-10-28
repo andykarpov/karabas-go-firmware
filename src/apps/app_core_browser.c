@@ -383,9 +383,10 @@ void app_core_browser_read_list() {
 
 }
 
-static void start_core() {
+// sound: the start sound of the graphic menu (a core chosen by the user, not the autoload)
+static void start_core(bool sound) {
   autoload_enabled = false;
-  if (has_ft) {
+  if (has_ft && sound) {
     app_core_browser_ft_menu(2); // play wav
   }
   d_printf("Selected core %s to boot from menu", cores[core_sel].filename); d_println();
@@ -442,7 +443,7 @@ void app_core_browser_on_keyboard() {
         }
 
         if (key == KEY_ENTER) {
-          start_core();
+          start_core(true);
         }
 
         // enter setup mode (S, joy start)
@@ -501,7 +502,7 @@ void app_core_browser_tick() {
     int16_t id = ft_hover();
     if (id >= 0 && id < cores_len) {
       if (id == core_sel) {
-        start_core();
+        start_core(true);
         return;
       }
       core_sel = id;
@@ -527,17 +528,7 @@ void app_core_browser_tick() {
 void app_core_browser_on_time() {
   if (autoload_enabled) {
     if (ms_since(autoload_timer) > autoload_countdown * 1000) {
-      autoload_enabled = false;
-      char buf[sizeof(cores[0].filename)];
-      strcpy(buf, cores[core_sel].filename); kg_trim(buf);
-      has_ft = false;
-      do_configure(buf);
-      switch (core.type) {
-        case CORE_TYPE_BOOT: osd_state = state_core_browser; break;
-        case CORE_TYPE_OSD: osd_state = state_main; break;
-        case CORE_TYPE_FILELOADER: osd_state = state_file_loader; break;
-        default: osd_state = state_main;
-      }
+      start_core(false);
     }
   }
 }
