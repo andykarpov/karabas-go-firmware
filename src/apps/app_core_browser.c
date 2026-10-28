@@ -74,9 +74,9 @@ void app_core_browser_menu(uint8_t vpos) {
   for (uint8_t row = 0; row < core_page_size; row++) {
     uint8_t i = core_from + row;
     char line[40] = "";
-    // number, name (17 chars), build, where it is
+    // number, name (19 chars), build
     if (i < core_to) {
-      snprintf(line, sizeof(line), "%-3d %-17.17s%s%s", i+1, cores[i].name, cores[i].build, cores[i].flash ? "  F" : " SD");
+      snprintf(line, sizeof(line), "%-3d %-19.19s %s", i+1, cores[i].name, cores[i].build);
     }
     ui_row(0, vpos + row, line, i == core_sel && i < core_to);
   }
@@ -235,9 +235,6 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
       ft_draw_rect(bx, by, bw, bh, 2, color_button_active);
     }
     ft_draw_button(bx, by, bw, bh, 28, colort, colorb, hw_setup.ft_3d_buttons ? FT81x_OPT_3D : FT81x_OPT_FLAT, name);
-    if (cores[i].flash) {
-      ft_draw_text(bx + bw - 32, by + bh / 2, 28, colort, FT81x_OPT_CENTERY, "F");
-    }
     if (autoload_enabled && i == core_sel) {
       ft_draw_gauge(bx + 20, by + bh / 2, 12, colort, colorb, 0, 1, 1, autoload_left_s(), autoload_countdown);
     }
@@ -285,7 +282,6 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
 core_list_item_t app_core_browser_get_item(const char *filename) {
   core_list_item_t core;
   snprintf(core.filename, sizeof(core.filename), "%s", filename);
-  core.flash = false;
   file_read_str(&file1, FILE_POS_CORE_ID, core.id, 32);
   file_read_str(&file1, FILE_POS_CORE_NAME, core.name, 32);
   uint8_t visible; file_seek(FILE_POS_CORE_VISIBLE); visible = file_read(); core.visible = (visible > 0);

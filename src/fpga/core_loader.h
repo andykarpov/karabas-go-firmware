@@ -37,7 +37,7 @@ bool core_osd_phys(uint8_t pos, const char *filename);
 void core_ioctl_send(uint8_t slot, bool popup);
 // len bytes of f from its position (UINT32_MAX: to its end) to the core at addr through
 // link_write_data() (the ROMs, the file loader, ioctl), read into the bitstream buffer; progress
-// (if any) after every chunk of 8 KB, crc (if any) updated with the bytes. The bytes sent.
+// (if any) every 32 KB and at the end, crc (if any) updated with the bytes. The bytes sent.
 typedef void (*core_send_progress_t)(uint32_t sent, void *ctx);
 uint32_t core_send_file(FIL *f, uint32_t len, uint8_t data_cmd, uint8_t bank_cmd, uint32_t addr,
   core_send_progress_t progress, void *ctx, uint32_t *crc);

@@ -53,17 +53,23 @@ void core_send(uint8_t pos)
   d_println();
 }
 
+#define SEND_PROGRESS_STEP 32768 // an OSD redraw costs: a popup every 8 KB made a 256 KB file 18% slower
+
 uint32_t core_send_file(FIL *f, uint32_t len, uint8_t data_cmd, uint8_t bank_cmd, uint32_t addr,
     core_send_progress_t progress, void *ctx, uint32_t *crc) {
   uint8_t *buf = bitstream_buf(); // free while no bitstream is sent
-  uint32_t sent = 0;
+  uint32_t sent = 0, shown = 0;
   UINT n;
   while (sent < len && (n = sd_read(f, buf, len - sent < BITSTREAM_BUF_SIZE ? len - sent : BITSTREAM_BUF_SIZE)) > 0) {
     if (crc) *crc = kg_crc32_update(*crc, buf, n);
     link_write_data(data_cmd, bank_cmd, addr + sent, buf, n);
     sent += n;
-    if (progress) progress(sent, ctx);
+    if (progress && sent - shown >= SEND_PROGRESS_STEP) {
+      progress(sent, ctx);
+      shown = sent;
+    }
   }
+  if (progress && sent != shown) progress(sent, ctx); // the end
   return sent;
 }
 
@@ -345,7 +351,6 @@ void read_core(const char* filename) {
     halt("Unable to open bitstream file to read");
   }
 
-  core.flash = false;
   {
     FILINFO fi; // the name as it is on the card
     snprintf(core.filename, sizeof(core.filename), "%s", f_stat(filename, &fi) == FR_OK ? fi.fname : filename);
