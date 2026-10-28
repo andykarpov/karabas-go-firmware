@@ -193,7 +193,7 @@ answered by the firmware:
 | `AT+KARABAS=msc` | restart with the SD card as a USB drive |
 | `AT+KARABAS=msc2` | restart with the second SD card (the slot of the FPGA) as a USB drive |
 | `AT+KARABAS=sd2test` | core browser only: reads the second SD card at a few SPI clocks (a check of the card and the link) |
-| `AT+KARABAS=esp` | core browser only: the bridge goes to the ESP8266, for its own AT commands |
+| `AT+KARABAS=esp` | core browser only: the bridge goes to the ESP8266, for its own AT commands (a CR, LF or CR LF from the terminal goes as CR LF) |
 | `AT+KARABAS=uart` | back to the UART of the core |
 
 ## Building from source

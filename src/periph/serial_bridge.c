@@ -10,7 +10,8 @@
 //   boot - reboot into the RP2040 USB bootloader (BOOTSEL, firmware update)
 //   msc  - reboot with the SD card exposed as USB mass storage (core update)
 //   msc2 - the same with the second SD card (the slot of the FPGA, through the boot core)
-//   esp  - BOOT core only: the bridge goes to the ESP8266 uart (AT commands to the module)
+//   esp  - BOOT core only: the bridge goes to the ESP8266 uart (AT commands to the module; a CR,
+//          LF or CR LF of the host goes as CR LF)
 //   uart - back to the core UART (also when another core is loaded)
 //   sd2test - BOOT core only: reads the second SD card at a few SPI clocks (storage/sd2)
 
@@ -26,6 +27,7 @@ static uint8_t tx_len = 0, tx_pos = 0;
 static uint32_t at_hold_timer = 0;         // held bytes go to the core when the host goes quiet
 #define AT_HOLD_TIMEOUT_MS 500
 static bool esp_mode = false;
+static kg_crlf_t esp_crlf;                 // the ESP8266 runs a command only after CR LF
 
 // The host side is the CDC port (also the debug log, both from APP only). A write waits while
 // the fifo is full, at most HOST_WRITE_WAIT_MS without progress (no terminal reading): USBD,
@@ -136,6 +138,7 @@ static void at_command(const char *arg) {
     msc_reboot_to_msc(strcasecmp(arg, "msc2") == 0 ? 2 : 1);
   } else if (strcasecmp(arg, "esp") == 0 && core.type == CORE_TYPE_BOOT) {
     esp_mode = true;
+    esp_crlf.cr = false;
     host_print("OK\r\n");
   } else if (strcasecmp(arg, "sd2test") == 0 && core.type == CORE_TYPE_BOOT) {
     sd2_test(serial_out);
@@ -151,6 +154,12 @@ void serial_bridge_begin() {
   kg_at_init(&at_parser);
 }
 
+// to the ESP8266 with the line ends of the host as CR LF (PuTTY sends a CR alone)
+static void esp_write_host_bytes() {
+  char out[2 * sizeof(at_parser.out)];
+  esp_serial_write((const uint8_t *) out, kg_crlf(&esp_crlf, at_parser.out, at_parser.out_len, out));
+}
+
 // esp mode: host <-> ESP8266 uart, except while Setup Wi-Fi waits for a reply of the module
 static void esp_tick() {
   if (esp_at_busy()) return;
@@ -160,18 +169,18 @@ static void esp_tick() {
   while (n < (int) sizeof(buf) && esp_serial_available() > 0) buf[n++] = (uint8_t) esp_serial_read();
   if (n > 0) { host_write(buf, n); host_flush(); }
 
-  while (tud_cdc_available() > 0 && esp_serial_available_for_write() > (int) sizeof(at_parser.out)) {
+  while (tud_cdc_available() > 0 && esp_serial_available_for_write() > 2 * (int) sizeof(at_parser.out)) {
     int c = tud_cdc_read_char();
     if (c == -1) return;
     at_hold_timer = ms_now();
     switch (kg_at_feed(&at_parser, (char) c)) {
-      case KG_AT_PASS: esp_serial_write((const uint8_t *) at_parser.out, at_parser.out_len); break;
+      case KG_AT_PASS: esp_write_host_bytes(); break;
       case KG_AT_COMMAND: at_command(kg_at_arg(&at_parser)); return;
       default: break;
     }
   }
   if (at_parser.len > 0 && ms_since(at_hold_timer) >= AT_HOLD_TIMEOUT_MS && kg_at_flush(&at_parser) > 0) {
-    esp_serial_write((const uint8_t *) at_parser.out, at_parser.out_len);
+    esp_write_host_bytes();
   }
 }
 

@@ -6,6 +6,7 @@
 // ignoring case, the line ends with CR or LF (a LF right after a CR is dropped).
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -36,6 +37,15 @@ kg_at_result_t kg_at_feed(kg_at_parser_t *p, char c);
 uint8_t kg_at_flush(kg_at_parser_t *p);
 // the arg of the command after KG_AT_COMMAND, as typed
 const char *kg_at_arg(const kg_at_parser_t *p);
+
+// Line ends for the ESP8266, which runs a command only after CR LF, from terminals that send a
+// CR (PuTTY) or a LF alone: every CR, LF or CR LF becomes CR LF, also when the CR and the LF
+// come in different calls. out has room for 2 * len bytes; returns the bytes written.
+typedef struct {
+  bool cr; // the last byte was a CR: a LF next is dropped
+} kg_crlf_t;
+
+size_t kg_crlf(kg_crlf_t *s, const char *in, size_t len, char *out);
 
 #ifdef __cplusplus
 }

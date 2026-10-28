@@ -62,11 +62,31 @@ static void test_flush() {
   TEST_ASSERT_EQUAL_STRING("q", feed(&p, "q", cmds));
 }
 
+static const char *crlf(kg_crlf_t *s, const char *in) {
+  static char out[64];
+  out[kg_crlf(s, in, strlen(in), out)] = '\0';
+  return out;
+}
+
+static void test_crlf() {
+  kg_crlf_t s = {0};
+  TEST_ASSERT_EQUAL_STRING("AT\r\n", crlf(&s, "AT\r"));
+  TEST_ASSERT_EQUAL_STRING("AT\r\n", crlf(&s, "AT\n"));
+  TEST_ASSERT_EQUAL_STRING("AT\r\nAT\r\n", crlf(&s, "AT\r\nAT\r\n"));
+  TEST_ASSERT_EQUAL_STRING("\r\n\r\n", crlf(&s, "\n\n"));
+  TEST_ASSERT_EQUAL_STRING("\r\n\r\n", crlf(&s, "\r\r"));
+  TEST_ASSERT_EQUAL_STRING("", crlf(&s, "\n")); // the LF of the CR LF of the last call
+  TEST_ASSERT_EQUAL_STRING("\r\n", crlf(&s, "\r"));
+  TEST_ASSERT_EQUAL_STRING("", crlf(&s, "\n"));
+  TEST_ASSERT_EQUAL_STRING("x\r\n", crlf(&s, "x\n"));
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_command);
   RUN_TEST(test_passthrough);
   RUN_TEST(test_too_long);
   RUN_TEST(test_flush);
+  RUN_TEST(test_crlf);
   return UNITY_END();
 }
