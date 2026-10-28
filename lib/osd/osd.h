@@ -83,7 +83,9 @@ void osd_scrollbar(uint8_t x, uint8_t y, uint8_t height, uint32_t val, uint32_t 
 void osd_logo(uint8_t x, uint8_t y, uint8_t hw);
 void osd_header(const char *build, const char *id, uint8_t hw);
 void osd_footer(void);
-void osd_loading_popup(uint32_t val, uint32_t max);
+// a box with a title (up to 15 chars), "Please wait." and a progress bar
+void osd_progress_popup(const char *title, uint32_t val, uint32_t max);
+void osd_loading_popup(uint32_t val, uint32_t max); // "Loading..."
 void osd_show_menu(void);
 void osd_hide_menu(void);
 void osd_show_popup(uint8_t i);

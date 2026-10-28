@@ -27,6 +27,8 @@ void img_mount(uint8_t slot);
 void img_close_all();
 // serve a sector request of the fpga, called from the main loop
 void img_tick();
+// the sectors written so far, all slots (bk_flush() counts the ones of a flush)
+uint32_t img_writes();
 
 #ifdef __cplusplus
 }

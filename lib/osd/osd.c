@@ -150,19 +150,23 @@ void osd_scrollbar(uint8_t x, uint8_t y, uint8_t height, uint32_t val, uint32_t 
   }
 }
 
-void osd_loading_popup(uint32_t val, uint32_t max) {
+void osd_progress_popup(const char *title, uint32_t val, uint32_t max) {
   uint8_t bg = OSD_COLOR_BLUE;
   osd_set_color(OSD_COLOR_WHITE, bg);
   osd_frame(8, 8, 24, 12);
   osd_fill(9, 9, 23, 11, OSD_CHAR_VOID);
   osd_set_color(OSD_COLOR_YELLOW_I, bg);
   osd_set_pos(9, 9);
-  osd_print("Loading...");
+  osd_print(title);
   osd_set_color(OSD_COLOR_CYAN_I, bg);
   osd_set_pos(9, 10);
   osd_print("Please wait.");
   osd_set_color(OSD_COLOR_WHITE, bg);
   osd_progress(9, 11, 15, val, max, OSD_COLOR_WHITE, bg);
+}
+
+void osd_loading_popup(uint32_t val, uint32_t max) {
+  osd_progress_popup("Loading...", val, max);
 }
 
 void osd_logo(uint8_t x, uint8_t y, uint8_t hw) {
