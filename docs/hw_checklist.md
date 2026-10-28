@@ -69,7 +69,7 @@ Set `debug=1` in `karabas.ini` and keep a terminal on the USB serial port: most 
 ## Serial bridge
 
 - [ ] The host's bytes reach the core UART and back.
-- [ ] `AT+KARABAS=list`, `boot` (BOOTSEL), `msc`, `msc2`, `esp` / `uart` (BOOT core: the ESP AT console and back).
+- [ ] `AT+KARABAS=list`, `version`, `boot` (BOOTSEL), `msc`, `msc2`, `esp` / `uart` (BOOT core: the ESP AT console and back).
 
 ## Displays
 
