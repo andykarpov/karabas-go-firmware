@@ -38,6 +38,10 @@ uint8_t link_core_caps();                 // the caps of the loaded core (0: no 
 // send data to `type`'s target starting at addr; returns how many bytes went out as bursts
 // (less than len if the fpga stopped being ready: send the rest with classic frames)
 size_t link_burst_write(uint8_t type, uint32_t addr, const uint8_t *data, size_t len);
+// data for a target of the core (the ROMs, the file loader, ioctl) at addr: bursts of type
+// data_cmd if the core takes them, the rest as classic frames: bank_cmd 0..2 the address bits
+// 8..31 (before the first byte and at every 256), data_cmd with the low byte of the address
+void link_write_data(uint8_t data_cmd, uint8_t bank_cmd, uint32_t addr, const uint8_t *buf, size_t len);
 
 void spi_queue(uint8_t cmd, uint8_t addr, uint8_t data); // enqueue from any core / irq, sent by the input handler
 bool link_queue_pop(queue_spi_t *packet);

@@ -11,10 +11,9 @@
 #include "kg_list.h"
 
 uint8_t curr_osd_item;
-bool is_filebrowser = false;
-int filebrowser_slot = -1;
-int prev_filebrowser_slot = -1;
-bool prev_is_filebrowser = false;
+static bool is_filebrowser = false;
+static int filebrowser_slot = -1; // the slot of the file list read last, -1: read it again
+static bool prev_is_filebrowser = false;
 // the dir of the slot when the file browser was opened: browsing changes the dir of the slot,
 // esc puts it back, so it stays the dir of the mounted image
 static char filebrowser_dir[256];
@@ -25,9 +24,14 @@ static int last_mount_slot = -1;
 // the image of that slot: the browser of the empty slot preselects the file after it (disk 2)
 static char presel_after[256];
 
+// the file slot of the item under the cursor
+static core_file_slot_t *cur_slot() {
+  return &file_slots[core.osd[curr_osd_item].slot_id];
+}
+
 static void filebrowser_open() {
   uint8_t slot = core.osd[curr_osd_item].slot_id;
-  core_file_slot_t *fs = &file_slots[slot];
+  core_file_slot_t *fs = cur_slot();
   memcpy(filebrowser_dir, fs->dir, sizeof(filebrowser_dir));
   presel_after[0] = '\0';
   if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER && !fs->is_mounted) {
@@ -133,7 +137,7 @@ void app_core_overlay(bool force)
 // the value of a core menu item as shown: the option, the image of a file item
 static void item_value(uint8_t i, char *out, size_t size) {
   const core_osd_t *item = &core.osd[i];
-  if (item->type == CORE_OSD_TYPE_FILEMOUNTER || item->type == CORE_OSD_TYPE_FILELOADER) {
+  if (core_osd_is_file(i)) {
     const core_file_slot_t *fs = &file_slots[item->slot_id];
     int phys = kg_phys_drive(fs->filename);
     if (fs->is_mounted && phys >= 0) snprintf(out, size, "Phys DF%d", phys);
@@ -182,7 +186,7 @@ void app_core_save(uint8_t pos)
       return;
     }
     core.osd_need_save = false;
-    if (core.osd[pos].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[pos].type == CORE_OSD_TYPE_FILELOADER) {
+    if (core_osd_is_file(pos)) {
       // save file mounter data (dir, filename) into the core
       uint32_t offset = file_slots[core.osd[pos].slot_id].offset_dir;
       file_seek(offset); 
@@ -199,96 +203,83 @@ void app_core_save(uint8_t pos)
     sd_close(&file1);
 }
 
-void app_core_on_keyboard() {
+// the file browser in the dir of the slot, which has just changed (the image stays mounted
+// until a file is chosen)
+static void filebrowser_dir_changed() {
+  d_print("Enter directory "); d_print(cur_slot()->dir); d_println();
+  app_core_init_filebrowser();
+  app_core_filebrowser(APP_COREBROWSER_MENU_OFFSET);
+}
 
+// Enter in the file browser: eject, a physical drive, the root, the parent, a dir or an image.
+// true if it went into another dir (the browser is drawn already)
+static bool filebrowser_enter() {
+  uint16_t sel = fb_sel();
+  if (fb_len() == 0) return false;
+  sd_close(&file1);
+  core_file_slot_t *fs = cur_slot();
+  FILINFO fi;
+  if (fb_is_eject(sel)) {
+    app_core_eject(curr_osd_item);
+    is_filebrowser = false;
+  } else if (fb_phys(sel) >= 0) {
+    app_core_select_phys(curr_osd_item, fb_phys(sel));
+    is_filebrowser = false;
+  } else if (fb_is_root(sel)) {
+    strcpy(fs->dir, "/");
+    filebrowser_dir_changed();
+    return true;
+  } else if (fb_is_parent(sel)) {
+    kg_path_parent(fs->dir);
+    kg_path_collapse(fs->dir);
+    filebrowser_dir_changed();
+    return true;
+  } else if (sd_find_id(&root1, fb_id(sel), &fi)) {
+    if (fi.fattrib & AM_DIR) {
+      char path[KG_PATH_MAX];
+      kg_path_join(path, sizeof(path), fs->dir, fi.fname);
+      kg_path_collapse(path);
+      snprintf(fs->dir, sizeof(fs->dir), "%s", path);
+      filebrowser_dir_changed();
+      return true;
+    }
+    // an image, if its extension matches
+    d_printf("Selecting file id %d: %s", fb_id(sel), fi.fname); d_println();
+    char exts[sizeof(fs->ext)];
+    strcpy(exts, fs->ext);
+    kg_trim(exts);
+    if (kg_name_has_ext(fi.fname, exts)) {
+      strcpy(fs->filename, fi.fname);
+      fs->is_mounted = true;
+      if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER) {
+        last_mount_slot = core.osd[curr_osd_item].slot_id;
+      }
+      app_core_on_select_file();
+      is_filebrowser = false; // exit from file browser mode
+      filebrowser_slot = -1; // the file list gets the eject entry
+    } else {
+      d_println("File extension does not match");
+    }
+  }
+  core.osd_need_save = true;
+  return false;
+}
+
+void app_core_on_keyboard() {
   uint8_t key = ui_nav_key();
 
   if (is_filebrowser) {
-
     // up / down, left / right a page
     if (fb_key(key)) need_redraw = true;
 
-    // enter
     if (key == KEY_ENTER) {
-      uint16_t sel = fb_sel();
-      if (fb_len() > 0) {
-        sd_close(&file1);
-        FILINFO fi;
-        // eject
-        if (fb_is_eject(sel)) {
-          app_core_eject(curr_osd_item);
-          is_filebrowser = false;
-        }
-        // physical floppy drive
-        else if (fb_phys(sel) >= 0) {
-          app_core_select_phys(curr_osd_item, fb_phys(sel));
-          is_filebrowser = false;
-        }
-        // goto root (.)
-        else if (fb_is_root(sel)) {
-          strcpy(file_slots[core.osd[curr_osd_item].slot_id].dir, "/");
-          // re-read files from root (the image stays mounted until a file is selected)
-          app_core_init_filebrowser();
-          app_core_filebrowser(APP_COREBROWSER_MENU_OFFSET);
-          return;
-        }
-        // goto parent (..)
-        else if (fb_is_parent(sel)) {
-          char *dir = file_slots[core.osd[curr_osd_item].slot_id].dir;
-          kg_path_parent(dir);
-          kg_path_collapse(dir);
-          d_print("Enter directory "); d_print(dir); d_println();
-          // re-read files from parent dir
-          app_core_init_filebrowser();
-          app_core_filebrowser(APP_COREBROWSER_MENU_OFFSET);
-          return;
-        }
-        // open file / dir
-        else if (sd_find_id(&root1, fb_id(sel), &fi)) {
-          // goto new dir name
-          if (fi.fattrib & AM_DIR) {
-            const char *dirname = fi.fname;
-            char *dir = file_slots[core.osd[curr_osd_item].slot_id].dir;
-            char path[KG_PATH_MAX];
-            kg_path_join(path, sizeof(path), dir, dirname);
-            kg_path_collapse(path);
-            snprintf(dir, sizeof(file_slots[0].dir), "%s", path);
-            app_core_init_filebrowser();
-            app_core_filebrowser(APP_COREBROWSER_MENU_OFFSET);
-            return;
-          }
-          // file selection (if ext matches)
-          else {
-            d_printf("Selecting file id %d", fb_id(sel)); d_println();
-            const char *filename = fi.fname;
-            d_printf("Filename %s", filename);
-            // check file ext match
-            char exts[sizeof(file_slots[0].ext)];
-            strcpy(exts, file_slots[core.osd[curr_osd_item].slot_id].ext);
-            kg_trim(exts);
-            if (kg_name_has_ext(filename, exts)) {
-              strcpy(file_slots[core.osd[curr_osd_item].slot_id].filename, filename);
-              file_slots[core.osd[curr_osd_item].slot_id].is_mounted = true;
-              if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER) {
-                last_mount_slot = core.osd[curr_osd_item].slot_id;
-              }
-              app_core_on_select_file();
-              is_filebrowser = false; // exit from file browser mode
-              filebrowser_slot = -1; // the file list gets the eject entry
-            } else {
-              d_println("File extension does not match");
-            }
-          }
-        }
-
-        core.osd_need_save = true;
-      }
+      if (filebrowser_enter()) return; // another dir: drawn already
       need_redraw = true;
     }
 
     // esc: back to the dir of the mounted image
     if (key == KEY_ESC) {
-      core_file_slot_t *fs = &file_slots[core.osd[curr_osd_item].slot_id];
+      core_file_slot_t *fs = cur_slot();
       if (strcmp(fs->dir, filebrowser_dir) != 0) {
         memcpy(fs->dir, filebrowser_dir, sizeof(filebrowser_dir));
         filebrowser_slot = -1;
@@ -296,60 +287,33 @@ void app_core_on_keyboard() {
       is_filebrowser = false;
       need_redraw = true;
     }
-
   } else {
+    if (key == KEY_DOWN || key == KEY_UP) {
+      curr_osd_item = kg_list_step_active(curr_osd_item, core.osd_len, key == KEY_DOWN ? 1 : -1, item_active, NULL);
+      need_redraw = true;
+    }
 
-        // down
-        if (key == KEY_DOWN) {
-          curr_osd_item = kg_list_step_active(curr_osd_item, core.osd_len, 1, item_active, NULL);
-          need_redraw = true;
-        }
+    // right / enter, left: the browser of a file item, else the next / previous option
+    if (key == KEY_RIGHT || key == KEY_ENTER || key == KEY_LEFT) {
+      if (core_osd_is_file(curr_osd_item)) {
+        filebrowser_open();
+      } else {
+        core_osd_change(curr_osd_item, key == KEY_LEFT ? -1 : 1);
+      }
+      need_redraw = true;
+    }
 
-        // up
-        if (key == KEY_UP) {
-          curr_osd_item = kg_list_step_active(curr_osd_item, core.osd_len, -1, item_active, NULL);
-          need_redraw = true;
-        }
+    // delete, backspace: eject the image of a file mounter item
+    if ((key == KEY_DELETE || key == KEY_BACKSPACE) &&
+        core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER && cur_slot()->is_mounted) {
+      app_core_eject(curr_osd_item);
+      need_redraw = true;
+    }
 
-        // right, enter
-        if (key == KEY_RIGHT || key == KEY_ENTER) {
-          if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILELOADER) {
-            filebrowser_open();
-          } else {
-            core_osd_change(curr_osd_item, 1);
-          }
-          need_redraw = true;
-        }
-
-        // left
-        if (key == KEY_LEFT) {
-          if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILELOADER) {
-            filebrowser_open();
-          } else {
-            core_osd_change(curr_osd_item, -1);
-          }
-          need_redraw = true;
-        }
-
-        // delete, backspace: eject the image of a file mounter item
-        if (key == KEY_DELETE || key == KEY_BACKSPACE) {
-          if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER && file_slots[core.osd[curr_osd_item].slot_id].is_mounted) {
-            app_core_eject(curr_osd_item);
-            need_redraw = true;
-          }
-        }
-
-        // s
-        if (key == KEY_S) {
-          osd_return_state = state_main;
-          osd_state = state_setup;
-        }
-
-        // a
-        if (key == KEY_A) {
-          osd_return_state = state_main;
-          osd_state = state_about;
-        }
+    if (key == KEY_S || key == KEY_A) {
+      osd_return_state = state_main;
+      osd_state = key == KEY_S ? state_setup : state_about;
+    }
   }
 
   if (need_redraw) {
@@ -386,7 +350,7 @@ int app_core_init_filebrowser() {
   if (!has_sd) return -1;
 
   // working dir
-  char *dir = file_slots[core.osd[curr_osd_item].slot_id].dir;
+  char *dir = cur_slot()->dir;
   kg_path_root(dir, sizeof(file_slots[0].dir));
 
   sd_opendir(&root1, dir);
@@ -400,7 +364,7 @@ int app_core_init_filebrowser() {
   // the eject entry (a mounted image of a file mounter), the physical floppy drives (an F item
   // of a board with the floppy connector), the root and the parent dir
   uint16_t n_special = 0;
-  if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER && file_slots[core.osd[curr_osd_item].slot_id].is_mounted) {
+  if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER && cur_slot()->is_mounted) {
     if (fb_add_eject()) n_special++;
   }
   if (core_osd_can_phys(curr_osd_item)) {
@@ -413,7 +377,7 @@ int app_core_init_filebrowser() {
 
   uint16_t presel_id = 0;
   uint16_t after_id = 0; // the image of another slot (presel_after): the next file is preselected
-  const char *core_f = file_slots[core.osd[curr_osd_item].slot_id].filename;
+  const char *core_f = cur_slot()->filename;
   FILINFO fi;
   while (sd_dir_is_open(&root1) && f_readdir(&root1, &fi) == FR_OK && fi.fname[0]) {
     uint16_t id;
@@ -449,7 +413,7 @@ int app_core_init_filebrowser() {
 }
 
 void app_core_filebrowser(uint8_t vpos) {
-  fb_draw(vpos, file_slots[core.osd[curr_osd_item].slot_id].dir, true);
+  fb_draw(vpos, cur_slot()->dir, true);
 }
 
 void app_core_on_select_file() {

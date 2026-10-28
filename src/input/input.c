@@ -77,10 +77,8 @@ static void osd_toggle() {
   if (!is_osd) {
     is_osd = true;
     osd_show_menu();
-  } else if (!is_osd_hiding) {
-    is_osd_hiding = true;
-    hide_timer = ms_now();
-    osd_hide_menu();
+  } else {
+    ui_osd_hide();
   }
 }
 
@@ -355,7 +353,7 @@ bool on_global_hotkeys() {
       }
     } else if (core.osd[i].type == CORE_OSD_TYPE_TRIGGER) {
         core_trigger(i);
-    } else if (core.osd[i].type == CORE_OSD_TYPE_FILELOADER || core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER) {
+    } else if (core_osd_is_file(i)) {
       is_osd = true;
       curr_osd_item = i;
       osd_show_menu();

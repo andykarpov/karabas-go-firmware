@@ -4,6 +4,7 @@
 #include "input/ps2kbd.h"
 #include "input/usb_hid_keys.h"
 #include "kg_format.h"
+#include "crc32.h"
 #include "file_name.h"
 #include "periph/printer_link.h"
 
@@ -22,9 +23,12 @@ bool core_osd_phys(uint8_t pos, const char *filename) {
   return core_osd_can_phys(pos) && kg_phys_drive(filename) >= 0;
 }
 
+bool core_osd_is_file(uint8_t pos) {
+  return pos < core.osd_len && (core.osd[pos].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[pos].type == CORE_OSD_TYPE_FILELOADER);
+}
+
 bool core_osd_selectable(uint8_t pos) {
-  return pos < core.osd_len && (core.osd[pos].options_len > 0 || core.osd[pos].type == CORE_OSD_TYPE_FILEMOUNTER ||
-         core.osd[pos].type == CORE_OSD_TYPE_FILELOADER);
+  return pos < core.osd_len && (core.osd[pos].options_len > 0 || core_osd_is_file(pos));
 }
 
 void core_osd_change(uint8_t pos, int d) {
@@ -47,6 +51,25 @@ void core_send(uint8_t pos)
     d_printf("Switch: %s %d", core.osd[pos].name, core.osd[pos].val);
   }
   d_println();
+}
+
+uint32_t core_send_file(FIL *f, uint32_t len, uint8_t data_cmd, uint8_t bank_cmd, uint32_t addr,
+    core_send_progress_t progress, void *ctx, uint32_t *crc) {
+  uint8_t *buf = bitstream_buf(); // free while no bitstream is sent
+  uint32_t sent = 0;
+  UINT n;
+  while (sent < len && (n = sd_read(f, buf, len - sent < BITSTREAM_BUF_SIZE ? len - sent : BITSTREAM_BUF_SIZE)) > 0) {
+    if (crc) *crc = kg_crc32_update(*crc, buf, n);
+    link_write_data(data_cmd, bank_cmd, addr + sent, buf, n);
+    sent += n;
+    if (progress) progress(sent, ctx);
+  }
+  return sent;
+}
+
+void core_loading_popup(uint32_t sent, void *ctx) {
+  osd_loading_popup(sent, *(const uint32_t *) ctx);
+  osd_update();
 }
 
 void core_ioctl_send(uint8_t slot, bool popup)
@@ -81,26 +104,9 @@ void core_ioctl_send(uint8_t slot, bool popup)
     spi_send(CMD_IOCTL_EXT, i, ext[i]);
   }
 
-  uint8_t buf[512];
-  uint64_t i = 0;
-  int c;
   uint32_t send_timer = ms_now();
-  send_timer = ms_now();
-  while (i < fsize && (c = sd_read(file, buf, sizeof(buf))) > 0) {
-    if (popup && i % 8192 == 0) {
-      osd_loading_popup(i, fsize);
-      osd_update();
-    }
-    // bursts if the core supports them; classic frames for whatever they did not send
-    int done = link_burst_write(CMD_IOCTL_DATA, (uint32_t) i, buf, c);
-    i += done;
-    for (int j = done; j < c; j++, i++) {
-      if (j == done || i % 256 == 0) {
-        spi_send24(CMD_IOCTL_BANK, i >> 8);
-      }
-      spi_send(CMD_IOCTL_DATA, (uint8_t)((i & 0x00000000000000FF)), buf[j]);
-    }
-  }
+  uint32_t total = (uint32_t) fsize;
+  uint32_t i = open ? core_send_file(file, total, CMD_IOCTL_DATA, CMD_IOCTL_BANK, 0, popup ? core_loading_popup : NULL, &total, NULL) : 0;
   sd_tmp_close();
   spi_send(CMD_IOCTL_STATE, 0, 0); // finish
   d_printf("Ioctl slot %d: %s, %lu bytes in %lu ms (%s)", slot, fname, (unsigned long) i,
@@ -117,7 +123,7 @@ void core_ioctl_send(uint8_t slot, bool popup)
 void core_send_all() 
 {
   for (uint8_t i=0; i<core.osd_len; i++) {
-    if (core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[i].type == CORE_OSD_TYPE_FILELOADER) {
+    if (core_osd_is_file(i)) {
       // images are mounted by read_core(), after the core settings
     } else {
       spi_send(CMD_SWITCHES, i, core.osd[i].val);
@@ -221,9 +227,7 @@ void flashboot (uint8_t data) {
   // now it's implemented as hack: reload the same core (required for zx next hard reset)
   // d_printf("Core id %s", core.id); d_println();
   // d_printf("Core filename %s", core.filename); d_println();
-  char id[sizeof(core.id)];
-  strcpy(id, core.id); kg_trim(id);
-  if (strcmp(id, "zxnext") == 0) { // allow flashboot only for zxnext core
+  if (strcmp(core.id, "zxnext") == 0) { // allow flashboot only for zxnext core
     is_flashboot = true;
     do_configure(core.filename);
   }
@@ -347,7 +351,7 @@ void read_core(const char* filename) {
     snprintf(core.filename, sizeof(core.filename), "%s", f_stat(filename, &fi) == FR_OK ? fi.fname : filename);
     core.filename[32] = '\0';
   }
-  file_seek(FILE_POS_CORE_NAME); file_read_bytes(core.name, 32); core.name[32] = '\0';
+  file_read_str(&file1, FILE_POS_CORE_NAME, core.name, 32);
   uint8_t visible; file_seek(FILE_POS_CORE_VISIBLE); visible = file_read(); core.visible = (visible > 0);
   file_seek(FILE_POS_CORE_ORDER); core.order = file_read();
   file_seek(FILE_POS_CORE_TYPE); core.type = file_read();
@@ -368,17 +372,15 @@ void read_core(const char* filename) {
     default: d_println("Reserved");
   }
   core.bitstream_length = file_read32(FILE_POS_BITSTREAM_LEN);
-  file_seek(FILE_POS_CORE_ID); file_read_bytes(core.id, 32); core.id[32] = '\0';
-  file_seek(FILE_POS_CORE_BUILD); file_read_bytes(core.build, 8); core.build[8] = '\0';
+  file_read_str(&file1, FILE_POS_CORE_ID, core.id, 32);
+  file_read_str(&file1, FILE_POS_CORE_BUILD, core.build, 8);
   file_seek(FILE_POS_CORE_EEPROM_BANK); core.eeprom_bank = file_read();
   file_seek(FILE_POS_RTC_TYPE); core.rtc_type = file_read();
-  file_seek(FILE_POS_FILELOADER_DIR); file_read_bytes(core.dir, 32); core.dir[32] = '\0';
+  file_read_str(&file1, FILE_POS_FILELOADER_DIR, core.dir, 32);
   file_seek(FILE_POS_FILELOADER_FILE); core.last_file_id = file_read16(FILE_POS_FILELOADER_FILE);
-  file_seek(FILE_POS_FILELOADER_EXTENSIONS); file_read_bytes(core.file_extensions, 32); core.file_extensions[32] = '\0';
+  file_read_str(&file1, FILE_POS_FILELOADER_EXTENSIONS, core.file_extensions, 32);
   file_seek(FILE_POS_SPI_FREQ); core.spi_freq = file_read();
-  file_seek(FILE_POS_SAVE_DIR); file_read_bytes(core.save_dir, 32); core.save_dir[32] = '\0';
-  // reserved bytes of older core files are FF: no save dir
-  for (uint8_t i=0; i<32; i++) { if ((uint8_t) core.save_dir[i] == 0xFF) { core.save_dir[i] = '\0'; break; } }
+  file_read_str(&file1, FILE_POS_SAVE_DIR, core.save_dir, 32); // older core files: FF, no save dir
   link_set_freq(core.spi_freq);
   read_buttons();
   read_matrix();
@@ -414,7 +416,7 @@ void read_core(const char* filename) {
 
     // filemounter osd type:
     // loading initial dir, filename, extensions and trying to mount file, if any
-    if (core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER || core.osd[i].type == CORE_OSD_TYPE_FILELOADER) {
+    if (core_osd_is_file(i)) {
       core.osd[i].options_len = 0;
       uint8_t slot_byte = file_read(); // bit 7: autoload
       // not bitClear(): it clears the bit in slot_byte too, and the autoload bit read 0
@@ -583,27 +585,9 @@ void read_core(const char* filename) {
   osd_handle(true);
 }
 
-// send a chunk of rom data to the fpga, starting at the given rom address
-void rom_send(uint32_t addr, const uint8_t* buf, size_t len) {
-  // bursts if the core supports them; classic frames for whatever they did not send
-  size_t done = link_burst_write(CMD_ROMDATA, addr, buf, len);
-  addr += done;
-  buf += done;
-  len -= done;
-  for (size_t j=0; j<len; j++) {
-    uint32_t a = addr + j;
-    // send rombank address every 256 bytes (and on the first byte of an unaligned chunk)
-    if (j == 0 || a % 256 == 0) {
-      spi_send(CMD_ROMBANK, 0, (uint8_t)((a & 0x0000FF00) >> 8));
-      spi_send(CMD_ROMBANK, 1, (uint8_t)((a & 0x00FF0000) >> 16));
-      spi_send(CMD_ROMBANK, 2, (uint8_t)((a & 0xFF000000) >> 24));
-    }
-    // send lower 256 bytes
-    spi_send(CMD_ROMDATA, (uint8_t)(a & 0x000000FF), buf[j]);
-  }
-}
-
-void rom_progress(uint32_t rom_idx, uint32_t sent) {
+// the bytes sent of the ROM *ctx (uint32_t, from 0) on its row of the loading screen
+static void rom_progress(uint32_t sent, void *ctx) {
+  uint32_t rom_idx = *(const uint32_t *) ctx;
   osd_set_pos(4,5+rom_idx);
   osd_printf("%lu: ", (unsigned long) rom_idx + 1);
   char b[40];
@@ -611,9 +595,6 @@ void rom_progress(uint32_t rom_idx, uint32_t sent) {
   osd_update();
 }
 
-#define ROM_CHUNK 4096           // SD read size per rom_send (bursts split it into 512-byte bursts)
-#define ROM_PROGRESS_STEP 8192   // OSD progress update interval, bytes
-static_assert(ROM_CHUNK <= BITSTREAM_BUF_SIZE, "a ROM chunk must fit the bitstream buffer");
 
 void read_roms(const char* filename) {
 
@@ -650,8 +631,6 @@ void read_roms(const char* filename) {
       break;
     }
 
-    uint8_t *buf = bitstream_buf(); // the bitstream is sent by now
-    uint32_t next_progress = ROM_PROGRESS_STEP;
     if (rom_is_external) {
       // external rom block contains a rom filename (rom_len bytes) instead of a rom data
       char rom_filename[256];
@@ -662,18 +641,7 @@ void read_roms(const char* filename) {
       d_print("External ROM "); d_println(rom_filename);
 
       if (sd_open(&file2, rom_filename, FA_READ)) {
-        uint32_t sent = 0;
-        int c;
-        while ((c = sd_read(&file2, buf, ROM_CHUNK)) > 0) {
-          rom_send(rom_addr + sent, buf, c);
-          sent += c;
-          rom_bytes += c;
-          if (sent >= next_progress) {
-            rom_progress(rom_idx, sent);
-            next_progress = sent + ROM_PROGRESS_STEP;
-          }
-        }
-        rom_progress(rom_idx, sent);
+        rom_bytes += core_send_file(&file2, UINT32_MAX, CMD_ROMDATA, CMD_ROMBANK, rom_addr, rom_progress, &rom_idx, NULL);
         sd_close(&file2);
       } else {
         osd_set_pos(4,5+rom_idx);
@@ -682,19 +650,7 @@ void read_roms(const char* filename) {
       }
     } else {
       file_seek(rom_pos + KG_ROM_BLOCK_HEADER_SIZE);
-      uint32_t sent = 0;
-      while (sent < rom_len) {
-        size_t chunk = (rom_len - sent < ROM_CHUNK) ? rom_len - sent : ROM_CHUNK;
-        size_t c = file_read_bytes((char*) buf, chunk);
-        if (c == 0) break;
-        rom_send(rom_addr + sent, buf, c);
-        sent += c;
-        rom_bytes += c;
-        if (sent >= next_progress || sent == rom_len) {
-          rom_progress(rom_idx, sent);
-          next_progress = sent + ROM_PROGRESS_STEP;
-        }
-      }
+      rom_bytes += core_send_file(&file1, rom_len, CMD_ROMDATA, CMD_ROMBANK, rom_addr, rom_progress, &rom_idx, NULL);
     }
     offset = offset + rom_len + KG_ROM_BLOCK_HEADER_SIZE;
     roms_len = roms_len - rom_len - KG_ROM_BLOCK_HEADER_SIZE;

@@ -19,14 +19,14 @@
 core_list_item_t *cores = NULL; // on the heap, cores_len items
 uint8_t cores_len = 0;
 #define CORES_CHUNK 16
-uint8_t core_sel = 0;
-const uint8_t core_page_size = MAX_CORES_PER_PAGE;
+static uint8_t core_sel = 0;
+static const uint8_t core_page_size = MAX_CORES_PER_PAGE;
 // the graphic list: as many buttons as fit between the logo and the page line
 #define FT_CORE_TOP (64 + 16 + 8)
 #define FT_CORE_STEP 40
 #define FT_CORE_BOTTOM 60 // the page line and the footer
-uint8_t core_pages = 1;
-uint8_t core_page = 1;
+static uint8_t core_pages = 1;
+static uint8_t core_page = 1;
 
 static uint8_t ft_core_page_size() {
   int n = (ft_height() - FT_CORE_BOTTOM - FT_CORE_TOP) / FT_CORE_STEP;
@@ -35,10 +35,9 @@ static uint8_t ft_core_page_size() {
 
 // the cores on a page of the menu on screen (Left / Right jump by it)
 static uint8_t page_size() { return has_ft ? ft_core_page_size() : core_page_size; }
-uint16_t rot = 0;
-uint32_t autoload_timer = 0;
-bool autoload_enabled;
-uint32_t autoload_countdown;
+static uint32_t autoload_timer = 0;
+static bool autoload_enabled;
+static uint32_t autoload_countdown;
 
 // the clickable areas of the graphic browser besides the cores (0..cores_len-1)
 enum { HIT_SETUP = 1000, HIT_PREV, HIT_NEXT };
@@ -185,37 +184,21 @@ void app_core_browser_ft_decor(const setup_t *t, bool show_char) {
   }
 }
 
+// the start sounds of the graphic menu (hw_setup.ft_sound 1..4), loaded into GRAM
+typedef struct { uint32_t offset, size, samplerate, duration; } ft_sound_t;
+static const ft_sound_t ft_sounds[] = {
+  { KEY1_OFFSET, KEY1_PCM_SIZE, KEY1_SAMPLERATE, KEY1_DURATION },
+  { KEY2_OFFSET, KEY2_PCM_SIZE, KEY2_SAMPLERATE, KEY2_DURATION },
+  { KEY3_OFFSET, KEY3_PCM_SIZE, KEY3_SAMPLERATE, KEY3_DURATION },
+  { KEY4_OFFSET, KEY4_PCM_SIZE, KEY4_SAMPLERATE, KEY4_DURATION },
+};
+
 void app_core_browser_ft_sound(uint8_t sound, bool wait) {
-  uint32_t key_size, key_samplerate, key_duration, key_offset;
-  switch (sound) {
-    case 2:
-      key_size = KEY2_PCM_SIZE;
-      key_samplerate = KEY2_SAMPLERATE;
-      key_duration = KEY2_DURATION;
-      key_offset = KEY2_OFFSET;
-      break;
-    case 3:
-      key_size = KEY3_PCM_SIZE;
-      key_samplerate = KEY3_SAMPLERATE;
-      key_duration = KEY3_DURATION;
-      key_offset = KEY3_OFFSET;
-      break;
-    case 4:
-      key_size = KEY4_PCM_SIZE;
-      key_samplerate = KEY4_SAMPLERATE;
-      key_duration = KEY4_DURATION;
-      key_offset = KEY4_OFFSET;
-      break;
-    default:
-      key_size = KEY1_PCM_SIZE;
-      key_samplerate = KEY1_SAMPLERATE;
-      key_duration = KEY1_DURATION;
-      key_offset = KEY1_OFFSET;
-  }
+  const ft_sound_t *k = &ft_sounds[sound >= 1 && sound <= 4 ? sound - 1 : 0];
   // a length that is not a multiple of 8 plays on past the sound (the last few samples go)
-  ft_play_audio(key_offset, key_size & ~7u, key_samplerate, FT81x_AUDIO_FORMAT_ULAW, false);
+  ft_play_audio(k->offset, k->size & ~7u, k->samplerate, FT81x_AUDIO_FORMAT_ULAW, false);
   if (wait) {
-    ms_delay(key_duration);
+    ms_delay(k->duration);
     ft_stop_audio(); // not stopSound(): that silences the click effect (REG_SOUND) instead
   }
 }
@@ -238,36 +221,34 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
   core_page = kg_list_page(core_sel, ft_page);
   uint8_t core_from = (core_page-1)*ft_page;
   uint8_t core_to = core_page*ft_page > cores_len ? cores_len : core_page*ft_page;
-  uint8_t pos = 0;
-  uint8_t offset = FT_CORE_TOP;
-  for(uint8_t i=core_from; i < core_to; i++) {
-    char trimmed[sizeof(cores[0].name)], name[18];
-    strcpy(trimmed, cores[i].name); kg_trim(trimmed);
-    snprintf(name, sizeof(name), "%s", trimmed);
+  // the button of a core: the middle half of the screen, a row each
+  const int16_t bx = ft_width() / 4 + 8, bw = ft_width() / 2 - 16, bh = 32;
+  for (uint8_t i = core_from; i < core_to; i++) {
+    const int16_t by = FT_CORE_TOP + (i - core_from) * FT_CORE_STEP;
+    char name[18];
+    snprintf(name, sizeof(name), "%s", cores[i].name);
     const bool sel = i == core_sel && !setup_focus;
     const uint32_t colorb = sel ? color_button_active : color_button;
     const uint32_t colort = sel ? color_text_active : color_text;
-    if (ft_hit_add(ft_width()/4 + 8, offset + pos*FT_CORE_STEP, ft_width()/2-16, 32, i)) {
+    if (ft_hit_add(bx, by, bw, bh, i)) {
       // hovered: a rect grows by its corner radius, so this is a 2 px frame around the button
-      ft_draw_rect(ft_width()/4 + 8, offset + pos*FT_CORE_STEP, ft_width()/2-16, 32, 2, color_button_active);
+      ft_draw_rect(bx, by, bw, bh, 2, color_button_active);
     }
-    ft_draw_button(ft_width()/4 + 8, offset + pos*FT_CORE_STEP, ft_width()/2-16, 32, 28, colort, colorb, (hw_setup.ft_3d_buttons) ? FT81x_OPT_3D : FT81x_OPT_FLAT , name);
+    ft_draw_button(bx, by, bw, bh, 28, colort, colorb, hw_setup.ft_3d_buttons ? FT81x_OPT_3D : FT81x_OPT_FLAT, name);
     if (cores[i].flash) {
-      ft_draw_text(ft_width()/4+ft_width()/2-16-24, offset + pos*FT_CORE_STEP + 16, 28, colort, FT81x_OPT_CENTERY, "F\0");
+      ft_draw_text(bx + bw - 32, by + bh / 2, 28, colort, FT81x_OPT_CENTERY, "F");
     }
-    if (autoload_enabled && i==core_sel) {
-      uint32_t diff = autoload_left_s();
-      ft_draw_gauge(ft_width()/4+16+12, offset + pos*FT_CORE_STEP + 16, 12, colort, colorb, 0, 1, 1, diff, autoload_countdown);
+    if (autoload_enabled && i == core_sel) {
+      ft_draw_gauge(bx + 20, by + bh / 2, 12, colort, colorb, 0, 1, 1, autoload_left_s(), autoload_countdown);
     }
-    pos++;
   }
 
   char b[40]; 
 
-  //ft_draw_text(112, ft_height()-40, 27, color_copyright, FT81x_OPT_CENTER, "www.karabas.uk\0");
   sprintf(b, "FW build: %s", STRINGIZE_VALUE_OF(BUILD_VER));
   ft_draw_text(112, ft_height()-40, 27, color_copyright, FT81x_OPT_CENTER, b);
-  ft_draw_text(112, ft_height()-20, 27, color_copyright, FT81x_OPT_CENTER, "(c) 2026 andykarpov");
+  sprintf(b, "(c) %s andykarpov", __DATE__ + 7); // the year of the build ("Oct 28 2026")
+  ft_draw_text(112, ft_height()-20, 27, color_copyright, FT81x_OPT_CENTER, b);
   sprintf(b, "Page %d of %d", core_page, core_pages);
   ft_draw_text(ft_width()/2, ft_height()-40, 27, color_copyright, FT81x_OPT_CENTER, b);
   if (core_pages > 1) {
@@ -277,14 +258,9 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
     ft_draw_text(ft_width()/2 + 80, ft_height()-40, 28, h ? color_text : color_copyright, FT81x_OPT_CENTER, ">");
   }
 
-  if (autoload_enabled) {
-    uint32_t diff = autoload_left_s();
-    sprintf(b, "Autoloading core in %lu s", (unsigned long) diff);
-    ft_draw_text(ft_width()/2, ft_height()-20, 27, color_copyright, FT81x_OPT_CENTER, b);
-  } else {
-    sprintf(b, "Autoload disabled");
-    ft_draw_text(ft_width()/2, ft_height()-20, 27, color_copyright, FT81x_OPT_CENTER, b);
-  }
+  if (autoload_enabled) sprintf(b, "Autoloading core in %lu s", (unsigned long) autoload_left_s());
+  else sprintf(b, "Autoload disabled");
+  ft_draw_text(ft_width()/2, ft_height()-20, 27, color_copyright, FT81x_OPT_CENTER, b);
 
   if (play_sounds == 1 && hw_setup.ft_click) {
       ft_play_sound();
@@ -310,12 +286,12 @@ core_list_item_t app_core_browser_get_item(const char *filename) {
   core_list_item_t core;
   snprintf(core.filename, sizeof(core.filename), "%s", filename);
   core.flash = false;
-  file_seek(FILE_POS_CORE_ID); file_read_bytes(core.id, 32); core.id[32] = '\0';
-  file_seek(FILE_POS_CORE_NAME); file_read_bytes(core.name, 32); core.name[32] = '\0';
+  file_read_str(&file1, FILE_POS_CORE_ID, core.id, 32);
+  file_read_str(&file1, FILE_POS_CORE_NAME, core.name, 32);
   uint8_t visible; file_seek(FILE_POS_CORE_VISIBLE); visible = file_read(); core.visible = (visible > 0);
   file_seek(FILE_POS_CORE_ORDER); core.order = file_read();
   file_seek(FILE_POS_CORE_TYPE); core.type = file_read();
-  file_seek(FILE_POS_CORE_BUILD); file_read_bytes(core.build, 8); core.build[8] = '\0';
+  file_read_str(&file1, FILE_POS_CORE_BUILD, core.build, 8);
   return core;
 }
 
@@ -372,11 +348,10 @@ void app_core_browser_read_list() {
   
   autoload_enabled = false;
   // pre-select autoload core
+  char autoload_id[sizeof(hw_setup.autoload_core)];
+  strcpy(autoload_id, hw_setup.autoload_core); kg_trim(autoload_id);
   for (uint8_t i=0; i<cores_len; i++) {
-    char s1[sizeof(hw_setup.autoload_core)], s2[sizeof(cores[0].id)];
-    strcpy(s1, hw_setup.autoload_core); kg_trim(s1);
-    strcpy(s2, cores[i].id); kg_trim(s2);
-    if (!autoload_enabled && hw_setup.autoload_enabled && strcmp(s2, s1) == 0) {
+    if (!autoload_enabled && hw_setup.autoload_enabled && strcmp(cores[i].id, autoload_id) == 0) {
       autoload_enabled = true;
       autoload_countdown = hw_setup.autoload_timeout;
       core_sel = i;
@@ -393,10 +368,8 @@ static void start_core(bool sound) {
     app_core_browser_ft_menu(2); // play wav
   }
   d_printf("Selected core %s to boot from menu", cores[core_sel].filename); d_println();
-  char buf[sizeof(cores[0].filename)];
-  strcpy(buf, cores[core_sel].filename); kg_trim(buf);
   has_ft = false;
-  do_configure(buf);
+  do_configure(cores[core_sel].filename);
   switch (core.type) {
     case CORE_TYPE_BOOT: osd_state = state_core_browser; break;
     case CORE_TYPE_OSD: osd_state = state_main; break;
@@ -429,63 +402,63 @@ static bool setup_focus_key(uint8_t key) {
 }
 
 void app_core_browser_on_keyboard() {
-      uint8_t key = ui_nav_key();
-      if (has_ft) ft_mouse_hide(); // the keys move the selection
-      if (!has_ft) setup_focus = false;
-      if (setup_focus && setup_focus_key(key)) return;
-      if (cores_len > 0) {
-        if (key == KEY_LEFT && has_ft && core_sel == 0) {
-          // already on the first core: onto the Setup button (not by a held Left)
-          autoload_enabled = false;
-          if (!ui_repeat) setup_focus = true;
-        } else {
-          // up / down, left / right a page
-          uint16_t sel = core_sel;
-          if (ui_list_key(&sel, cores_len, page_size(), key)) autoload_enabled = false;
-          core_sel = sel;
-        }
+  uint8_t key = ui_nav_key();
+  if (has_ft) ft_mouse_hide(); // the keys move the selection
+  if (!has_ft) setup_focus = false;
+  if (setup_focus && setup_focus_key(key)) return;
+  if (cores_len > 0) {
+    if (key == KEY_LEFT && has_ft && core_sel == 0) {
+      // already on the first core: onto the Setup button (not by a held Left)
+      autoload_enabled = false;
+      if (!ui_repeat) setup_focus = true;
+    } else {
+      // up / down, left / right a page
+      uint16_t sel = core_sel;
+      if (ui_list_key(&sel, cores_len, page_size(), key)) autoload_enabled = false;
+      core_sel = sel;
+    }
 
-        if (key == KEY_ENTER) {
-          start_core(true);
-        }
+    if (key == KEY_ENTER) {
+      start_core(true);
+    }
 
-        // enter setup mode (S, joy start)
-        if (key == KEY_S || ((joyL | joyR) & SC_BTN_START)) {
-          open_setup();
-        }
+    // enter setup mode (S, joy start)
+    if (key == KEY_S || ((joyL | joyR) & SC_BTN_START)) {
+      open_setup();
+    }
 
-        // redraw core browser on keypress
-        if (osd_state == state_core_browser) {
-          if (has_ft) {
-            app_core_browser_ft_menu(1);
-          } else {
-            app_core_browser_menu(APP_COREBROWSER_MENU_OFFSET);
-          }
-        }
+    // redraw core browser on keypress
+    if (osd_state == state_core_browser) {
+      if (has_ft) {
+        app_core_browser_ft_menu(1);
+      } else {
+        app_core_browser_menu(APP_COREBROWSER_MENU_OFFSET);
       }
+    }
+  }
 
-      // return back to classic osd
-      if (key == KEY_SPACE && has_ft) {
-        has_ft = false;
-        ft_vga(false);
-        ft_spi(false);
-        app_core_browser_overlay();
-      }
+  // return back to classic osd
+  if (key == KEY_SPACE && has_ft) {
+    has_ft = false;
+    ft_vga(false);
+    ft_spi(false);
+    app_core_browser_overlay();
+  }
 
-      // the graphic menu, also when it is off in karabas.ini (until the next start)
-      if (key == KEY_G && !has_ft) {
-        autoload_enabled = false;
-        ft_spi(true);
-        has_ft = ft_init(hw_setup.ft_video_mode);
-        if (has_ft) {
-          d_printf("FT81x started (system clock %lu kHz), switching to FT OSD", (unsigned long) (ft_init_clock_hz() / 1000)); d_println();
-          ft_vga(true);
-          app_core_browser_ft_overlay();
-        } else {
-          d_println("FT81x did not come up");
-          ft_spi(false);
-        }
-      }
+  // the graphic menu, also when it is off in karabas.ini (until the next start)
+  if (key == KEY_G && !has_ft) {
+    autoload_enabled = false;
+    ft_spi(true);
+    has_ft = ft_init(hw_setup.ft_video_mode);
+    if (has_ft) {
+      d_printf("FT81x started (system clock %lu kHz), switching to FT OSD", (unsigned long) (ft_init_clock_hz() / 1000)); d_println();
+      ft_vga(true);
+      app_core_browser_ft_overlay();
+    } else {
+      d_println("FT81x did not come up");
+      ft_spi(false);
+    }
+  }
 }
 
 // the mouse on the graphic browser: the pointer hovers, a click selects a core, a click on the
@@ -512,13 +485,11 @@ void app_core_browser_tick() {
     } else if (id == HIT_SETUP) {
       open_setup();
       return;
-    } else if (id == HIT_PREV) {
-      uint8_t n = ft_core_page_size();
-      core_sel = core_sel >= n ? (core_sel / n - 1) * n : 0;
-    } else if (id == HIT_NEXT) {
-      uint8_t n = ft_core_page_size();
-      uint8_t next = (core_sel / n + 1) * n;
-      if (next < cores_len) core_sel = next;
+    } else if (id == HIT_PREV || id == HIT_NEXT) {
+      // a page, as Left / Right
+      uint16_t sel = core_sel;
+      kg_list_move(&sel, cores_len, ft_core_page_size(), id == HIT_PREV ? KG_LIST_PAGE_UP : KG_LIST_PAGE_DOWN);
+      core_sel = sel;
     }
   }
   if (act || ft_hover() != hover) {
