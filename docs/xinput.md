@@ -1,9 +1,11 @@
 # USB XInput controllers
 
+[Русская версия](xinput.ru.md)
+
 The firmware uses [Ryzee119/tusb_xinput](https://github.com/Ryzee119/tusb_xinput),
-pinned in `platformio.ini`, as an additional TinyUSB host class driver.
-The pin retains the `bool open()` API used by the project's Arduino core;
-the newer upstream `uint16_t open()` API is incompatible with that core.
+copied into `third_party/tusb_xinput` (with its license), as an additional TinyUSB host class driver.
+The copy keeps the `bool open()` API that the class drivers of TinyUSB 0.18 (pico-sdk 2.2.0)
+have; the newer upstream `uint16_t open()` API is for a later TinyUSB.
 The target device is an **8BitDo M30 2.4G connected by a USB data cable**.
 Bluetooth and the M30's 2.4G receiver are not implemented by this integration.
 The actual controller must enumerate in XInput mode; a HID-mode device still uses
@@ -46,5 +48,5 @@ about every M30 revision. Guide and stick-click buttons are ignored.
 Wireless Xbox receivers and other Xbox controller families are outside the
 validated target scope, even though the upstream driver recognizes them.
 
-Target build: `pio run -e minig`. Mapping and port tests:
-`pio test -e native -f test_xinput`.
+Target build: `ninja -C build karabas_minig`. Port tests:
+`ctest --test-dir build-test -R test_usb_joy_slots`.

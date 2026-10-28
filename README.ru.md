@@ -11,8 +11,7 @@ Karabas Go. Микроконтроллер работает в паре с ПЛ�
 
 **[Маппер USB-геймпадов](https://andykarpov.github.io/karabas-go-firmware/hidmapper/)**: настройка
 USB HID геймпада в браузере и загрузка его ini-драйвера для папки `/drivers/` на SD-карте.
-Большинство геймпадов работает и без драйвера, см. [USB HID геймпады](docs/usb_gamepads.md)
-(на английском).
+Большинство геймпадов работает и без драйвера, см. [USB HID геймпады](docs/usb_gamepads.ru.md).
 
 ## Платы
 
@@ -58,7 +57,7 @@ USB HID геймпада в браузере и загрузка его ini-др
 
 Каждая сборка `master`, которая меняет прошивку, становится
 [релизом](https://github.com/andykarpov/karabas-go-firmware/releases) с тремя `.uf2` файлами.
-Эти же файлы вместе с `karabas.ini` попадают в папки `firmware/` репозиториев
+Эти же файлы попадают в папки `firmware/` репозиториев
 [karabas-go](https://github.com/andykarpov/karabas-go) и
 [karabas-mini](https://github.com/andykarpov/karabas-mini).
 
@@ -99,7 +98,7 @@ CI собирает прошивку для каждого PR. Скачать е
 | `/boot.kg1` (`.kg2`, `.kg3`) | браузер ядер, загружается при включении |
 | `/*.kg1` (`.kg2`, `.kg3`) | ядра платы |
 | `/karabas.ini` | настройки, см. ниже |
-| `/drivers/*.ini` | драйверы USB-геймпадов, необязательно ([формат](drivers/example_ini.txt)) |
+| `/drivers/*.ini` | драйверы USB-геймпадов, необязательно ([формат](docs/usb_gamepads.ru.md#ini-драйвер)) |
 
 Файловая система: FAT16, FAT32 или exFAT. Ядра собираются утилитой
 [make_core](https://github.com/andykarpov/karabas-go-tools/tree/master/make_core) из
@@ -107,23 +106,42 @@ CI собирает прошивку для каждого PR. Скачать е
 
 ### karabas.ini
 
-Файл по умолчанию: [`src/karabas.ini`](src/karabas.ini). Строки не длиннее 79 символов, иначе
-файл целиком игнорируется. Большую часть `[setup]` и `[autoload]`, а также `enabled` /
-`video_mode` из `[ft812]` можно менять в Setup > Settings браузера ядер; записываются только
-изменённые ключи, остальной файл сохраняется.
+Файл необязателен: без него прошивка берёт значения по умолчанию из таблицы ниже. Все ключи
+меняются в меню: Setup > Settings текстового браузера ядер (`[setup]`, `[autoload]`, `[matrix]`,
+`enabled` / `video_mode` из `[ft812]`) и графический setup (все). Сохранение создаёт файл или
+записывает только изменённые ключи, остальной файл остаётся как был. Строки не длиннее 79
+символов, иначе файл целиком игнорируется.
 
-| Секция | Ключ | Значение |
-| --- | --- | --- |
-| `[setup]` | `debug` | `1`: отладочный лог в USB-serial порт |
-| | `dvi_only` | `1`: ядра отключают HDMI-фреймы (звук, инфокадры) и выдают чистый DVI |
-| | `tz` | смещение от UTC для NTP sync, задаётся в Setup RTC / на странице Clock, например `+03:00`, `-04:30`; без летнего времени |
-| `[ft812]` | `enabled` | `1`: графический браузер ядер на FT812 |
-| | `video_mode` | видеорежим FT812: `0` 640x480@60, `1` 800x600@60 |
-| | `sound`, `click` | звуки меню |
-| | `time`, `date`, `char` | показывать в графическом браузере часы, дату и картинку «Карабаса» |
-| | `color_*`, `3d_buttons` | цвета (hex RGB) и стиль кнопок |
-| | `mouse_speed` | скорость указателя мыши в графическом меню, 1..5 |
-| `[autoload]` | `enabled`, `timeout`, `core` | запуск ядра `core` через `timeout` секунд |
+| Секция | Ключ | По умолчанию | Значение |
+| --- | --- | --- | --- |
+| `[setup]` | `debug` | `0` | `1`: отладочный лог в USB-serial порт |
+| | `dvi_only` | `0` | `1`: ядра отключают HDMI-фреймы (звук, инфокадры) и выдают чистый DVI |
+| | `tz` | `+00:00` | смещение от UTC для NTP sync, задаётся в Setup RTC / на странице Clock, например `+03:00`, `-04:30`; без летнего времени |
+| `[ft812]` | `enabled` | `1` | `1`: графический браузер ядер на FT812 |
+| | `video_mode` | `1` | видеорежим FT812: `0` 640x480@60, `1` 800x600@60 |
+| | `sound`, `click` | `1`, `1` | звуки меню |
+| | `time`, `date`, `char` | `1`, `1`, `1` | показывать в графическом браузере часы, дату и картинку «Карабаса» |
+| | `color_bg`, `color_gradient`, `color_button`, `color_active`, `color_text`, `color_text_active`, `color_copyright` | `010101`, `0000c8`, `202026`, `0000c8`, `ffffff`, `ffffff`, `787878` | цвета (hex RGB) |
+| | `3d_buttons` | `0` | `1`: кнопки с тенью и светлым краем |
+| | `mouse_speed` | `3` | скорость указателя мыши в графическом меню, 1..5 |
+| `[matrix]` | `enabled`, `brightness`, `clock_*`, `meter_*` | `1`, `0`, ... | LED-матрица, см. [docs/matrix.ru.md](docs/matrix.ru.md) |
+| `[autoload]` | `enabled`, `timeout`, `core` | `0`, `15`, нет | запуск ядра `core` через `timeout` секунд |
+
+Пример:
+
+```ini
+[setup]
+debug=0
+tz=+03:00
+
+[ft812]
+video_mode=0
+
+[autoload]
+enabled=1
+timeout=5
+core=tsconf
+```
 
 ## Управление
 
@@ -179,19 +197,20 @@ USB mass storage (удержание 2 с — со второй SD-картой)
 
 ## Сборка из исходников
 
-Прошивка собирается в [PlatformIO](https://platformio.org/) (Arduino framework, ядро RP2040 от
-earlephilhower, FreeRTOS). Версии платформы и библиотек зафиксированы.
+Прошивка написана на C11 на pico-sdk с FreeRTOS SMP и TinyUSB, собирается CMake и тулчейном
+arm-none-eabi от earlephilhower ([pico-quick-toolchain](https://github.com/earlephilhower/pico-quick-toolchain)
+4.1.0: нужен его newlib). Версии pico-sdk и FreeRTOS зафиксированы в `CMakeLists.txt` и
+скачиваются сами, если `PICO_SDK_PATH` / `FREERTOS_KERNEL_PATH` не заданы.
 
 ```sh
-pio run -e go                    # Karabas Go
-pio run -e mini                  # Karabas Mini
-pio run -e minig                 # Karabas Mini G (сборка по умолчанию)
-pio run -e go -e mini -e minig   # все платы
-pio test -e native               # юнит-тесты lib/KarabasCommon
-pio run -e minig -t upload       # собрать и залить по USB
+cmake -S . -B build -G Ninja                  # -DPICO_TOOLCHAIN_PATH=..., если тулчейна нет в PATH
+ninja -C build                                # все платы
+ninja -C build karabas_minig                  # одна плата: karabas_go, karabas_mini, karabas_minig
+cmake -S test -B build-test -G Ninja && ninja -C build-test && ctest --test-dir build-test   # юнит-тесты
 ```
 
-Результат: `.pio/build/<env>/firmware.uf2`. CI ([build.yml](.github/workflows/build.yml))
+Результат: `build/karabas_<плата>.uf2`, его копируют на диск `RPI-RP2` платы в режиме BOOTSEL
+(туда переводит `AT+KARABAS=boot` по USB). CI ([build.yml](.github/workflows/build.yml))
 собирает все платы, запускает тесты и выпускает релизы. Маппер геймпадов лежит в
 [`tools/hidmapper`](tools/hidmapper) и публикуется в GitHub Pages через
 [hidmapper.yml](.github/workflows/hidmapper.yml).
@@ -201,18 +220,18 @@ pio run -e minig -t upload       # собрать и залить по USB
 
 ## Документация
 
-- [USB HID геймпады](docs/usb_gamepads.md): раскладка по умолчанию, маппер в OSD и ini-драйверы.
-- [XInput-контроллеры / 8BitDo M30 2.4G](docs/xinput.md).
-- [USB-принтер / Epson LX-300+II](docs/usb_printer.md) (драйвер и очередь на 2048 байт;
+- [USB HID геймпады](docs/usb_gamepads.ru.md): раскладка по умолчанию, маппер в OSD и ini-драйверы.
+- [XInput-контроллеры / 8BitDo M30 2.4G](docs/xinput.ru.md).
+- [USB-принтер / Epson LX-300+II](docs/usb_printer.ru.md) (драйвер и очередь на 2048 байт;
   интеграция с ПЛИС ещё не сделана).
 - [Протокол MCU ↔ FPGA](docs/protocol.ru.md) ([in English](docs/protocol.md)): SPI-кадры, все
   команды, последовательности загрузки.
-- [Пакетная передача](docs/burst_protocol.md): быстрый режим передачи ПЗУ и файлов.
-- [LED-матрица](MATRIX.md).
+- [Пакетная передача](docs/burst_protocol.ru.md): быстрый режим передачи ПЗУ и файлов.
+- [LED-матрица](docs/matrix.ru.md).
 - Файлы ядер (`.kg1` / `.kg2` / `.kg3`) и `core.json`:
   [karabas-go-tools/make_core](https://github.com/andykarpov/karabas-go-tools/tree/master/make_core).
 
-Документы без пометки написаны на английском.
+У каждого документа есть английская версия (ссылка в его начале).
 
 ## Лицензия
 

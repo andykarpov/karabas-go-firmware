@@ -1,5 +1,7 @@
 # USB Printer Host
 
+[Русская версия](usb_printer.ru.md)
+
 The initial target is Epson LX-300+II connected directly to the board's USB host
 with a USB-A to USB-B cable. Hardware validation on Go confirmed enumeration,
 Device ID, port status and printing `Hello from Karabas Go!` via Bulk OUT:
@@ -232,19 +234,12 @@ The OSD test page is not implemented. Printing from a core requires matching HDL
 
 ## Validation
 
-- Firmware: `pio run -e go` (only GO is requested for this change).
-- Host simulation: `python test/usb_printer_host/run.py` with a C++17 `g++` on PATH
-  (or set `CXX` to a compiler executable). This compiles the actual driver against
-  a fake TinyUSB host in a temporary directory. It checks malformed descriptors,
-  protocol selection, endpoint rollback, request fields, ID bounds, status
-  validity, asynchronous buffer ownership, backpressure, failed submissions,
-  partial writes, STALL, reset recovery, unplug and unidirectional devices.
-- The same runner tests the actual service plus driver, using a host mutex in
-  place of the RP2040 spinlock: 2048-byte bound including in-flight data, wraparound,
-  pause/resume, submission failures, explicit reset, interruption/reconnection,
-  and a concurrent 50,000-byte producer/consumer stream with exact byte comparison.
+- Firmware: `ninja -C build karabas_go`.
+- The host simulation of the driver and the service (`test/usb_printer_host/run.py`, a fake
+  TinyUSB host) is gone with the move to the pico-sdk; it covered malformed descriptors,
+  protocol selection, endpoint rollback, backpressure, STALL, reset and unplug.
 
-Simulation does not validate PIO timing, electrical connectivity or printer behavior.
+The simulation did not validate PIO timing, electrical connectivity or printer behavior.
 
 ## References
 

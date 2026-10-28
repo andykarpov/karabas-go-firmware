@@ -1,7 +1,13 @@
 #pragma once
 
-#include <Arduino.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 #include "types.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 extern core_item_t core;
 extern core_file_slot_t file_slots[MAX_FILE_SLOTS];
@@ -15,6 +21,11 @@ void read_roms(const char* filename);
 void flashboot(uint8_t data);
 
 void core_send(uint8_t pos);
+// the osd item pos takes the cursor of the core menu: it has options, or it is a file item
+bool core_osd_selectable(uint8_t pos);
+// the option of the osd item pos one up (d = 1) or down (d = -1), around the ends: sent to the
+// core, a switch is saved into the core file later (core.osd_need_save)
+void core_osd_change(uint8_t pos, int d);
 // the F osd item pos can be a physical floppy drive (its flag, and the board has the connector)
 bool core_osd_can_phys(uint8_t pos);
 // filename is a physical drive (":phys0" / ":phys1") that the F osd item pos can be
@@ -24,5 +35,7 @@ bool core_osd_phys(uint8_t pos, const char *filename);
 void core_ioctl_send(uint8_t slot, bool popup);
 void core_send_all();
 void core_trigger(uint8_t pos);
-uint8_t core_eeprom_get(uint8_t pos);
-void core_eeprom_set(uint8_t pos, uint8_t val);
+
+#ifdef __cplusplus
+}
+#endif

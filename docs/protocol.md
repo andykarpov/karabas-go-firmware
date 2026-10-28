@@ -108,7 +108,7 @@ Commands that the core does not know must be ignored.
 | `53` | `CMD_IOCTL_DATA` | address bits 7..0 | file byte | |
 | `54` | `CMD_IOCTL_EXT` | character index | extension character | Lowercase, without the dot. |
 | `55` | `CMD_IOCTL_STATE` | 0 | 1 = start, 0 = end | |
-| `63` | `CMD_MATRIX_BTN` | button 0..3 | 1 / 0 | LED matrix add-on buttons ([MATRIX.md](../MATRIX.md)). |
+| `63` | `CMD_MATRIX_BTN` | button 0..3 | 1 / 0 | LED matrix add-on buttons ([matrix.md](matrix.md)). |
 | `F7` | `CMD_CAPS` | 0 = query | protocol version (1) | Capability query, section 7. |
 | `F8` | `CMD_ESP_UART` | 0 | byte | Byte to the ESP8266 module behind the FPGA. |
 | `F9` | `CMD_HW_SETUP` | 0 = board, 1 = DVI only | 0: `HW_ID` (1 Go, 2 Mini, 3 Mini G); 1: 0 / 1 | |
@@ -135,7 +135,7 @@ These are sent in the reply bytes of any transfer.
 | `44` | `CMD_IMG_BUF_BANK` | `10` / `11` | sum bits 7..0 / 15..8 | 16-bit sum of the sector written, after its data. |
 | `47` | `CMD_IMG_FLUSH` | slot | 1 = done, 2 = a write failed | Answer to `47 slot 00`: no dirty sectors left. |
 | `48` | `CMD_BK_MOUNT` | 0..3 / `10` / `80` | size in sectors (LE) / img slot / kind | Backup RAM: the core asks for its save file; `80` last (kind 0 = `.sav`). Section 6. |
-| `60` | `CMD_MATRIX_CTL` | 0 | bit 0 clear, bit 1 update, bit 2 set brightness (bits 7..4), bit 3 audio meter mode | LED matrix ([MATRIX.md](../MATRIX.md)). |
+| `60` | `CMD_MATRIX_CTL` | 0 | bit 0 clear, bit 1 update, bit 2 set brightness (bits 7..4), bit 3 audio meter mode | LED matrix ([matrix.md](matrix.md)). |
 | `61` | `CMD_MATRIX_PIXEL` | Y (bits 7..4), X (bits 3..0) | color: 0 black, 1 red, 2 yellow, 3 green | |
 | `62` | `CMD_MATRIX_BITPLAN` | byte 0..31 | bitmap byte | |
 | `70` / `71` | `CMD_AUDIO_PEAKS_L` / `_R` | high byte | low byte | 16-bit audio peak for the matrix meters. |

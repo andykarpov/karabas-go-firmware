@@ -60,7 +60,7 @@ Each build of `master` that changes the firmware becomes a
 [release](https://github.com/andykarpov/karabas-go-firmware/releases) with the three `.uf2` files.
 The same files go to the `firmware/` folders of
 [karabas-go](https://github.com/andykarpov/karabas-go) and
-[karabas-mini](https://github.com/andykarpov/karabas-mini), together with an example `karabas.ini`.
+[karabas-mini](https://github.com/andykarpov/karabas-mini).
 
 ### Test firmware from a pull request
 
@@ -99,7 +99,7 @@ artifacts for 90 days.
 | `/boot.kg1` (`.kg2`, `.kg3`) | the core browser, loaded at power on |
 | `/*.kg1` (`.kg2`, `.kg3`) | the cores of the board |
 | `/karabas.ini` | settings, optional, see below |
-| `/drivers/*.ini` | USB gamepad drivers, optional ([format](drivers/example_ini.txt)) |
+| `/drivers/*.ini` | USB gamepad drivers, optional ([format](docs/usb_gamepads.md#driver-ini)) |
 
 The card can be FAT16, FAT32 or exFAT. The cores are built with
 [make_core](https://github.com/andykarpov/karabas-go-tools/tree/master/make_core) from
@@ -107,25 +107,42 @@ The card can be FAT16, FAT32 or exFAT. The cores are built with
 
 ### karabas.ini
 
-The file is optional: without it the firmware uses its defaults (the values of
-[`src/karabas.ini`](src/karabas.ini), except autoload, which is off). Every key can be changed
-in the menus: Setup > Settings of the text core browser (`[setup]`, `[autoload]`, `enabled` /
-`video_mode` of `[ft812]`) and the graphic setup (all of them). A save creates the file, or
-writes only the changed keys and keeps the rest of it. Lines must be at most 79 characters
-long, or the whole file is ignored.
+The file is optional: without it the firmware uses the defaults below. Every key can be changed
+in the menus: Setup > Settings of the text core browser (`[setup]`, `[autoload]`, `[matrix]`,
+`enabled` / `video_mode` of `[ft812]`) and the graphic setup (all of them). A save creates the
+file, or writes only the changed keys and keeps the rest of it. Lines must be at most 79
+characters long, or the whole file is ignored.
 
-| Section | Key | Meaning |
-| --- | --- | --- |
-| `[setup]` | `debug` | `1`: debug log on the USB serial port |
-| | `dvi_only` | `1`: the cores drop the HDMI frames (audio, info) and output plain DVI |
-| | `tz` | UTC offset for NTP sync, set in Setup RTC / the Clock page, e.g. `+03:00`, `-04:30`; no daylight saving |
-| `[ft812]` | `enabled` | `1`: graphical core browser on the FT812 |
-| | `video_mode` | FT812 video mode: `0` 640x480@60, `1` 800x600@60 |
-| | `sound`, `click` | menu sounds |
-| | `time`, `date`, `char` | show the clock, the date and the Karabas picture in the graphical browser |
-| | `color_*`, `3d_buttons` | colors (hex RGB) and button style |
-| | `mouse_speed` | mouse pointer speed in the graphic menu, 1..5 |
-| `[autoload]` | `enabled`, `timeout`, `core` | start `core` after `timeout` seconds |
+| Section | Key | Default | Meaning |
+| --- | --- | --- | --- |
+| `[setup]` | `debug` | `0` | `1`: debug log on the USB serial port |
+| | `dvi_only` | `0` | `1`: the cores drop the HDMI frames (audio, info) and output plain DVI |
+| | `tz` | `+00:00` | UTC offset for NTP sync, set in Setup RTC / the Clock page, e.g. `+03:00`, `-04:30`; no daylight saving |
+| `[ft812]` | `enabled` | `1` | `1`: graphical core browser on the FT812 |
+| | `video_mode` | `1` | FT812 video mode: `0` 640x480@60, `1` 800x600@60 |
+| | `sound`, `click` | `1`, `1` | menu sounds |
+| | `time`, `date`, `char` | `1`, `1`, `1` | show the clock, the date and the Karabas picture in the graphical browser |
+| | `color_bg`, `color_gradient`, `color_button`, `color_active`, `color_text`, `color_text_active`, `color_copyright` | `010101`, `0000c8`, `202026`, `0000c8`, `ffffff`, `ffffff`, `787878` | colors (hex RGB) |
+| | `3d_buttons` | `0` | `1`: buttons with a shadow and a light edge |
+| | `mouse_speed` | `3` | mouse pointer speed in the graphic menu, 1..5 |
+| `[matrix]` | `enabled`, `brightness`, `clock_*`, `meter_*` | `1`, `0`, ... | the LED matrix, see [docs/matrix.md](docs/matrix.md) |
+| `[autoload]` | `enabled`, `timeout`, `core` | `0`, `15`, none | start `core` after `timeout` seconds |
+
+Example:
+
+```ini
+[setup]
+debug=0
+tz=+03:00
+
+[ft812]
+video_mode=0
+
+[autoload]
+enabled=1
+timeout=5
+core=tsconf
+```
 
 ## Controls
 
@@ -181,19 +198,20 @@ answered by the firmware:
 
 ## Building from source
 
-The firmware is a [PlatformIO](https://platformio.org/) project (Arduino framework, earlephilhower
-RP2040 core, FreeRTOS). Platform and library versions are pinned.
+The firmware is C11 on the pico-sdk with FreeRTOS SMP and TinyUSB, built with CMake and the
+earlephilhower arm-none-eabi toolchain ([pico-quick-toolchain](https://github.com/earlephilhower/pico-quick-toolchain)
+4.1.0: its newlib is needed). The pico-sdk and FreeRTOS versions are pinned in
+`CMakeLists.txt` and fetched unless `PICO_SDK_PATH` / `FREERTOS_KERNEL_PATH` point to them.
 
 ```sh
-pio run -e go                    # Karabas Go
-pio run -e mini                  # Karabas Mini
-pio run -e minig                 # Karabas Mini G (also the default)
-pio run -e go -e mini -e minig   # all boards
-pio test -e native               # unit tests of lib/KarabasCommon
-pio run -e minig -t upload       # build and upload over USB
+cmake -S . -B build -G Ninja                  # add -DPICO_TOOLCHAIN_PATH=... if the toolchain is not on PATH
+ninja -C build                                # all boards
+ninja -C build karabas_minig                  # one board: karabas_go, karabas_mini, karabas_minig
+cmake -S test -B build-test -G Ninja && ninja -C build-test && ctest --test-dir build-test   # unit tests
 ```
 
-The result is `.pio/build/<env>/firmware.uf2`. CI
+The result is `build/karabas_<board>.uf2`: copy it to the `RPI-RP2` drive of the board in
+BOOTSEL mode (`AT+KARABAS=boot` gets there over USB). CI
 ([build.yml](.github/workflows/build.yml)) builds all boards, runs the tests and makes the
 releases. The gamepad mapper lives in [`tools/hidmapper`](tools/hidmapper) and is published to
 GitHub Pages by [hidmapper.yml](.github/workflows/hidmapper.yml).
@@ -210,7 +228,7 @@ and the conventions of the code.
 - [MCU ↔ FPGA protocol](docs/protocol.md) ([по-русски](docs/protocol.ru.md)): SPI frames, all
   commands, load sequences.
 - [Burst transfers](docs/burst_protocol.md): the fast ROM / file transfer mode.
-- [LED matrix add-on](MATRIX.md).
+- [LED matrix add-on](docs/matrix.md).
 - Core files (`.kg1` / `.kg2` / `.kg3`) and `core.json`:
   [karabas-go-tools/make_core](https://github.com/andykarpov/karabas-go-tools/tree/master/make_core).
 

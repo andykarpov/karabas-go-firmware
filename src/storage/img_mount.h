@@ -2,6 +2,10 @@
 
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // File mounter (`F` OSD items): the image file of a slot stays open, and the core reads and
 // writes its 512-byte sectors through the IMG_* commands (docs/protocol.md, section "File
 // mounter").
@@ -23,3 +27,7 @@ void img_mount(uint8_t slot);
 void img_close_all();
 // serve a sector request of the fpga, called from the main loop
 void img_tick();
+
+#ifdef __cplusplus
+}
+#endif

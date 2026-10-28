@@ -69,6 +69,20 @@ describe('HidLearn', () => {
     }
   });
 
+  it('a press while resting', () => {
+    const idle = [0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x0f, 0x00, 0x00];
+    const rest = new RestState();
+    rest.add(0, u8(idle));
+    const press = (i: number, v: number) => { const p = [...idle]; p[i] = v; return u8(p); };
+    expect(rest.moved(0, press(1, 0x00))).toBe(true);
+    expect(rest.moved(0, press(1, 0x84))).toBe(false);
+    expect(rest.moved(1, press(1, 0x84))).toBe(false);
+    const zero = new RestState();
+    zero.add(0, u8([0x00, 0x00]));
+    expect(zero.moved(0, u8([0xff, 0x01]))).toBe(false);
+    expect(zero.moved(0, u8([0x80, 0x00]))).toBe(true);
+  });
+
   it('clamps long reports', () => {
     const rest = new RestState();
     rest.add(0, new Uint8Array(100));

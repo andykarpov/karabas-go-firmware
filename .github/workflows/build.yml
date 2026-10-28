@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      # Same date stamp as build*.sh. A second build in the same hour gets the
+      # A date stamp (yymmddhh). A second build in the same hour gets the
       # run number appended, so its release tag does not collide.
       - id: ver
         run: |
@@ -37,7 +37,7 @@ jobs:
             if ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
               release=true
             elif git diff --name-only "$BEFORE" "$GITHUB_SHA" -- \
-                src lib include patches apply_patches.py platformio.ini | grep -q .; then
+                src lib third_party cmake CMakeLists.txt | grep -q .; then
               release=true
             fi
           fi
@@ -47,44 +47,42 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - uses: actions/cache@v4
-        with:
-          path: ~/.platformio
-          key: pio-native-${{ hashFiles('platformio.ini') }}
-      - run: pip install platformio
-      - run: pio test -e native
+      - run: sudo apt-get install -y ninja-build
+      - run: cmake -S test -B build-test -G Ninja
+      - run: ninja -C build-test
+      - run: ctest --test-dir build-test --output-on-failure
 
+  # All three boards in one build tree: the pico-sdk, FreeRTOS, pioasm and picotool are fetched
+  # and built once. The toolchain is the one the firmware is checked with (its newlib has the
+  # dynamic reent and retargetable locks, src/platform/newlib.c).
   firmware:
     needs: version
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        env: [go, mini, minig]
+    env:
+      TOOLCHAIN_URL: https://github.com/earlephilhower/pico-quick-toolchain/releases/download/4.1.0/x86_64-linux-gnu.arm-none-eabi-1aec55e.250530.tar.gz
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+      - run: sudo apt-get install -y ninja-build
       - uses: actions/cache@v4
+        id: toolchain
         with:
-          path: ~/.platformio
-          key: pio-rp2040-${{ hashFiles('platformio.ini') }}
-      - run: pip install platformio
-      - run: pio run -e ${{ matrix.env }}
-        env:
-          PLATFORMIO_BUILD_FLAGS: -DBUILD_VER=${{ needs.version.outputs.ver }}
+          path: ~/toolchain
+          key: ${{ env.TOOLCHAIN_URL }}
+      - if: steps.toolchain.outputs.cache-hit != 'true'
+        run: mkdir -p ~/toolchain && curl -sSL "$TOOLCHAIN_URL" | tar -xz -C ~/toolchain --strip-components=1
+      - run: |
+          cmake -S . -B build -G Ninja \
+            -DPICO_TOOLCHAIN_PATH=$HOME/toolchain \
+            -DBUILD_VER=${{ needs.version.outputs.ver }}
+      - run: ninja -C build
       - uses: actions/upload-artifact@v4
         with:
-          name: firmware-${{ matrix.env }}
-          path: .pio/build/${{ matrix.env }}/firmware.uf2
+          name: firmware
+          path: build/karabas_*.uf2
 
   # A master build with firmware changes (or a manual run) that builds and
   # passes the tests becomes a release and goes to the karabas-go and
-  # karabas-mini repos, as build*.sh did by hand.
+  # karabas-mini repos.
   release:
     if: github.ref == 'refs/heads/master' && needs.version.outputs.release == 'true'
     needs: [version, test, firmware]
@@ -100,10 +98,9 @@ jobs:
       - name: Collect files
         run: |
           mkdir dist
-          cp artifacts/firmware-go/firmware.uf2 dist/karabas-go-firmware.uf2
-          cp artifacts/firmware-mini/firmware.uf2 dist/karabas-mini-firmware.uf2
-          cp artifacts/firmware-minig/firmware.uf2 dist/karabas-minig-firmware.uf2
-          cp src/karabas.ini dist/karabas.ini
+          cp artifacts/firmware/karabas_go.uf2 dist/karabas-go-firmware.uf2
+          cp artifacts/firmware/karabas_mini.uf2 dist/karabas-mini-firmware.uf2
+          cp artifacts/firmware/karabas_minig.uf2 dist/karabas-minig-firmware.uf2
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -156,14 +153,13 @@ jobs:
           go=sib/karabas-go
           mini=sib/karabas-mini
           cp dist/karabas-go-firmware.uf2 $go/firmware/firmware.uf2
-          # karabas.ini is optional (the firmware has the defaults, Setup writes it): an
-          # example next to the firmware, none on the SD card template
-          cp src/karabas.ini $go/firmware/karabas.ini
-          git -C $go rm -q --ignore-unmatch cores/karabas.ini
           cp dist/karabas-mini-firmware.uf2 $mini/firmware/firmware.uf2
           cp dist/karabas-minig-firmware.uf2 $mini/firmware/firmware_g.uf2
-          cp src/karabas.ini $mini/firmware/karabas.ini
-          git -C $mini rm -q --ignore-unmatch cores/karabas.ini
+          # no karabas.ini or pad drivers next to the firmware: the firmware has the defaults
+          # and maps most pads itself (README.md, docs/usb_gamepads.md)
+          for repo in $go $mini; do
+            git -C $repo rm -rq --ignore-unmatch cores/karabas.ini firmware/karabas.ini firmware/drivers
+          done
           for repo in $go $mini; do
             git -C $repo config user.name "github-actions[bot]"
             git -C $repo config user.email "41898282+github-actions[bot]@users.noreply.github.com"
