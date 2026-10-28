@@ -3,6 +3,7 @@
 #include "storage/file.h"
 #include "main.h"
 #include "kg_format.h"
+#include "file_name.h"
 
 // the open core file (file1)
 
@@ -22,6 +23,15 @@ size_t file_read_bytes(char *buf, size_t len) {
 
 size_t file_write_bytes(const char *buf, size_t len) {
     return sd_write(&file1, buf, len);
+}
+
+void file_read_str(FIL *f, uint32_t pos, char *out, size_t len) {
+  f_lseek(f, pos);
+  UINT n = sd_read(f, out, len);
+  out[n] = '\0';
+  char *ff = (char *) memchr(out, 0xFF, n); // the reserved bytes of older core files
+  if (ff) *ff = '\0';
+  kg_trim(out);
 }
 
 uint16_t file_read16(uint32_t pos) {

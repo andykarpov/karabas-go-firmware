@@ -85,7 +85,7 @@ The firmware is checked on Mini G hardware; Go and Mini have not been checked on
 - The SPI clock defaults to 16 MHz. A core can override it with its `spi_freq` header field, which `read_core()` passes to `link_set_freq()`.
 - **Burst transfers** (`docs/burst_protocol.md`). A second chip select (`PIN_BURST_CS` = `PIN_MCU_SPI_IO0`), optional `PIN_BURST_READY` = `PIN_MCU_SPI_IO1`, a 5-byte header (type + 32-bit address) and up to 512 data bytes.
   - They are used only if the core answered the `CMD_CAPS` query that `do_configure()` sends. Otherwise everything stays on classic frames, so old cores are unaffected.
-  - ROMs, the file loader and ioctl data try `link_burst_write()` first and send the rest with classic frames.
+  - ROMs, the file loader and ioctl data go through `core_send_file()` (`fpga/core_loader`, the file read into the bitstream buffer) and `link_write_data()` (`fpga/link`): `link_burst_write()` first, the rest as classic frames (the bank command 0..2 with the address bits 8..31, the data command with the low byte).
   - **MCU_IO4 (GPIO18) must stay an input:** on modded Mini boards it is the FT812 clock from the FPGA.
   - `PIN_BURST_CS` is pulled up while the MCU does not drive it, and the cores pull it up too. A floating chip select lets a core's burst receiver take classic traffic for a burst.
   - Bursts are always used when the core supports them (there is no switch). With `debug=1` the log shows the ROM, file loader and ioctl transfer times with the link mode. The file loader also logs the CRC-32 of the sent file, which can be compared with the file on a PC.

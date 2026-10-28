@@ -66,20 +66,14 @@ void app_file_loader_read_list(void) {
   // select and load prev file on boot
   if (has_sd && fb_len() > 0 && core.last_file_id > 0) {
     for (uint16_t i=0; i<fb_len(); i++) {
-      if (core.last_file_id == fb_id(i)) {
-          fb_select(i);
-          //d_printf("Found %d pos", i); d_println();
-          FILINFO fi;
-          if (sd_find_id(&root1, core.last_file_id, &fi)) {
-            app_file_loader_send_file(core.last_file_id);
-          }
-          // hide osd
-          if (!is_osd_hiding) {
-            is_osd_hiding = true;
-            hide_timer = ms_now();
-            osd_hide_menu();
-          }
+      if (core.last_file_id != fb_id(i)) continue;
+      fb_select(i);
+      FILINFO fi;
+      if (sd_find_id(&root1, core.last_file_id, &fi)) {
+        app_file_loader_send_file(core.last_file_id);
       }
+      ui_osd_hide();
+      break;
     }
   }
 }
@@ -150,9 +144,6 @@ void app_file_loader_send_file(uint16_t file_id) {
   const char *game_name = fi.fname;
   bk_set_game(core.dir, game_name); // its save, if the core asks for one after the load
 
-  uint8_t buf[512];
-  int c;
-
   // keep the whole file transfer together on the fpga link
   spi_bus_lock();
 
@@ -160,35 +151,17 @@ void app_file_loader_send_file(uint16_t file_id) {
   spi_send(CMD_FILELOADER, 0, 3); // 11 - active = 1, reset = 1
   spi_send(CMD_FILELOADER, 0, 2); // 10 - active = 1, reset = 0
 
-  uint64_t file_size = f_size(&file1);
-
+  uint32_t file_size = f_size(&file1);
   d_printf("Sending file %d (%lu bytes)", file_id, (unsigned long) file_size); d_println();
   d_flush();
-  
-uint32_t cnt = 0;
-uint32_t c1 = 0;
-  uint32_t send_timer = ms_now();
-  send_timer = ms_now();
-  uint32_t crc = KG_CRC32_INIT; // debug: compare with the crc32 of the file on a pc
 
-  while((c = sd_read(&file1, buf, sizeof(buf))) > 0) {
-    if (hw_setup.debug_enabled) crc = kg_crc32_update(crc, buf, c);
-    // bursts if the core supports them; classic frames for whatever they did not send
-    size_t done = link_burst_write(CMD_FILEDATA, cnt, buf, c);
-    for (int j=done; j<c; j++) {
-      app_file_loader_send_byte(cnt + j, buf[j], j == (int) done);
-    }
-    cnt += c;
-    c1 += c;
-    if (c1 >= 16384) {
-      c1 = 0;
-      osd_loading_popup(cnt, file_size);
-      osd_update();
-    }
-  }
+  uint32_t send_timer = ms_now();
+  uint32_t crc = KG_CRC32_INIT; // debug: compare with the crc32 of the file on a pc
+  uint32_t cnt = core_send_file(&file1, file_size, CMD_FILEDATA, CMD_FILEBANK, 0, core_loading_popup, &file_size,
+    hw_setup.debug_enabled ? &crc : NULL);
   osd_loading_popup(file_size, file_size);
   osd_update();
-  
+
   // 00 - active = 0, reset = 0
   spi_send(CMD_FILELOADER, 0, 0);
   spi_bus_unlock();
@@ -218,12 +191,7 @@ void app_file_loader_on_keyboard() {
   if (key == KEY_ENTER) {
     app_file_loader_save();
     app_file_loader_send_file(fb_id(fb_sel()));
-    // hide osd
-    if (!is_osd_hiding) {
-      is_osd_hiding = true;
-      hide_timer = ms_now();
-      osd_hide_menu();
-    }
+    ui_osd_hide();
   }
 
   // redraw file loader on keypress
@@ -231,20 +199,3 @@ void app_file_loader_on_keyboard() {
     app_file_loader_menu(APP_COREBROWSER_MENU_OFFSET);
   }
 }
-
-void app_file_loader_send_byte(uint32_t addr, uint8_t data, bool force_bank) {
-  // send file bank address every 256 bytes (and when resuming in the middle of a bank)
-  if (force_bank || (addr & 0x000000FF) == 0) {
-    uint8_t filebank3 = (uint8_t)((addr & 0xFF000000) >> 24);
-    uint8_t filebank2 = (uint8_t)((addr & 0x00FF0000) >> 16);
-    uint8_t filebank1 = (uint8_t)((addr & 0x0000FF00) >> 8);
-    //d_printf("File bank %d %d %d", filebank1, filebank2, filebank3); d_println();
-    spi_send(CMD_FILEBANK, 0, filebank1);
-    spi_send(CMD_FILEBANK, 1, filebank2);
-    spi_send(CMD_FILEBANK, 2, filebank3);
-  }
-  // send lower 256 bytes
-  uint8_t fileaddr = (uint8_t)((addr & 0x000000FF));
-  spi_send(CMD_FILEDATA, fileaddr, data);
-}
-

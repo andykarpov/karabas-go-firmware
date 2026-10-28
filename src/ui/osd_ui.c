@@ -20,10 +20,10 @@
 // OSD state and the app screens (one per osd_state)
 
 volatile bool is_osd = false;       // also read by the input task
-volatile bool is_osd_hiding = false;
+static bool is_osd_hiding = false;
 bool need_redraw = false;
 bool has_ft = false;
-uint32_t hide_timer = 0;
+static uint32_t hide_timer = 0;
 uint8_t osd_state;
 uint8_t osd_return_state;
 bool ui_repeat = false;
@@ -87,6 +87,13 @@ void ui_popup_start(uint8_t i) {
   is_popup_hiding = true;
   popup_timer = ms_now();
   osd_show_popup(i);
+}
+
+void ui_osd_hide() {
+  if (is_osd_hiding) return;
+  is_osd_hiding = true;
+  hide_timer = ms_now();
+  osd_hide_menu();
 }
 
 void ui_tick() {

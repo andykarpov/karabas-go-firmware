@@ -92,14 +92,6 @@ void serial_data(uint8_t addr, uint8_t data) {
     }
 }
 
-// header string of a core file without the padding
-static void read_core_str(FIL *f, uint32_t pos, char *out, size_t len) {
-  f_lseek(f, pos);
-  UINT n = sd_read(f, out, len);
-  out[n] = '\0';
-  for (int i = strlen(out) - 1; i >= 0 && (out[i] == ' ' || out[i] == '\0'); i--) out[i] = '\0';
-}
-
 static void at_list_cores() {
   static DIR root;
   if (!has_sd) { host_print("ERROR\r\n"); return; }
@@ -109,9 +101,9 @@ static void at_list_cores() {
   while (f_readdir(&root, &fi) == FR_OK && fi.fname[0]) {
     if (!(fi.fattrib & AM_DIR) && kg_name_has_ext(fi.fname, CORE_EXT) && (f = sd_tmp_open(fi.fname, FA_READ)) != NULL) {
       char id[33], name[33], build[9];
-      read_core_str(f, FILE_POS_CORE_ID, id, 32);
-      read_core_str(f, FILE_POS_CORE_NAME, name, 32);
-      read_core_str(f, FILE_POS_CORE_BUILD, build, 8);
+      file_read_str(f, FILE_POS_CORE_ID, id, 32);
+      file_read_str(f, FILE_POS_CORE_NAME, name, 32);
+      file_read_str(f, FILE_POS_CORE_BUILD, build, 8);
       char line[160];
       snprintf(line, sizeof(line), "+KARABAS:%s;%s;%s;%s\r\n", fi.fname, id, name, build);
       host_print(line);

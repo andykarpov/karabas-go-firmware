@@ -90,9 +90,7 @@ void settings_begin(setup_t *s) {
   if (s->ft_sound >= SOUNDS) s->ft_sound = 1;
   core_sel = cores_len;
   for (uint8_t i = 0; i < cores_len; i++) {
-    char id[sizeof(cores[0].id)];
-    trim_copy(id, cores[i].id, sizeof(id));
-    if (strcmp(id, s->autoload_core) == 0) { core_sel = i; break; }
+    if (strcmp(cores[i].id, s->autoload_core) == 0) { core_sel = i; break; }
   }
   core_other = core_sel == cores_len;
   strlcpy(core_other_id, s->autoload_core, sizeof(core_other_id));
@@ -204,7 +202,7 @@ void settings_change(uint8_t id, setup_t *s, int d) {
       uint8_t n = cores_len + (core_other ? 1 : 0);
       if (n == 0) break;
       core_sel = (core_sel + d + n) % n;
-      if (core_sel < cores_len) trim_copy(s->autoload_core, cores[core_sel].id, sizeof(s->autoload_core));
+      if (core_sel < cores_len) strlcpy(s->autoload_core, cores[core_sel].id, sizeof(s->autoload_core));
       else strlcpy(s->autoload_core, core_other_id, sizeof(s->autoload_core));
       break;
     }

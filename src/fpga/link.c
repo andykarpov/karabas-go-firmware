@@ -342,3 +342,14 @@ size_t link_burst_write(uint8_t type, uint32_t addr, const uint8_t *data, size_t
   spi_bus_unlock();
   return sent;
 }
+
+void link_write_data(uint8_t data_cmd, uint8_t bank_cmd, uint32_t addr, const uint8_t *buf, size_t len) {
+  spi_bus_lock();
+  size_t done = link_burst_write(data_cmd, addr, buf, len);
+  for (size_t j = done; j < len; j++) {
+    uint32_t a = addr + j;
+    if (j == done || a % 256 == 0) spi_send24(bank_cmd, a >> 8);
+    spi_send(data_cmd, (uint8_t) a, buf[j]);
+  }
+  spi_bus_unlock();
+}

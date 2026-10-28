@@ -11,7 +11,6 @@ typedef struct {
 } queue_spi_t;
 
 typedef struct {
-	bool flash;
 	char id[32+1];
 	char name[32+1];
 	char filename[32+1];
@@ -88,7 +87,6 @@ typedef struct {
 	char build[8+1];
 	char name[32+1];
 	char filename[32+1];
-	bool flash;
 	uint8_t order;
 	bool visible;
 	uint8_t type;
