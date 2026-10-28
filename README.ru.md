@@ -122,7 +122,7 @@ CI собирает прошивку для каждого PR. Скачать е
 | | `sound`, `click` | `1`, `1` | звуки меню |
 | | `time`, `date`, `char` | `1`, `1`, `1` | показывать в графическом браузере часы, дату и картинку «Карабаса» |
 | | `color_bg`, `color_gradient`, `color_button`, `color_active`, `color_text`, `color_text_active`, `color_copyright` | `010101`, `0000c8`, `202026`, `0000c8`, `ffffff`, `ffffff`, `787878` | цвета (hex RGB) |
-| | `3d_buttons` | `0` | `1`: кнопки с тенью и светлым краем |
+| | `3d_buttons` | `0` | `1`: кнопки с тенью и светлым краем (кроме 800x600: там это слишком тяжело для FT812) |
 | | `mouse_speed` | `3` | скорость указателя мыши в графическом меню, 1..5 |
 | `[matrix]` | `enabled`, `brightness`, `clock_*`, `meter_*` | `1`, `0`, ... | LED-матрица, см. [docs/matrix.ru.md](docs/matrix.ru.md) |
 | `[autoload]` | `enabled`, `timeout`, `core` | `0`, `15`, нет | запуск ядра `core` через `timeout` секунд |

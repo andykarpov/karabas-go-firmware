@@ -123,7 +123,7 @@ characters long, or the whole file is ignored.
 | | `sound`, `click` | `1`, `1` | menu sounds |
 | | `time`, `date`, `char` | `1`, `1`, `1` | show the clock, the date and the Karabas picture in the graphical browser |
 | | `color_bg`, `color_gradient`, `color_button`, `color_active`, `color_text`, `color_text_active`, `color_copyright` | `010101`, `0000c8`, `202026`, `0000c8`, `ffffff`, `ffffff`, `787878` | colors (hex RGB) |
-| | `3d_buttons` | `0` | `1`: buttons with a shadow and a light edge |
+| | `3d_buttons` | `0` | `1`: buttons with a shadow and a light edge (not in 800x600: too heavy for the FT812 there) |
 | | `mouse_speed` | `3` | mouse pointer speed in the graphic menu, 1..5 |
 | `[matrix]` | `enabled`, `brightness`, `clock_*`, `meter_*` | `1`, `0`, ... | the LED matrix, see [docs/matrix.md](docs/matrix.md) |
 | `[autoload]` | `enabled`, `timeout`, `core` | `0`, `15`, none | start `core` after `timeout` seconds |

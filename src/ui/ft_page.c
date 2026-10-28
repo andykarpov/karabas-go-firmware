@@ -55,3 +55,7 @@ void ft_page_text(int16_t x, int16_t y, uint8_t font, uint32_t color, uint16_t o
   b[n] = '\0';
   ft_draw_text(x, y, font, color, opt, b);
 }
+
+uint16_t ft_button_opt(bool want_3d) {
+  return want_3d && !ft_pclk_is_sysclk() ? FT81x_OPT_3D : FT81x_OPT_FLAT;
+}

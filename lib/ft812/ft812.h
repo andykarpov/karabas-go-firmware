@@ -258,6 +258,8 @@ uint32_t ft_frames_in(uint32_t ms);     // frames scanned out in ms (REG_FRAMES)
 uint8_t ft_mode_count(void);
 const char *ft_mode_name(uint8_t m);    // "800x600@60"
 uint16_t ft_width(void);
+// the running mode draws a pixel every system clock (800x600): no time for heavy lines
+bool ft_pclk_is_sysclk(void);
 uint16_t ft_height(void);
 
 // a display list: ft_begin_display_list(), the drawing, ft_swap_screen()
@@ -278,8 +280,9 @@ void ft_draw_slider(int16_t x, int16_t y, int16_t width, int16_t height, uint32_
 // an RGB565 bitmap in GRAM, scaled and rotated, added on top (additive blending)
 void ft_draw_bitmap(uint32_t offset, uint16_t x, uint16_t y, uint16_t width, uint16_t height, uint8_t scale, uint8_t rot);
 void ft_draw_bitmap_argb4(uint32_t offset, int16_t x, int16_t y, uint16_t width, uint16_t height);
-// an RGB565 bitmap of bitmap_width pixels repeated across width
-void ft_draw_bitmap_rgb565_repeat_x(uint32_t offset, int16_t x, int16_t y, uint16_t bitmap_width, uint16_t height, uint16_t width);
+// a vertical gradient across the screen from rgb0 at line y0 to rgb1 at y1, only on these lines
+// (CMD_GRADIENT with a scissor)
+void ft_draw_gradient_v(int16_t y0, uint32_t rgb0, int16_t y1, uint32_t rgb1);
 void ft_cmd_memcpy(uint32_t dest, uint32_t src, uint32_t size);
 void ft_cmd_append(uint32_t offset, uint32_t size);   // GRAM at offset into the display list
 
