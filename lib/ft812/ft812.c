@@ -85,6 +85,8 @@ void ft812_bus_unlock(void);
 // KTOME addition
 #define BLEND_FUNC(src, dst) ((0x0BL << 24) | (src << 3) | (dst))
 #define VERTEX_FORMAT(frac) ((0x27L << 24) | ((frac) & 7)) ///< Fraction bits of VERTEX2F (4, 1/16 px, by default)
+#define SCISSOR_XY(x, y) ((0x1BL << 24) | (((uint32_t)(x) & 0x7FF) << 11) | ((uint32_t)(y) & 0x7FF))
+#define SCISSOR_SIZE(w, h) ((0x1CL << 24) | (((uint32_t)(w) & 0xFFF) << 12) | ((uint32_t)(h) & 0xFFF))
 #define BITMAP_SIZE_H(w, h) ((0x29L << 24) | (((uint32_t)(w) & 3) << 2) | ((uint32_t)(h) & 3)) ///< Bits 9-10 of the BITMAP_SIZE width / height
 #define CMD_ROTATE()         0xffffff29
 #define CMD_TRANSLATE()      0xffffff27
@@ -113,7 +115,7 @@ void ft812_bus_unlock(void);
 // no 25.175 MHz for 640x480: it runs at 24 MHz with the VESA line (800 clocks) and a shorter
 // vertical blanking (500 lines), 60 Hz; a monitor took none of the longer lines or 26.67 MHz.
 // 800x600 is VESA exactly, at 1:1: the system clock is the pixel clock, so the frames must stay
-// light (the background gradient is a bitmap, CMD_GRADIENT left busy lines unfinished).
+// light.
 static const ft_mode_t ft_modes[] =
 {
   // f_mul, f_div, h_fporch, h_sync, h_bporch, h_visible, v_fporch, v_sync, v_bporch, v_visible
@@ -489,18 +491,17 @@ void ft_draw_bitmap_argb4(const uint32_t offset, const int16_t x, const int16_t 
     ft_end_cmd(END());
 }
 
-void ft_draw_bitmap_rgb565_repeat_x(const uint32_t offset, const int16_t x, const int16_t y, const uint16_t bitmapWidth, const uint16_t height, const uint16_t width) {
-    ft_start_cmd(COLOR(FT81x_COLOR_RGB(255, 255, 255)));
-    ft_intermediate_cmd(BITMAP_SOURCE(FT81x_RAM_G + offset));
-    ft_intermediate_cmd(BITMAP_LAYOUT(FT81x_BITMAP_LAYOUT_RGB565, (uint32_t)bitmapWidth * 2, (uint32_t)height));
-    ft_intermediate_cmd(BITMAP_SIZE(FT81x_BITMAP_SIZE_NEAREST, 1, 0, (uint32_t)width, (uint32_t)height)); // repeat in x
-    ft_intermediate_cmd(BITMAP_SIZE_H((uint32_t)width >> 9, (uint32_t)height >> 9));
-    ft_intermediate_cmd(BEGIN(BITMAPS));
-    ft_intermediate_cmd(VERTEX_FORMAT(0));
-    ft_intermediate_cmd(VERTEX2F(x, y));
-    ft_intermediate_cmd(VERTEX_FORMAT(4));
-    ft_intermediate_cmd(END());
-    ft_end_cmd(BITMAP_SIZE_H(0, 0)); // the other bitmaps of the handle set only the low bits
+void ft_draw_gradient_v(const int16_t y0, const uint32_t rgb0, const int16_t y1, const uint32_t rgb1) {
+    const uint16_t x = ft_width() / 2;
+    ft_start_cmd(SCISSOR_XY(0, y0)); // only these lines: CMD_GRADIENT fills the whole scissor area
+    ft_intermediate_cmd(SCISSOR_SIZE(ft_width(), y1 - y0 + 1));
+    ft_intermediate_cmd(GRADIENT());
+    ft_intermediate_cmd(x | ((uint32_t)y0 << 16));
+    ft_intermediate_cmd(rgb0);
+    ft_intermediate_cmd(x | ((uint32_t)y1 << 16));
+    ft_intermediate_cmd(rgb1);
+    ft_intermediate_cmd(SCISSOR_XY(0, 0));
+    ft_end_cmd(SCISSOR_SIZE(2048, 2048));
 }
 
 void ft_cmd_memcpy(const uint32_t dest, const uint32_t src, const uint32_t size) {

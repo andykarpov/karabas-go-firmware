@@ -87,59 +87,12 @@ void app_core_browser_menu(uint8_t vpos) {
   osd_update();
 }
 
-// The background gradient as a bitmap in GRAM, after the kept frame of ft_mouse (0xF0400 + 8 KB):
-// CMD_GRADIENT took too much of the render time of every line (in 800x600, where the system
-// clock is the pixel clock, busy lines came out unfinished). A 4 px wide column, ordered dither for the RGB565 steps,
-// repeated across the screen: one bitmap a line. Made again when the colors or the mode change,
-// into the other of two buffers: the frame on the screen keeps drawing the old one until the swap
-// (a theme change tore the background for a frame).
-#define GRADIENT_OFFSET 0xF4000
-#define GRADIENT_W 4
-#define GRADIENT_MAX_H 450 // 3/4 of 600 lines
-#define GRADIENT_BUF 0x1000 // the second buffer is after the first
-static_assert(GRADIENT_W * 2 * GRADIENT_MAX_H <= GRADIENT_BUF, "the gradient buffers overlap");
-static_assert(GRADIENT_OFFSET + 2 * GRADIENT_BUF <= 0x100000, "the gradient is past the GRAM");
-
-static uint32_t gradient_from, gradient_to;
-static uint16_t gradient_h; // 0: not in GRAM
-static uint8_t gradient_buf; // the buffer of the last gradient
-
-static uint8_t gradient_mix(uint32_t from, uint32_t to, uint8_t shift, uint16_t y, uint16_t h) {
-  int a = (from >> shift) & 0xFF, b = (to >> shift) & 0xFF;
-  return a + (b - a) * y / (h - 1);
-}
-
-static void gradient_load(uint32_t from, uint32_t to, uint16_t h) {
-  static const uint8_t bayer[4][4] = { {0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5} };
-  // on the heap only until it is in GRAM
-  uint16_t *gradient_px = (uint16_t *) malloc(GRADIENT_W * 2 * h);
-  if (!gradient_px) return;
-  for (uint16_t y = 0; y < h; y++) {
-    uint8_t r = gradient_mix(from, to, 16, y, h), g = gradient_mix(from, to, 8, y, h), b = gradient_mix(from, to, 0, y, h);
-    for (uint8_t x = 0; x < GRADIENT_W; x++) {
-      uint8_t t = bayer[y & 3][x];
-      uint16_t r5 = (r + t / 2) >> 3, g6 = (g + t / 4) >> 2, b5 = (b + t / 2) >> 3;
-      if (r5 > 31) r5 = 31;
-      if (g6 > 63) g6 = 63;
-      if (b5 > 31) b5 = 31;
-      gradient_px[y * GRADIENT_W + x] = (r5 << 11) | (g6 << 5) | b5;
-    }
-  }
-  gradient_buf ^= 1;
-  ft_write_gram(GRADIENT_OFFSET + gradient_buf * GRADIENT_BUF, GRADIENT_W * 2 * h, (const uint8_t *) gradient_px);
-  free(gradient_px);
-  gradient_from = from;
-  gradient_to = to;
-  gradient_h = h;
-}
-
 static_assert(KEY1_PCM_START + KEY1_PCM_SIZE <= sizeof(key1Data), "sound 1 is past its array");
 static_assert(KEY2_PCM_START + KEY2_PCM_SIZE <= sizeof(key2Data), "sound 2 is past its array");
 static_assert(KEY3_PCM_START + KEY3_PCM_SIZE <= sizeof(key3Data), "sound 3 is past its array");
 static_assert(KEY4_PCM_START + KEY4_PCM_SIZE <= sizeof(key4Data), "sound 4 is past its array");
 
 void app_core_browser_ft_load() {
-  gradient_h = 0; // the GRAM is cleared by a reset of the FT812
   ft_set_sound(FT81x_SOUND_COWBELL, 60);
   ft_load_image(LOGO_OFFSET, LOGO_SIZE, logoData); // karabas logo, starts from 0 in GRAM
   ft_load_image(BG_OFFSET, BG_SIZE, bgData); // karabas bg, starts after logo in GRAM
@@ -158,13 +111,8 @@ void app_core_browser_ft_overlay() {
 
 void app_core_browser_ft_background(const setup_t *t) {
   ft_clear(t->color_bg);
-  // from the top to 3/4 of the height, as CMD_GRADIENT drew it; below is the clear color
-  uint16_t h = ft_height() - ft_height() / 4;
-  if (h > GRADIENT_MAX_H) h = GRADIENT_MAX_H;
-  if (h != gradient_h || t->color_gradient != gradient_from || t->color_bg != gradient_to) {
-    gradient_load(t->color_gradient, t->color_bg, h);
-  }
-  ft_draw_bitmap_rgb565_repeat_x(GRADIENT_OFFSET + gradient_buf * GRADIENT_BUF, 0, 0, GRADIENT_W, h, ft_width());
+  // from the top to 3/4 of the height; below is the clear color
+  ft_draw_gradient_v(0, t->color_gradient, ft_height() - ft_height() / 4 - 1, t->color_bg);
 }
 
 void app_core_browser_ft_decor(const setup_t *t, bool show_char) {

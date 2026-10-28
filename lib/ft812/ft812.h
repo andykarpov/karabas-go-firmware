@@ -278,8 +278,9 @@ void ft_draw_slider(int16_t x, int16_t y, int16_t width, int16_t height, uint32_
 // an RGB565 bitmap in GRAM, scaled and rotated, added on top (additive blending)
 void ft_draw_bitmap(uint32_t offset, uint16_t x, uint16_t y, uint16_t width, uint16_t height, uint8_t scale, uint8_t rot);
 void ft_draw_bitmap_argb4(uint32_t offset, int16_t x, int16_t y, uint16_t width, uint16_t height);
-// an RGB565 bitmap of bitmap_width pixels repeated across width
-void ft_draw_bitmap_rgb565_repeat_x(uint32_t offset, int16_t x, int16_t y, uint16_t bitmap_width, uint16_t height, uint16_t width);
+// a vertical gradient across the screen from rgb0 at line y0 to rgb1 at y1, only on these lines
+// (CMD_GRADIENT with a scissor)
+void ft_draw_gradient_v(int16_t y0, uint32_t rgb0, int16_t y1, uint32_t rgb1);
 void ft_cmd_memcpy(uint32_t dest, uint32_t src, uint32_t size);
 void ft_cmd_append(uint32_t offset, uint32_t size);   // GRAM at offset into the display list
 
