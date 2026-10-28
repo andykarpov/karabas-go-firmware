@@ -24,6 +24,7 @@ enum { HIT_STATUS = 0, HIT_RETRY = 10, HIT_RESCAN, HIT_NEXT, HIT_CONNECT, HIT_SH
 #define CHAR_W 13
 #define CURSOR_COLOR 0x00d8d8
 #define BAR_H 20
+#define LOCK_W 12
 
 static bool closed; // Esc left the page
 
@@ -71,6 +72,15 @@ static void draw_status(const ft_page_ctx_t *c, int16_t y) {
   draw_info(c, y + INFO_STEP * 7 / 2, "IP", w->ip[0] && strcmp(w->ip, "0.0.0.0") != 0 ? w->ip : "-", value);
 }
 
+// a padlock LOCK_W wide, centered on y: closed for a network with a password, open (the right
+// end of the shackle out of the body) for one without
+static void draw_lock(int16_t x, int16_t y, bool closed, uint32_t color) {
+  ft_page_rect(x, y - 1, LOCK_W, 8, 2, color);                 // the body
+  ft_page_rect(x + 2, y - 8, 2, 8, 1, color);                  // the shackle: left
+  ft_page_rect(x + 2, y - 8, LOCK_W - 4, 2, 1, color);         // top
+  ft_page_rect(x + LOCK_W - 4, y - 8, 2, closed ? 8 : 4, 1, color); // right
+}
+
 static void draw_list(const ft_page_ctx_t *c) {
   const ws_t *w = ws_state();
   ft_draw_text(c->x + 16, c->y + FT_PAGE_BTN_H / 2, FT_PAGE_FONT_SMALL, c->s->color_copyright, FT81x_OPT_CENTERY, "dBm      Network");
@@ -98,9 +108,10 @@ static void draw_list(const ft_page_ctx_t *c) {
     snprintf(b, sizeof(b), "%d", ap->rssi);
     int16_t cy = y + (LIST_ROW_H - 2) / 2;
     ft_draw_text(c->x + 60, cy, FT_PAGE_FONT, c->s->color_text, FT81x_OPT_RIGHTX | FT81x_OPT_CENTERY, b);
-    if (ap->ecn) ft_draw_text(c->x + 76, cy, FT_PAGE_FONT, c->s->color_copyright, FT81x_OPT_CENTERY, "*");
     bool joined = strcmp(ap->ssid, w->cur_ssid) == 0;
-    ft_page_text(c->x + 96, cy, FT_PAGE_FONT, joined ? c->s->color_active : c->s->color_text, FT81x_OPT_CENTERY, ap->ssid, (c->w - 112) / 12);
+    uint32_t color = joined ? c->s->color_active : c->s->color_text;
+    draw_lock(c->x + 72, cy, ap->ecn != 0, color);
+    ft_page_text(c->x + 96, cy, FT_PAGE_FONT, color, FT81x_OPT_CENTERY, ap->ssid, (c->w - 112) / 12);
   }
 }
 
@@ -259,7 +270,7 @@ static const char *hint() {
     case WS_INIT: case WS_SCAN: case WS_JOIN: return "Please wait";
     case WS_UPD: return "Please wait, do not power off the board";
     case WS_UPD_ASK: return ws_state()->restoring ? "AT+RESTORE: the network, the mode and the UART settings" : "The module keeps its old firmware if the download fails";
-    case WS_LIST: return "* password, joined in color";
+    case WS_LIST: return "Closed lock: password, joined in color";
     case WS_SSID: return "Pad: Up/Down: char   Right: add   Left: delete";
     case WS_PASS: return ws_state()->show_pass ? "Tab: hide the password" : "Tab: show the password";
     default: return "";
