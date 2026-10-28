@@ -31,6 +31,11 @@ void sd_closedir(DIR *d);
 // f_read / f_write of len bytes; the count done, 0 on an error
 UINT sd_read(FIL *f, void *buf, UINT len);
 UINT sd_write(FIL *f, const void *buf, UINT len);
+// One FIL for the short file jobs of APP, which open, use and close it in one function (a FIL
+// has its own 512-byte buffer, so one is shared instead of a static one per job). NULL if the
+// file can't be opened, or the FIL is taken (a nested use: logged). sd_tmp_close() is f_close().
+FIL *sd_tmp_open(const char *path, BYTE mode);
+bool sd_tmp_close(void);
 // the whole file in a malloc()ed buffer with a null after it (free() it); NULL if it can't
 // be read or is longer than max
 char *sd_read_all(const char *path, size_t max, size_t *len);

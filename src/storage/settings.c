@@ -242,15 +242,15 @@ bool save_setup(const setup_t *s) {
   size_t old_len = 0;
   char *old = sd_read_all(INI_FILE, INI_MAX, &old_len);
   bool has_old = old != NULL;
-  static FIL f; // not on the stack: a FIL has its own sector buffer
-  if (!sd_open(&f, INI_NEW, FA_WRITE | FA_CREATE_ALWAYS)) {
+  FIL *f = sd_tmp_open(INI_NEW, FA_WRITE | FA_CREATE_ALWAYS);
+  if (!f) {
     free(old);
     d_println("karabas.ini: can't create " INI_NEW);
     return false;
   }
 
   // keep the line ends of the file
-  ini_writer_t w = { &f, has_old && memchr(old, '\r', old_len) != NULL, true };
+  ini_writer_t w = { f, has_old && memchr(old, '\r', old_len) != NULL, true };
   kg_ini_update_t u;
   kg_ini_update_begin(&u, items, count, write_line, &w);
   for (size_t pos = 0; has_old && w.ok && pos < old_len; ) {
@@ -272,7 +272,7 @@ bool save_setup(const setup_t *s) {
   }
   free(old);
   if (w.ok) kg_ini_update_end(&u);
-  if (f_close(&f) != FR_OK) w.ok = false;
+  if (!sd_tmp_close()) w.ok = false;
 
   if (!w.ok) {
     f_unlink(INI_NEW);

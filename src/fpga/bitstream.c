@@ -16,6 +16,11 @@
 #define BITSTREAM_CHUNK 4096
 
 static uint8_t chunk_buf[2][BITSTREAM_CHUNK];
+static_assert(sizeof(chunk_buf) == BITSTREAM_BUF_SIZE, "BITSTREAM_BUF_SIZE is the size of chunk_buf");
+
+uint8_t *bitstream_buf(void) {
+  return &chunk_buf[0][0];
+}
 
 static void bitstream_progress(uint32_t sent, uint32_t total) {
   static bool blink = false;
@@ -28,7 +33,7 @@ static void bitstream_progress(uint32_t sent, uint32_t total) {
 }
 
 static int bitstream_read(uint8_t *buf, uint32_t remaining) {
-  return file_read_buf((char*) buf, (remaining < BITSTREAM_CHUNK) ? remaining : BITSTREAM_CHUNK);
+  return file_read_bytes((char*) buf, (remaining < BITSTREAM_CHUNK) ? remaining : BITSTREAM_CHUNK);
 }
 
 // PIO-USB claims DMA channel 0 on core1, so take channels from the top
