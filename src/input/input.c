@@ -65,6 +65,7 @@ static int hotkey_find(const hid_keyboard_report_t *kbd, uint16_t jl, uint16_t j
 // the backup RAM first, then the log (the result of the flush) gets to the port before the reboot
 static void flush_and_reboot() {
   bk_flush();
+  core_eeprom_flush();
   d_flush();
   ms_delay(100);
   chip_reboot();
@@ -100,6 +101,7 @@ static void btn_run(uint8_t i, uint8_t action) {
     }
     case BTN_ACTION_BOOTSEL:
       bk_flush();
+      core_eeprom_flush();
       hang_diag_stop();
       matrix_icon(MATRIX_ICON_BOOTSEL); // the bootloader leaves the matrix as it is
       chip_reboot_bootsel();

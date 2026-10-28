@@ -133,6 +133,7 @@ static void at_command(const char *arg) {
     at_list_cores();
   } else if (strcasecmp(arg, "boot") == 0) {
     bk_flush();
+    core_eeprom_flush();
     host_print("OK\r\n"); host_flush(); ms_delay(100);
     hang_diag_stop();
     matrix_icon(MATRIX_ICON_BOOTSEL); // the bootloader leaves the matrix as it is
