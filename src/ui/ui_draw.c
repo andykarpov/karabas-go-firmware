@@ -31,3 +31,31 @@ void ui_hotkey(const char *key, const char *rest) {
   osd_set_color(OSD_COLOR_CYAN_I, OSD_COLOR_FLASH); osd_print(key);
   osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK); osd_print(rest);
 }
+
+void ui_clear_rows(uint8_t y1, uint8_t y2) {
+  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+  osd_fill(0, y1, UI_COL_LAST, y2, ' ');
+}
+
+void ui_clear_body(void) { ui_clear_rows(UI_ROW_BODY, UI_ROW_BODY_LAST); }
+
+// the box: a frame around UI_BOX_TEXT x 2 chars
+#define BOX_X1 8
+#define BOX_Y1 8
+#define BOX_X2 (BOX_X1 + UI_BOX_TEXT + 1)
+#define BOX_Y2 (BOX_Y1 + 4)
+
+void ui_box(const char *line1, uint8_t color1, const char *line2, uint8_t color2) {
+  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+  osd_frame(BOX_X1, BOX_Y1, BOX_X2, BOX_Y2);
+  osd_fill(BOX_X1 + 1, BOX_Y1 + 1, BOX_X2 - 1, BOX_Y2 - 1, ' ');
+  osd_set_color(color1, OSD_COLOR_BLACK);
+  osd_set_pos(BOX_X1 + 1, BOX_Y1 + 1); osd_printf("%.*s", UI_BOX_TEXT, line1);
+  osd_set_color(color2, OSD_COLOR_BLACK);
+  osd_set_pos(BOX_X1 + 1, BOX_Y1 + 2); osd_printf("%.*s", UI_BOX_TEXT, line2);
+}
+
+void ui_box_clear(void) {
+  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+  osd_fill(BOX_X1, BOX_Y1, BOX_X2, BOX_Y2, ' ');
+}

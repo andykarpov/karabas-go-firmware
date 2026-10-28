@@ -19,79 +19,50 @@ static void core_dir_path(char *out, size_t size) {
   snprintf(out, size, "%s%s", dir[0] == '/' ? "" : "/", dir);
 }
 
+// a message box shown for a second: no SD card, a dir that can't be opened
+static void read_error(const char *line2) {
+  ui_box("Error occured", OSD_COLOR_RED_I, line2, OSD_COLOR_RED_I);
+  osd_update();
+  ms_delay(1000);
+}
+
 void app_file_loader_read_list(bool forceIndex) {
 
-  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-  osd_frame(8,8,24,12);
-  osd_fill(9,9,23,11, 32);
-  osd_set_color(OSD_COLOR_GREEN_I, OSD_COLOR_BLACK);
-  osd_set_pos(9, 9);
-  osd_print("Scanning files");
-  osd_set_color(OSD_COLOR_MAGENTA_I, OSD_COLOR_BLACK);
-  osd_set_pos(9,10);
-  osd_print("Please wait...");
+  ui_box("Scanning files", OSD_COLOR_GREEN_I, "Please wait...", OSD_COLOR_MAGENTA_I);
   osd_update();
   ms_delay(100);
 
-  // files from sd1 card
-
-  if (has_sd) {
-    char d[256];
-    core_dir_path(d, sizeof(d));
+  // files from sd1 card, tried again until they can be read
+  char d[256];
+  core_dir_path(d, sizeof(d));
+  for (;;) {
+    if (!has_sd) { read_error("Check SD card"); continue; }
     if (!sd_opendir(&root1, d)) {
-
-        osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-        osd_frame(8,8,24,12);
-        osd_fill(9,9,23,11, 32);
-        osd_set_color(OSD_COLOR_RED_I, OSD_COLOR_BLACK);
-        osd_set_pos(9, 9);
-        osd_print("Error occured");
-        osd_set_pos(9,10);
-        char b[255];
-        snprintf(b, sizeof(b), "Bad dir %s", d);
-        osd_print(b);
-        osd_update();
-        ms_delay(1000);
-        app_file_loader_read_list(forceIndex);
-        return;
+      char b[UI_BOX_TEXT + 1];
+      snprintf(b, sizeof(b), "Bad dir %s", d);
+      read_error(b);
+      continue;
     }
-    d_println("Read file list");
-    fb_clear();
-    char e[sizeof(core.file_extensions)];
-    strcpy(e, core.file_extensions);
-    kg_str_lower(e); kg_trim(e);
-    FILINFO fi;
-    while (f_readdir(&root1, &fi) == FR_OK && fi.fname[0]) {
-      uint16_t id;
-      if (!(fi.fattrib & AM_DIR) && sd_file_id(&fi, &id) && kg_name_has_ext(fi.fname, e)) {
-        fb_add_file(fi.fname, id);
-      }
+    break;
+  }
+  d_println("Read file list");
+  fb_clear();
+  char e[sizeof(core.file_extensions)];
+  strcpy(e, core.file_extensions);
+  kg_str_lower(e); kg_trim(e);
+  FILINFO fi;
+  while (f_readdir(&root1, &fi) == FR_OK && fi.fname[0]) {
+    uint16_t id;
+    if (!(fi.fattrib & AM_DIR) && sd_file_id(&fi, &id) && kg_name_has_ext(fi.fname, e)) {
+      fb_add_file(fi.fname, id);
     }
-
-  } else {
-    osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-    osd_frame(8,8,24,12);
-    osd_fill(9,9,23,11, 32);
-    osd_set_color(OSD_COLOR_RED_I, OSD_COLOR_BLACK);
-    osd_set_pos(9, 9);
-    osd_print("Error occured");
-    osd_set_pos(9,10);
-    osd_print("Check SD card");
-    osd_update();
-    ms_delay(1000);
-    app_file_loader_read_list(forceIndex);
-    return;
   }
 
   // sort by file name
   fb_sort();
   
-  // cleanup error messages
-  if (has_sd) {
-    osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-    osd_fill(8,8,24,12, 32);
-    osd_update();
-  }
+  ui_box_clear();
+  osd_update();
 
   // select and load prev file on boot
   if (has_sd && fb_len() > 0 && core.last_file_id > 0) {

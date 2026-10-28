@@ -96,10 +96,10 @@ static void draw() {
   uint8_t kind;
   const char *status = ce_message(&kind);
   osd_set_color(kind == CE_MSG_ERROR ? OSD_COLOR_RED_I : kind == CE_MSG_OK ? OSD_COLOR_GREEN_I : OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-  osd_fill(0, ROW_ERROR, 31, ROW_ERROR, ' ');
+  osd_fill(0, ROW_ERROR, UI_COL_LAST, ROW_ERROR, ' ');
   if (status) { osd_set_pos(1, ROW_ERROR); osd_print(status); }
   osd_set_color(OSD_COLOR_GREY, OSD_COLOR_BLACK);
-  osd_fill(0, ROW_HINT, 31, ROW_HINT, ' ');
+  osd_fill(0, ROW_HINT, UI_COL_LAST, ROW_HINT, ' ');
   osd_set_pos(1, ROW_HINT);
   if (focus == F_TZ) osd_print("UTC offset, no summer time");
   else if (focus == F_SYNC) osd_print("The time from NTP over Wi-Fi");

@@ -76,7 +76,7 @@ static void section(uint8_t row, const char *title) {
 // the sections and the footer of the main page or of the Matrix effects page
 static void draw_frame() {
   osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-  osd_fill(0, UI_ROW_BODY, 31, UI_ROW_HINT_LINE - 1, ' ');
+  osd_fill(0, UI_ROW_BODY, UI_COL_LAST, UI_ROW_BODY_LAST, ' ');
   if (mx_page) {
     ui_row(0, UI_ROW_TITLE, "Settings > Matrix effects", false);
     section(ROW_CLOCK, "Clock");
@@ -105,7 +105,7 @@ static void draw() {
   settings_preview(mx_page ? hint_id : SET_COUNT);
 
   osd_set_color(error ? OSD_COLOR_RED_I : OSD_COLOR_GREY, OSD_COLOR_BLACK);
-  osd_fill(0, ROW_HINT, 31, ROW_HINT, ' ');
+  osd_fill(0, ROW_HINT, UI_COL_LAST, ROW_HINT, ' ');
   osd_set_pos(1, ROW_HINT);
   if (error) osd_print(error);
   else if (hint_id < SET_COUNT) osd_print(settings[hint_id].hint);

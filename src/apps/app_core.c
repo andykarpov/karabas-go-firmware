@@ -112,7 +112,7 @@ void app_core_overlay(bool force)
 
   // footer
   if (!is_filebrowser) {
-    osd_set_pos(0, 23);
+    osd_set_pos(0, UI_ROW_HINT_LINE);
     ui_hotkey("S", "etup ");
     ui_hotkey("A", "bout");
     // file mounter items: delete ejects the image
@@ -125,8 +125,8 @@ void app_core_overlay(bool force)
     }
   }
   osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK); 
-  osd_line(24);
-  osd_set_pos(0,25); osd_print("Press Menu+Esc to toggle OSD");
+  osd_line(UI_ROW_HINT);
+  osd_set_pos(0, UI_ROW_HINT + 1); osd_print("Press Menu+Esc to toggle OSD");
   osd_update();
 }
 
@@ -357,7 +357,7 @@ void app_core_on_keyboard() {
     // cls screen while changing screen mode
     if (prev_is_filebrowser != is_filebrowser) {
       prev_is_filebrowser = is_filebrowser;
-      osd_fill(0, APP_COREBROWSER_MENU_OFFSET, 31, APP_COREBROWSER_MENU_OFFSET + 16, ' ');
+      osd_fill(0, APP_COREBROWSER_MENU_OFFSET, UI_COL_LAST, APP_COREBROWSER_MENU_OFFSET + 16, ' ');
     }
     if (is_filebrowser) {
       if (filebrowser_slot == -1 || filebrowser_slot != core.osd[curr_osd_item].slot_id) {
