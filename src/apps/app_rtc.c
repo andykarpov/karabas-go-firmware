@@ -8,11 +8,13 @@
 #include "time_zone.h"
 #include "apps/app_rtc.h"
 #include "ui/ui_draw.h"
+#include "apps/clock_edit.h"
 
 // Setup > Setup RTC: the date and the time are typed into masked fields. Up / Down / Tab move
 // between the fields and the buttons, Left / Right move the cursor (or pick a button). The BOOT
 // core (the ESP is behind it) has the time zone (karabas.ini [setup] tz) and NTP sync, which sets
-// the clock from NTP; Save and Sync write the time zone, Cancel drops it.
+// the clock from NTP; Save and Sync write the time zone, Cancel drops it. The editing itself is
+// apps/clock_edit, shared with the Clock page of the graphic setup.
 
 enum { F_DATE, F_TIME, F_TZ, F_SAVE, F_CANCEL, F_SYNC, F_COUNT };
 
@@ -24,10 +26,7 @@ enum { F_DATE, F_TIME, F_TZ, F_SAVE, F_CANCEL, F_SYNC, F_COUNT };
 #define ROW_HINT 18
 #define FIELD_X 8
 
-static kg_field_t date_field, time_field;
 static uint8_t focus;
-static const char *error;
-static int16_t tz;
 
 // the time zone and Sync
 static bool has_ntp() {
@@ -65,7 +64,7 @@ static void draw_field(uint8_t y, const char *label, const char *hint, const kg_
 // as a choice of Settings: '<' UTC+03:00 '>'
 static void draw_tz(bool focused) {
   char v[10];
-  kg_tz_format(tz, v, sizeof(v));
+  kg_tz_format(ce_tz(), v, sizeof(v));
   osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
   osd_set_pos(1, ROW_TZ); osd_print("Zone");
   // the value under the digits of the fields, the arrows around it
@@ -83,8 +82,8 @@ static void draw_tz(bool focused) {
 }
 
 static void draw() {
-  draw_field(ROW_DATE, "Date", "DD.MM.YYYY", &date_field, focus == F_DATE);
-  draw_field(ROW_TIME, "Time", "HH:MM", &time_field, focus == F_TIME);
+  draw_field(ROW_DATE, "Date", "DD.MM.YYYY", ce_field(CE_DATE), focus == F_DATE);
+  draw_field(ROW_TIME, "Time", "HH:MM", ce_field(CE_TIME), focus == F_TIME);
   if (has_ntp()) {
     draw_tz(focus == F_TZ);
     ui_button(1, ROW_BUTTONS, 9, "Save", focus == F_SAVE);
@@ -94,9 +93,9 @@ static void draw() {
     ui_button(1, ROW_BUTTONS, 10, "Save", focus == F_SAVE);
     ui_button(12, ROW_BUTTONS, 10, "Cancel", focus == F_CANCEL);
   }
-  const char *status = error ? error : ntp_sync_message();
-  uint8_t ntp = ntp_sync_state();
-  osd_set_color(error || ntp == NTP_ERROR ? OSD_COLOR_RED_I : ntp == NTP_OK ? OSD_COLOR_GREEN_I : OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+  uint8_t kind;
+  const char *status = ce_message(&kind);
+  osd_set_color(kind == CE_MSG_ERROR ? OSD_COLOR_RED_I : kind == CE_MSG_OK ? OSD_COLOR_GREEN_I : OSD_COLOR_WHITE, OSD_COLOR_BLACK);
   osd_fill(0, ROW_ERROR, 31, ROW_ERROR, ' ');
   if (status) { osd_set_pos(1, ROW_ERROR); osd_print(status); }
   osd_set_color(OSD_COLOR_GREY, OSD_COLOR_BLACK);
@@ -107,72 +106,18 @@ static void draw() {
   osd_update();
 }
 
-// the fields from the RTC
-static void init_fields() {
-  char buf[11];
-  snprintf(buf, sizeof(buf), "%02u.%02u.%04u", rtc_get_day(), rtc_get_month(), 2000 + rtc_get_year());
-  kg_field_init(&date_field, buf);
-  snprintf(buf, sizeof(buf), "%02u:%02u", rtc_get_hour(), rtc_get_minute());
-  kg_field_init(&time_field, buf);
-}
-
 void app_rtc_overlay() {
   ui_screen("Setup RTC");
 
-  init_fields();
+  ce_open();
   focus = F_DATE;
-  error = NULL;
-  tz = hw_setup.tz;
-  ntp_sync_cancel();
 
   ui_hint("Digits: edit, Up/Down: next", "Enter: OK, Esc: cancel");
   draw();
 }
 
-// the time zone into karabas.ini when it changed
-static bool save_tz() {
-  if (tz == hw_setup.tz) return true;
-  setup_t n = hw_setup;
-  n.tz = tz;
-  if (save_setup(&n)) return true;
-  error = "Can't save karabas.ini";
-  return false;
-}
-
-static bool save() {
-  int day, month, year, hour, minute;
-  if (!kg_date_parse(date_field.text, &day, &month, &year)) {
-    focus = F_DATE;
-    error = "Invalid date";
-    return false;
-  }
-  if (!kg_time_parse(time_field.text, &hour, &minute)) {
-    focus = F_TIME;
-    error = "Invalid time";
-    return false;
-  }
-  if (!save_tz()) return false;
-  rtc_set_day(day);
-  rtc_set_month(month);
-  rtc_set_year(year - 2000);
-  rtc_set_hour(hour);
-  rtc_set_minute(minute);
-  rtc_set_second(0);
-  rtc_save();
-  return true;
-}
-
-// the digit of a key, 0 if it is not a digit key
-static char key_digit(uint8_t key) {
-  if (key >= KEY_1 && key <= KEY_9) return '1' + (key - KEY_1);
-  if (key == KEY_0) return '0';
-  if (key >= KEY_KP1 && key <= KEY_KP9) return '1' + (key - KEY_KP1);
-  if (key == KEY_KP0) return '0';
-  return 0;
-}
-
 static void leave() {
-  ntp_sync_cancel();
+  ce_close();
   osd_state = state_setup;
 }
 
@@ -185,9 +130,10 @@ void app_rtc_on_keyboard() {
   bool right = key == KEY_RIGHT;
   bool enter = key == KEY_ENTER;
   bool esc = key == KEY_ESC;
-  kg_field_t *field = focus == F_DATE ? &date_field : focus == F_TIME ? &time_field : NULL;
+  bool field = focus == F_DATE || focus == F_TIME;
+  uint8_t f = focus == F_TIME ? CE_TIME : CE_DATE;
   bool button = focus >= F_SAVE;
-  char digit = key_digit(typed);
+  char digit = ce_key_digit(typed);
 
   if (esc) {
     leave();
@@ -195,34 +141,33 @@ void app_rtc_on_keyboard() {
   }
   if (field && !typed && (up || down)) {
     // the joystick has no digits: Up / Down turn the one under the cursor
-    error = NULL;
-    kg_field_turn(field, up ? 1 : -1);
+    ce_turn(f, up ? 1 : -1);
   } else if (up) {
     // the buttons are one row: from them to the last field, from the first field to the last button
     focus = focus_step(button ? F_SAVE : focus, -1);
   } else if (down) {
     focus = focus_step(focus, 1);
   } else if (field && digit) {
-    error = NULL;
-    if (kg_field_type(field, digit)) focus = focus_step(focus, 1);
+    if (ce_type(f, digit)) focus = focus_step(focus, 1);
   } else if (field && (left || key == KEY_BACKSPACE)) {
-    kg_field_left(field);
+    kg_field_left(ce_field(f));
   } else if (field && right) {
-    kg_field_right(field);
+    kg_field_right(ce_field(f));
   } else if (focus == F_TZ && (left || right)) {
-    tz = kg_tz_step(tz, right ? 1 : -1);
+    ce_tz_step(right ? 1 : -1);
   } else if (button && (left || right)) {
     do focus = F_SAVE + (focus - F_SAVE + (right ? 1 : 2)) % 3; while (!focusable(focus));
   } else if (enter && !button) {
     focus = focus_step(focus, 1);
   } else if (enter && focus == F_SAVE) {
-    if (save()) { leave(); return; }
+    uint8_t bad;
+    if (ce_set_clock(&bad)) { leave(); return; }
+    if (bad != CE_NO_FIELD) focus = bad == CE_TIME ? F_TIME : F_DATE;
   } else if (enter && focus == F_CANCEL) {
     leave();
     return;
   } else if (enter && focus == F_SYNC) {
-    error = NULL;
-    if (save_tz()) ntp_sync_start(tz);
+    ce_sync();
   } else {
     return;
   }
@@ -230,9 +175,5 @@ void app_rtc_on_keyboard() {
 }
 
 void app_rtc_tick() {
-  if (ntp_sync_state() != NTP_BUSY) return;
-  uint8_t r = ntp_sync_poll();
-  if (r == NTP_BUSY) return;
-  if (r == NTP_OK) init_fields(); // the time typed before is gone
-  draw();
+  if (ce_tick()) draw();
 }
