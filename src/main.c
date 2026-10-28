@@ -55,8 +55,13 @@ static uint32_t led_timer = 0;
 // there; usb_host_setup() releases them right before PIO-USB init.
 
 // fpga commands handled here (link_on)
+// a handler runs inside any spi_send of APP (a file transfer, an osd redraw): the core reload
+// waits for the main loop, so the sequence it interrupted does not go on into the new core
+static bool flashboot_pending = false;
+static uint8_t flashboot_data;
 static void on_flashboot(uint8_t addr, uint8_t data) {
-  flashboot(data);
+  flashboot_data = data;
+  flashboot_pending = true;
 }
 
 static void on_esp_uart(uint8_t addr, uint8_t data) {
@@ -243,6 +248,10 @@ static void karabas_loop()
   hang_mark(0x0a00);
   link_report_drops();
   link_dispatch_pending();
+  if (flashboot_pending) {
+    flashboot_pending = false;
+    flashboot(flashboot_data);
+  }
   hang_mark(0x0b00);
   printer_link_tick();
 
