@@ -41,6 +41,7 @@ static uint32_t img_last_write_ms = 0;
 #define IMG_LOG_IDLE_MS 1000   // a summary once the requests stop for this long
 #define IMG_LOG_EVERY_MS 10000 // or this often while they go on
 static uint32_t log_rd = 0, log_wr = 0;
+static uint32_t writes = 0; // all written sectors, img_writes()
 static uint32_t log_max_wait_us = 0, log_max_serve_us = 0;
 static uint32_t log_first_ms = 0, log_last_ms = 0;
 static uint8_t log_slots = 0; // slots in the summary, one bit each
@@ -292,7 +293,7 @@ static bool img_serve() {
     d_println();
   } else {
     if (log_rd + log_wr == 0) log_first_ms = ms_now();
-    if (req_op == IMG_REQ_WRITE) log_wr++; else log_rd++;
+    if (req_op == IMG_REQ_WRITE) { log_wr++; writes++; } else log_rd++;
     if (slot < 8) log_slots |= 1 << slot;
     if (wait_us > log_max_wait_us) log_max_wait_us = wait_us;
     if (took_us > log_max_serve_us) log_max_serve_us = took_us;
@@ -300,6 +301,10 @@ static bool img_serve() {
   log_last_ms = ms_now();
   spi_bus_unlock();
   return true;
+}
+
+uint32_t img_writes() {
+  return writes;
 }
 
 static void img_log_summary() {

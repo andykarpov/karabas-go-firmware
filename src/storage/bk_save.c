@@ -14,6 +14,7 @@ static volatile bool req_pending = false;
 static volatile uint8_t flush_result = 0;
 
 static int8_t bk_slot = -1;      // the img slot of the mounted save
+static uint32_t bk_sectors = 0;  // its size
 static char game_dir[256] = "";
 static char game_name[256] = "";
 
@@ -130,6 +131,7 @@ void bk_tick() {
   // the size of the file, or 0: the core goes on without a save
   img_mount(slot);
   bk_slot = fs->is_mounted ? slot : -1;
+  bk_sectors = size;
 }
 
 bool bk_flush() {
@@ -138,10 +140,27 @@ bool bk_flush() {
   spi_send(CMD_IMG_FLUSH, bk_slot, 0);
   uint32_t timer = ms_now();
   timer = ms_now();
-  // the core writes its sectors through the file mounter: serve them while waiting for the answer
+  // the core writes its sectors through the file mounter: serve them while waiting for the answer.
+  // Only the core knows which sectors are unsaved: the popup comes with the first one written
+  // (up to a few seconds, the screen should not just stand) and counts against the whole file.
+  uint32_t writes = img_writes(), shown = 0;
   while (flush_result == 0 && ms_since(timer) < BK_FLUSH_TIMEOUT_MS) {
     img_tick();
+    uint32_t n = img_writes() - writes;
+    if (n != shown) {
+      if (shown == 0 && !is_osd) {
+        osd_clear();
+        osd_show_menu();
+      }
+      osd_progress_popup("Saving...", n, bk_sectors);
+      osd_update();
+      shown = n;
+    }
     spi_send(CMD_NOP, 0, 0);
+  }
+  if (shown > 0) {
+    osd_progress_popup("Saving...", 1, 1);
+    osd_update();
   }
   bool ok = flush_result == IMG_RES_DONE;
   d_printf("Save: flush slot %d %s in %lu ms", bk_slot, flush_result == 0 ? "no answer" : ok ? "done" : "FAILED",
