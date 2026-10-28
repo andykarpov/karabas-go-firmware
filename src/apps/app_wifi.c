@@ -83,7 +83,7 @@ static void draw_list() {
     const kg_wifi_ap_t *ap = &w->aps[top + row];
     bool focused = top + row == w->sel && !w->on_rescan;
     osd_set_color(focused ? OSD_COLOR_BLACK : OSD_COLOR_WHITE, focused ? OSD_COLOR_YELLOW_I : OSD_COLOR_BLACK);
-    osd_fill(0, LIST_ROW + row, 31, LIST_ROW + row, ' ');
+    osd_fill(0, LIST_ROW + row, UI_COL_LAST, LIST_ROW + row, ' ');
     osd_set_pos(0, LIST_ROW + row);
     osd_putc(strcmp(ap->ssid, w->cur_ssid) == 0 ? '>' : ' ');
     osd_printf("%4d %c ", ap->rssi, ap->ecn ? '*' : ' ');
@@ -97,8 +97,7 @@ static void draw_list() {
 
 static void draw() {
   const ws_t *w = ws_state();
-  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-  osd_fill(0, 7, 31, 22, ' ');
+  ui_clear_body();
   char buf[40];
 
   switch (w->screen) {

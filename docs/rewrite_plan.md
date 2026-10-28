@@ -105,7 +105,7 @@ From the review of the OSD apps (2026-10-28). One branch and PR per step, checke
 4. **One file browser** (`ui/file_browser`): the browser of the F / FL slots (`app_core`) and of the file loader (`app_file_loader`) share the directory read, the pages, the name cache and the drawing; integer page math.
 5. **Data-driven menus.** Done differently from the plan: Setup (a table) and Settings (`settings_items`) were already data, and the core menu items come from the core file, so a karabas-pro style `MenuItem` framework would only move code around. What was repeated is shared instead: `kg_list_step_active()` over `core_osd_selectable()` steps the core menu (four `find_*_item` functions, one of them an endless loop), `core_osd_change()` is the option change of the menu keys and the hotkeys (three copies), and the rows use `ui_row()`.
 6. **Text and FT screens share their logic**: `app_wifi` / `app_ft_wifi`, `app_rtc` / `app_ft_clock`, `app_pad_mapper` / `app_ft_pad` split into a model (states, actions, no drawing) and two views.
-7. **Small things**: the debug key V (FT video mode) of the core browser goes; the float page math; magic numbers.
+7. **Small things**: the debug key V (FT video mode) of the core browser goes; the float page math; magic numbers (the text screens: `UI_ROW_BODY_LAST`, `UI_COL_LAST`, `UI_COL_CLOCK`, `ui_clear_body()`, `ui_box()`; the FT pages keep their pixel layouts as local constants).
 
 ## Risks
 

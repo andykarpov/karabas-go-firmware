@@ -32,8 +32,8 @@ static const char *list_msg;
 static bool list_msg_ok;
 
 static void draw_status(const char *line1, const char *line2) {
+  ui_clear_rows(8, 9);
   osd_set_color(OSD_COLOR_YELLOW_I, OSD_COLOR_BLACK);
-  osd_fill(0, 8, 31, 9, ' ');
   osd_set_pos(0, 8); osd_print(line1);
   osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
   osd_set_pos(0, 9); osd_print(line2);
@@ -44,7 +44,7 @@ static void draw_buttons() {
   for (uint8_t i = 0; i < HID_JOY_BUTTONS; i++) {
     bool current = (st == PL_PRESS || st == PL_RELEASE) && i == pl_btn();
     osd_set_color(current ? OSD_COLOR_BLACK : OSD_COLOR_WHITE, current ? OSD_COLOR_WHITE : OSD_COLOR_BLACK);
-    osd_fill(0, 11 + i, 31, 11 + i, ' ');
+    osd_fill(0, 11 + i, UI_COL_LAST, 11 + i, ' ');
     osd_set_pos(1, 11 + i); osd_print(pl_btn_names[i]);
     osd_set_pos(8, 11 + i);
     if (pl_mapped(i)) {
@@ -70,14 +70,14 @@ static void pad_source(const usb_pad_t *p, char *out, size_t size) {
 }
 
 static void draw_list() {
+  ui_clear_rows(8, UI_ROW_BODY_LAST);
   osd_set_color(OSD_COLOR_GREY, OSD_COLOR_BLACK);
-  osd_fill(0, 8, 31, 22, ' ');
   osd_set_pos(1, 8); osd_print("Port Pad       Mapped by");
   for (uint8_t i = 0; i < 2; i++) {
     const usb_pad_t *p = &pads[i];
     bool chosen = i == port;
     osd_set_color(chosen ? OSD_COLOR_BLACK : OSD_COLOR_WHITE, chosen ? OSD_COLOR_WHITE : OSD_COLOR_BLACK);
-    osd_fill(0, 10 + i, 31, 10 + i, ' ');
+    osd_fill(0, 10 + i, UI_COL_LAST, 10 + i, ' ');
     osd_set_pos(1, 10 + i);
     char src[18], buf[33];
     if (p->source == USB_PAD_NONE && p->vid == 0) {
@@ -148,14 +148,12 @@ static void show_list() {
   list_btn = 0;
   view = V_LIST;
   list_timer = ms_now();
-  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-  osd_fill(0, 7, 31, 22, ' ');
+  ui_clear_body();
   draw();
 }
 
 static void start() {
-  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-  osd_fill(0, 7, 31, 22, ' ');
+  ui_clear_body();
   view = V_MAPPING;
   pl_start();
 }

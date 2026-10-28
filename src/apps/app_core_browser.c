@@ -56,10 +56,10 @@ void app_core_browser_overlay() {
   print_time();
   app_core_browser_menu(APP_COREBROWSER_MENU_OFFSET);
   // footer
-  osd_line(21);
-  osd_set_pos(0, 22);
+  osd_line(UI_ROW_HINT_LINE - 2);
+  osd_set_pos(0, UI_ROW_HINT_LINE - 1);
   ui_hotkey("S", "etup");
-  osd_set_pos(29, 22); // right of the page number
+  osd_set_pos(OSD_SIZE_X - 3, UI_ROW_HINT_LINE - 1); // right of the page number
   ui_hotkey("G", "UI");
   ui_hint("Please use arrows to navigate", "Press Enter to load selection");
   osd_update();

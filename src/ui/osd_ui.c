@@ -15,6 +15,7 @@
 #include "apps/app_msc.h"
 #include "masked_input.h"
 #include "kg_list.h"
+#include "ui/ui_draw.h"
 
 // OSD state and the app screens (one per osd_state)
 
@@ -117,7 +118,7 @@ void ui_button(uint8_t x, uint8_t y, uint8_t width, const char *label, bool focu
 }
 
 void print_time() {
-  osd_set_pos(24, 0);
+  osd_set_pos(UI_COL_CLOCK, 0);
   osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
   // the C++ of old: a static initialized once to !false, so the dots never blinked
   static const bool dots_blink = true;
@@ -127,7 +128,7 @@ void print_time() {
   char sep = dots_blink ? ':' : ' ';
   osd_printf("%02u%c%02u%c%02u", h, sep, m, sep, s);
 
-  osd_set_pos(24, 1);
+  osd_set_pos(UI_COL_CLOCK, 1);
   osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
   uint8_t d = rtc_get_day();
   uint8_t mo = rtc_get_month();
