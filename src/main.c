@@ -329,7 +329,17 @@ static void __not_in_flash_func(usb_task)(void *param) {
 
 // FreeRTOS hooks: the message is kept for the next boot's log (hang_diag, --wrap=panic)
 void vApplicationStackOverflowHook(TaskHandle_t task, char *name) {
-  (void) task; (void) name;
+  (void) task;
+  // a literal per task: only the pointer to the message is kept over the reboot
+  static const char *const msgs[][2] = {
+    { "APP", "stack overflow: APP" }, { "USB", "stack overflow: USB" }, { "USBD", "stack overflow: USBD" },
+    { "INPUT", "stack overflow: INPUT" }, { "MATRIX", "stack overflow: MATRIX" }, { "OLED", "stack overflow: OLED" },
+    { "WDOG", "stack overflow: WDOG" }, { "Tmr Svc", "stack overflow: Tmr Svc" }, { "IDLE0", "stack overflow: IDLE0" },
+    { "IDLE1", "stack overflow: IDLE1" },
+  };
+  for (size_t i = 0; i < sizeof(msgs) / sizeof(msgs[0]); i++) {
+    if (strcmp(name, msgs[i][0]) == 0) panic(msgs[i][1]);
+  }
   panic("stack overflow");
 }
 
