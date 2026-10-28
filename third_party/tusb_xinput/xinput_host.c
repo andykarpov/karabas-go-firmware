@@ -325,6 +325,103 @@ bool xinputh_open(uint8_t rhport, uint8_t dev_addr, tusb_desc_interface_t const 
     return true;
 }
 
+static void xinputh_mount(uint8_t dev_addr, uint8_t instance)
+{
+    xinputh_interface_t *xid_itf = get_instance(dev_addr, instance);
+    if (tuh_xinput_mount_cb)
+    {
+        tuh_xinput_mount_cb(dev_addr, instance, xid_itf);
+    }
+
+    usbh_driver_set_config_complete(dev_addr, xid_itf->itf_num);
+}
+
+// karabas: many third-party Xbox 360 wired pads (8BitDo, Hori, ...) send no input until the
+// host has read their string descriptors and the vendor request 0x01 (Windows does both, Linux
+// xpad sends the request in xpad_start_xbox_360). TinyUSB of the Arduino core read the strings
+// while enumerating, TinyUSB 0.18 of the pico-sdk does not. Every step may fail: it is skipped.
+enum
+{
+    X360_INIT_LANGID,
+    X360_INIT_MANUFACTURER,
+    X360_INIT_PRODUCT,
+    X360_INIT_SERIAL,
+    X360_INIT_VENDOR,
+    X360_INIT_DONE
+};
+
+// one device enumerates at a time
+static TU_ATTR_ALIGNED(4) uint8_t x360_init_buf[64];
+static uint16_t x360_init_langid;
+
+static void x360_init_step(uint8_t dev_addr, uint8_t itf_num, uint8_t step);
+
+static void x360_init_cb(tuh_xfer_t *xfer)
+{
+    uint8_t const dev_addr = xfer->daddr;
+    uint8_t const step = (uint8_t)(xfer->user_data & 0xff);
+    uint8_t const itf_num = (uint8_t)(xfer->user_data >> 8);
+
+    // closed while initializing
+    if (get_dev(dev_addr)->inst_count == 0)
+        return;
+
+    if (step == X360_INIT_LANGID && xfer->result == XFER_RESULT_SUCCESS && xfer->actual_len >= 4)
+    {
+        x360_init_langid = (uint16_t)(x360_init_buf[3] << 8 | x360_init_buf[2]);
+    }
+    x360_init_step(dev_addr, itf_num, step + 1);
+}
+
+static void x360_init_step(uint8_t dev_addr, uint8_t itf_num, uint8_t step)
+{
+    uintptr_t const ud = (uintptr_t)itf_num << 8;
+    for (; step < X360_INIT_DONE; step++)
+    {
+        bool started = false;
+        switch (step)
+        {
+        case X360_INIT_LANGID:
+            x360_init_langid = 0x0409;
+            started = tuh_descriptor_get_string(dev_addr, 0, 0, x360_init_buf, sizeof(x360_init_buf), x360_init_cb, ud | step);
+            break;
+        case X360_INIT_MANUFACTURER:
+            started = tuh_descriptor_get_manufacturer_string(dev_addr, x360_init_langid, x360_init_buf, sizeof(x360_init_buf), x360_init_cb, ud | step);
+            break;
+        case X360_INIT_PRODUCT:
+            started = tuh_descriptor_get_product_string(dev_addr, x360_init_langid, x360_init_buf, sizeof(x360_init_buf), x360_init_cb, ud | step);
+            break;
+        case X360_INIT_SERIAL:
+            started = tuh_descriptor_get_serial_string(dev_addr, x360_init_langid, x360_init_buf, sizeof(x360_init_buf), x360_init_cb, ud | step);
+            break;
+        case X360_INIT_VENDOR:
+        {
+            static const tusb_control_request_t request = {
+                .bmRequestType = 0xC1, // vendor, device to host, interface
+                .bRequest = 0x01,
+                .wValue = 0x0100,
+                .wIndex = 0x0000,
+                .wLength = 20};
+            tuh_xfer_t xfer = {
+                .daddr = dev_addr,
+                .ep_addr = 0,
+                .setup = &request,
+                .buffer = x360_init_buf,
+                .complete_cb = x360_init_cb,
+                .user_data = ud | step};
+            started = tuh_control_xfer(&xfer);
+            break;
+        }
+        }
+        if (started)
+            return;
+    }
+
+    uint8_t const instance = get_instance_id_by_itfnum(dev_addr, itf_num);
+    if (instance != 0xff)
+        xinputh_mount(dev_addr, instance);
+}
+
 bool xinputh_set_config(uint8_t dev_addr, uint8_t itf_num)
 {
     uint8_t instance = get_instance_id_by_itfnum(dev_addr, itf_num);
@@ -340,18 +437,16 @@ bool xinputh_set_config(uint8_t dev_addr, uint8_t itf_num)
     }
     else if (xid_itf->type == XBOX360_WIRED)
     {
+        // karabas: mounted at the end of the init (x360_init_step)
+        x360_init_step(dev_addr, itf_num, X360_INIT_LANGID);
+        return true;
     }
     else if (xid_itf->type == XBOXONE)
     {
         xboxone_init(xid_itf, dev_addr, instance);
     }
 
-    if (tuh_xinput_mount_cb)
-    {
-        tuh_xinput_mount_cb(dev_addr, instance, xid_itf);
-    }
-
-    usbh_driver_set_config_complete(dev_addr, xid_itf->itf_num);
+    xinputh_mount(dev_addr, instance);
     return true;
 }
 
