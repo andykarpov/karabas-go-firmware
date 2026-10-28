@@ -83,8 +83,16 @@ void hid_drivers_load()
   if (count > MAX_JOY_DRIVERS) count = MAX_JOY_DRIVERS;
 
   driver_table_t *t = (driver_table_t *) malloc(sizeof(driver_table_t));
-  t->len = 0;
-  t->list = count ? (driver_t *) malloc(count * sizeof(driver_t)) : NULL;
+  if (t) {
+    t->len = 0;
+    t->list = count ? (driver_t *) malloc(count * sizeof(driver_t)) : NULL;
+  }
+  if (!t || (count && !t->list)) {
+    d_printf("Joystick drivers: out of memory for %u drivers", count); d_println();
+    free(t);
+    sd_closedir(&dir);
+    return;
+  }
   f_readdir(&dir, NULL); // rewind
   while (t->len < count && f_readdir(&dir, &fi) == FR_OK && fi.fname[0]) {
     if (!is_driver_file(&fi)) continue;

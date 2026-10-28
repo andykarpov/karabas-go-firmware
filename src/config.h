@@ -250,7 +250,7 @@
 // osd item flags (the byte after the type in the core file)
 #define CORE_OSD_FLAG_PHYS 0x01          // F item: can be a physical floppy drive (board_has_floppy)
 
-#define MAX_CORES 255
+#define MAX_CORES 255 // cores_len is uint8_t
 #define MAX_FILES 255
 #define MAX_FILE_SLOTS 8
 #define MAX_JOY_DRIVERS 255

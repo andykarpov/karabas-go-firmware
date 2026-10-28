@@ -32,18 +32,17 @@ void app_file_loader_read_list(bool forceIndex) {
   osd_update();
   ms_delay(100);
 
-  // files from sd1 card, tried again until they can be read
+  // files from sd1 card; without the card or the dir the list stays empty (the hotkeys still work)
   char d[256];
   core_dir_path(d, sizeof(d));
-  for (;;) {
-    if (!has_sd) { read_error("Check SD card"); continue; }
-    if (!sd_opendir(&root1, d)) {
-      char b[UI_BOX_TEXT + 1];
-      snprintf(b, sizeof(b), "Bad dir %s", d);
-      read_error(b);
-      continue;
-    }
-    break;
+  bool opened = has_sd && sd_opendir(&root1, d);
+  if (!has_sd) {
+    read_error("Check SD card");
+  } else if (!opened) {
+    char b[UI_BOX_TEXT + 1];
+    snprintf(b, sizeof(b), "Bad dir %s", d);
+    d_println(b);
+    read_error(b);
   }
   d_println("Read file list");
   fb_clear();
@@ -51,7 +50,7 @@ void app_file_loader_read_list(bool forceIndex) {
   strcpy(e, core.file_extensions);
   kg_str_lower(e); kg_trim(e);
   FILINFO fi;
-  while (f_readdir(&root1, &fi) == FR_OK && fi.fname[0]) {
+  while (opened && f_readdir(&root1, &fi) == FR_OK && fi.fname[0]) {
     uint16_t id;
     if (!(fi.fattrib & AM_DIR) && sd_file_id(&fi, &id) && kg_name_has_ext(fi.fname, e)) {
       fb_add_file(fi.fname, id);
@@ -131,6 +130,7 @@ void app_file_loader_send_file(uint16_t file_id) {
   core_dir_path(dirname, sizeof(dirname));
   if (!sd_opendir(&root1, dirname)) {
     d_printf("Unable to open dir %s", dirname); d_println();
+    app_file_loader_overlay(false, false); // the loading popup goes
     return;
   }
 
@@ -203,16 +203,17 @@ uint32_t c1 = 0;
 }
 
 void app_file_loader_on_keyboard() {
-  if (fb_len() == 0) return;
   uint8_t key = ui_nav_key();
+
+  // R = recreate file index (also an empty list: the dir may be readable now)
+  if (key == KEY_R) {
+    app_file_loader_overlay(true, true);
+    return;
+  }
+  if (fb_len() == 0) return;
 
   // up / down, left / right a page
   fb_key(key);
-
-  // R = recreate file index
-  if (key == KEY_R) {
-    app_file_loader_overlay(true, true);
-  }
 
   if (key == KEY_ENTER) {
     app_file_loader_save();

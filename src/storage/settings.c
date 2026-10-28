@@ -126,7 +126,7 @@ void load_setup() {
     ini_bool("autoload", "enabled", &hw_setup.autoload_enabled);
     hw_setup.autoload_timeout = (ini_get("autoload", "timeout", buffer, bufferLen)) ? strtoul(buffer, 0, 10) : 0;
     if (ini_get("autoload", "core", buffer, bufferLen)) {
-          strcpy(hw_setup.autoload_core, buffer);
+          strlcpy(hw_setup.autoload_core, buffer, sizeof(hw_setup.autoload_core));
     }
 
     d_println("Setup:");
