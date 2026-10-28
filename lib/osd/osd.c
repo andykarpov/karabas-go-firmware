@@ -39,7 +39,7 @@ void osd_set_pos(uint8_t x, uint8_t y) {
     current_x = 0;
     current_y++;
   }
-  if (y >= OSD_SIZE_Y) {
+  if (current_y >= OSD_SIZE_Y) { // also the wrap past the end of the last row
     current_y = 0;
     current_x = 0;
   }
