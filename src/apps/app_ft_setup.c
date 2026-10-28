@@ -610,6 +610,11 @@ static void pick_row(uint8_t i) {
 static bool click(int16_t id) {
   if (id >= HIT_TAB && id < HIT_TAB + T_COUNT) {
     to_tabs();
+    // the tab chosen already: its page starts again on its first screen (the Wi-Fi status)
+    if (id - HIT_TAB == tab && shown && shown->show) {
+      if (shown->hide) shown->hide();
+      shown->show();
+    }
     tab = id - HIT_TAB;
     if (tab >= T_SAVE) open_tab();
   } else if (id == HIT_PANEL) {
