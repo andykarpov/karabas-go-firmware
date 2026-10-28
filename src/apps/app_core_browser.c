@@ -11,6 +11,7 @@
 #include "ui/sorts.h"
 #include "file_name.h"
 #include "ui/ft_mouse.h"
+#include "ui/ft_page.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include "ui/ui_draw.h"
@@ -182,7 +183,7 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
       // hovered: a rect grows by its corner radius, so this is a 2 px frame around the button
       ft_draw_rect(bx, by, bw, bh, 2, color_button_active);
     }
-    ft_draw_button(bx, by, bw, bh, 28, colort, colorb, hw_setup.ft_3d_buttons ? FT81x_OPT_3D : FT81x_OPT_FLAT, name);
+    ft_draw_button(bx, by, bw, bh, 28, colort, colorb, ft_button_opt(hw_setup.ft_3d_buttons), name);
     if (autoload_enabled && i == core_sel) {
       ft_draw_gauge(bx + 20, by + bh / 2, 12, colort, colorb, 0, 1, 1, autoload_left_s(), autoload_countdown);
     }

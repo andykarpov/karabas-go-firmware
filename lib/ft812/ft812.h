@@ -258,6 +258,8 @@ uint32_t ft_frames_in(uint32_t ms);     // frames scanned out in ms (REG_FRAMES)
 uint8_t ft_mode_count(void);
 const char *ft_mode_name(uint8_t m);    // "800x600@60"
 uint16_t ft_width(void);
+// the running mode draws a pixel every system clock (800x600): no time for heavy lines
+bool ft_pclk_is_sysclk(void);
 uint16_t ft_height(void);
 
 // a display list: ft_begin_display_list(), the drawing, ft_swap_screen()

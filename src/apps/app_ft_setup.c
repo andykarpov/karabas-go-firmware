@@ -102,7 +102,7 @@ static bool dragging;      // a slider follows the pointer
 static hid_keyboard_report_t prev_kbd; // for the keys of the custom pages
 static const ft_page_t *shown;  // the custom page whose tab is chosen (show / hide)
 
-static uint16_t ft_opt() { return s.ft_3d_buttons ? FT81x_OPT_3D : FT81x_OPT_FLAT; }
+static uint16_t ft_opt() { return ft_button_opt(s.ft_3d_buttons); }
 
 static uint16_t panel_w() {
   int w = ft_width() - PANEL_X - 16;

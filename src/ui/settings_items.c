@@ -27,7 +27,7 @@ const setting_t settings[SET_COUNT] = {
   { "Core",           "The core to start",              SET_KIND_CHOICE },
   { "Graphic menu",   "Off: the text menu, next start", SET_KIND_BOOL },
   { "Video mode",     "Space at power on: text menu",   SET_KIND_CHOICE },
-  { "3D buttons",     "Raised buttons",                 SET_KIND_BOOL },
+  { "3D buttons",     "Raised, not in 800x600",         SET_KIND_BOOL },
   { "Show time",      "The clock at the top",           SET_KIND_BOOL },
   { "Show date",      "The date under the clock",       SET_KIND_BOOL },
   { "Character",      "The Karabas picture",            SET_KIND_BOOL },

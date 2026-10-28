@@ -371,6 +371,10 @@ bool ft_init(uint8_t m) {
     return true;
 }
 
+bool ft_pclk_is_sysclk(void) {
+    return mode.f_div <= 1;
+}
+
 uint16_t ft_width(void) {
   return mode.h_visible;
 }
