@@ -61,3 +61,20 @@ kg_at_result_t kg_at_feed(kg_at_parser_t *p, char c) {
 const char *kg_at_arg(const kg_at_parser_t *p) {
   return p->done ? p->buf + prefix_len : "";
 }
+
+size_t kg_crlf(kg_crlf_t *s, const char *in, size_t len, char *out) {
+  size_t n = 0;
+  for (size_t i = 0; i < len; i++) {
+    char c = in[i];
+    bool cr = s->cr;
+    s->cr = (c == '\r');
+    if (c == '\n' && cr) continue;
+    if (c == '\r' || c == '\n') {
+      out[n++] = '\r';
+      out[n++] = '\n';
+    } else {
+      out[n++] = c;
+    }
+  }
+  return n;
+}
