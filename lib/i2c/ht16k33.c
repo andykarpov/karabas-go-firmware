@@ -60,6 +60,12 @@ void ht16k33_pixel(int x, int y, uint8_t color) {
   }
 }
 
+void ht16k33_row(uint8_t chip, uint8_t y, bool red, uint8_t bits) {
+  if (chip >= HT16K33_CHIPS || y >= 8) return;
+  uint16_t *row = &rows[chip][y];
+  *row = red ? (uint16_t) ((*row & 0x00FF) | (bits << 8)) : (uint16_t) ((*row & 0xFF00) | bits);
+}
+
 bool ht16k33_show(void) {
   bool ok = true;
   for (uint8_t chip = 0; chip < HT16K33_CHIPS; chip++) {

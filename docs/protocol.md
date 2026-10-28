@@ -137,7 +137,7 @@ These are sent in the reply bytes of any transfer.
 | `48` | `CMD_BK_MOUNT` | 0..3 / `10` / `80` | size in sectors (LE) / img slot / kind | Backup RAM: the core asks for its save file; `80` last (kind 0 = `.sav`). Section 6. |
 | `60` | `CMD_MATRIX_CTL` | 0 | bit 0 clear, bit 1 update, bit 2 set brightness (bits 7..4), bit 3 audio meter mode | LED matrix ([matrix.md](matrix.md)). |
 | `61` | `CMD_MATRIX_PIXEL` | Y (bits 7..4), X (bits 3..0) | color: 0 black, 1 red, 2 yellow, 3 green | |
-| `62` | `CMD_MATRIX_BITPLAN` | byte 0..31 | bitmap byte | |
+| `62` | `CMD_MATRIX_BITPLAN` | byte 0..31 | bitmap byte | a row of one color: 0..7 the left matrix red rows 0..7, 8..15 its green, 16..23 / 24..31 the right matrix; bit n is column n of the matrix |
 | `70` / `71` | `CMD_AUDIO_PEAKS_L` / `_R` | high byte | low byte | 16-bit audio peak for the matrix meters. |
 | `F7` | `CMD_CAPS` | caps | max_mhz | Answer to the capability query, section 7. |
 | `F8` | `CMD_ESP_UART` | 0 | byte | Byte from the ESP8266 module. |

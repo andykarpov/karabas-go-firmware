@@ -24,6 +24,8 @@ extern "C" {
 bool ht16k33_begin(void);
 void ht16k33_clear(void);
 void ht16k33_pixel(int x, int y, uint8_t color);
+// one color plane (red or green) of row y of a chip: bit n is the pixel x = chip * 8 + n
+void ht16k33_row(uint8_t chip, uint8_t y, bool red, uint8_t bits);
 bool ht16k33_show(void);
 void ht16k33_brightness(uint8_t level); // 0..15
 // the key scan of the first chip (the buttons of the add-on), 8 bits of row 0
