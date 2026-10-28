@@ -24,7 +24,9 @@ enum { F_DATE, F_TIME, F_TZ, F_SAVE, F_CANCEL, F_SYNC, F_COUNT };
 #define ROW_BUTTONS 14
 #define ROW_ERROR 16
 #define ROW_HINT 18
-#define FIELD_X 8
+#define FIELD_X 6
+#define TZ_WIDTH 10 // the selector of the zone, as wide as the date field
+#define BTN_WIDTH 10
 
 static uint8_t focus;
 
@@ -45,7 +47,7 @@ static uint8_t focus_step(uint8_t f, int d) {
 
 static void draw_field(uint8_t y, const char *label, const char *hint, const kg_field_t *f, bool focused) {
   osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-  osd_set_pos(1, y); osd_print(label);
+  osd_set_pos(0, y); osd_print(label);
   osd_set_pos(FIELD_X, y);
   for (uint8_t i = 0; i < f->len; i++) {
     if (focused && i == f->pos) {
@@ -61,46 +63,36 @@ static void draw_field(uint8_t y, const char *label, const char *hint, const kg_
   osd_set_pos(FIELD_X + f->len + 2, y); osd_print(hint);
 }
 
-// as a choice of Settings: '<' UTC+03:00 '>'
+// as a choice of Settings: UTC+03:00 under the digits of the fields, on yellow when focused
 static void draw_tz(bool focused) {
-  char v[10];
-  kg_tz_format(ce_tz(), v, sizeof(v));
+  char v[TZ_WIDTH + 1], tz[10];
+  kg_tz_format(ce_tz(), tz, sizeof(tz));
+  snprintf(v, sizeof(v), "UTC%-*s", TZ_WIDTH - 3, tz);
   osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-  osd_set_pos(1, ROW_TZ); osd_print("Zone");
-  // the value under the digits of the fields, the arrows around it
-  osd_fill(FIELD_X - 1, ROW_TZ, FIELD_X + 9, ROW_TZ, ' ');
-  if (focused) {
-    osd_set_pos(FIELD_X - 1, ROW_TZ); osd_print("<");
-    osd_set_pos(FIELD_X + 9, ROW_TZ); osd_print(">");
-    osd_set_color(OSD_COLOR_BLACK, OSD_COLOR_YELLOW_I);
-  } else {
-    osd_set_color(OSD_COLOR_CYAN_I, OSD_COLOR_BLACK);
-  }
-  osd_set_pos(FIELD_X, ROW_TZ); osd_print("UTC"); osd_print(v);
+  osd_set_pos(0, ROW_TZ); osd_print("Zone");
+  if (focused) osd_set_color(OSD_COLOR_BLACK, OSD_COLOR_YELLOW_I);
+  else osd_set_color(OSD_COLOR_CYAN_I, OSD_COLOR_BLACK);
+  osd_set_pos(FIELD_X, ROW_TZ); osd_print(v);
   osd_set_color(OSD_COLOR_GREY, OSD_COLOR_BLACK);
-  osd_set_pos(FIELD_X + 11, ROW_TZ); osd_print("for NTP sync");
+  osd_set_pos(FIELD_X + TZ_WIDTH + 2, ROW_TZ); osd_print("for NTP sync");
 }
 
 static void draw() {
   draw_field(ROW_DATE, "Date", "DD.MM.YYYY", ce_field(CE_DATE), focus == F_DATE);
   draw_field(ROW_TIME, "Time", "HH:MM", ce_field(CE_TIME), focus == F_TIME);
-  if (has_ntp()) {
-    draw_tz(focus == F_TZ);
-    ui_button(1, ROW_BUTTONS, 9, "Save", focus == F_SAVE);
-    ui_button(11, ROW_BUTTONS, 9, "Cancel", focus == F_CANCEL);
-    ui_button(21, ROW_BUTTONS, 9, "NTP sync", focus == F_SYNC);
-  } else {
-    ui_button(1, ROW_BUTTONS, 10, "Save", focus == F_SAVE);
-    ui_button(12, ROW_BUTTONS, 10, "Cancel", focus == F_CANCEL);
-  }
+  if (has_ntp()) draw_tz(focus == F_TZ);
+  // the labels have even lengths, so they center exactly in the even width
+  ui_button(0, ROW_BUTTONS, BTN_WIDTH, "Save", focus == F_SAVE);
+  ui_button(BTN_WIDTH + 1, ROW_BUTTONS, BTN_WIDTH, "Cancel", focus == F_CANCEL);
+  if (has_ntp()) ui_button(2 * (BTN_WIDTH + 1), ROW_BUTTONS, BTN_WIDTH, "NTP sync", focus == F_SYNC);
   uint8_t kind;
   const char *status = ce_message(&kind);
   osd_set_color(kind == CE_MSG_ERROR ? OSD_COLOR_RED_I : kind == CE_MSG_OK ? OSD_COLOR_GREEN_I : OSD_COLOR_WHITE, OSD_COLOR_BLACK);
   osd_fill(0, ROW_ERROR, UI_COL_LAST, ROW_ERROR, ' ');
-  if (status) { osd_set_pos(1, ROW_ERROR); osd_print(status); }
+  if (status) { osd_set_pos(0, ROW_ERROR); osd_print(status); }
   osd_set_color(OSD_COLOR_GREY, OSD_COLOR_BLACK);
   osd_fill(0, ROW_HINT, UI_COL_LAST, ROW_HINT, ' ');
-  osd_set_pos(1, ROW_HINT);
+  osd_set_pos(0, ROW_HINT);
   if (focus == F_TZ) osd_print("UTC offset, no summer time");
   else if (focus == F_SYNC) osd_print("The time from NTP over Wi-Fi");
   osd_update();

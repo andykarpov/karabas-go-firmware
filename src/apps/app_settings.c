@@ -35,9 +35,9 @@ static const uint8_t mx_rows[] = { 9, 10, 11, 12, 15, 16, 17, 18 };
 #define ROW_METERS 14
 #define ROW_BUTTONS 21
 #define ROW_HINT 22
-#define LABEL_X 2
-#define VALUE_X 16 // '<', the value, '>'
-#define VALUE_WIDTH 13
+#define LABEL_X 1   // under the section title
+#define VALUE_X 16
+#define VALUE_WIDTH 16 // to the right edge, on yellow when focused (as the core menu)
 #define BTN_WIDTH 10
 
 static setup_t s;     // the edited copy of hw_setup
@@ -53,23 +53,14 @@ static void draw_item(uint8_t id, uint8_t row, bool focused) {
   char value[VALUE_WIDTH + 1];
   settings_value_text(id, &s, value, sizeof(value));
   if (settings[id].kind == SET_KIND_PAGE) strlcpy(value, "...", sizeof(value));
-  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-  osd_fill(VALUE_X, row, VALUE_X + VALUE_WIDTH + 1, row, ' ');
-  if (focused && settings[id].kind != SET_KIND_PAGE) {
-    osd_set_pos(VALUE_X, row); osd_print("<");
-    osd_set_pos(VALUE_X + VALUE_WIDTH + 1, row); osd_print(">");
-    osd_set_color(OSD_COLOR_BLACK, OSD_COLOR_YELLOW_I);
-  } else if (focused) {
-    osd_set_color(OSD_COLOR_BLACK, OSD_COLOR_YELLOW_I);
-  } else {
-    osd_set_color(OSD_COLOR_CYAN_I, OSD_COLOR_BLACK);
-  }
-  osd_set_pos(VALUE_X + 1, row); osd_print(value);
+  if (focused) osd_set_color(OSD_COLOR_BLACK, OSD_COLOR_YELLOW_I);
+  else osd_set_color(OSD_COLOR_CYAN_I, OSD_COLOR_BLACK);
+  osd_set_pos(VALUE_X, row); osd_printf("%-*s", VALUE_WIDTH, value);
 }
 
 static void section(uint8_t row, const char *title) {
   osd_set_color(OSD_COLOR_GREEN_I, OSD_COLOR_BLACK);
-  osd_set_pos(1, row); osd_print(title);
+  osd_set_pos(0, row); osd_print(title);
 }
 
 
@@ -98,15 +89,15 @@ static void draw() {
     hint_id = settings_mx_ids[mx_focus];
   } else {
     for (uint8_t i = 0; i < ITEMS; i++) draw_item(ids[i], rows[i], focus == i);
-    ui_button(1, ROW_BUTTONS, BTN_WIDTH, "Save", focus == I_SAVE);
-    ui_button(12, ROW_BUTTONS, BTN_WIDTH, "Cancel", focus == I_CANCEL);
+    ui_button(0, ROW_BUTTONS, BTN_WIDTH, "Save", focus == I_SAVE);
+    ui_button(BTN_WIDTH + 1, ROW_BUTTONS, BTN_WIDTH, "Cancel", focus == I_CANCEL);
     if (focus < ITEMS) hint_id = ids[focus];
   }
   settings_preview(mx_page ? hint_id : SET_COUNT);
 
   osd_set_color(error ? OSD_COLOR_RED_I : OSD_COLOR_GREY, OSD_COLOR_BLACK);
   osd_fill(0, ROW_HINT, UI_COL_LAST, ROW_HINT, ' ');
-  osd_set_pos(1, ROW_HINT);
+  osd_set_pos(0, ROW_HINT);
   if (error) osd_print(error);
   else if (hint_id < SET_COUNT) osd_print(settings[hint_id].hint);
   osd_update();

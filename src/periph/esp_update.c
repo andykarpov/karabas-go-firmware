@@ -102,7 +102,7 @@ uint8_t esp_update_poll() {
     case S_UPDATE:
       if (r == ESP_AT_OK && error_stage == 0) go(S_RESTART);
       else if (r == ESP_AT_TIMEOUT || r == ESP_AT_IDLE) finish(ESP_UPD_ERROR, "No answer from the ESP");
-      else finish(ESP_UPD_ERROR, restore ? "The module did not erase them" : "Update failed, the firmware is unchanged");
+      else finish(ESP_UPD_ERROR, restore ? "The module did not erase them" : "Update failed, firmware is kept");
       break;
     case S_PING:
       if (r == ESP_AT_OK) go(S_ECHO);

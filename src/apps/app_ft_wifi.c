@@ -198,7 +198,7 @@ static void draw(const ft_page_ctx_t *c) {
         draw_message(c, c->y + INFO_STEP * 5 / 2, "From the Espressif server, ~30 s", dim);
         draw_message(c, c->y + INFO_STEP * 7 / 2, "Do not power off the board", dim);
       }
-      ft_page_button(c, x, c->y + 4 * INFO_STEP + 16, 140, w->restoring ? "Erase" : "Update", w->sel == 0, HIT_UPDATE);
+      ft_page_button(c, x, c->y + 4 * INFO_STEP + 16, 140, w->restoring ? "Wipe" : "Update", w->sel == 0, HIT_UPDATE);
       ft_page_button(c, x + 156, c->y + 4 * INFO_STEP + 16, 140, "Cancel", w->sel == 1, HIT_CANCEL);
       break;
     case WS_UPD: {

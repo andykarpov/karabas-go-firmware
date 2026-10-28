@@ -17,8 +17,8 @@ void ui_hint(const char *line1, const char *line2) {
   osd_line(UI_ROW_HINT_LINE);
   ui_row(0, UI_ROW_HINT, "", false);
   ui_row(0, UI_ROW_HINT + 1, "", false);
-  if (line1) { osd_set_pos(1, UI_ROW_HINT); osd_print(line1); }
-  if (line2) { osd_set_pos(1, UI_ROW_HINT + 1); osd_print(line2); }
+  if (line1) { osd_set_pos(0, UI_ROW_HINT); osd_print(line1); }
+  if (line2) { osd_set_pos(0, UI_ROW_HINT + 1); osd_print(line2); }
 }
 
 void ui_row(uint8_t x, uint8_t y, const char *text, bool selected) {
