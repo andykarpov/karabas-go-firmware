@@ -47,7 +47,7 @@ static void app_core_browser_show() {
 }
 
 static void app_core_show() { app_core_overlay(true); }
-static void app_file_loader_show() { app_file_loader_overlay(); }
+static void app_file_loader_show() { app_file_loader_overlay(true); }
 
 // indexed by osd_state_e
 static const app_t apps[] = {
