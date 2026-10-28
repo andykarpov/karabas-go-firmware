@@ -87,24 +87,23 @@ static bool bk_make_file(const char *dir, const char *name, uint32_t size) {
   }
   char path[KG_PATH_MAX];
   kg_path_join(path, sizeof(path), dir, name);
-  static FIL f; // not on the stack: a FIL has its own sector buffer
-  if (!sd_open(&f, path, FA_READ | FA_WRITE | FA_OPEN_ALWAYS)) {
+  FIL *f = sd_tmp_open(path, FA_READ | FA_WRITE | FA_OPEN_ALWAYS);
+  if (!f) {
     d_printf("Save: unable to open %s", path); d_println();
     return false;
   }
-  uint64_t have = f_size(&f);
+  uint64_t have = f_size(f);
   bool ok = true;
   if (have < size) {
-    static uint8_t zeros[IMG_SECTOR_SIZE];
-    memset(zeros, 0, sizeof(zeros));
-    ok = f_lseek(&f, have) == FR_OK;
+    static const uint8_t zeros[IMG_SECTOR_SIZE] = {0};
+    ok = f_lseek(f, have) == FR_OK;
     while (ok && have < size) {
       uint32_t n = size - have < IMG_SECTOR_SIZE ? size - have : IMG_SECTOR_SIZE;
-      ok = sd_write(&f, zeros, n) == n;
+      ok = sd_write(f, zeros, n) == n;
       have += n;
     }
   }
-  sd_close(&f);
+  if (!sd_tmp_close()) ok = false;
   d_printf("Save: %s, %lu bytes%s", path, (unsigned long) size, ok ? "" : ", FAILED to extend"); d_println();
   return ok;
 }

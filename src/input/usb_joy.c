@@ -12,7 +12,7 @@ __attribute__((constructor)) static void joy_lock_init(void) {
   joy_lock = spin_lock_init(spin_lock_claim_unused(true));
 }
 
-spin_lock_t *usb_host_lock() {
+spin_lock_t *__not_in_flash_func(usb_host_lock)() { // the USB loop runs from RAM
   return joy_lock;
 }
 

@@ -128,16 +128,35 @@ UINT sd_write(FIL *f, const void *buf, UINT len) {
   return f_write(f, buf, len, &n) == FR_OK ? n : 0;
 }
 
+static FIL tmp_file;
+static bool tmp_taken = false;
+
+FIL *sd_tmp_open(const char *path, BYTE mode) {
+  if (tmp_taken) {
+    d_printf("sd_tmp_open %s: the FIL is taken", path); d_println();
+    return NULL;
+  }
+  if (!sd_open(&tmp_file, path, mode)) return NULL;
+  tmp_taken = true;
+  return &tmp_file;
+}
+
+bool sd_tmp_close(void) {
+  if (!tmp_taken) return true;
+  tmp_taken = false;
+  return f_close(&tmp_file) == FR_OK;
+}
+
 char *sd_read_all(const char *path, size_t max, size_t *len) {
-  static FIL f; // not on the stack: a FIL has its own sector buffer
-  if (!sd_open(&f, path, FA_READ)) return NULL;
-  FSIZE_t size = f_size(&f);
+  FIL *f = sd_tmp_open(path, FA_READ);
+  if (!f) return NULL;
+  FSIZE_t size = f_size(f);
   char *buf = size <= max ? (char *) malloc(size + 1) : NULL;
-  if (buf && sd_read(&f, buf, size) != size) {
+  if (buf && sd_read(f, buf, size) != size) {
     free(buf);
     buf = NULL;
   }
-  sd_close(&f);
+  sd_tmp_close();
   if (!buf) return NULL;
   buf[size] = '\0';
   *len = size;

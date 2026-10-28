@@ -7,7 +7,8 @@ extern "C" {
 #endif
 
 // One claimed hardware spinlock for the short critical sections of the USB host data: these
-// joystick ports, the keyboard report and the gamepad mapper capture (hid_app.cpp). They are
+// joystick ports, the keyboard report, the gamepad mapper capture (hid_app.c) and the printer
+// queue (periph/printer.c). They are
 // never nested. Only 8 spinlocks can be claimed and the SDK takes some; PIO-USB claims one more
 // when the USB host starts (alarm_pool_create), and if none is left the USB task panics. So do
 // not claim a new spinlock for a new lock, use this one or a FreeRTOS primitive.

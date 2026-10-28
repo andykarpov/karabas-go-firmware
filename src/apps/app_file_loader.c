@@ -26,7 +26,7 @@ static void read_error(const char *line2) {
   ms_delay(1000);
 }
 
-void app_file_loader_read_list(bool forceIndex) {
+void app_file_loader_read_list(void) {
 
   ui_box("Scanning files", OSD_COLOR_GREEN_I, "Please wait...", OSD_COLOR_MAGENTA_I);
   osd_update();
@@ -90,7 +90,7 @@ void app_file_loader_menu(uint8_t vpos) {
   fb_draw(vpos, d, false);
 }
 
-void app_file_loader_overlay(bool initSD, bool recreateIndex) {
+void app_file_loader_overlay(bool initSD) {
   osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
   osd_clear();
   osd_header(core.build, core.id, HW_ID);
@@ -98,7 +98,7 @@ void app_file_loader_overlay(bool initSD, bool recreateIndex) {
 
   // collect files from sd
   if (initSD) {
-      app_file_loader_read_list(recreateIndex);
+    app_file_loader_read_list();
   }
 
   app_file_loader_menu(APP_COREBROWSER_MENU_OFFSET);
@@ -130,7 +130,7 @@ void app_file_loader_send_file(uint16_t file_id) {
   core_dir_path(dirname, sizeof(dirname));
   if (!sd_opendir(&root1, dirname)) {
     d_printf("Unable to open dir %s", dirname); d_println();
-    app_file_loader_overlay(false, false); // the loading popup goes
+    app_file_loader_overlay(false); // the loading popup goes
     return;
   }
 
@@ -143,7 +143,7 @@ void app_file_loader_send_file(uint16_t file_id) {
   if (!found || !sd_open(&file1, path, FA_READ)) {
     d_printf("Unable to open file %d", file_id); d_println();
     d_flush();
-    app_file_loader_overlay(false, false);
+    app_file_loader_overlay(false);
     return;
   }
 
@@ -199,7 +199,7 @@ uint32_t c1 = 0;
   ms_delay(100);
 
   // reload menu
-  app_file_loader_overlay(false, false);
+  app_file_loader_overlay(false);
 }
 
 void app_file_loader_on_keyboard() {
@@ -207,7 +207,7 @@ void app_file_loader_on_keyboard() {
 
   // R = recreate file index (also an empty list: the dir may be readable now)
   if (key == KEY_R) {
-    app_file_loader_overlay(true, true);
+    app_file_loader_overlay(true);
     return;
   }
   if (fb_len() == 0) return;

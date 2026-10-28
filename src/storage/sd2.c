@@ -4,6 +4,7 @@
 #include "spi0_bus.h"
 #include "hardware/spi.h"
 #include <stdarg.h>
+#include <stdlib.h>
 #include "sd_card.h"
 
 // The card shares SPI0 with the link and the FT812, which use their own clocks (spi0_bus):
@@ -127,7 +128,6 @@ static bool read_pass(uint8_t *buf, uint8_t mhz, uint8_t n, uint32_t ref_crc, ui
 
 void sd2_test(sd2_out_t out) {
   out_fn = out;
-  static uint8_t buf[SD2_BLOCK * 512];
   if (!sd2_begin_mhz(test_mhz[0])) {
     out_fn("+SD2:no card (or a boot core without SD2)"); print_error(); out_fn("\r\n");
     out_fn("ERROR\r\n");
@@ -145,6 +145,9 @@ void sd2_test(sd2_out_t out) {
   }
   out_fn("\r\n");
 
+  // on the heap only for the test
+  uint8_t *buf = (uint8_t *) malloc(SD2_BLOCK * 512);
+  if (!buf) { out_fn("ERROR\r\n"); return; }
   uint32_t ref_crc = 0;
   for (size_t k = 0; k < sizeof(test_mhz); k++) {
     uint8_t mhz = test_mhz[k];
@@ -159,6 +162,7 @@ void sd2_test(sd2_out_t out) {
     if (ok && !ref_crc) ref_crc = crc8;
     out_fn(ok ? " OK\r\n" : " FAIL\r\n");
   }
+  free(buf);
   out_printf("+SD2:crc of the first %u KB %08lX\r\n", SD2_TEST_SECTORS / 2, (unsigned long) ref_crc);
   out_fn("OK\r\n");
 }

@@ -113,12 +113,8 @@ void matrix_bitplan_data(uint8_t addr, uint8_t data) {
     i2c_bus_lock();
     if (!core_owns_matrix()) { i2c_bus_unlock(); return; }
     matrix_mode = MATRIX_MODE_DRAW;
-    // todo:
-    // addr 0-7:   matrix1, red
-    // addr 8-15:  matrix1, green
-    // addr 16-23: matrix2, red
-    // addr 24-31: matrix2, green
-    //ht16k33 bitmap
+    // addr 0-7: matrix1 red rows 0-7, 8-15: matrix1 green, 16-23: matrix2 red, 24-31: matrix2 green
+    ht16k33_row((addr >> 4) & 1, addr & 7, !(addr & 8), data);
     i2c_bus_unlock();
   }
 }

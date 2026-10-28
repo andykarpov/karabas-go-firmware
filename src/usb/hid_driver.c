@@ -174,10 +174,12 @@ bool hid_driver_save(const hid_joy_config_t *cfg, char *path, size_t path_size)
   // other drivers for this pad would be ambiguous: keep them as *.ini.bak
   backup_drivers(cfg->vid, cfg->pid, name);
 
-  // the text first, then one write
-  static char text[2048];
+  // the text first (on the heap), then one write
+  const size_t text_size = 2048;
+  char *text = (char *) malloc(text_size);
+  if (!text) return false;
   size_t n = 0;
-#define TEXT(...) n += snprintf(text + n, n < sizeof(text) ? sizeof(text) - n : 0, __VA_ARGS__)
+#define TEXT(...) n += snprintf(text + n, n < text_size ? text_size - n : 0, __VA_ARGS__)
   TEXT("[info]\nvid = %04x\npid = %04x\nname = mapped in the OSD\n", cfg->vid, cfg->pid);
   if (cfg->report_id >= 0) TEXT("report_id = %d\n", cfg->report_id);
   TEXT("\n[buttons]\n");
@@ -194,12 +196,13 @@ bool hid_driver_save(const hid_joy_config_t *cfg, char *path, size_t path_size)
     if (!first) TEXT("\n");
   }
 #undef TEXT
-  static FIL f; // not on the stack: a FIL has its own sector buffer
-  bool ok = n < sizeof(text) && sd_open(&f, path, FA_WRITE | FA_CREATE_ALWAYS);
+  FIL *f = n < text_size ? sd_tmp_open(path, FA_WRITE | FA_CREATE_ALWAYS) : NULL;
+  bool ok = f != NULL;
   if (ok) {
-    ok = sd_write(&f, text, n) == n;
-    if (f_close(&f) != FR_OK) ok = false;
+    ok = sd_write(f, text, n) == n;
+    if (!sd_tmp_close()) ok = false;
   }
+  free(text);
   d_printf("Driver %s %s", path, ok ? "saved" : "save failed"); d_println();
   if (ok) hid_drivers_load();
   return ok;

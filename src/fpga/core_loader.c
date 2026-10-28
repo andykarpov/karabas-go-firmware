@@ -67,12 +67,12 @@ void core_ioctl_send(uint8_t slot, bool popup)
   char fname[KG_PATH_MAX];
   kg_path_join(fname, sizeof(fname), file_slots[slot].dir, file_slots[slot].filename);
   kg_path_collapse(fname);
-  static FIL file; // not on the stack: a FIL has its own sector buffer
-  bool open = sd_open(&file, fname, FA_READ);
+  FIL *file = sd_tmp_open(fname, FA_READ);
+  bool open = file != NULL;
   if (!open) {
     d_printf("Ioctl slot %d: unable to open %s", slot, fname); d_println();
   }
-  fsize = open ? f_size(&file) : 0;
+  fsize = open ? f_size(file) : 0;
   spi_send64(CMD_IOCTL_SIZE, fsize);
 
   const char *dot = strrchr(fname, '.');
@@ -86,7 +86,7 @@ void core_ioctl_send(uint8_t slot, bool popup)
   int c;
   uint32_t send_timer = ms_now();
   send_timer = ms_now();
-  while (i < fsize && (c = sd_read(&file, buf, sizeof(buf))) > 0) {
+  while (i < fsize && (c = sd_read(file, buf, sizeof(buf))) > 0) {
     if (popup && i % 8192 == 0) {
       osd_loading_popup(i, fsize);
       osd_update();
@@ -101,7 +101,7 @@ void core_ioctl_send(uint8_t slot, bool popup)
       spi_send(CMD_IOCTL_DATA, (uint8_t)((i & 0x00000000000000FF)), buf[j]);
     }
   }
-  sd_close(&file);
+  sd_tmp_close();
   spi_send(CMD_IOCTL_STATE, 0, 0); // finish
   d_printf("Ioctl slot %d: %s, %lu bytes in %lu ms (%s)", slot, fname, (unsigned long) i,
     (unsigned long) ms_since(send_timer), link_burst_available() ? "burst" : "classic");
@@ -613,7 +613,7 @@ void rom_progress(uint32_t rom_idx, uint32_t sent) {
 
 #define ROM_CHUNK 4096           // SD read size per rom_send (bursts split it into 512-byte bursts)
 #define ROM_PROGRESS_STEP 8192   // OSD progress update interval, bytes
-static uint8_t rom_buf[ROM_CHUNK];
+static_assert(ROM_CHUNK <= BITSTREAM_BUF_SIZE, "a ROM chunk must fit the bitstream buffer");
 
 void read_roms(const char* filename) {
 
@@ -650,7 +650,7 @@ void read_roms(const char* filename) {
       break;
     }
 
-    uint8_t *buf = rom_buf;
+    uint8_t *buf = bitstream_buf(); // the bitstream is sent by now
     uint32_t next_progress = ROM_PROGRESS_STEP;
     if (rom_is_external) {
       // external rom block contains a rom filename (rom_len bytes) instead of a rom data

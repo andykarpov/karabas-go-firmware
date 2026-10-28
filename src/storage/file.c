@@ -20,11 +20,7 @@ size_t file_read_bytes(char *buf, size_t len) {
     return sd_read(&file1, buf, len);
 }
 
-int file_read_buf(char *buf, size_t len) {
-    return sd_read(&file1, buf, len);
-}
-
-int file_write_buf(char *buf, size_t len) {
+size_t file_write_bytes(const char *buf, size_t len) {
     return sd_write(&file1, buf, len);
 }
 

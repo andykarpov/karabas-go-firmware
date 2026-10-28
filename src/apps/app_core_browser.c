@@ -101,7 +101,6 @@ void app_core_browser_menu(uint8_t vpos) {
 static_assert(GRADIENT_W * 2 * GRADIENT_MAX_H <= GRADIENT_BUF, "the gradient buffers overlap");
 static_assert(GRADIENT_OFFSET + 2 * GRADIENT_BUF <= 0x100000, "the gradient is past the GRAM");
 
-static uint16_t gradient_px[GRADIENT_W * GRADIENT_MAX_H];
 static uint32_t gradient_from, gradient_to;
 static uint16_t gradient_h; // 0: not in GRAM
 static uint8_t gradient_buf; // the buffer of the last gradient
@@ -113,6 +112,9 @@ static uint8_t gradient_mix(uint32_t from, uint32_t to, uint8_t shift, uint16_t 
 
 static void gradient_load(uint32_t from, uint32_t to, uint16_t h) {
   static const uint8_t bayer[4][4] = { {0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5} };
+  // on the heap only until it is in GRAM
+  uint16_t *gradient_px = (uint16_t *) malloc(GRADIENT_W * 2 * h);
+  if (!gradient_px) return;
   for (uint16_t y = 0; y < h; y++) {
     uint8_t r = gradient_mix(from, to, 16, y, h), g = gradient_mix(from, to, 8, y, h), b = gradient_mix(from, to, 0, y, h);
     for (uint8_t x = 0; x < GRADIENT_W; x++) {
@@ -126,6 +128,7 @@ static void gradient_load(uint32_t from, uint32_t to, uint16_t h) {
   }
   gradient_buf ^= 1;
   ft_write_gram(GRADIENT_OFFSET + gradient_buf * GRADIENT_BUF, GRADIENT_W * 2 * h, (const uint8_t *) gradient_px);
+  free(gradient_px);
   gradient_from = from;
   gradient_to = to;
   gradient_h = h;
