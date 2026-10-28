@@ -59,6 +59,22 @@ static void test_pages() {
   TEST_ASSERT_EQUAL_UINT16(5, kg_list_page(4, 0)); // page 0 is taken as 1
 }
 
+// a core menu: text rows (inactive) between the options
+static bool active_odd(uint16_t i, void *ctx) { (void) ctx; return i % 2 == 1; }
+static bool active_none(uint16_t i, void *ctx) { (void) i; (void) ctx; return false; }
+
+static void test_active() {
+  TEST_ASSERT_EQUAL_UINT16(1, kg_list_first_active(6, active_odd, NULL));
+  TEST_ASSERT_EQUAL_UINT16(6, kg_list_first_active(6, active_none, NULL));
+  TEST_ASSERT_EQUAL_UINT16(3, kg_list_step_active(1, 6, 1, active_odd, NULL));
+  TEST_ASSERT_EQUAL_UINT16(1, kg_list_step_active(5, 6, 1, active_odd, NULL));  // around the end
+  TEST_ASSERT_EQUAL_UINT16(5, kg_list_step_active(1, 6, -1, active_odd, NULL)); // around the start
+  TEST_ASSERT_EQUAL_UINT16(3, kg_list_step_active(5, 6, -1, active_odd, NULL));
+  TEST_ASSERT_EQUAL_UINT16(1, kg_list_step_active(1, 2, 1, active_odd, NULL));  // the only one
+  TEST_ASSERT_EQUAL_UINT16(2, kg_list_step_active(2, 6, 1, active_none, NULL)); // none: stays
+  TEST_ASSERT_EQUAL_UINT16(0, kg_list_step_active(0, 0, 1, active_odd, NULL));
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_up_down_wrap);
@@ -67,5 +83,6 @@ int main() {
   RUN_TEST(test_selection_past_the_end);
   RUN_TEST(test_moved_flag);
   RUN_TEST(test_pages);
+  RUN_TEST(test_active);
   return UNITY_END();
 }

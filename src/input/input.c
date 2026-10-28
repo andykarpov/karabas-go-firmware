@@ -338,11 +338,7 @@ bool on_global_hotkeys() {
     if (core.osd[i].type == CORE_OSD_TYPE_SWITCH || core.osd[i].type == CORE_OSD_TYPE_NSWITCH) {
       if (core.osd[i].options_len > 0) {
         curr_osd_item = i;
-        core.osd[i].val++; 
-        if (core.osd[i].val > core.osd[i].options_len-1) {
-          core.osd[i].val = 0;
-        }
-        core_send(i);
+        core_osd_change(i, 1);
         if (!is_osd) {
           osd_clear();
           osd_logo(0, 0, HW_ID);
@@ -353,9 +349,6 @@ bool on_global_hotkeys() {
           osd_print(core.osd[i].options[core.osd[i].val].name);
           osd_update();
           ui_popup_start(i);
-        }
-        if (core.osd[i].type == CORE_OSD_TYPE_SWITCH) {
-          core.osd_need_save = true;
         }
       }
     } else if (core.osd[i].type == CORE_OSD_TYPE_TRIGGER) {
