@@ -125,6 +125,11 @@ static void at_command(const char *arg) {
   d_printf("Serial: AT+KARABAS=%s", arg); d_println();
   if (strcasecmp(arg, "list") == 0) {
     at_list_cores();
+  } else if (strcasecmp(arg, "version") == 0) {
+    char line[64];
+    snprintf(line, sizeof(line), "+KARABAS:%s;%u;%s;%s\r\n", STRINGIZE_VALUE_OF(BUILD_VER), HW_ID, core.id, core.build);
+    host_print(line);
+    host_print("OK\r\n");
   } else if (strcasecmp(arg, "boot") == 0) {
     bk_flush();
     core_eeprom_flush();

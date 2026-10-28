@@ -141,6 +141,13 @@ void print_time() {
   uint8_t mo = rtc_get_month();
   uint8_t y = rtc_get_year();
   osd_printf("%02u/%02u/%02u", d, mo, y);
+
+  // the build line of the header: the FPGA core and the MCU firmware in turn, 3 s each
+  osd_set_pos(19, 2);
+  osd_set_color(OSD_COLOR_GREY, OSD_COLOR_BLACK);
+  if ((ms_now() / 3000) % 2 == 0) osd_printf("FPGA %-8.8s", core.build);
+  else osd_printf(" MCU %-8.8s", STRINGIZE_VALUE_OF(BUILD_VER));
+  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
 }
 
 void on_time() {

@@ -189,6 +189,7 @@ answered by the firmware:
 | Command | Action |
 | --- | --- |
 | `AT+KARABAS=list` | list the cores on the SD card with their builds |
+| `AT+KARABAS=version` | `+KARABAS:<firmware>;<board>;<core id>;<core build>`: the firmware build, the board (1 Go, 2 Mini, 3 Mini G) and the running core |
 | `AT+KARABAS=boot` | restart into BOOTSEL mode, to update the firmware |
 | `AT+KARABAS=msc` | restart with the SD card as a USB drive |
 | `AT+KARABAS=msc2` | restart with the second SD card (the slot of the FPGA) as a USB drive |
