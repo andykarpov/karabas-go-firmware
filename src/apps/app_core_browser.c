@@ -12,11 +12,13 @@
 #include "file_name.h"
 #include "ui/ft_mouse.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include "ui/ui_draw.h"
 #include "kg_list.h"
 
-core_list_item_t cores[MAX_CORES];
+core_list_item_t *cores = NULL; // on the heap, cores_len items
 uint8_t cores_len = 0;
+#define CORES_CHUNK 16
 uint8_t core_sel = 0;
 const uint8_t core_page_size = MAX_CORES_PER_PAGE;
 // the graphic list: as many buttons as fit between the logo and the page line
@@ -314,7 +316,32 @@ core_list_item_t app_core_browser_get_item(const char *filename) {
   return core;
 }
 
+// the next free item of cores[], NULL at MAX_CORES or out of memory
+static uint8_t cores_cap = 0;
+static core_list_item_t *add_core(void) {
+  if (cores_len >= MAX_CORES) {
+    d_printf("Core list: more than %d cores, the rest is left out", MAX_CORES); d_println();
+    return NULL;
+  }
+  if (cores_len >= cores_cap) {
+    uint16_t c = cores_cap + CORES_CHUNK;
+    if (c > MAX_CORES) c = MAX_CORES;
+    core_list_item_t *p = (core_list_item_t *) realloc(cores, c * sizeof(core_list_item_t));
+    if (p == NULL) {
+      d_printf("Core list: out of memory at %d cores", cores_len); d_println();
+      return NULL;
+    }
+    cores = p;
+    cores_cap = (uint8_t) c;
+  }
+  return &cores[cores_len++];
+}
+
 void app_core_browser_read_list() {
+  free(cores);
+  cores = NULL;
+  cores_len = 0;
+  cores_cap = 0;
 
   // files from sd card
   if (has_sd) {
@@ -325,10 +352,16 @@ void app_core_browser_read_list() {
     while (f_readdir(&root1, &fi) == FR_OK && fi.fname[0]) {
       if (!(fi.fattrib & AM_DIR) && strlen(fi.fname) < 32 && kg_name_has_ext(fi.fname, CORE_EXT) &&
           sd_open(&file1, fi.fname, FA_READ)) {
-        cores[cores_len] = app_core_browser_get_item(fi.fname);
-        cores_len++;
+        core_list_item_t *item = add_core();
+        if (item) *item = app_core_browser_get_item(fi.fname);
         sd_close(&file1);
+        if (!item) break;
       }
+    }
+    // give the unused end of the last chunk back
+    if (cores_len > 0 && cores_len < cores_cap) {
+      core_list_item_t *p = (core_list_item_t *) realloc(cores, cores_len * sizeof(core_list_item_t));
+      if (p) { cores = p; cores_cap = cores_len; }
     }
   }
   // sort by core order number

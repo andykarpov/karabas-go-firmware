@@ -14,7 +14,7 @@
 extern "C" {
 #endif
 
-extern core_list_item_t cores[MAX_CORES];
+extern core_list_item_t *cores; // on the heap, NULL while empty
 extern uint8_t cores_len;
 
 void app_core_browser_overlay();
