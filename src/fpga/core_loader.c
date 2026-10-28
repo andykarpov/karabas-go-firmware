@@ -326,6 +326,11 @@ void read_core(const char* filename) {
   uint32_t offset = FILE_POS_BITSTREAM_START + core.bitstream_length + roms_len;
   //d_print("OSD section: "); d_println(offset);
   file_seek(offset); core.osd_len = file_read();
+  // a broken core file (cut short, a wrong roms_len) reads FF here: no more items than fit
+  if (core.osd_len > MAX_OSD_ITEMS) {
+    d_printf("OSD section: %u items, only %d fit", core.osd_len, MAX_OSD_ITEMS); d_println();
+    core.osd_len = MAX_OSD_ITEMS;
+  }
   //d_print("OSD len: "); d_println(core.osd_len);
 
   if (core.spi_freq > 0 && core.spi_freq < 255) { d_printf("Core SPI Frequency: %u MHz", core.spi_freq); d_println(); } else { d_println("Core SPI Frequency: default"); }
@@ -335,6 +340,11 @@ void read_core(const char* filename) {
   for (uint8_t i=0; i<MAX_FILE_SLOTS; i++) { file_slots[i].is_mounted = false; }
 
   for (uint8_t i=0; i<core.osd_len; i++) {
+    if (f_tell(&file1) >= f_size(&file1)) {
+      d_printf("OSD section: the file ends at item %u", i); d_println();
+      core.osd_len = i;
+      break;
+    }
     core.osd[i].type = file_read();
     core.osd[i].flags = file_read();
     file_read_bytes(core.osd[i].name, 16); core.osd[i].name[16] = '\0';
@@ -349,6 +359,11 @@ void read_core(const char* filename) {
       uint8_t slot_byte = file_read(); // bit 7: autoload
       // not bitClear(): it clears the bit in slot_byte too, and the autoload bit read 0
       core.osd[i].slot_id = slot_byte & 0x7F;
+      if (core.osd[i].slot_id >= MAX_FILE_SLOTS) {
+        d_printf("OSD item %u: file slot %u, only %d exist", i, core.osd[i].slot_id, MAX_FILE_SLOTS); d_println();
+        core.osd_len = i; // the items after it can't be trusted either
+        break;
+      }
       file_slots[core.osd[i].slot_id].is_autoload = (slot_byte & 0x80) != 0;
       file_slots[core.osd[i].slot_id].is_mounted = false;
       file_read_bytes(file_slots[core.osd[i].slot_id].ext, 256); file_slots[core.osd[i].slot_id].ext[255] = '\0';
@@ -370,12 +385,18 @@ void read_core(const char* filename) {
     }
       // otherwise - reading options structure
       else {
-      core.osd[i].options_len = file_read();
-      if (core.osd[i].options_len > 8) {
-        core.osd[i].options_len = 8; // something goes wrong
-      } 
+      uint8_t n = file_read();
+      core.osd[i].options_len = n > MAX_OSD_ITEM_OPTIONS ? MAX_OSD_ITEM_OPTIONS : n;
       for (uint8_t j=0; j<core.osd[i].options_len; j++) {
         file_read_bytes(core.osd[i].options[j].name, 16); core.osd[i].options[j].name[16] = '\0';
+      }
+      // the names that do not fit are skipped, so the rest of the section stays in step
+      if (n > core.osd[i].options_len) file_seek(f_tell(&file1) + (n - core.osd[i].options_len) * 16);
+      // an option name is shown by its index (a hidden item without options keeps its value)
+      if (core.osd[i].options_len > 0 && core.osd[i].def >= core.osd[i].options_len) {
+        core.osd[i].def = 0;
+        core.osd[i].val = 0;
+        core.osd[i].prev_val = 0;
       }
     }
     file_read_bytes(core.osd[i].hotkey, 16); core.osd[i].hotkey[16] = '\0';
@@ -389,7 +410,7 @@ void read_core(const char* filename) {
   // read eeprom data from file (in case rombank = 4 and up)
   // 255 means no eeprom allowed by core
   if (core.eeprom_bank >= MAX_EEPROM_BANKS && core.eeprom_bank != NO_EEPROM_BANK) {
-    for (uint8_t i=0; i<255; i++) {
+    for (uint16_t i=0; i<MAX_EEPROM_ITEMS; i++) {
       file_seek(FILE_POS_EEPROM_DATA + i);
       core.eeprom[i].val = file_read();
       core.eeprom[i].prev_val = core.eeprom[i].val;
