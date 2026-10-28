@@ -15,8 +15,12 @@
 
 #define LIST_ROW 8
 #define LIST_ROWS 14
+// the labels of the buttons have even lengths (Retry has a screen of its own), so they center
+// exactly in an even width
 #define BTN_WIDTH 10
+#define BTN2_X (BTN_WIDTH + 1)
 #define MENU_WIDTH 18
+#define VALUE_X 9
 #define ROW_RESCAN 22
 
 static hid_keyboard_report_t prev_kbd;
@@ -39,24 +43,24 @@ static void print_text(const char *s, uint8_t width) {
 
 static void draw_info(uint8_t y, const char *label, const char *value, uint8_t color) {
   osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-  osd_set_pos(1, y); osd_print(label);
+  osd_set_pos(0, y); osd_print(label);
   osd_set_color(color, OSD_COLOR_BLACK);
-  osd_set_pos(10, y); print_text(value, 21);
+  osd_set_pos(VALUE_X, y); print_text(value, OSD_SIZE_X - VALUE_X);
 }
 
 static void draw_message(uint8_t y, const char *msg, uint8_t color) {
   osd_set_color(color, OSD_COLOR_BLACK);
-  osd_set_pos(1, y); print_text(msg, 30);
+  osd_set_pos(0, y); print_text(msg, OSD_SIZE_X);
 }
 
 
 // the text field: the tail that fits, a cyan cursor at the end
 static void draw_field(uint8_t y, const char *text, bool hidden) {
-  const uint8_t width = 30;
+  const uint8_t width = OSD_SIZE_X;
   size_t len = strlen(text);
   size_t from = len >= width ? len - width + 1 : 0;
   osd_set_color(OSD_COLOR_BLACK, OSD_COLOR_WHITE);
-  osd_set_pos(1, y);
+  osd_set_pos(0, y);
   for (size_t i = from; i < from + width; i++) {
     if (i == len) {
       osd_set_color(OSD_COLOR_BLACK, OSD_COLOR_CYAN_I);
@@ -73,7 +77,7 @@ static void draw_field(uint8_t y, const char *text, bool hidden) {
 
 static void draw_list() {
   const ws_t *w = ws_state();
-  ui_button(1, ROW_RESCAN, BTN_WIDTH, "Rescan", w->on_rescan || w->aps_len == 0);
+  ui_button(0, ROW_RESCAN, BTN_WIDTH, "Rescan", w->on_rescan || w->aps_len == 0);
   if (w->aps_len == 0) {
     draw_message(LIST_ROW, "No networks found", OSD_COLOR_YELLOW_I);
     return;
@@ -91,7 +95,7 @@ static void draw_list() {
   }
   if (w->aps_len > LIST_ROWS) {
     osd_set_color(OSD_COLOR_GREY, OSD_COLOR_BLACK);
-    osd_set_pos(24, 7); osd_printf("%2u/%-2u", w->sel + 1, w->aps_len);
+    osd_set_pos(UI_COL_LAST - 4, 7); osd_printf("%2u/%-2u", w->sel + 1, w->aps_len);
   }
 }
 
@@ -107,7 +111,7 @@ static void draw() {
       break;
     case WS_NO_ESP:
       draw_message(8, "ESP8266 is not responding", OSD_COLOR_RED_I);
-      ui_button(1, 11, BTN_WIDTH, "Retry", true);
+      ui_button(0, 11, BTN_WIDTH + 1, "Retry", true);
       ui_hint("Enter: retry", "Esc: back");
       break;
     case WS_STATUS:
@@ -118,7 +122,7 @@ static void draw() {
       draw_info(11, "IP", w->ip[0] && strcmp(w->ip, "0.0.0.0") != 0 ? w->ip : "-", OSD_COLOR_CYAN_I);
       {
         uint8_t ids[WS_M_COUNT], n = ws_menu_items(ids);
-        for (uint8_t i = 0; i < n; i++) ui_button(1, 14 + 2 * i, MENU_WIDTH, ws_menu_names[ids[i]], w->sel == i);
+        for (uint8_t i = 0; i < n; i++) ui_button(0, 14 + 2 * i, MENU_WIDTH, ws_menu_names[ids[i]], w->sel == i);
       }
       ui_hint("Enter: select", "Esc: back");
       break;
@@ -139,9 +143,9 @@ static void draw() {
       break;
     case WS_PASS:
       osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-      osd_set_pos(1, 8); osd_print("Network:");
+      osd_set_pos(0, 8); osd_print("Network:");
       osd_set_color(OSD_COLOR_CYAN_I, OSD_COLOR_BLACK);
-      osd_set_pos(10, 8); print_text(w->ssid, 21);
+      osd_set_pos(VALUE_X, 8); print_text(w->ssid, OSD_SIZE_X - VALUE_X);
       draw_message(10, "Password:", OSD_COLOR_WHITE);
       draw_field(11, w->pass, !w->show_pass);
       ui_hint("Enter: connect, Esc: back", w->show_pass ? "Tab: hide the password" : "Tab: show the password");
@@ -160,15 +164,15 @@ static void draw() {
         draw_info(11, "IP", w->ip[0] ? w->ip : "-", OSD_COLOR_CYAN_I);
         draw_message(13, "The ESP8266 remembers it", OSD_COLOR_GREY);
       }
-      ui_button(1, 16, BTN_WIDTH, "OK", true);
+      ui_button(0, 16, BTN_WIDTH, "OK", true);
       ui_hint("Enter: back", "");
       break;
     case WS_FORGET:
       draw_message(8, "Forget this network?", OSD_COLOR_YELLOW_I);
       draw_info(10, "Network", w->cur_ssid, OSD_COLOR_CYAN_I);
       draw_message(12, "The ESP8266 will not join it", OSD_COLOR_GREY);
-      ui_button(1, 15, BTN_WIDTH, "Forget", w->sel == 0);
-      ui_button(12, 15, BTN_WIDTH, "Cancel", w->sel == 1);
+      ui_button(0, 15, BTN_WIDTH, "Forget", w->sel == 0);
+      ui_button(BTN2_X, 15, BTN_WIDTH, "Cancel", w->sel == 1);
       ui_hint("Left/Right: select", "Enter: OK, Esc: back");
       break;
     case WS_UPD_ASK:
@@ -184,15 +188,15 @@ static void draw() {
         draw_message(13, "about half a minute.", OSD_COLOR_GREY);
         draw_message(14, "Do not power off the board.", OSD_COLOR_GREY);
       }
-      ui_button(1, 17, BTN_WIDTH, w->restoring ? "Erase" : "Update", w->sel == 0);
-      ui_button(12, 17, BTN_WIDTH, "Cancel", w->sel == 1);
+      ui_button(0, 17, BTN_WIDTH, w->restoring ? "Wipe" : "Update", w->sel == 0);
+      ui_button(BTN2_X, 17, BTN_WIDTH, "Cancel", w->sel == 1);
       ui_hint("Left/Right: select", "Enter: OK, Esc: back");
       break;
     case WS_UPD: {
       uint8_t percent = esp_update_progress();
       const char *msg = esp_update_message();
       draw_message(8, msg ? msg : "", OSD_COLOR_YELLOW_I);
-      osd_progress(1, 10, 26, percent, 100, OSD_COLOR_CYAN_I, OSD_COLOR_BLACK);
+      osd_progress(0, 10, 27, percent, 100, OSD_COLOR_CYAN_I, OSD_COLOR_BLACK);
       osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
       osd_set_pos(28, 10); osd_printf("%3u%%", percent);
       draw_message(12, "Do not power off the board", OSD_COLOR_GREY);
@@ -208,7 +212,7 @@ static void draw() {
       } else if (ok) {
         draw_message(10, "Join the network again", OSD_COLOR_GREY);
       }
-      ui_button(1, 14, BTN_WIDTH, "OK", true);
+      ui_button(0, 14, BTN_WIDTH, "OK", true);
       ui_hint("Enter: back", "");
       break;
     }

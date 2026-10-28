@@ -9,7 +9,7 @@ enum { S_NONE, S_ECHO_OFF, S_VERSION, S_FLOW_GET, S_FLOW_SET, S_MODE_GET, S_MODE
 
 #define ECHO_TRIES 3
 
-const char *const ws_menu_names[WS_M_COUNT] = { "Scan networks", "Hidden network", "Forget network", "Update module", "Reset module" };
+const char *const ws_menu_names[WS_M_COUNT] = { "Network scan", "Hidden network", "Forget network", "Upgrade module", "Reset module" };
 
 static ws_t ws;
 static uint8_t step;

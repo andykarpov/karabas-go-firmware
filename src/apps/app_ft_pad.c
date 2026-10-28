@@ -12,7 +12,7 @@
 
 // The Gamepad page of the graphic setup, as Map USB gamepad of the text menu. First the two
 // joystick ports: the pad on each and what maps it (a driver ini, the default map, XInput);
-// Forget renames the driver ini of a pad to .bak. Map learns a pad through apps/pad_learn
+// Forget renames the driver ini of a pad to .bak. Assign learns a pad through apps/pad_learn
 // (shared with the text menu). A Mega Drive pad shows the button asked for and the ones mapped;
 // when all are done it shows the presses through the learned map, also after Save (a test).
 // Test: both ports as the core gets them (the USB pads and the Sega / DB9 ones of the board),
@@ -57,7 +57,7 @@ static bool dirty;
 
 static usb_pad_t pads[2];
 static uint8_t port;         // the port chosen in the list
-static uint8_t list_btn;     // 0: Map, 1: Test, 2: Forget
+static uint8_t list_btn;     // 0: Assign, 1: Test, 2: Forget
 static const char *list_msg;
 static bool list_msg_ok;
 static uint16_t test_joy[2]; // the test: the buttons held on each port
@@ -213,7 +213,7 @@ static void draw_list(const ft_page_ctx_t *c) {
       FT81x_OPT_CENTERY, b, (c->w - COL_SRC - 32) / 12);
   }
   int16_t by = y + ROW_H * 3 + 12;
-  ft_page_button(c, x, by, LIST_BTN_W, "Map", list_btn == 0, HIT_MAP);
+  ft_page_button(c, x, by, LIST_BTN_W, "Assign", list_btn == 0, HIT_MAP);
   ft_page_button(c, x + LIST_BTN_W + 12, by, LIST_BTN_W, "Test", list_btn == 1, HIT_TEST);
   if (can_forget()) ft_page_button(c, x + 2 * (LIST_BTN_W + 12), by, LIST_BTN_W, "Forget", list_btn == 2, HIT_FORGET);
   if (list_msg && c->focused) {
@@ -410,7 +410,7 @@ static const char *hint() {
   switch (view == V_LIST ? 0xff : pl_state()) {
     case 0xff: return list_btn == 2 ? "Forget: the driver ini becomes .bak, the default map is used" :
                          list_btn == 1 ? "Test: the buttons held on both ports, as the core gets them" :
-                                         "Map: learns the pad you press a button on, also one not on a port";
+                                         "Assign: learns the pad you press a button on, also one not on a port";
     case PL_PRESS: return "Enter: skip   Backspace: back";
     case PL_DONE: return "Enter: save the driver   Backspace: redo the last one";
     case PL_SAVED: case PL_FAILED: return "Enter: back to the ports";

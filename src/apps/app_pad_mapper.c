@@ -10,7 +10,7 @@
 #include "ui/ui_draw.h"
 
 // First the two joystick ports: the pad on each and what maps it (a driver ini, the default
-// map, XInput); Forget renames the driver ini of a pad to .bak. Map learns a pad through
+// map, XInput); Forget renames the driver ini of a pad to .bak. Assign learns a pad through
 // apps/pad_learn (shared with the Gamepad page of the graphic setup); this screen draws it.
 // The keyboard drives the screen: the pad being mapped must not.
 
@@ -21,13 +21,13 @@ enum {
 };
 
 #define LIST_REFRESH_MS 500
-#define BTN_WIDTH 10
+#define BTN_WIDTH 10 // Assign and Forget: even lengths, centered exactly
 
 static uint8_t view = V_IDLE;
 static uint32_t list_timer = 0;
 static usb_pad_t pads[2];
 static uint8_t port;       // the port chosen in the list
-static uint8_t list_btn;   // 0: Map, 1: Forget
+static uint8_t list_btn;   // 0: Assign, 1: Forget
 static const char *list_msg;
 static bool list_msg_ok;
 
@@ -45,8 +45,8 @@ static void draw_buttons() {
     bool current = (st == PL_PRESS || st == PL_RELEASE) && i == pl_btn();
     osd_set_color(current ? OSD_COLOR_BLACK : OSD_COLOR_WHITE, current ? OSD_COLOR_WHITE : OSD_COLOR_BLACK);
     osd_fill(0, 11 + i, UI_COL_LAST, 11 + i, ' ');
-    osd_set_pos(1, 11 + i); osd_print(pl_btn_names[i]);
-    osd_set_pos(8, 11 + i);
+    osd_set_pos(0, 11 + i); osd_print(pl_btn_names[i]);
+    osd_set_pos(7, 11 + i);
     if (pl_mapped(i)) {
       char buf[24];
       hid_learn_format_rule(pl_rule(i), buf, sizeof(buf));
@@ -72,13 +72,13 @@ static void pad_source(const usb_pad_t *p, char *out, size_t size) {
 static void draw_list() {
   ui_clear_rows(8, UI_ROW_BODY_LAST);
   osd_set_color(OSD_COLOR_GREY, OSD_COLOR_BLACK);
-  osd_set_pos(1, 8); osd_print("Port Pad       Mapped by");
+  osd_set_pos(0, 8); osd_print("Port Pad       Mapped by");
   for (uint8_t i = 0; i < 2; i++) {
     const usb_pad_t *p = &pads[i];
     bool chosen = i == port;
     osd_set_color(chosen ? OSD_COLOR_BLACK : OSD_COLOR_WHITE, chosen ? OSD_COLOR_WHITE : OSD_COLOR_BLACK);
     osd_fill(0, 10 + i, UI_COL_LAST, 10 + i, ' ');
-    osd_set_pos(1, 10 + i);
+    osd_set_pos(0, 10 + i);
     char src[18], buf[33];
     if (p->source == USB_PAD_NONE && p->vid == 0) {
       snprintf(buf, sizeof(buf), "%u    -", i + 1);
@@ -88,18 +88,18 @@ static void draw_list() {
     }
     osd_print(buf);
   }
-  ui_button(1, 14, BTN_WIDTH, "Map", list_btn == 0);
-  if (can_forget()) ui_button(12, 14, BTN_WIDTH, "Forget", list_btn == 1);
+  ui_button(0, 14, BTN_WIDTH, "Assign", list_btn == 0);
+  if (can_forget()) ui_button(BTN_WIDTH + 1, 14, BTN_WIDTH, "Forget", list_btn == 1);
   if (list_msg) {
     osd_set_color(list_msg_ok ? OSD_COLOR_GREEN_I : OSD_COLOR_RED_I, OSD_COLOR_BLACK);
-    osd_set_pos(1, 16); osd_print(list_msg);
+    osd_set_pos(0, 16); osd_print(list_msg);
   }
   osd_set_color(OSD_COLOR_GREY, OSD_COLOR_BLACK);
-  osd_set_pos(1, 18); osd_print("Map: learns the pad you press a");
-  osd_set_pos(1, 19); osd_print("button on, also one not on a");
-  osd_set_pos(1, 20); osd_print("port");
-  osd_set_pos(1, 21); osd_print("Forget: the driver ini -> .bak,");
-  osd_set_pos(1, 22); osd_print("the pad uses its default map");
+  osd_set_pos(0, 18); osd_print("Assign: learns the pad you press");
+  osd_set_pos(0, 19); osd_print("a button on, also one not on a");
+  osd_set_pos(0, 20); osd_print("port");
+  osd_set_pos(0, 21); osd_print("Forget: the driver ini -> .bak,");
+  osd_set_pos(0, 22); osd_print("the pad uses its default map");
   ui_hint("Up/Down: port, Left/Right: btn", "Enter: OK, Esc: return");
 }
 

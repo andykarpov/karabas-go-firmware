@@ -64,7 +64,7 @@ Set `debug=1` in `karabas.ini` and keep a terminal on the USB serial port: most 
 - [ ] Time zone `tz`: text Setup and the FT Clock page, saved.
 - [ ] NTP sync sets the RTC.
 - [ ] Wi-Fi: status, scan, password, join; the CTS flow control (`AT+UART_DEF`).
-- [ ] Wi-Fi: Update module (`AT+CIUPDATE`) and Reset module (`AT+RESTORE`) with the progress bar.
+- [ ] Wi-Fi: Upgrade module (`AT+CIUPDATE`) and Reset module (`AT+RESTORE`) with the progress bar.
 
 ## Serial bridge
 
