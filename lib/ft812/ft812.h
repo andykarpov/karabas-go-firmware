@@ -266,6 +266,9 @@ void ft_swap_screen(void);
 uint16_t ft_display_list_size(void);
 void ft_clear(uint32_t color);
 void ft_draw_circle(int16_t x, int16_t y, uint8_t size, uint32_t color);
+// a line through n points (x, y pairs in 1/16 px), radius (half its width) in 1/16 px; the ends
+// and the joins are round
+void ft_draw_line_strip(const int16_t *xy, uint8_t n, uint16_t radius, uint32_t color);
 void ft_draw_rect(int16_t x, int16_t y, uint16_t width, uint16_t height, uint8_t corner_radius, uint32_t color);
 void ft_draw_text(int16_t x, int16_t y, uint8_t font, uint32_t color, uint16_t options, const char text[]);
 void ft_draw_button(int16_t x, int16_t y, int16_t width, int16_t height, uint8_t font, uint32_t text_color, uint32_t button_color, uint16_t options, const char text[]);

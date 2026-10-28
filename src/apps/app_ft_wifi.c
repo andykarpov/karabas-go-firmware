@@ -24,7 +24,7 @@ enum { HIT_STATUS = 0, HIT_RETRY = 10, HIT_RESCAN, HIT_NEXT, HIT_CONNECT, HIT_SH
 #define CHAR_W 13
 #define CURSOR_COLOR 0x00d8d8
 #define BAR_H 20
-#define LOCK_W 12
+#define LOCK_W 14
 
 static bool closed; // Esc left the page
 
@@ -73,12 +73,18 @@ static void draw_status(const ft_page_ctx_t *c, int16_t y) {
 }
 
 // a padlock LOCK_W wide, centered on y: closed for a network with a password, open (the right
-// end of the shackle out of the body) for one without
+// end of the shackle out of the body) for one without. The shackle is one line: the left leg, a
+// half circle, the right leg (in 1/16 px).
 static void draw_lock(int16_t x, int16_t y, bool closed, uint32_t color) {
-  ft_page_rect(x, y - 1, LOCK_W, 8, 2, color);                 // the body
-  ft_page_rect(x + 2, y - 8, 2, 8, 1, color);                  // the shackle: left
-  ft_page_rect(x + 2, y - 8, LOCK_W - 4, 2, 1, color);         // top
-  ft_page_rect(x + LOCK_W - 4, y - 8, 2, closed ? 8 : 4, 1, color); // right
+  // the half circle of radius 4 px from the left over the top, 22.5 degree steps
+  static const int8_t arc[9][2] = { {-64, 0}, {-59, 24}, {-45, 45}, {-24, 59}, {0, 64}, {24, 59}, {45, 45}, {59, 24}, {64, 0} };
+  int16_t cx = (x + LOCK_W / 2) * 16, top = (y - 5) * 16;
+  int16_t xy[2 * 11];
+  xy[0] = cx + arc[0][0]; xy[1] = (y + 1) * 16; // the left leg into the body
+  for (uint8_t i = 0; i < 9; i++) { xy[2 + 2 * i] = cx + arc[i][0]; xy[3 + 2 * i] = top - arc[i][1]; }
+  xy[20] = cx + arc[8][0]; xy[21] = (closed ? y + 1 : y - 4) * 16;
+  ft_draw_line_strip(xy, 11, 16, color);
+  ft_page_rect(x, y - 1, LOCK_W, 9, 2, color); // the body
 }
 
 static void draw_list(const ft_page_ctx_t *c) {

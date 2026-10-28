@@ -390,6 +390,15 @@ void ft_draw_circle(const int16_t x, const int16_t y, const uint8_t size, const 
     ft_end_cmd(END());
 }
 
+void ft_draw_line_strip(const int16_t *xy, const uint8_t n, const uint16_t radius, const uint32_t color) {
+    if (n < 2) return;
+    ft_start_cmd(COLOR(color));
+    ft_intermediate_cmd(LINE_WIDTH(radius));
+    ft_intermediate_cmd(BEGIN(LINE_STRIP));
+    for (uint8_t i = 0; i < n; i++) ft_intermediate_cmd(VERTEX2F(xy[2 * i], xy[2 * i + 1]));
+    ft_end_cmd(END());
+}
+
 void ft_draw_rect(const int16_t x, const int16_t y, const uint16_t width, const uint16_t height, const uint8_t cornerRadius, const uint32_t color) {
     ft_start_cmd(COLOR(color));
     ft_intermediate_cmd(LINE_WIDTH(cornerRadius * 16));
