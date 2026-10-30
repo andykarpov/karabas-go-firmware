@@ -25,6 +25,8 @@ void ui_screen(const char *title);
 void ui_hint(const char *line1, const char *line2);
 // a row from x to the right edge, the text cut or padded with spaces: black on white when selected
 void ui_row(uint8_t x, uint8_t y, const char *text, bool selected);
+// the same in another color: ink on black, black on ink when selected
+void ui_row_ink(uint8_t x, uint8_t y, const char *text, bool selected, uint8_t ink);
 // rows y1..y2 cleared, white on black
 void ui_clear_rows(uint8_t y1, uint8_t y2);
 // the body of a screen cleared: the rows between the title line and the hint line

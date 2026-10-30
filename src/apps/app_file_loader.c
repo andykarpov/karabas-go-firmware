@@ -46,13 +46,10 @@ void app_file_loader_read_list(void) {
   }
   d_println("Read file list");
   fb_clear();
-  char e[sizeof(core.file_extensions)];
-  strcpy(e, core.file_extensions);
-  kg_str_lower(e); kg_trim(e);
   FILINFO fi;
   while (opened && f_readdir(&root1, &fi) == FR_OK && fi.fname[0]) {
     uint16_t id;
-    if (!(fi.fattrib & AM_DIR) && sd_file_id(&fi, &id) && kg_name_has_ext(fi.fname, e)) {
+    if (!(fi.fattrib & AM_DIR) && sd_file_id(&fi, &id) && kg_name_has_ext(fi.fname, core.file_extensions)) {
       fb_add_file(fi.fname, id);
     }
   }
@@ -96,7 +93,9 @@ void app_file_loader_overlay(bool initSD) {
   }
 
   app_file_loader_menu(APP_COREBROWSER_MENU_OFFSET);
-  ui_hint("Please use arrows to navigate", "Press Enter to load selection");
+  char b[OSD_SIZE_X + 1] = "Files: ";
+  kg_exts_text(core.file_extensions, b + 7, OSD_SIZE_X - 7);
+  ui_hint(b[7] ? b : "Please use arrows to navigate", "Press Enter to load selection");
   osd_update();
 }
 

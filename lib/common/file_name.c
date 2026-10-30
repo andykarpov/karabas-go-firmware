@@ -6,18 +6,61 @@ static char to_lower(char c) {
   return (c >= 'A' && c <= 'Z') ? c - 'A' + 'a' : c;
 }
 
+static bool is_ext_sep(char c) {
+  return c == ',' || c == ';' || c == ' ' || c == '\t' || c == '\r' || c == '\n';
+}
+
+// the next extension of a list: its start (the dot skipped) and length, 0 at the end
+static size_t next_ext(const char **p, const char **ext) {
+  while (is_ext_sep(**p)) (*p)++;
+  if (**p == '.') (*p)++;
+  *ext = *p;
+  while (**p && !is_ext_sep(**p)) (*p)++;
+  return *p - *ext;
+}
+
 bool kg_name_has_ext(const char *name, const char *exts) {
-  size_t exts_len = strlen(exts);
-  if (exts_len == 0) return true;
   size_t len = strlen(name);
-  if (len < 4) return false;
-  const char *ext = name + len - 4;
-  for (size_t i = 0; i + 4 <= exts_len; i++) {
+  bool any = false;
+  const char *p = exts, *ext;
+  size_t n;
+  while (*p) {
+    if ((n = next_ext(&p, &ext)) == 0) continue;
+    any = true;
+    // the name ends with "." + ext, and has a base before the dot
+    if (len < n + 2 || name[len - n - 1] != '.') continue;
     size_t j = 0;
-    while (j < 4 && to_lower(exts[i + j]) == to_lower(ext[j])) j++;
-    if (j == 4) return true;
+    while (j < n && to_lower(name[len - n + j]) == to_lower(ext[j])) j++;
+    if (j == n) return true;
   }
-  return false;
+  return !any;
+}
+
+void kg_exts_text(const char *exts, char *out, size_t width) {
+  size_t w = 0;
+  const char *p = exts, *ext;
+  size_t n;
+  out[0] = '\0';
+  while (*p) {
+    if ((n = next_ext(&p, &ext)) == 0) continue;
+    size_t need = (w ? 1 : 0) + 1 + n;
+    if (w + need > width) {
+      // cut: " .." in place of the extensions that do not fit, whole ones dropped for it
+      while (w > 0 && w + 3 > width) {
+        while (w > 0 && out[w - 1] != ' ') w--;
+        if (w > 0) w--;
+      }
+      if (w > 0) out[w++] = ' ';
+      if (w + 2 <= width) { out[w++] = '.'; out[w++] = '.'; }
+      out[w] = '\0';
+      return;
+    }
+    if (w) out[w++] = ' ';
+    out[w++] = '.';
+    memcpy(out + w, ext, n);
+    w += n;
+    out[w] = '\0';
+  }
 }
 
 void kg_short_name(const char *name, char *out, size_t width) {

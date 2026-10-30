@@ -12,6 +12,37 @@ static void test_has_ext() {
   TEST_ASSERT_TRUE(kg_name_has_ext("anything", ""));
   TEST_ASSERT_FALSE(kg_name_has_ext("a.b", ".trd"));
   TEST_ASSERT_FALSE(kg_name_has_ext("", ".trd"));
+  // other lengths and separators
+  TEST_ASSERT_TRUE(kg_name_has_ext("game.rk", ".rkr,.rk,.gam"));
+  TEST_ASSERT_TRUE(kg_name_has_ext("game.RKR", ".rkr,.rk,.gam"));
+  TEST_ASSERT_FALSE(kg_name_has_ext("game.r", ".rkr,.rk,.gam"));
+  TEST_ASSERT_TRUE(kg_name_has_ext("mario.ines", ".nes,.ines"));
+  TEST_ASSERT_TRUE(kg_name_has_ext("mario.nes", ".nes,.ines"));
+  TEST_ASSERT_FALSE(kg_name_has_ext("machines", ".nes,.ines"));
+  TEST_ASSERT_FALSE(kg_name_has_ext("x.snes", ".nes"));
+  TEST_ASSERT_TRUE(kg_name_has_ext("disk.vhd", ".img .vhd .hdf"));
+  TEST_ASSERT_TRUE(kg_name_has_ext("a.gg", " .sms; .gg "));
+  TEST_ASSERT_TRUE(kg_name_has_ext("a.trd", "trd,scl"));
+  TEST_ASSERT_FALSE(kg_name_has_ext(".trd", ".trd"));
+  TEST_ASSERT_TRUE(kg_name_has_ext("anything", " , "));
+}
+
+static void test_exts_text() {
+  char b[33];
+  kg_exts_text(".img .vhd .hdf .bin .raw", b, 32);
+  TEST_ASSERT_EQUAL_STRING(".img .vhd .hdf .bin .raw", b);
+  kg_exts_text(".rom,.mx1, .mx2;bin", b, 32);
+  TEST_ASSERT_EQUAL_STRING(".rom .mx1 .mx2 .bin", b);
+  kg_exts_text("", b, 32);
+  TEST_ASSERT_EQUAL_STRING("", b);
+  kg_exts_text(".trd,.scl,.fdi", b, 14);
+  TEST_ASSERT_EQUAL_STRING(".trd .scl .fdi", b);
+  kg_exts_text(".trd,.scl,.fdi", b, 13);
+  TEST_ASSERT_EQUAL_STRING(".trd .scl ..", b);
+  kg_exts_text(".trd,.scl,.fdi", b, 10);
+  TEST_ASSERT_EQUAL_STRING(".trd ..", b);
+  kg_exts_text(".abcdefgh", b, 4);
+  TEST_ASSERT_EQUAL_STRING("..", b);
 }
 
 static void test_short_name() {
@@ -75,6 +106,7 @@ static void test_paths() {
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_has_ext);
+  RUN_TEST(test_exts_text);
   RUN_TEST(test_short_name);
   RUN_TEST(test_phys);
   RUN_TEST(test_trim_lower);

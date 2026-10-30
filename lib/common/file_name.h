@@ -10,9 +10,14 @@ extern "C" {
 // File name helpers for the OSD file lists. The lists use the long names: exFAT has no 8.3
 // names, so FAT and exFAT cards work the same way.
 
-// true if the last 4 chars of name (".trd") are in exts (".trd,.scl"), ignoring case.
-// An empty exts matches every name.
+// true if name ends with one of the extensions of exts (".trd,.scl", ".img .vhd"; separated
+// by ',', ';' or white space, the dot optional, any length), ignoring case. An empty exts
+// matches every name.
 bool kg_name_has_ext(const char *name, const char *exts);
+
+// the extensions of exts as shown in the OSD: ".trd .scl", cut with ".." to fit width chars.
+// out must hold width + 1 bytes; empty for an empty exts.
+void kg_exts_text(const char *exts, char *out, size_t width);
 
 // name shortened to fit width chars: "Prince of Persia.trd" -> "Princ~.trd" for width 10.
 // out must hold width + 1 bytes.
