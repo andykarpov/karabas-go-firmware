@@ -17,10 +17,6 @@ uint8_t board_ft_reset_pin() {
 
 static bool has_extender = false;
 
-uint32_t board_i2c_hz() {
-  return 100000; // the firmware ran 100 kHz until 2026-10-14, the buttons worked
-}
-
 void board_init_pins() {
   // unused MCU-FPGA pins (yet)
   pin_input(PIN_MCU_SPI_IO0);
@@ -41,11 +37,19 @@ void board_init_io() {
   }
 
   if (has_extender) {
-    // LEDs off (active low) before they become outputs; the buttons are inputs with the
-    // chip's pull-ups (SparkFun's pinMode took INPUT_PULLUP for an output driven high)
+    // all four pins outputs driven high (LEDs off, active low), as the firmware on Arduino
+    // had them: SparkFun's pinMode took INPUT_PULLUP for an output. A pressed button pulls
+    // its pin low against the high output, and the input register reads it. As inputs with
+    // the chip's 100k pull-ups the buttons were dead on the Go boards.
     pca9536_write(PIN_EXT_LED1, true);
     pca9536_write(PIN_EXT_LED2, true);
-    pca9536_outputs((1 << PIN_EXT_LED1) | (1 << PIN_EXT_LED2));
+    pca9536_write(PIN_EXT_BTN1, true);
+    pca9536_write(PIN_EXT_BTN2, true);
+    pca9536_outputs(0x0F);
+    uint8_t r[4];
+    if (pca9536_regs(r)) {
+      d_printf("PCA9536 in %02X out %02X pol %02X cfg %02X", r[0], r[1], r[2], r[3]); d_println();
+    }
   }
   i2c_bus_unlock();
 
