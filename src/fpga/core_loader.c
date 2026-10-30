@@ -256,6 +256,7 @@ void do_configure(const char* filename) {
   link_burst_reset(); // the new core may not support bursts
   hang_step(0x85);
   ft_power_down(); // FT off while the core before still passes its SPI through
+  d_printf("FT812 REG_ID after PWRDOWN: %02x (7c: running)", ft_read_id()); d_println();
   hang_step(0x86);
   kb_reset(); // reset to ps/2 defaults
 
@@ -506,6 +507,9 @@ void read_core(const char* filename) {
 
   // other core types: the FT812 stays in PWRDOWN from do_configure() (no reset: a reset wakes it
   // and the idle chip hums into the audio); a core that uses it wakes it with ACTIVE itself
+  if (core.type != CORE_TYPE_BOOT) {
+    d_printf("FT812 REG_ID after the load: %02x (7c: running)", ft_read_id()); d_println();
+  }
 
   // reset ESP and MIDI (mini revG)
   board_reset_peripherals();

@@ -221,11 +221,23 @@ void ft_power_down(void) {
     ft_vga(false);
     ft_spi(true);
     // PLL and oscillator off first, then the 1.2 V core regulator; SPI stays alive and ACTIVE
-    // (a dummy read at 0) wakes it: a core that uses the FT812 brings it up itself
+    // (a dummy read at 0) wakes it: a core that uses the FT812 brings it up itself. At the low
+    // SPI clock: without its system clock (text OSD, a failed init) the chip misses fast commands
+    slow_spi = true;
     ft_send_command(FT81x_CMD_SLEEP);
     ms_delay(1);
     ft_send_command(FT81x_CMD_PWRDOWN);
+    slow_spi = false;
     ft_spi(false);
+}
+
+uint8_t ft_read_id(void) {
+    ft_spi(true);
+    slow_spi = true;
+    uint8_t id = ft_read8(FT81x_REG_ID);
+    slow_spi = false;
+    ft_spi(false);
+    return id;
 }
 
 // Hardware reset: PD_N low, then high (the same as a power-on reset, the chip comes up in

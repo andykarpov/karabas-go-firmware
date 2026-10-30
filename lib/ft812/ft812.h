@@ -252,6 +252,8 @@ void ft_reset(void);    // a hardware reset, the SPI and video switches off
 // PWRDOWN host command (the running FT812 hums into the audio): video off, then the PLL, the
 // oscillator and the core regulator; the SPI and video switches off. ACTIVE or ft_init() wakes it
 void ft_power_down(void);
+// REG_ID at the low SPI clock (7Ch when the chip runs, not in SLEEP / PWRDOWN); does not wake it
+uint8_t ft_read_id(void);
 // power cycle, clock and video mode m (0..ft_mode_count()-1); up to 3 attempts
 bool ft_init(uint8_t m);
 uint32_t ft_init_clock_hz(void);        // the system clock measured by the last ft_init()
