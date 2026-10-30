@@ -4,15 +4,18 @@
 #include "hardware/i2c.h"
 
 static i2c_inst_t *bus = i2c0;
+static uint32_t byte_us = 50;
 
-// a byte is 22.5 us at 400 kHz; a device may stretch the clock a little
+// a byte is 9 clocks (22.5 us at 400 kHz, 90 us at 100 kHz); twice that, as a device may
+// stretch the clock a little
 static uint32_t timeout_us(size_t len) {
-  return 2000 + 50 * (uint32_t) len;
+  return 2000 + byte_us * (uint32_t) len;
 }
 
 void i2c_dev_begin(unsigned sda, unsigned scl, uint32_t hz) {
   bus = ((sda >> 1) & 1) ? i2c1 : i2c0;
-  i2c_init(bus, hz);
+  uint32_t real = i2c_init(bus, hz);
+  byte_us = 2 * 9 * 1000000u / (real ? real : hz) + 1;
   gpio_set_function(sda, GPIO_FUNC_I2C);
   gpio_set_function(scl, GPIO_FUNC_I2C);
   gpio_pull_up(sda);

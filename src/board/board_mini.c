@@ -39,6 +39,10 @@ void board_init_io() {
   pin_output(PIN_LED2); gpio_put(PIN_LED2, 1);
 }
 
+uint32_t board_i2c_hz() {
+  return 400000;
+}
+
 uint8_t board_usb_pinout() {
   return PIO_USB_PINOUT_DPDM;
 }

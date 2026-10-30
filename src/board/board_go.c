@@ -17,6 +17,10 @@ uint8_t board_ft_reset_pin() {
 
 static bool has_extender = false;
 
+uint32_t board_i2c_hz() {
+  return 100000; // the firmware ran 100 kHz until 2026-10-14, the buttons worked
+}
+
 void board_init_pins() {
   // unused MCU-FPGA pins (yet)
   pin_input(PIN_MCU_SPI_IO0);
@@ -25,12 +29,15 @@ void board_init_pins() {
 
 void board_init_io() {
   i2c_bus_lock();
-  if (!pca9536_present()) {
-    has_extender = false;
+  // a few tries: one failed probe would leave the buttons dead until the next reboot
+  for (uint8_t i = 0; i < 5 && !has_extender; i++) {
+    if (i) ms_delay(10);
+    has_extender = pca9536_present();
+  }
+  if (!has_extender) {
     d_println("PCA9536 unavailable. Please check soldering.");
   } else {
     d_println("I2C PCA9536 extender detected");
-    has_extender = true;
   }
 
   if (has_extender) {
@@ -67,6 +74,15 @@ bool btn_read(uint8_t num) {
   i2c_bus_lock();
   bool ok = pca9536_read(&levels);
   i2c_bus_unlock();
+  if (!ok) {
+    // a failed read is a released button: count them, log at most once a second
+    static uint32_t errors = 0, logged = 0;
+    errors++;
+    if (ms_since(logged) >= 1000) {
+      logged = ms_now();
+      d_printf("PCA9536 read failed (%lu)", (unsigned long) errors); d_println();
+    }
+  }
   return ok && !((levels >> (num == 0 ? PIN_EXT_BTN1 : PIN_EXT_BTN2)) & 1);
 }
 

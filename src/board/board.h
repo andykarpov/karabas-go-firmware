@@ -16,6 +16,10 @@ extern "C" {
 // the PD_N pin of the FT812 driven by the MCU, or FT_NO_RESET (driven by the FPGA)
 uint8_t board_ft_reset_pin();
 
+// the I2C bus clock: 100 kHz on the Karabas Go (its add-ons on a cable, 4k7 pull-ups: the
+// rise time is past the 300 ns of fast mode), 400 kHz on the Mini boards
+uint32_t board_i2c_hz();
+
 // early gpio setup: unused mcu-fpga lines, peripheral reset lines (before I2C)
 void board_init_pins();
 

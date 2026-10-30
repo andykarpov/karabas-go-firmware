@@ -117,8 +117,9 @@ static void karabas_setup()
   board_init_pins();
 
   // I2C
-  // all devices on the bus are fast-mode (SSD1306, HT16K33, DS3231, 24xx EEPROM, PCA9536)
-  i2c_dev_begin(PIN_I2C_SDA, PIN_I2C_SCL, 400000);
+  // all devices on the bus are fast-mode (SSD1306, HT16K33, DS3231, 24xx EEPROM, PCA9536),
+  // the board sets the clock its bus is good for
+  i2c_dev_begin(PIN_I2C_SDA, PIN_I2C_SCL, board_i2c_hz());
 
 #if WAIT_SERIAL
   while (!tud_cdc_connected()) ms_delay(10); // wait for a terminal
