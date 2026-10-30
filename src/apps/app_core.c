@@ -245,10 +245,7 @@ static bool filebrowser_enter() {
     }
     // an image, if its extension matches
     d_printf("Selecting file id %d: %s", fb_id(sel), fi.fname); d_println();
-    char exts[sizeof(fs->ext)];
-    strcpy(exts, fs->ext);
-    kg_trim(exts);
-    if (kg_name_has_ext(fi.fname, exts)) {
+    if (kg_name_has_ext(fi.fname, fs->ext)) {
       strcpy(fs->filename, fi.fname);
       fs->is_mounted = true;
       if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER) {
@@ -361,7 +358,7 @@ int app_core_init_filebrowser() {
   d_println("Read file list");
   fb_clear();
 
-  // the eject entry (a mounted image of a file mounter), the physical floppy drives (an F item
+  // the dirs and the files with the extensions of the slot; the eject entry (a mounted image of a file mounter), the physical floppy drives (an F item
   // of a board with the floppy connector), the root and the parent dir
   uint16_t n_special = 0;
   if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER && cur_slot()->is_mounted) {
@@ -378,9 +375,11 @@ int app_core_init_filebrowser() {
   uint16_t presel_id = 0;
   uint16_t after_id = 0; // the image of another slot (presel_after): the next file is preselected
   const char *core_f = cur_slot()->filename;
+  const char *exts = cur_slot()->ext;
   FILINFO fi;
   while (sd_dir_is_open(&root1) && f_readdir(&root1, &fi) == FR_OK && fi.fname[0]) {
     uint16_t id;
+    if (!(fi.fattrib & AM_DIR) && !kg_name_has_ext(fi.fname, exts)) continue;
     if (!sd_file_id(&fi, &id) || !fb_add_file(fi.fname, id)) continue;
     if (core_f[0] && strcasecmp(core_f, fi.fname) == 0) presel_id = id;
     if (presel_after[0] && strcasecmp(presel_after, fi.fname) == 0) after_id = id;
@@ -412,8 +411,13 @@ int app_core_init_filebrowser() {
   return core.osd[curr_osd_item].slot_id;
 }
 
+// the browser, and the extensions of the slot on the last hint row (the toggle hint is back
+// with the menu)
 void app_core_filebrowser(uint8_t vpos) {
-  fb_draw(vpos, cur_slot()->dir, true);
+  char b[OSD_SIZE_X + 1] = "Files: ";
+  kg_exts_text(cur_slot()->ext, b + 7, OSD_SIZE_X - 7);
+  ui_row(0, UI_ROW_HINT + 1, b[7] ? b : "Files: all", false);
+  fb_draw(vpos, cur_slot()->dir, true); // sends the OSD
 }
 
 void app_core_on_select_file() {
