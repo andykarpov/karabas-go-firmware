@@ -22,7 +22,11 @@ void ui_hint(const char *line1, const char *line2) {
 }
 
 void ui_row(uint8_t x, uint8_t y, const char *text, bool selected) {
-  osd_set_color(selected ? OSD_COLOR_BLACK : OSD_COLOR_WHITE, selected ? OSD_COLOR_WHITE : OSD_COLOR_BLACK);
+  ui_row_ink(x, y, text, selected, OSD_COLOR_WHITE);
+}
+
+void ui_row_ink(uint8_t x, uint8_t y, const char *text, bool selected, uint8_t ink) {
+  osd_set_color(selected ? OSD_COLOR_BLACK : ink, selected ? ink : OSD_COLOR_BLACK);
   osd_set_pos(x, y);
   for (uint8_t i = x; i < OSD_SIZE_X; i++) osd_putc(*text ? (uint8_t) *text++ : ' ');
 }

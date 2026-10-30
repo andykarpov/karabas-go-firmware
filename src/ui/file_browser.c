@@ -109,12 +109,18 @@ static void entry_name(uint16_t i, char *name, size_t size) {
   } else if (fb_phys(i) >= 0) {
     snprintf(name, size, "[ Physical DF%d ]", fb_phys(i));
   } else if (fb_is_root(i)) {
-    snprintf(name, size, ".");
+    snprintf(name, size, "/");
   } else if (fb_is_parent(i)) {
-    snprintf(name, size, "..");
+    snprintf(name, size, "../");
   } else if (sd_find_id(&root1, files[i].file_id, &fi)) {
     kg_trim(fi.fname);
-    snprintf(name, size, "%s", fi.fname);
+    if (fi.fattrib & AM_DIR) {
+      // a dir ends with '/': a long name is shortened to keep it on the row
+      kg_short_name(fi.fname, name, OSD_SIZE_X - 1 < size - 2 ? OSD_SIZE_X - 1 : size - 2);
+      strcat(name, "/");
+    } else {
+      snprintf(name, size, "%s", fi.fname);
+    }
   }
 }
 
@@ -130,7 +136,10 @@ void fb_draw(uint8_t top, const char *dir, bool show_dir) {
       names[row].name[0] = '\0';
       if (i < len) entry_name(i, names[row].name, sizeof(names[row].name));
     }
-    ui_row(0, top + row, names[row].name, i == sel && i < len);
+    // the dirs (and the root, the parent) end with '/' and are cyan
+    size_t n = strlen(names[row].name);
+    bool is_dir = n > 0 && names[row].name[n - 1] == '/';
+    ui_row_ink(0, top + row, names[row].name, i == sel && i < len, is_dir ? OSD_COLOR_CYAN_I : OSD_COLOR_WHITE);
   }
   names_from = from;
   names_valid = true;
