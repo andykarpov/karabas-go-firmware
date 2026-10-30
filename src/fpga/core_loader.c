@@ -142,11 +142,12 @@ void core_trigger(uint8_t pos)
   d_printf("Trigger: %s", core.osd[pos].name);
   d_println();
 
-  // reset FT812 on soft reset
+  // reset FT812 on soft reset: PWRDOWN (its core voltage off), the core wakes it if it uses it;
+  // not a PD_N pulse, which wakes it also under a core that cannot put it down again
   // todo: replace hardcode with something else
   if (memcmp(core.osd[pos].name, "Rese", 4) == 0) {
     d_println("Reset FT812");
-    ft_reset();
+    ft_power_down();
     // reset ESP and MIDI on soft reset (mini revG)
     board_reset_peripherals();
     ms_delay(100);
@@ -254,8 +255,7 @@ void do_configure(const char* filename) {
   link_set_rx_enabled(false);
   link_burst_reset(); // the new core may not support bursts
   hang_step(0x85);
-  ft_vga(false); // FT off
-  ft_spi(false);
+  ft_power_down(); // FT off while the core before still passes its SPI through
   hang_step(0x86);
   kb_reset(); // reset to ps/2 defaults
 
@@ -504,10 +504,8 @@ void read_core(const char* filename) {
 
   has_ft = false;
 
-  // hw ft reset for other cores types
-  if (core.type != CORE_TYPE_BOOT) {
-    ft_reset();
-  }
+  // other core types: the FT812 stays in PWRDOWN from do_configure() (no reset: a reset wakes it
+  // and the idle chip hums into the audio); a core that uses it wakes it with ACTIVE itself
 
   // reset ESP and MIDI (mini revG)
   board_reset_peripherals();
@@ -537,11 +535,10 @@ void read_core(const char* filename) {
         } else {
           d_printf("FT81x IC did not found (%u attempts, last system clock %lu kHz)", ft_init_attempts(),
             (unsigned long) (ft_init_clock_hz() / 1000)); d_println();
-          ft_vga(false);
-          ft_spi(false);
         }
       }
     }
+    if (!has_ft) ft_power_down(); // the text OSD: the FT812 off, it hums into the audio
   }
 
   // dump parsed OSD items

@@ -385,8 +385,7 @@ void app_core_browser_on_keyboard() {
   // return back to classic osd
   if (key == KEY_SPACE && has_ft) {
     has_ft = false;
-    ft_vga(false);
-    ft_spi(false);
+    ft_power_down(); // the running FT812 hums into the audio
     app_core_browser_overlay();
   }
 
@@ -401,7 +400,7 @@ void app_core_browser_on_keyboard() {
       app_core_browser_ft_overlay();
     } else {
       d_println("FT81x did not come up");
-      ft_spi(false);
+      ft_power_down();
     }
   }
 }

@@ -217,6 +217,17 @@ void ft_reset(void) {
     ft_vga(false);
 }
 
+void ft_power_down(void) {
+    ft_vga(false);
+    ft_spi(true);
+    // PLL and oscillator off first, then the 1.2 V core regulator; SPI stays alive and ACTIVE
+    // (a dummy read at 0) wakes it: a core that uses the FT812 brings it up itself
+    ft_send_command(FT81x_CMD_SLEEP);
+    ms_delay(1);
+    ft_send_command(FT81x_CMD_PWRDOWN);
+    ft_spi(false);
+}
+
 // Hardware reset: PD_N low, then high (the same as a power-on reset, the chip comes up in
 // SLEEP with the internal oscillator selected). Keeps the spi / vga switches as they are.
 static void ft_power_cycle(void) {
