@@ -25,20 +25,31 @@ void board_init_pins() {
 
 void board_init_io() {
   i2c_bus_lock();
-  if (!pca9536_present()) {
-    has_extender = false;
+  // a few tries: one failed probe would leave the buttons dead until the next reboot
+  for (uint8_t i = 0; i < 5 && !has_extender; i++) {
+    if (i) ms_delay(10);
+    has_extender = pca9536_present();
+  }
+  if (!has_extender) {
     d_println("PCA9536 unavailable. Please check soldering.");
   } else {
     d_println("I2C PCA9536 extender detected");
-    has_extender = true;
   }
 
   if (has_extender) {
-    // LEDs off (active low) before they become outputs; the buttons are inputs with the
-    // chip's pull-ups (SparkFun's pinMode took INPUT_PULLUP for an output driven high)
+    // all four pins outputs driven high (LEDs off, active low), as the firmware on Arduino
+    // had them: SparkFun's pinMode took INPUT_PULLUP for an output. A pressed button pulls
+    // its pin low against the high output, and the input register reads it. As inputs with
+    // the chip's 100k pull-ups the buttons were dead on the Go boards.
     pca9536_write(PIN_EXT_LED1, true);
     pca9536_write(PIN_EXT_LED2, true);
-    pca9536_outputs((1 << PIN_EXT_LED1) | (1 << PIN_EXT_LED2));
+    pca9536_write(PIN_EXT_BTN1, true);
+    pca9536_write(PIN_EXT_BTN2, true);
+    pca9536_outputs(0x0F);
+    uint8_t r[4];
+    if (pca9536_regs(r)) {
+      d_printf("PCA9536 in %02X out %02X pol %02X cfg %02X", r[0], r[1], r[2], r[3]); d_println();
+    }
   }
   i2c_bus_unlock();
 
@@ -67,6 +78,15 @@ bool btn_read(uint8_t num) {
   i2c_bus_lock();
   bool ok = pca9536_read(&levels);
   i2c_bus_unlock();
+  if (!ok) {
+    // a failed read is a released button: count them, log at most once a second
+    static uint32_t errors = 0, logged = 0;
+    errors++;
+    if (ms_since(logged) >= 1000) {
+      logged = ms_now();
+      d_printf("PCA9536 read failed (%lu)", (unsigned long) errors); d_println();
+    }
+  }
   return ok && !((levels >> (num == 0 ? PIN_EXT_BTN1 : PIN_EXT_BTN2)) & 1);
 }
 
