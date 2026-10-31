@@ -121,6 +121,18 @@ static void serial_out(const char *text) {
   host_print(text);
 }
 
+// into BOOTSEL: the saves first, the SD1 transfer ended (the card keeps it over the reboot)
+static void reboot_bootsel(bool ok) {
+  bk_flush();
+  core_eeprom_flush();
+  sd1_sync_before_reboot();
+  if (ok) { host_print("OK\r\n"); host_flush(); }
+  ms_delay(100);
+  hang_diag_stop();
+  matrix_icon(MATRIX_ICON_BOOTSEL); // the bootloader leaves the matrix as it is
+  chip_reboot_bootsel();
+}
+
 static void at_command(const char *arg) {
   d_printf("Serial: AT+KARABAS=%s", arg); d_println();
   if (strcasecmp(arg, "list") == 0) {
@@ -131,12 +143,7 @@ static void at_command(const char *arg) {
     host_print(line);
     host_print("OK\r\n");
   } else if (strcasecmp(arg, "boot") == 0) {
-    bk_flush();
-    core_eeprom_flush();
-    host_print("OK\r\n"); host_flush(); ms_delay(100);
-    hang_diag_stop();
-    matrix_icon(MATRIX_ICON_BOOTSEL); // the bootloader leaves the matrix as it is
-    chip_reboot_bootsel();
+    reboot_bootsel(true);
   } else if (strcasecmp(arg, "msc") == 0 || strcasecmp(arg, "msc2") == 0) {
     host_print("OK\r\n"); host_flush(); ms_delay(100);
     hang_diag_stop();
@@ -191,6 +198,7 @@ static void esp_tick() {
 
 // forward bytes received from the host to the core
 void serial_bridge_tick() {
+  if (usb_device_bootsel_requested()) reboot_bootsel(false); // the 1200 baud touch
   // TinyUSB sends only full 64-byte packets by itself: the tail of what the core, the ESP or
   // at_command() wrote would wait for the next 64 bytes
   host_flush();

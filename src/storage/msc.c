@@ -36,6 +36,7 @@ void msc_init() {
 void msc_reboot_to_msc(uint8_t sd_card) {
   bk_flush();
   core_eeprom_flush();
+  sd1_sync_before_reboot();
   matrix_icon(MATRIX_ICON_MSC);
   watchdog_hw->scratch[0] = sd_card == 2 ? MSC2_REQUEST_MAGIC : MSC_REQUEST_MAGIC;
   chip_reboot();

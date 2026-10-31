@@ -66,6 +66,7 @@ static int hotkey_find(const hid_keyboard_report_t *kbd, uint16_t jl, uint16_t j
 static void flush_and_reboot() {
   bk_flush();
   core_eeprom_flush();
+  sd1_sync_before_reboot();
   d_flush();
   ms_delay(100);
   chip_reboot();
@@ -100,6 +101,7 @@ static void btn_run(uint8_t i, uint8_t action) {
     case BTN_ACTION_BOOTSEL:
       bk_flush();
       core_eeprom_flush();
+      sd1_sync_before_reboot();
       hang_diag_stop();
       matrix_icon(MATRIX_ICON_BOOTSEL); // the bootloader leaves the matrix as it is
       chip_reboot_bootsel();
@@ -300,9 +302,13 @@ void input_task_start() {
 
 // APP side: run on_keyboard() for the events INPUT handed over, keep the keyboard led
 void input_tick_ui() {
-  while (ui_done != ui_posted) {
+  if (ui_done != ui_posted) {
+    // the events share the current reports (keyboard, pads), they are no snapshots: a second
+    // on_keyboard() saw the same keys again, so a switch hotkey turned twice (back to where it
+    // was) when two events waited while APP drew. Handle them once; later ones come next turn.
+    uint32_t target = ui_posted;
     on_keyboard();
-    ui_done++;
+    ui_done = target;
   }
   if (input_waiting && input_task_handle) {
     xTaskNotifyGive(input_task_handle);
