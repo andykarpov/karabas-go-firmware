@@ -5,6 +5,7 @@
 #include "tusb.h"
 #include "xinput_host.h"
 #include "printer_host.h"
+#include "midi_host.h"
 #include "config.h"
 #include "storage/settings.h"
 #include "periph/printer_usb.h"
@@ -17,9 +18,10 @@ static printer_trace_t tx_trace = { trace_tx }; // USB task only, separate from 
 
 usbh_class_driver_t const *usbh_app_driver_get_cb(uint8_t *count) {
   // C has no constant struct copies: the table is filled at the first call
-  static usbh_class_driver_t drivers[2];
+  static usbh_class_driver_t drivers[3];
   memcpy(&drivers[0], &usbh_xinput_driver, sizeof(drivers[0]));
   memcpy(&drivers[1], &usbh_printer_driver, sizeof(drivers[1]));
+  memcpy(&drivers[2], &usbh_midi_driver, sizeof(drivers[2]));
   *count = sizeof(drivers) / sizeof(drivers[0]);
   return drivers;
 }

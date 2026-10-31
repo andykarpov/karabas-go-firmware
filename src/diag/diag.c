@@ -1,6 +1,7 @@
 #include "main.h"
 #include "diag.h"
 #include "usb_diag.h"
+#include "usb/midi_host.h"
 
 #if DIAG_STATS
 
@@ -67,6 +68,12 @@ void diag_tick() {
     (unsigned long) (matrix ? uxTaskGetStackHighWaterMark(matrix) : 0),
     (unsigned long) (oled ? uxTaskGetStackHighWaterMark(oled) : 0));
   usb_diag_print();
+  midi_host_stats_t midi;
+  midi_host_stats(&midi);
+  if (midi.mounted || midi.rx) {
+    d_printf(" | midi %s rx %lu sent %lu skipped %lu", midi.mounted ? "on" : "off", (unsigned long) midi.rx,
+      (unsigned long) midi.sent, (unsigned long) midi.skipped);
+  }
   d_println();
 }
 
