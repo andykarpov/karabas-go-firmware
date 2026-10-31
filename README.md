@@ -29,6 +29,9 @@ Map USB gamepad (text and graphic menus), see [USB HID gamepads](docs/usb_gamepa
   automatically after a timeout. The bitstream goes to the FPGA through PIO and DMA, then the
   ROMs of the core follow.
 - **OSD.** Cores with an on-screen menu get their options, switches and hotkeys from the core file.
+  A long menu scrolls; a core can split it into sub-menus (pages, nested), separators and options
+  shown or enabled only with a value of another option (the `core.json` keys are in
+  [make_core](https://github.com/andykarpov/karabas-go-tools/blob/master/make_core/README.md#sub-menus-pages-and-conditional-items)).
   Disk images are mounted from the SD card and stay open while the core runs, with reads and
   writes. File loaders are supported too. On Karabas Go, physical floppy drives can be selected
   instead of an image.
@@ -156,6 +159,8 @@ core=tsconf
 | typing | Up / Down, Right, Left | a Wi-Fi text field: change the last char, add one, delete one |
 | `S` | Start (core browser) | Setup: clock, Wi-Fi and Settings (core browser), USB gamepad mapper; in the graphic browser, the graphic setup (settings, video mode, color themes) |
 | `A` (core OSD) | | About |
+| Enter, Right (core OSD) | A / B, Right | open the sub-menu of a `►` item |
+| Esc (core OSD) | C or Select | back from a sub-menu to the menu above it |
 | Delete / Backspace (core OSD) | | eject the disk image of the selected drive |
 | Space (graphical browser) | | switch to the text browser |
 | mouse (graphical browser, Setup) | | hover, click, wheel; right button = Esc |
