@@ -49,6 +49,26 @@ static bool rtc_is_24h = true;
 
 static uint32_t tr = 0; // rtc poll time
 
+// MC146818A register A / B: the values of an erased EEPROM (FFh) are not a state of the chip
+// (B FFh: binary, all interrupts, SET): such a register reads as the reset state of the chip
+// with 32.768 kHz / 1024 Hz in A and BCD, 24 h in B
+#define MC_REG_A_DEFAULT 0x26
+#define MC_REG_B_DEFAULT 0x02
+#define MC_REG_B_SET 0x80 // the clock is stopped for a write
+#define MC_REG_B_DM 0x04  // 1: binary, 0: BCD
+#define MC_REG_B_24H 0x02
+
+static uint8_t mc_reg(uint8_t reg) {
+  uint8_t data = rtc_get_eeprom_reg(reg);
+  if (data != 0xFF) return data;
+  return reg == 0xA ? MC_REG_A_DEFAULT : MC_REG_B_DEFAULT;
+}
+
+// the data mode of a register B value: zxevo always BCD
+static bool mc_is_bcd(uint8_t reg_b) {
+  return rtc_type == RTC_TYPE_ZXEVO || !(reg_b & MC_REG_B_DM);
+}
+
 static uint8_t time_to12h(uint8_t val) {
   return val > 12 ? val - 12 : val;
 }
@@ -195,11 +215,10 @@ void rtc_save(void) {
 // the time, and is_bcd / is_24h from register B
 static void read_all(void) {
   read_clock();
-  uint8_t reg_b = rtc_get_eeprom_reg(0xB);
   if (rtc_type == RTC_TYPE_DS1307) {
     rtc_is_bcd = true;
-  } else {
-    rtc_is_bcd = (rtc_type == RTC_TYPE_ZXEVO) ? true : (reg_b >> 2) & 1;
+  } else if (rtc_type != RTC_TYPE_MSM6242B) {
+    rtc_is_bcd = mc_is_bcd(mc_reg(0xB));
   }
   rtc_is_24h = true;
 }
@@ -231,8 +250,13 @@ void rtc_send_all(void) {
           break;
         }
         // control registers
-        case 0xA: data = rtc_get_eeprom_reg(reg) & ~0x80; send(reg, data); break;
-        case 0xB: data = rtc_get_eeprom_reg(reg) | 0x02; send(reg, data); break; // always 24h mode
+        case 0xA: data = mc_reg(reg) & ~0x80; send(reg, data); break; // UIP is never set
+        case 0xB:
+          // the mode the time is sent in: always 24 h, the data mode of rtc_is_bcd, never SET
+          data = (mc_reg(reg) | MC_REG_B_24H) & ~MC_REG_B_SET;
+          data = rtc_is_bcd ? data & ~MC_REG_B_DM : data | MC_REG_B_DM;
+          send(reg, data);
+          break;
         case 0xC: send(reg, 0x00); break;
         case 0xD: send(reg, 0x80); break;
         // eeprom (also over the time registers 0..9, as before: the next rtc_handle() sends
@@ -290,9 +314,9 @@ void rtc_set_data(uint8_t addr, uint8_t data) {
       case 9: rtc_year = rtc_is_bcd ? kg_bcd2bin(data) : data; break;
       case 0xA: rtc_set_eeprom_reg(addr, data & ~0x80); break;
       case 0xB:
-        // zxevo always uses BCD; always 24 h; register B itself is not kept (tsconf
-        // maxi-clock writes it too often)
-        rtc_is_bcd = rtc_type == RTC_TYPE_ZXEVO ? true : (data >> 2) & 1;
+        // DM (bit 2) = 1 is binary, 0 BCD; zxevo always uses BCD; always 24 h; register B
+        // itself is not kept (tsconf maxi-clock writes it too often)
+        rtc_is_bcd = mc_is_bcd(data);
         rtc_is_24h = true;
         break;
       case 0xC: // C and D are read-only registers
