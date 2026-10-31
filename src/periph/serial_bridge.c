@@ -4,7 +4,9 @@
 #include "at_cmd.h"
 #include "file_name.h"
 
-// USB CDC serial <-> core UART bridge (TS ZiFi and ZX Evo RS232).
+// USB CDC serial <-> core UART bridge (TS ZiFi and ZX Evo RS232). While a USB-UART adapter
+// is plugged into the USB host (periph/usb_uart), the core UART goes to it instead, at the
+// speed of the core, and the CDC port takes only the AT+KARABAS lines (the log stays there).
 // AT+KARABAS=<cmd> lines from the host are not forwarded, the firmware answers them:
 //   list - the installed cores: "+KARABAS:<file>;<id>;<name>;<build>" lines, then OK
 //   boot - reboot into the RP2040 USB bootloader (BOOTSEL, firmware update)
@@ -20,6 +22,9 @@ static uint8_t evo_rs232_dll = 0;
 static uint8_t evo_rs232_dlm = 0;
 static uint32_t serial_speed = 115200;
 static unsigned long uart_rx_last = 0;
+static uint32_t speed_changed = 0;         // ms_now() of the last speed change
+// the speed goes to the adapter once it is still this long: EVO RS232 sends DLL and DLM apart
+#define SPEED_SETTLE_MS 20
 
 static kg_at_parser_t at_parser;
 static char tx_buf[sizeof(at_parser.out)]; // bytes to forward to the core, one per rx period
@@ -71,15 +76,24 @@ void serial_set_speed(uint8_t dll, uint8_t dlm) {
     // standard mode
     speed = 115200 / ((dlm*256) + dll);
   }
-  // the pace of the bytes to the core (the CDC itself has no baud rate)
-  serial_speed = speed;
+  // the pace of the bytes to the core (the CDC itself has no baud rate) and the adapter speed
+  if (speed != serial_speed) {
+    serial_speed = speed;
+    speed_changed = ms_now();
+  }
+}
+
+// a byte of the core: to the adapter if one is plugged, else to the CDC port
+static void core_out(uint8_t data) {
+  if (usb_uart_active()) usb_uart_write(data);
+  else host_write(&data, 1);
 }
 
 void serial_data(uint8_t addr, uint8_t data) {
     if (addr == 0) {
       // ts zifi 115200
-      serial_speed = 115200;
-      host_write(&data, 1);
+      if (serial_speed != 115200) { serial_speed = 115200; speed_changed = ms_now(); }
+      core_out(data);
     } else if (addr == 1) {
       // evo rs232 dll
       evo_rs232_dll = data;
@@ -90,7 +104,7 @@ void serial_data(uint8_t addr, uint8_t data) {
       serial_set_speed(evo_rs232_dll, evo_rs232_dlm);
     } else if (addr == 3) {
       // evo rs232 data
-      host_write(&data, 1);
+      core_out(data);
     }
 }
 
@@ -196,7 +210,18 @@ static void esp_tick() {
   }
 }
 
-// forward bytes received from the host to the core
+// with an adapter the CDC port takes only AT+KARABAS lines, the other bytes are dropped
+static void host_commands() {
+  while (tud_cdc_available() > 0) {
+    int c = tud_cdc_read_char();
+    if (c == -1) return;
+    at_hold_timer = ms_now();
+    if (kg_at_feed(&at_parser, (char) c) == KG_AT_COMMAND) { at_command(kg_at_arg(&at_parser)); return; }
+  }
+  if (at_parser.len > 0 && ms_since(at_hold_timer) >= AT_HOLD_TIMEOUT_MS) kg_at_flush(&at_parser);
+}
+
+// forward bytes received from the host (or the adapter) to the core
 void serial_bridge_tick() {
   if (usb_device_bootsel_requested()) reboot_bootsel(false); // the 1200 baud touch
   // TinyUSB sends only full 64-byte packets by itself: the tail of what the core, the ESP or
@@ -205,26 +230,40 @@ void serial_bridge_tick() {
   if (esp_mode && core.type != CORE_TYPE_BOOT) esp_mode = false;
   if (esp_mode) { esp_tick(); return; }
 
-  // receive at least on the serial_speed
-  unsigned long uart_rx_delay = 30 * 1e6 / serial_speed;
+  const bool adapter = usb_uart_active();
+  if (adapter) {
+    if (ms_since(speed_changed) >= SPEED_SETTLE_MS) usb_uart_set_baud(serial_speed);
+    host_commands();
+  }
+
+  // the pace of the bytes to the core: 3 byte times on the CDC (the host sends as fast as it
+  // can), the line rate from the adapter (its bytes come at that rate and would pile up)
+  unsigned long uart_rx_delay = (adapter ? 10 : 30) * 1e6 / serial_speed;
   if (us_now() - uart_rx_last < uart_rx_delay) return;
 
   if (tx_pos >= tx_len) {
     tx_pos = tx_len = 0;
-    if (tud_cdc_available() > 0) {
-      int uart_rx = tud_cdc_read_char();
-      if (uart_rx == -1) return;
-      at_hold_timer = ms_now();
-      switch (kg_at_feed(&at_parser, (char) uart_rx)) {
-        case KG_AT_PASS: break;
-        case KG_AT_COMMAND: at_command(kg_at_arg(&at_parser)); return;
-        default: return;
+    if (adapter) {
+      int c = usb_uart_read();
+      if (c < 0) return;
+      tx_buf[0] = (char) c;
+      tx_len = 1;
+    } else {
+      if (tud_cdc_available() > 0) {
+        int uart_rx = tud_cdc_read_char();
+        if (uart_rx == -1) return;
+        at_hold_timer = ms_now();
+        switch (kg_at_feed(&at_parser, (char) uart_rx)) {
+          case KG_AT_PASS: break;
+          case KG_AT_COMMAND: at_command(kg_at_arg(&at_parser)); return;
+          default: return;
+        }
+      } else if (!(at_parser.len > 0 && ms_since(at_hold_timer) >= AT_HOLD_TIMEOUT_MS && kg_at_flush(&at_parser) > 0)) {
+        return;
       }
-    } else if (!(at_parser.len > 0 && ms_since(at_hold_timer) >= AT_HOLD_TIMEOUT_MS && kg_at_flush(&at_parser) > 0)) {
-      return;
+      memcpy(tx_buf, at_parser.out, at_parser.out_len);
+      tx_len = at_parser.out_len;
     }
-    memcpy(tx_buf, at_parser.out, at_parser.out_len);
-    tx_len = at_parser.out_len;
   }
 
   uart_idx++;

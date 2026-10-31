@@ -51,7 +51,8 @@ Map USB gamepad (text and graphic menus), see [USB HID gamepads](docs/usb_gamepa
 - **SD card as a USB drive.** The PC sees the SD card as a USB mass storage device, so the card
   can stay in the board.
 - **USB serial bridge.** The USB serial port of the board is wired to the UART of the core, and a
-  few `AT+KARABAS=` commands control the firmware itself.
+  few `AT+KARABAS=` commands control the firmware itself. A USB-UART adapter plugged into the
+  USB host takes the UART of the core instead.
 - **Optional peripherals**, detected at boot: FT812, OLED display, LED matrix, I2C extender (Go),
   ESP8266, MIDI (Mini G).
 - **Fast transfers.** Cores that support it receive ROMs and files in bursts of up to 512 bytes
@@ -201,6 +202,15 @@ answered by the firmware:
 | `AT+KARABAS=sd2test` | core browser only: reads the second SD card at a few SPI clocks (a check of the card and the link) |
 | `AT+KARABAS=esp` | core browser only: the bridge goes to the ESP8266, for its own AT commands (a CR, LF or CR LF from the terminal goes as CR LF) |
 | `AT+KARABAS=uart` | back to the UART of the core |
+
+### USB-UART adapter
+
+A USB-UART adapter (CDC ACM, FTDI, CP210x or CH34x) plugged into the USB host of the board takes
+the UART of the core while it is plugged: the bytes of the core go to the adapter and the bytes
+from it to the core. The adapter runs 8N1 at the speed of the core: 115200, or the speed the core
+sets (the DLL / DLM divisor of ZX Evo RS232). Only the first adapter is used. The USB serial port
+of the board keeps the debug log and the `AT+KARABAS=` commands; other bytes sent to it are
+dropped meanwhile.
 
 ## Building from source
 

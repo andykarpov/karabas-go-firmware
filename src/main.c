@@ -286,6 +286,7 @@ static void __not_in_flash_func(usb_host_loop)()
   if (tuh_task_event_ready()) tuh_task_ext(0, false);
   printer_host_tick();
   printer_usb_tick();
+  usb_uart_host_tick();
 }
 
 // The firmware and the usb host run in their own pinned tasks, created by main().

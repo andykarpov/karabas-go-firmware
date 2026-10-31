@@ -76,6 +76,7 @@ Set `debug=1` in `karabas.ini` and keep a terminal on the USB serial port: most 
 
 - [ ] The host's bytes reach the core UART and back.
 - [ ] `AT+KARABAS=list`, `version`, `boot` (BOOTSEL), `msc`, `msc2`, `esp` / `uart` (BOOT core: the ESP AT console and back).
+- [ ] A USB-UART adapter (FTDI, CP210x, CH34x, CDC ACM) on the USB host: `USB UART mounted` in the log, the core UART goes to it both ways at 115200 (tsconf ZiFi) and at the EVO RS232 speed; the CDC port keeps the log and `AT+KARABAS=`; unplugged, the bridge goes back to the CDC port; a second adapter is ignored.
 
 ## Displays
 

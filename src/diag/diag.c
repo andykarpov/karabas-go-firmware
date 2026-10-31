@@ -74,6 +74,12 @@ void diag_tick() {
     d_printf(" | midi %s rx %lu sent %lu skipped %lu", midi.mounted ? "on" : "off", (unsigned long) midi.rx,
       (unsigned long) midi.sent, (unsigned long) midi.skipped);
   }
+  usb_uart_stats_t uart;
+  usb_uart_stats(&uart);
+  if (uart.mounted || uart.rx || uart.tx) {
+    d_printf(" | uart %s %lu rx %lu tx %lu lost %lu/%lu", uart.mounted ? "on" : "off", (unsigned long) uart.baud,
+      (unsigned long) uart.rx, (unsigned long) uart.tx, (unsigned long) uart.rx_lost, (unsigned long) uart.tx_lost);
+  }
   d_println();
 }
 
