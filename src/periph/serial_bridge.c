@@ -3,6 +3,7 @@
 #include "diag/hang_diag.h"
 #include "at_cmd.h"
 #include "file_name.h"
+#include "kg_keys.h"
 
 // USB CDC serial <-> core UART bridge (TS ZiFi and ZX Evo RS232). While a USB-UART adapter
 // is plugged into the USB host (periph/usb_uart), the core UART goes to it instead, at the
@@ -16,6 +17,12 @@
 //          LF or CR LF of the host goes as CR LF)
 //   uart - back to the core UART (also when another core is loaded)
 //   sd2test - BOOT core only: reads the second SD card at a few SPI clocks (storage/sd2)
+//   key:<k> [<k>...] - press and release keys, as a USB keyboard (to the core, OSD, hotkeys):
+//          a key is modifiers and one key joined by '+' (lib/common/kg_keys.h: "ctrl+alt+del",
+//          "menu+esc", "f3", "enter", "0x29"); 40 ms per report
+//   type:<text> - type the printable chars of the text (US layout, Shift for the shifted ones)
+//   hold:<k> - press a key and keep it down (until release or the next key / type)
+//   release - all keys up
 
 static uint8_t uart_idx = 0;
 static uint8_t evo_rs232_dll = 0;
@@ -147,6 +154,52 @@ static void reboot_bootsel(bool ok) {
   chip_reboot_bootsel();
 }
 
+// a report of keys down (mod / key) to the keyboard queue
+static void key_report(uint8_t mod, uint8_t key) {
+  hid_keyboard_report_t r = {0};
+  r.modifier = mod;
+  r.keycode[0] = key;
+  hid_kbd_inject(&r);
+}
+
+// key:<keys>, type:<text>, hold:<key>: false when a key is unknown or the queue has no room
+static bool at_keys(const char *arg) {
+  if (strncasecmp(arg, "type:", 5) == 0) {
+    const char *t = arg + 5;
+    uint8_t mod, key;
+    for (const char *c = t; *c; c++) if (!kg_key_ascii(*c, &mod, &key)) return false;
+    if (hid_kbd_inject_free() < 2 * (int) strlen(t)) return false;
+    for (const char *c = t; *c; c++) {
+      kg_key_ascii(*c, &mod, &key);
+      key_report(mod, key);
+      key_report(0, 0);
+    }
+    return true;
+  }
+  bool hold = strncasecmp(arg, "hold:", 5) == 0;
+  if (!hold && strncasecmp(arg, "key:", 4) != 0) return false;
+  const char *s = arg + (hold ? 5 : 4);
+  char name[KG_AT_MAX_ARG + 1];
+  uint8_t mods[KG_AT_MAX_ARG], keys[KG_AT_MAX_ARG];
+  int n = 0;
+  while (*s) {
+    while (*s == ' ') s++;
+    if (!*s) break;
+    size_t len = strcspn(s, " ");
+    memcpy(name, s, len);
+    name[len] = '\0';
+    if (!kg_key_parse(name, &mods[n], &keys[n])) return false;
+    n++;
+    s += len;
+  }
+  if (n == 0 || (hold && n != 1) || hid_kbd_inject_free() < 2 * n) return false;
+  for (int i = 0; i < n; i++) {
+    key_report(mods[i], keys[i]);
+    if (!hold) key_report(0, 0);
+  }
+  return true;
+}
+
 static void at_command(const char *arg) {
   d_printf("Serial: AT+KARABAS=%s", arg); d_println();
   if (strcasecmp(arg, "list") == 0) {
@@ -171,6 +224,12 @@ static void at_command(const char *arg) {
   } else if (strcasecmp(arg, "uart") == 0) {
     esp_mode = false;
     host_print("OK\r\n");
+  } else if (strcasecmp(arg, "release") == 0) {
+    key_report(0, 0);
+    host_print("OK\r\n");
+  } else if (strncasecmp(arg, "key:", 4) == 0 || strncasecmp(arg, "type:", 5) == 0 ||
+             strncasecmp(arg, "hold:", 5) == 0) {
+    host_print(at_keys(arg) ? "OK\r\n" : "ERROR\r\n");
   } else {
     host_print("ERROR\r\n");
   }

@@ -81,6 +81,52 @@ void hid_kbd_report_get(hid_keyboard_report_t *report)
   spin_unlock(usb_host_lock(), save);
 }
 
+// keyboard reports of AT+KARABAS=key / type: queued by APP, taken by core1 (hid_kbd_inject_tick),
+// under usb_host_lock(); each one stays for KBD_INJECT_US, as the report of a keyboard
+#define KBD_INJECT_N 256
+#define KBD_INJECT_US 40000
+static hid_keyboard_report_t inject_q[KBD_INJECT_N];
+static uint16_t inject_head = 0, inject_tail = 0;
+
+int hid_kbd_inject_free()
+{
+  uint32_t save = spin_lock_blocking(usb_host_lock());
+  int n = KBD_INJECT_N - 1 - (inject_head + KBD_INJECT_N - inject_tail) % KBD_INJECT_N;
+  spin_unlock(usb_host_lock(), save);
+  return n;
+}
+
+bool hid_kbd_inject(const hid_keyboard_report_t *report)
+{
+  bool ok = false;
+  uint32_t save = spin_lock_blocking(usb_host_lock());
+  uint16_t next = (inject_head + 1) % KBD_INJECT_N;
+  if (next != inject_tail) {
+    inject_q[inject_head] = *report;
+    inject_head = next;
+    ok = true;
+  }
+  spin_unlock(usb_host_lock(), save);
+  return ok;
+}
+
+void __not_in_flash_func(hid_kbd_inject_tick)()
+{
+  static uint32_t last = 0;
+  if (inject_head == inject_tail || time_us_32() - last < KBD_INJECT_US) return;
+  hid_keyboard_report_t r;
+  uint32_t save = spin_lock_blocking(usb_host_lock());
+  bool have = inject_head != inject_tail;
+  if (have) {
+    r = inject_q[inject_tail];
+    inject_tail = (inject_tail + 1) % KBD_INJECT_N;
+  }
+  spin_unlock(usb_host_lock(), save);
+  if (!have) return;
+  last = time_us_32();
+  process_kbd_report(0, 0, &r, 8);
+}
+
 // the mouse moves since the last hid_mouse_take(): written by core1, read by APP, under usb_host_lock()
 static hid_mouse_move_t mouse_shared = {0};
 

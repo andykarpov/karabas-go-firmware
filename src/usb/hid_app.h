@@ -19,6 +19,13 @@ void hid_kbd_report_sync();
 // copy the latest keyboard report received by core1 (any task, does not touch usb_keyboard_report)
 void hid_kbd_report_get(hid_keyboard_report_t *report);
 
+// AT+KARABAS=key / type (APP): a keyboard report as if a USB keyboard sent it (to the core, the
+// OSD and the hotkeys); core1 takes one per 40 ms in hid_kbd_inject_tick(). false: the queue is
+// full. hid_kbd_inject_free(): the reports that still fit.
+bool hid_kbd_inject(const hid_keyboard_report_t *report);
+int hid_kbd_inject_free();
+void hid_kbd_inject_tick(); // core1, usb_host_loop
+
 // The mouse moves for the graphic menus (APP): the sums since the last take, the buttons held and
 // the ones pressed since then (a short click between two takes is not lost).
 typedef struct {

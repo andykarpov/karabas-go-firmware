@@ -46,8 +46,9 @@ static void test_passthrough() {
 
 static void test_too_long() {
   kg_at_parser_t p; kg_at_init(&p);
-  char cmds[64] = "";
-  const char *s = "AT+KARABAS=0123456789abcdefXYZ\r";
+  char cmds[128] = "";
+  // longer than KG_AT_MAX_ARG (80)
+  const char *s = "AT+KARABAS=012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789\r";
   TEST_ASSERT_EQUAL_STRING(s, feed(&p, s, cmds));
   TEST_ASSERT_EQUAL_STRING("", cmds);
 }
