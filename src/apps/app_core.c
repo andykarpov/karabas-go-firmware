@@ -159,9 +159,10 @@ static void menu_back(void) {
 // the menu of a file loader core is its Options screen, opened from its file list
 static bool is_options(void) { return core.type == CORE_TYPE_FILELOADER; }
 
-// the rows of the menu: on a sub-page (and on the Options screen) the first row is its title
+// the rows of the menu: on a sub-page (and on the Options screen) the first two rows are its title
+// and a line under it
 static bool has_title(void) { return cur_page || is_options(); }
-static uint8_t menu_rows(void) { return has_title() ? MENU_ROWS - 1 : MENU_ROWS; }
+static uint8_t menu_rows(void) { return has_title() ? MENU_ROWS - 2 : MENU_ROWS; }
 
 // the window keeps the cursor in view; on the first (last) option it goes to the top (bottom), so
 // the text rows before (after) it are seen too
@@ -262,7 +263,11 @@ static void page_title(uint8_t y) {
 // on it; a page entry: an arrow) and the hotkey; a disabled item in grey
 void app_core_menu(uint8_t vpos) {
   menu_sync();
-  if (has_title()) page_title(vpos++);
+  if (has_title()) {
+    page_title(vpos++);
+    osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+    osd_line(vpos++);
+  }
   uint8_t rows = menu_rows();
   menu_top = menu_window();
   uint8_t x_end = ui_list_col_end(rows, vis_len);
