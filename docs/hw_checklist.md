@@ -18,6 +18,7 @@ Set `debug=1` in `karabas.ini` and keep a terminal on the USB serial port: most 
 - [ ] BOOT core: the core list, long names, the selection kept over a reboot.
 - [ ] An OSD core (tsconf): loads, its ROMs arrive (`ROM ... ms` with the link mode in the log), Win+Esc opens and closes the OSD.
 - [ ] A FILELOADER core (NES): the file list, a game loads, the last file is remembered (the id is written into the core file).
+- [ ] A FILELOADER core with menu items: `Options` in the hint line, Tab / O open the core menu, Esc on its main page goes back to the files (the cursor on the same file, the game is not loaded again), an F item hotkey opens the menu, Menu+Esc opens the files again.
 - [ ] A burst core (`FPGA caps` with burst in the log) and a classic one (old core, no caps answer).
 - [ ] A core with its own `spi_freq`.
 - [ ] The heaviest core (nanomig): loads, Kickstart autoload (`FL` item with `autoload`), runs.

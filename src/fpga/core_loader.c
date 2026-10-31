@@ -7,6 +7,7 @@
 #include "crc32.h"
 #include "file_name.h"
 #include "periph/printer_link.h"
+#include "apps/app_file_loader.h"
 
 // Loading a core file: bitstream, header (OSD items, eeprom, switches), ROMs.
 
@@ -427,6 +428,7 @@ void read_core(const char* filename) {
 
   if (core.spi_freq > 0 && core.spi_freq < 255) { d_printf("Core SPI Frequency: %u MHz", core.spi_freq); d_println(); } else { d_println("Core SPI Frequency: default"); }
   
+  app_file_loader_core_loaded();
   img_close_all(); // the images of the previous core
   bk_forget();
   for (uint8_t i=0; i<MAX_FILE_SLOTS; i++) { file_slots[i].is_mounted = false; }

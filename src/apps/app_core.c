@@ -209,7 +209,7 @@ void app_core_overlay(bool force)
         break;
       }
     }
-    if (cur_page) {
+    if (cur_page || core.type == CORE_TYPE_FILELOADER) {
       osd_print(" ");
       ui_hotkey("Esc", " back");
     }
@@ -422,10 +422,13 @@ void app_core_on_keyboard() {
       need_redraw = true;
     }
 
-    // esc: back to the parent page
+    // esc: back to the parent page; from the main page of a file loader core, back to its files
     if (key == KEY_ESC && cur_page) {
       menu_back();
       need_redraw = true;
+    } else if (key == KEY_ESC && core.type == CORE_TYPE_FILELOADER) {
+      osd_state = state_file_loader;
+      return;
     }
 
     // right / enter, left: a page entry opens its page; the browser of a file item, else the next

@@ -3,6 +3,7 @@
 #include "input/ps2kbd.h"
 #include "input/usb_hid_keys.h"
 #include "apps/app_core.h"
+#include "apps/app_file_loader.h"
 #include "diag/hang_diag.h"
 
 #include <FreeRTOS.h>
@@ -76,6 +77,8 @@ static void flush_and_reboot() {
 static void osd_toggle() {
   if (core.type == CORE_TYPE_BOOT || core.type == CORE_TYPE_HIDDEN) return;
   if (!is_osd) {
+    // a file loader core opens on its files, also when it was left in its menu (Options)
+    if (core.type == CORE_TYPE_FILELOADER && osd_state == state_main) osd_state = state_file_loader;
     is_osd = true;
     osd_show_menu();
   } else {
@@ -360,6 +363,11 @@ bool on_global_hotkeys() {
     } else if (core.osd[i].type == CORE_OSD_TYPE_TRIGGER) {
         core_trigger(i);
     } else if (core_osd_is_file(i)) {
+      // a file loader core: its menu (Options) shows the item
+      if (osd_state == state_file_loader) {
+        app_file_loader_leave();
+        osd_state = state_main;
+      }
       is_osd = true;
       curr_osd_item = i;
       osd_show_menu();

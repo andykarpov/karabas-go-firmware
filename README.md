@@ -33,7 +33,8 @@ Map USB gamepad (text and graphic menus), see [USB HID gamepads](docs/usb_gamepa
   shown or enabled only with a value of another option (the `core.json` keys are in
   [make_core](https://github.com/andykarpov/karabas-go-tools/blob/master/make_core/README.md#sub-menus-pages-and-conditional-items)).
   Disk images are mounted from the SD card and stay open while the core runs, with reads and
-  writes. File loaders are supported too. On Karabas Go, physical floppy drives can be selected
+  writes. File loaders are supported too; a file loader core with menu items opens them from its
+  file list by Tab or O (Options), Esc goes back to the files. On Karabas Go, physical floppy drives can be selected
   instead of an image.
 - **Input.**
   - USB keyboards (including NKRO) and mice.
