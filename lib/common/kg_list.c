@@ -28,6 +28,35 @@ uint16_t kg_list_page(uint16_t sel, uint16_t page) {
   return sel / page + 1;
 }
 
+uint16_t kg_list_window(uint16_t top, uint16_t sel, uint16_t visible, uint16_t total) {
+  if (visible == 0 || total <= visible) return 0;
+  if (sel < top) top = sel;
+  else if (sel >= top + visible) top = sel - visible + 1;
+  return top > total - visible ? total - visible : top;
+}
+
+bool kg_list_thumb(uint16_t height, uint16_t top, uint16_t visible, uint16_t total, uint16_t *pos, uint16_t *len) {
+  if (total <= visible || height < 2) return false;
+  uint32_t n = ((uint32_t) height * visible + total / 2) / total;
+  if (n < 1) n = 1;
+  if (n > height - 1u) n = height - 1u;
+  uint32_t last_top = total - visible;
+  if (top > last_top) top = last_top; // the last page: the thumb at the bottom
+  uint32_t room = height - n;
+  uint32_t p;
+  if (top == 0) p = 0;
+  else if (top == last_top) p = room;
+  else {
+    // the cells between the ends for the positions between them
+    p = (room * top + last_top / 2) / last_top;
+    if (room >= 2 && p < 1) p = 1;
+    if (room >= 2 && p > room - 1) p = room - 1;
+  }
+  *pos = (uint16_t) p;
+  *len = (uint16_t) n;
+  return true;
+}
+
 uint16_t kg_list_first_active(uint16_t len, kg_list_active_fn active, void *ctx) {
   for (uint16_t i = 0; i < len; i++) if (active(i, ctx)) return i;
   return len;

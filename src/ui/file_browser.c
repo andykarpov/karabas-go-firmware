@@ -101,7 +101,7 @@ bool fb_key(uint8_t key) {
 }
 
 // the name of entry i as the browser shows it; root1 is the dir of the list
-static void entry_name(uint16_t i, char *name, size_t size) {
+static void entry_name(uint16_t i, char *name, size_t size, size_t width) {
   FILINFO fi;
   name[0] = '\0';
   if (fb_is_eject(i)) {
@@ -116,7 +116,7 @@ static void entry_name(uint16_t i, char *name, size_t size) {
     kg_trim(fi.fname);
     if (fi.fattrib & AM_DIR) {
       // a dir ends with '/': a long name is shortened to keep it on the row
-      kg_short_name(fi.fname, name, OSD_SIZE_X - 1 < size - 2 ? OSD_SIZE_X - 1 : size - 2);
+      kg_short_name(fi.fname, name, width - 1 < size - 2 ? width - 1 : size - 2);
       strcat(name, "/");
     } else {
       snprintf(name, size, "%s", fi.fname);
@@ -130,17 +130,20 @@ void fb_draw(uint8_t top, const char *dir, bool show_dir) {
   bool cached = names_valid && names_from == from;
   if (!cached) sd_opendir(&root1, dir);
 
+  // the last column is the scrollbar's when the list has more than a page
+  uint8_t x_end = ui_list_col_end(PAGE, len);
   for (uint16_t row = 0; row < PAGE; row++) {
     uint16_t i = from + row;
     if (!cached) {
       names[row].name[0] = '\0';
-      if (i < len) entry_name(i, names[row].name, sizeof(names[row].name));
+      if (i < len) entry_name(i, names[row].name, sizeof(names[row].name), x_end + 1);
     }
     // the dirs (and the root, the parent) end with '/' and are cyan
     size_t n = strlen(names[row].name);
     bool is_dir = n > 0 && names[row].name[n - 1] == '/';
-    ui_row_ink(0, top + row, names[row].name, i == sel && i < len, is_dir ? OSD_COLOR_CYAN_I : OSD_COLOR_WHITE);
+    ui_row_to(0, x_end, top + row, names[row].name, i == sel && i < len, is_dir ? OSD_COLOR_CYAN_I : OSD_COLOR_WHITE);
   }
+  ui_scrollbar(top, PAGE, from, PAGE, len);
   names_from = from;
   names_valid = true;
 

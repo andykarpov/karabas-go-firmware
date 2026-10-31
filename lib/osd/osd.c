@@ -142,11 +142,18 @@ void osd_progress(uint8_t x, uint8_t y, uint8_t size, uint32_t val, uint32_t max
   }
 }
 
-void osd_scrollbar(uint8_t x, uint8_t y, uint8_t height, uint32_t val, uint32_t max) {
-  uint8_t v = scale(val, max, height);
+void osd_scrollbar(uint8_t x, uint8_t y, uint8_t height, uint8_t pos, uint8_t len, uint8_t track_ink, uint8_t thumb_ink) {
   for (uint8_t i = 0; i < height; i++) {
+    uint8_t c = OSD_CHAR_SCROLL_TRACK;
+    if (i >= pos && i < pos + len) {
+      if (len == 1) c = OSD_CHAR_SCROLL_HANDLE;
+      else if (i == pos) c = OSD_CHAR_SCROLL_TOP;
+      else if (i == pos + len - 1) c = OSD_CHAR_SCROLL_BOTTOM;
+      else c = OSD_CHAR_SCROLL_MID;
+    }
+    osd_set_color(c == OSD_CHAR_SCROLL_TRACK ? track_ink : thumb_ink, OSD_COLOR_BLACK);
     osd_set_pos(x, y + i);
-    osd_putc(i == v ? OSD_CHAR_SCROLL_HANDLE : OSD_CHAR_LR);
+    osd_putc(c);
   }
 }
 

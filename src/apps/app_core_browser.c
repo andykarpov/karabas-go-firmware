@@ -72,15 +72,18 @@ void app_core_browser_menu(uint8_t vpos) {
   core_page = kg_list_page(core_sel, core_page_size);
   uint8_t core_from = (core_page-1)*core_page_size;
   uint8_t core_to = core_page*core_page_size > cores_len ? cores_len : core_page*core_page_size;
+  // number, name (19 chars, 18 with the scrollbar), build
+  uint8_t x_end = ui_list_col_end(core_page_size, cores_len);
+  int name_w = x_end == UI_COL_LAST ? 19 : 18;
   for (uint8_t row = 0; row < core_page_size; row++) {
     uint8_t i = core_from + row;
     char line[40] = "";
-    // number, name (19 chars), build
     if (i < core_to) {
-      snprintf(line, sizeof(line), "%-3d %-19.19s %s", i+1, cores[i].name, cores[i].build);
+      snprintf(line, sizeof(line), "%-3d %-*.*s %s", i+1, name_w, name_w, cores[i].name, cores[i].build);
     }
-    ui_row(0, vpos + row, line, i == core_sel && i < core_to);
+    ui_row_to(0, x_end, vpos + row, line, i == core_sel && i < core_to, OSD_COLOR_WHITE);
   }
+  ui_scrollbar(vpos, core_page_size, core_from, core_page_size, cores_len);
   osd_set_pos(8, vpos + core_page_size + 1); osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
   char b[24];
   snprintf(b, sizeof(b), "Page %02d of %02d", core_page, core_pages);

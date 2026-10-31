@@ -34,6 +34,17 @@ uint16_t kg_list_pages(uint16_t len, uint16_t page);
 // the page of item sel, from 1
 uint16_t kg_list_page(uint16_t sel, uint16_t page);
 
+// the first item of a window of visible rows that keeps sel in view, moved as little as possible
+// from top, and within 0..total - visible
+uint16_t kg_list_window(uint16_t top, uint16_t sel, uint16_t visible, uint16_t total);
+
+// the thumb of a scrollbar of height cells for total items, visible of them shown from item top
+// (a window, or the first item of a page): its first cell and its length, proportional to
+// visible / total, at least 1 and less than height. At the top only with top 0, at the bottom
+// only with the last items shown (when there are 3 or more positions for it). false (no
+// scrollbar) if the items fit or height is under 2.
+bool kg_list_thumb(uint16_t height, uint16_t top, uint16_t visible, uint16_t total, uint16_t *pos, uint16_t *len);
+
 #ifdef __cplusplus
 }
 #endif
