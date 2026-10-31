@@ -235,6 +235,7 @@ and the conventions of the code.
   commands, load sequences.
 - [Burst transfers](docs/burst_protocol.md): the fast ROM / file transfer mode.
 - [LED matrix add-on](docs/matrix.md).
+- [Hardware checklist](docs/hw_checklist.md): what to check on a board before a risky change, with the baseline measurements.
 - Core files (`.kg1` / `.kg2` / `.kg3`) and `core.json`:
   [karabas-go-tools/make_core](https://github.com/andykarpov/karabas-go-tools/tree/master/make_core).
 
