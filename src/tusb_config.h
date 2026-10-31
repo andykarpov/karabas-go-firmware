@@ -44,4 +44,15 @@
 #define CFG_TUH_HID_EPIN_BUFSIZE    64
 #define CFG_TUH_HID_EPOUT_BUFSIZE   64
 
+// A USB-UART adapter for the core serial (periph/usb_uart): one, the first plugged (a second
+// one gets no driver and takes no endpoints). 3 endpoints of the pool (FTDI, CP210x, CH34x:
+// control + bulk in / out), 4 for CDC ACM (+ the notification one). 8N1 at 115200 on mount,
+// then the speed of the core; DTR and RTS on.
+#define CFG_TUH_CDC                 1
+#define CFG_TUH_CDC_FTDI            1
+#define CFG_TUH_CDC_CP210X          1
+#define CFG_TUH_CDC_CH34X           1
+#define CFG_TUH_CDC_LINE_CONTROL_ON_ENUM 0x03
+#define CFG_TUH_CDC_LINE_CODING_ON_ENUM { 115200, CDC_LINE_CODING_STOP_BITS_1, CDC_LINE_CODING_PARITY_NONE, 8 }
+
 #endif

@@ -36,6 +36,7 @@
 #include "periph/matrix.h"
 #include "periph/oled.h"
 #include "periph/serial_bridge.h"
+#include "periph/usb_uart.h"
 #include "periph/esp_at.h"
 #include "periph/esp_serial.h"
 #include "periph/ntp_sync.h"

@@ -114,7 +114,7 @@ Commands that the core does not know must be ignored.
 | `F8` | `CMD_ESP_UART` | 0 | byte | Byte to the ESP8266 module behind the FPGA. |
 | `F9` | `CMD_HW_SETUP` | 0 = board, 1 = DVI only | 0: `HW_ID` (1 Go, 2 Mini, 3 Mini G); 1: 0 / 1 | |
 | `FA` | `CMD_RTC` | register | value | RTC register; the register set depends on `rtc_mode` (MC146818A, DS1307, ZX Evolution, MSM6242B). |
-| `FC` | `CMD_UART` | running index | byte | Byte from the USB serial port; `ADDR` changes with every byte, so the core can see a new one. |
+| `FC` | `CMD_UART` | running index | byte | Byte from the USB serial port (or a USB-UART adapter on the USB host); `ADDR` changes with every byte, so the core can see a new one. |
 | `FD` | `CMD_INIT_START` | 0 | 0 | Core configuration starts (BUSY = 1). |
 | `FE` | `CMD_INIT_DONE` | 0 | 0 | Core configuration done (BUSY = 0). |
 | `FF` | `CMD_NOP` | 0 | 0 | Poll: lets the FPGA send its next frame. |
@@ -144,7 +144,7 @@ These are sent in the reply bytes of any transfer.
 | `F8` | `CMD_ESP_UART` | 0 | byte | Byte from the ESP8266 module. |
 | `FA` | `CMD_RTC` | register | value | The core's CPU wrote an RTC register; the firmware updates the RTC chip. |
 | `FB` | `CMD_FLASHBOOT` | 0 | core id | Reload a core. Now it always reloads the current core (ZX Next hard reset). |
-| `FC` | `CMD_UART` | 0 = byte at 115200 (ZiFi), 1 = DLL, 2 = DLM, 3 = byte at the DLL/DLM speed (EVO RS232) | byte / divisor | Bytes to the USB serial port. |
+| `FC` | `CMD_UART` | 0 = byte at 115200 (ZiFi), 1 = DLL, 2 = DLM, 3 = byte at the DLL/DLM speed (EVO RS232) | byte / divisor | Bytes to the USB serial port, or to a USB-UART adapter on the USB host while one is plugged (its speed from DLL / DLM, 115200 otherwise). |
 | `FF` | `CMD_NOP` | | | Nothing to say. |
 
 ## 6. Sequences
