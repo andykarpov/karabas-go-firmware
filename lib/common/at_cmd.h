@@ -14,7 +14,7 @@ extern "C" {
 #endif
 
 #define KG_AT_PREFIX "AT+KARABAS="
-#define KG_AT_MAX_ARG 16
+#define KG_AT_MAX_ARG 80
 
 typedef enum {
   KG_AT_HOLD,    // the byte is held back
