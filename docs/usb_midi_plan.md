@@ -1,6 +1,6 @@
 # USB MIDI keyboards
 
-A USB MIDI keyboard on the USB host of the MCU, its events passed to the FPGA core. Status: steps 1-4 (the firmware) done on the branch `usb-midi`, not checked on hardware yet; steps 5-6 (FPGA) not started.
+A USB MIDI keyboard on the USB host of the MCU, its events passed to the FPGA core. Status: done. The firmware is #102 (v26103114); the FPGA side is karabas-go-modules #17 (`kg_mcu_midi`, `kg_midi_tx`) and the boot core karabas-go-core-menu #11 (build 26103114, the thru to the SAM2695). Checked on Mini G with an Akai MPK Mini 3; Go and Mini built, not checked on hardware. Open: the synth is quiet in the menu (the ADC is passed without gain), MIDI OUT to USB devices, the real target core (Atari ST).
 
 ## What there is now
 
