@@ -30,8 +30,21 @@ void usb_device_task_start() {
   }
 }
 
-// the 1200 baud touch of the upload tools (pio upload, arduino-cli) reboots into BOOTSEL
+// the 1200 baud touch of the upload tools (pio upload, arduino-cli) reboots into BOOTSEL.
+// APP does it (the saves, the SD1 transfer: the card is APP's); a hung APP still gets there
+// from here after a second.
+#define BOOTSEL_REQUEST_TIMEOUT_MS 1000
+static volatile bool bootsel_request = false;
+
+bool usb_device_bootsel_requested() {
+  return bootsel_request;
+}
+
 void tud_cdc_line_coding_cb(uint8_t itf, const cdc_line_coding_t *coding) {
   (void) itf;
-  if (coding->bit_rate == 1200) chip_reboot_bootsel();
+  if (coding->bit_rate != 1200) return;
+  bootsel_request = true;
+  uint32_t start = ms_now();
+  while (ms_since(start) < BOOTSEL_REQUEST_TIMEOUT_MS) vTaskDelay(pdMS_TO_TICKS(10));
+  chip_reboot_bootsel();
 }

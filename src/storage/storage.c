@@ -18,6 +18,14 @@ sd_card_t *sd1_card() {
   return &sd1;
 }
 
+// The card stays powered over a reboot of the MCU, so a CMD18 left open (a core image or a file
+// list read last) is still running when the boot core is loaded: its bitstream read stopped half
+// way (CONF_DONE timeout), as it did after an MSC eject before the eject callback ended it.
+void sd1_sync_before_reboot() {
+  if (!has_sd || msc_active()) return;
+  if (!sd_card_sync(&sd1)) { d_print("SD1: the transfer did not end before the reboot"); d_println(); }
+}
+
 // FatFs disk I/O (ff.h): drive 0 is SD1
 DSTATUS disk_status(BYTE pdrv) {
   return pdrv == 0 && sd1.type ? 0 : STA_NOINIT;
