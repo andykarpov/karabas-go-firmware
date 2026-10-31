@@ -1,5 +1,7 @@
 # Hardware checklist
 
+[Русская версия](hw_checklist.ru.md)
+
 What to check on a board before a risky change goes in: the rewrite (`docs/rewrite_plan.md`), a library bump, storage or USB work. Not every PR needs all of it: run the sections that the change can reach, and the **Smoke** section always.
 
 Set `debug=1` in `karabas.ini` and keep a terminal on the USB serial port: most items are confirmed in the log. Mark the board in each run: **G** Karabas Go, **M** Mini, **MG** Mini G. Items for one board only say so.
@@ -26,6 +28,9 @@ Set `debug=1` in `karabas.ini` and keep a terminal on the USB serial port: most 
 
 - [ ] Switches change the core at once, are saved into the core file and come back after a reload.
 - [ ] Hotkeys of OSD items (Ctrl+Alt+Del of tsconf).
+- [ ] A tree menu (nanomig): Enter / Right open a `►` page, Esc goes back, the cursor is kept per page, the path in the title row; a `show_if` item appears and an `enable_if` item turns grey with its switch; a hotkey of an item on another page opens that page. A flat core (tsconf) looks as before.
+- [ ] Long lists: the scrollbar in the last column of the core browser and the file browser (a slot per page), the core menu and the Wi-Fi list (a thumb at most half the track); no scrollbar and no empty column when the list fits; the core menu scrolls with the cursor.
+- [ ] `F` / `FL` browsers list the dirs (cyan, ending with `/`) and only the files with the item's extensions ("Files: ..." on the hint row).
 - [ ] `F` slots: mount, eject, the browser starts in the dir of the last image (disk 2 after disk 1), Esc to the slot's own dir.
 - [ ] The file mounter reads and writes (a disk image written by the core keeps its data after a reload).
 - [ ] `.sav` (NES with `CAPS_BK`): created in `saves/`, kept after another game, another core, the reboot hotkey.
@@ -61,6 +66,7 @@ Set `debug=1` in `karabas.ini` and keep a terminal on the USB serial port: most 
 ## Time and network (BOOT core)
 
 - [ ] RTC: Setup RTC sets the date and time, kept over a power cycle.
+- [ ] The RTC of the cores: MC146818A (profi on Go / Mini, pcxt: the DOS time) in BCD with an erased EEPROM (register B 02h), DS1307 (next), ZX Evolution (tsconf, profi on Mini G), MSM6242B (nanomig: the Workbench clock).
 - [ ] Time zone `tz`: text Setup and the FT Clock page, saved.
 - [ ] NTP sync sets the RTC.
 - [ ] Wi-Fi: status, scan, password, join; the CTS flow control (`AT+UART_DEF`).
@@ -81,6 +87,7 @@ Set `debug=1` in `karabas.ini` and keep a terminal on the USB serial port: most 
 
 ## Diagnostics
 
+- [ ] The text OSD header shows the FPGA build and the firmware build in turn (3 s); `AT+KARABAS=version`.
 - [ ] `debug=0`: no log, nothing slower. `debug=1`: the boot log is kept until a terminal opens the port.
 - [ ] A CDC flood (a heavy log) with keys typed: no hang, no reset of the port.
 - [ ] The watchdog: a hang reboots and the next boot logs `Last boot hung: ...`.

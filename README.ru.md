@@ -235,6 +235,7 @@ cmake -S test -B build-test -G Ninja && ninja -C build-test && ctest --test-dir 
   команды, последовательности загрузки.
 - [Пакетная передача](docs/burst_protocol.ru.md): быстрый режим передачи ПЗУ и файлов.
 - [LED-матрица](docs/matrix.ru.md).
+- [Проверка на железе](docs/hw_checklist.ru.md): что проверить на плате перед рискованным изменением, с базовыми замерами.
 - Файлы ядер (`.kg1` / `.kg2` / `.kg3`) и `core.json`:
   [karabas-go-tools/make_core](https://github.com/andykarpov/karabas-go-tools/tree/master/make_core).
 
