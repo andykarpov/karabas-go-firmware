@@ -82,9 +82,11 @@ void hid_kbd_report_get(hid_keyboard_report_t *report)
 }
 
 // keyboard reports of AT+KARABAS=key / type: queued by APP, taken by core1 (hid_kbd_inject_tick),
-// under usb_host_lock(); each one stays for KBD_INJECT_US, as the report of a keyboard
+// under usb_host_lock(). A report with keys down stays KBD_PRESS_US: APP reads the keys of a press
+// when it gets to it (the OSD may be drawing), 40 ms lost presses there; a release KBD_RELEASE_US.
 #define KBD_INJECT_N 256
-#define KBD_INJECT_US 40000
+#define KBD_PRESS_US 100000
+#define KBD_RELEASE_US 40000
 static hid_keyboard_report_t inject_q[KBD_INJECT_N];
 static uint16_t inject_head = 0, inject_tail = 0;
 
@@ -112,8 +114,8 @@ bool hid_kbd_inject(const hid_keyboard_report_t *report)
 
 void __not_in_flash_func(hid_kbd_inject_tick)()
 {
-  static uint32_t last = 0;
-  if (inject_head == inject_tail || time_us_32() - last < KBD_INJECT_US) return;
+  static uint32_t last = 0, hold = 0;
+  if (inject_head == inject_tail || time_us_32() - last < hold) return;
   hid_keyboard_report_t r;
   uint32_t save = spin_lock_blocking(usb_host_lock());
   bool have = inject_head != inject_tail;
@@ -124,6 +126,7 @@ void __not_in_flash_func(hid_kbd_inject_tick)()
   spin_unlock(usb_host_lock(), save);
   if (!have) return;
   last = time_us_32();
+  hold = (r.modifier || r.keycode[0]) ? KBD_PRESS_US : KBD_RELEASE_US;
   process_kbd_report(0, 0, &r, 8);
 }
 

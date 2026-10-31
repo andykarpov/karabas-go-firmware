@@ -202,7 +202,7 @@ answered by the firmware:
 | `AT+KARABAS=sd2test` | core browser only: reads the second SD card at a few SPI clocks (a check of the card and the link) |
 | `AT+KARABAS=esp` | core browser only: the bridge goes to the ESP8266, for its own AT commands (a CR, LF or CR LF from the terminal goes as CR LF) |
 | `AT+KARABAS=uart` | back to the UART of the core |
-| `AT+KARABAS=key:<keys>` | press and release keys as a USB keyboard would (core, OSD, hotkeys): keys apart by spaces, each modifiers and one key joined by `+` (`ctrl+alt+del`, `menu+esc`, `menu+f3`, `enter`, `f12`, `0x29` a HID usage), 40 ms per report |
+| `AT+KARABAS=key:<keys>` | press and release keys as a USB keyboard would (core, OSD, hotkeys): keys apart by spaces, each modifiers and one key joined by `+` (`ctrl+alt+del`, `menu+esc`, `menu+f3`, `enter`, `f12`, `0x29` a HID usage), 100 ms down, 40 ms up |
 | `AT+KARABAS=type:<text>` | type the text (printable ASCII, US layout) |
 | `AT+KARABAS=hold:<key>` / `release` | keep a key down (until `release` or the next key) / all keys up |
 

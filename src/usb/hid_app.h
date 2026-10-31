@@ -20,7 +20,7 @@ void hid_kbd_report_sync();
 void hid_kbd_report_get(hid_keyboard_report_t *report);
 
 // AT+KARABAS=key / type (APP): a keyboard report as if a USB keyboard sent it (to the core, the
-// OSD and the hotkeys); core1 takes one per 40 ms in hid_kbd_inject_tick(). false: the queue is
+// OSD and the hotkeys); core1 takes them in hid_kbd_inject_tick(), a press for 100 ms, a release 40. false: the queue is
 // full. hid_kbd_inject_free(): the reports that still fit.
 bool hid_kbd_inject(const hid_keyboard_report_t *report);
 int hid_kbd_inject_free();

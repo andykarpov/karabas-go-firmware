@@ -19,7 +19,7 @@
 //   sd2test - BOOT core only: reads the second SD card at a few SPI clocks (storage/sd2)
 //   key:<k> [<k>...] - press and release keys, as a USB keyboard (to the core, OSD, hotkeys):
 //          a key is modifiers and one key joined by '+' (lib/common/kg_keys.h: "ctrl+alt+del",
-//          "menu+esc", "f3", "enter", "0x29"); 40 ms per report
+//          "menu+esc", "f3", "enter", "0x29"); a press 100 ms, a release 40 ms
 //   type:<text> - type the printable chars of the text (US layout, Shift for the shifted ones)
 //   hold:<k> - press a key and keep it down (until release or the next key / type)
 //   release - all keys up
