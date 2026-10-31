@@ -23,8 +23,16 @@ void flashboot(uint8_t data);
 void core_send(uint8_t pos);
 // the osd item pos is a file item (F: the file mounter, FL: the ioctl file loader)
 bool core_osd_is_file(uint8_t pos);
-// the osd item pos takes the cursor of the core menu: it has options, or it is a file item
+// the osd item pos takes the cursor of the core menu: it has options, it is a file item or a page
+// entry
 bool core_osd_selectable(uint8_t pos);
+// the osd item pos is drawn in the menu (on its page): not a hidden trigger, and its show_if
+// condition met (an enable_if item is always drawn)
+bool core_osd_shown(uint8_t pos);
+// ... and its enable_if condition met too (else drawn grey, the cursor skips it)
+bool core_osd_enabled(uint8_t pos);
+// the page entry (M item) that opens page, -1 if none
+int core_osd_page_entry(uint8_t page);
 // the option of the osd item pos one up (d = 1) or down (d = -1), around the ends: sent to the
 // core, a switch is saved into the core file later (core.osd_need_save)
 void core_osd_change(uint8_t pos, int d);

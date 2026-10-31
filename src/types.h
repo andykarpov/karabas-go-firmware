@@ -54,6 +54,10 @@ typedef struct {
 	uint8_t prev_val;
 	uint8_t slot_id;
 	uint8_t flags; // CORE_OSD_FLAG_*
+	uint8_t page;      // the page the item is on, 0: the main menu
+	uint8_t open_page; // a page entry: the page it opens
+	uint8_t cond_item; // the switch the item depends on + 1, 0: none
+	uint8_t cond;      // CORE_OSD_COND_*
 } core_osd_t;
 
 typedef struct {

@@ -246,6 +246,13 @@
 #define CORE_OSD_TYPE_TEXT 0x04          // just a text line (32 characters wide)
 #define CORE_OSD_TYPE_FILEMOUNTER 0x05   // mounts a selected file image as virtual drive (img_*)
 #define CORE_OSD_TYPE_FILELOADER 0x06    // immediately transfer a selected file to the fpga side (ioctl_*)
+#define CORE_OSD_TYPE_PAGE 0x07          // a page entry (M): opens the items of its page, a sub-menu
+#define CORE_OSD_TYPE_SEPARATOR 0x08     // a line
+// the condition byte of an item (show_if / enable_if of make_core): shown / enabled when (the value
+// of the condition item == the value) xor invert
+#define CORE_OSD_COND_DISABLE 0x80       // else hide
+#define CORE_OSD_COND_INVERT 0x40
+#define CORE_OSD_COND_VALUE 0x3F
 
 // osd item flags (the byte after the type in the core file)
 #define CORE_OSD_FLAG_PHYS 0x01          // F item: can be a physical floppy drive (board_has_floppy)
@@ -255,8 +262,8 @@
 #define MAX_FILE_SLOTS 8
 #define MAX_JOY_DRIVERS 255
 #define MAX_CORES_PER_PAGE 16
-#define MAX_OSD_ITEMS 32
-#define MAX_OSD_ITEM_OPTIONS 8
+#define MAX_OSD_ITEMS 64
+#define MAX_OSD_ITEM_OPTIONS 16
 #define MAX_EEPROM_ITEMS 256
 #define MAX_EEPROM_BANKS 4
 #define NO_EEPROM_BANK 255
