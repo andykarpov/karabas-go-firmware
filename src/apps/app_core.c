@@ -89,27 +89,87 @@ static void app_core_select_phys(uint8_t pos, int drive) {
   core.osd_need_save = true;
 }
 
-// the items of the core menu that take the cursor (options, file items; not the text rows)
-static bool item_active(uint16_t i, void *ctx) {
+// The core menu is a tree: the items of a page (core.osd[].page, 0 the main menu) are shown, a page
+// entry (M) opens its page, Esc goes back to the parent. vis[] holds the items of the page shown,
+// in the order of core.osd (their index is the switch number of the core); the cursor
+// (curr_osd_item) is an item index, a hotkey of an item on another page takes the menu there.
+static uint8_t cur_page = 0;
+static uint8_t vis[MAX_OSD_ITEMS];
+static uint8_t vis_len = 0;
+static uint8_t page_cursor[256]; // the item + 1 the cursor was on when a page was left
+
+static void build_vis(void) {
+  vis_len = 0;
+  for (uint8_t i = 0; i < core.osd_len; i++) {
+    if (core.osd[i].page == cur_page && core_osd_shown(i)) vis[vis_len++] = i;
+  }
+}
+
+// the rows of the page that take the cursor (options, file items, page entries; not the text
+// rows, the separators, the disabled items)
+static bool item_active(uint16_t pos, void *ctx) {
   (void) ctx;
-  return core_osd_selectable(i);
+  return pos < vis_len && core_osd_selectable(vis[pos]) && core_osd_enabled(vis[pos]);
 }
 
+static int vis_pos(uint8_t item) {
+  for (uint8_t p = 0; p < vis_len; p++) if (vis[p] == item) return p;
+  return -1;
+}
+
+// the first item of the page that takes the cursor (vis built)
 static uint8_t first_item() {
-  uint16_t i = kg_list_first_active(core.osd_len, item_active, NULL);
-  return i < core.osd_len ? i : 0;
+  uint16_t p = kg_list_first_active(vis_len, item_active, NULL);
+  return p < vis_len ? vis[p] : (vis_len ? vis[0] : 0);
 }
 
-// the window of the core menu keeps the cursor in view; on the first (last) option it goes to the
-// top (bottom), so the text rows before (after) it are seen too
+// the page of the cursor (a hotkey may have moved it), the items of the page, the cursor on one
+// of them that takes it
+static void menu_sync(void) {
+  if (curr_osd_item < core.osd_len && core.osd[curr_osd_item].page != cur_page) {
+    cur_page = core.osd[curr_osd_item].page;
+    menu_top = 0;
+  }
+  build_vis();
+  int p = vis_pos(curr_osd_item);
+  if (p < 0 || !item_active(p, NULL)) curr_osd_item = first_item();
+}
+
+// to page: the cursor where it was on that page (else on its first item)
+static void menu_open_page(uint8_t page) {
+  page_cursor[cur_page] = curr_osd_item + 1;
+  cur_page = page;
+  menu_top = 0;
+  build_vis();
+  uint8_t c = page_cursor[page];
+  int p = c ? vis_pos(c - 1) : -1;
+  curr_osd_item = p >= 0 && item_active(p, NULL) ? c - 1 : first_item();
+}
+
+// back to the parent page, the cursor on the entry of the page left
+static void menu_back(void) {
+  int e = core_osd_page_entry(cur_page);
+  page_cursor[cur_page] = curr_osd_item + 1;
+  cur_page = e >= 0 ? core.osd[e].page : 0;
+  menu_top = 0;
+  build_vis();
+  curr_osd_item = e >= 0 ? e : first_item();
+}
+
+// the rows of the menu: on a sub-page the first row is its title
+static uint8_t menu_rows(void) { return cur_page ? MENU_ROWS - 1 : MENU_ROWS; }
+
+// the window keeps the cursor in view; on the first (last) option it goes to the top (bottom), so
+// the text rows before (after) it are seen too
 static uint8_t menu_window() {
-  uint16_t len = core.osd_len;
-  uint16_t top = kg_list_window(menu_top, curr_osd_item, MENU_ROWS, len);
-  if (len > MENU_ROWS) {
-    uint16_t last = len;
-    for (uint16_t i = len; i-- > 0;) if (item_active(i, NULL)) { last = i; break; }
+  uint8_t rows = menu_rows();
+  int sel = vis_pos(curr_osd_item);
+  uint16_t top = kg_list_window(menu_top, sel < 0 ? 0 : sel, rows, vis_len);
+  if (vis_len > rows && sel >= 0) {
+    uint16_t last = vis_len;
+    for (uint16_t p = vis_len; p-- > 0;) if (item_active(p, NULL)) { last = p; break; }
     if (curr_osd_item == first_item()) top = 0;
-    else if (curr_osd_item == last) top = len - MENU_ROWS;
+    else if (sel == last) top = vis_len - rows;
   }
   return (uint8_t) top;
 }
@@ -128,6 +188,9 @@ void app_core_overlay(bool force)
   print_time();
 
   if (force) {
+    cur_page = 0;
+    memset(page_cursor, 0, sizeof(page_cursor));
+    build_vis();
     curr_osd_item = first_item();
     menu_top = 0;
   }
@@ -145,6 +208,10 @@ void app_core_overlay(bool force)
         ui_hotkey("Del", " eject");
         break;
       }
+    }
+    if (cur_page) {
+      osd_print(" ");
+      ui_hotkey("Esc", " back");
     }
   }
   osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK); 
@@ -167,43 +234,74 @@ static void item_value(uint8_t i, char *out, size_t size) {
   }
 }
 
-// the rows of the core menu: a text row, or the name, the value (yellow, the cursor on it) and
-// the hotkey
+// the title of a sub-page: the names of the page entries from the main menu ("Video > Advanced")
+static void page_title(uint8_t y) {
+  int path[8];
+  uint8_t n = 0;
+  for (int e = core_osd_page_entry(cur_page); e >= 0 && n < 8; ) {
+    path[n++] = e;
+    uint8_t parent = core.osd[e].page;
+    e = parent ? core_osd_page_entry(parent) : -1;
+  }
+  char text[OSD_SIZE_X + 1];
+  size_t len = snprintf(text, sizeof(text), "%c ", OSD_CHAR_ARROW_LEFT);
+  while (n-- > 0 && len < sizeof(text)) {
+    len += snprintf(text + len, sizeof(text) - len, "%s%s", core.osd[path[n]].name, n ? " > " : "");
+  }
+  ui_row_ink(0, y, text, false, OSD_COLOR_CYAN_I);
+}
+
+// the rows of the core menu: a text row, a separator, or the name, the value (yellow, the cursor
+// on it; a page entry: an arrow) and the hotkey; a disabled item in grey
 void app_core_menu(uint8_t vpos) {
+  menu_sync();
+  if (cur_page) page_title(vpos++);
+  uint8_t rows = menu_rows();
   menu_top = menu_window();
-  uint8_t x_end = ui_list_col_end(MENU_ROWS, core.osd_len);
+  uint8_t x_end = ui_list_col_end(rows, vis_len);
   uint8_t hotkey_w = x_end - 22 + 1; // 10 chars, 9 with the scrollbar
-  for (uint8_t row = 0; row < MENU_ROWS; row++) {
-    uint16_t i = menu_top + row;
+  for (uint8_t row = 0; row < rows; row++) {
+    uint16_t p = menu_top + row;
     uint8_t y = vpos + row;
     char text[33];
-    if (i >= core.osd_len) {
+    if (p >= vis_len) {
       ui_row_to(0, x_end, y, "", false, OSD_COLOR_WHITE);
       continue;
     }
+    uint8_t i = vis[p];
     const core_osd_t *item = &core.osd[i];
     if (item->type == CORE_OSD_TYPE_TEXT) {
       snprintf(text, sizeof(text), "%s%s", item->name, item->hotkey);
       ui_row_to(0, x_end, y, text, false, OSD_COLOR_WHITE);
       continue;
     }
+    if (item->type == CORE_OSD_TYPE_SEPARATOR) {
+      osd_set_color(OSD_COLOR_GREY, OSD_COLOR_BLACK);
+      osd_set_pos(0, y);
+      for (uint8_t x = 0; x <= x_end; x++) osd_putc(OSD_CHAR_LINE);
+      continue;
+    }
+    bool enabled = core_osd_enabled(i);
     snprintf(text, 11, "%s", item->name);
-    ui_row_to(0, x_end, y, text, false, OSD_COLOR_WHITE);
+    ui_row_to(0, x_end, y, text, false, enabled ? OSD_COLOR_WHITE : OSD_COLOR_GREY);
     if (core_osd_selectable(i)) {
-      item_value(i, text, 11);
-      osd_set_color(curr_osd_item == i ? OSD_COLOR_BLACK : OSD_COLOR_YELLOW_I, curr_osd_item == i ? OSD_COLOR_YELLOW_I : OSD_COLOR_BLACK);
+      if (item->type == CORE_OSD_TYPE_PAGE) snprintf(text, 11, "%c         ", OSD_CHAR_ARROW_RIGHT);
+      else item_value(i, text, 11);
+      bool sel = curr_osd_item == i;
+      uint8_t ink = enabled ? OSD_COLOR_YELLOW_I : OSD_COLOR_GREY;
+      osd_set_color(sel ? OSD_COLOR_BLACK : ink, sel ? ink : OSD_COLOR_BLACK);
       osd_set_pos(11, y); osd_print(text);
-      osd_set_color(OSD_COLOR_CYAN_I, OSD_COLOR_BLACK);
+      osd_set_color(enabled ? OSD_COLOR_CYAN_I : OSD_COLOR_GREY, OSD_COLOR_BLACK);
       snprintf(text, hotkey_w + 1, "%s", item->hotkey);
       osd_set_pos(22, y); osd_print(text);
     } else {
       // a trigger: the hotkey where the value would be
-      osd_set_color(OSD_COLOR_CYAN_I, OSD_COLOR_BLACK);
+      osd_set_color(enabled ? OSD_COLOR_CYAN_I : OSD_COLOR_GREY, OSD_COLOR_BLACK);
       snprintf(text, x_end - 11 + 2, "%s", item->hotkey);
       osd_set_pos(11, y); osd_print(text);
     }
   }
-  ui_scrollbar(vpos, MENU_ROWS, menu_top, MENU_ROWS, core.osd_len);
+  ui_scrollbar(vpos, rows, menu_top, rows, vis_len);
   // no osd_update() here: app_core_overlay() draws the footer first, else the cleared footer
   // went out and came back on every move
 }
@@ -314,13 +412,32 @@ void app_core_on_keyboard() {
       need_redraw = true;
     }
   } else {
+    menu_sync();
     if (key == KEY_DOWN || key == KEY_UP) {
-      curr_osd_item = kg_list_step_active(curr_osd_item, core.osd_len, key == KEY_DOWN ? 1 : -1, item_active, NULL);
+      int p = vis_pos(curr_osd_item);
+      if (p >= 0) {
+        p = kg_list_step_active(p, vis_len, key == KEY_DOWN ? 1 : -1, item_active, NULL);
+        curr_osd_item = vis[p];
+      }
       need_redraw = true;
     }
 
-    // right / enter, left: the browser of a file item, else the next / previous option
-    if (key == KEY_RIGHT || key == KEY_ENTER || key == KEY_LEFT) {
+    // esc: back to the parent page
+    if (key == KEY_ESC && cur_page) {
+      menu_back();
+      need_redraw = true;
+    }
+
+    // right / enter, left: a page entry opens its page; the browser of a file item, else the next
+    // / previous option
+    if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_PAGE) {
+      if (key == KEY_RIGHT || key == KEY_ENTER) {
+        menu_open_page(core.osd[curr_osd_item].open_page);
+        need_redraw = true;
+      }
+    } else if (!core_osd_enabled(curr_osd_item)) {
+      // a page with no item to change
+    } else if (key == KEY_RIGHT || key == KEY_ENTER || key == KEY_LEFT) {
       if (core_osd_is_file(curr_osd_item)) {
         filebrowser_open();
       } else {

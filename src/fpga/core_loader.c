@@ -28,7 +28,32 @@ bool core_osd_is_file(uint8_t pos) {
 }
 
 bool core_osd_selectable(uint8_t pos) {
-  return pos < core.osd_len && (core.osd[pos].options_len > 0 || core_osd_is_file(pos));
+  return pos < core.osd_len && (core.osd[pos].options_len > 0 || core_osd_is_file(pos) ||
+                                core.osd[pos].type == CORE_OSD_TYPE_PAGE);
+}
+
+// the condition of an item met (no condition: met)
+static bool cond_met(uint8_t pos) {
+  const core_osd_t *item = &core.osd[pos];
+  if (item->cond_item == 0) return true;
+  bool eq = core.osd[item->cond_item - 1].val == (item->cond & CORE_OSD_COND_VALUE);
+  return eq != ((item->cond & CORE_OSD_COND_INVERT) != 0);
+}
+
+bool core_osd_shown(uint8_t pos) {
+  if (pos >= core.osd_len || core.osd[pos].type == CORE_OSD_TYPE_HIDDEN) return false;
+  return (core.osd[pos].cond & CORE_OSD_COND_DISABLE) || cond_met(pos);
+}
+
+bool core_osd_enabled(uint8_t pos) {
+  return core_osd_shown(pos) && cond_met(pos);
+}
+
+int core_osd_page_entry(uint8_t page) {
+  for (uint8_t i = 0; i < core.osd_len; i++) {
+    if (core.osd[i].type == CORE_OSD_TYPE_PAGE && core.osd[i].open_page == page) return i;
+  }
+  return -1;
 }
 
 void core_osd_change(uint8_t pos, int d) {
@@ -469,9 +494,17 @@ void read_core(const char* filename) {
     file_read_bytes(core.osd[i].hotkey, 16); core.osd[i].hotkey[16] = '\0';
     core.osd[i].keys[0] = file_read();
     core.osd[i].keys[1] = file_read();
-    file_read(); // reserved
-    file_read(); 
-    file_read();
+    // the page and the condition (0 0 0 in core files before the tree menus: the main page,
+    // always shown)
+    core.osd[i].page = file_read();
+    core.osd[i].cond_item = file_read();
+    core.osd[i].cond = file_read();
+    core.osd[i].open_page = 0;
+    if (core.osd[i].type == CORE_OSD_TYPE_PAGE) {
+      core.osd[i].open_page = core.osd[i].def; // a page entry has no value of its own
+      core.osd[i].def = core.osd[i].val = core.osd[i].prev_val = 0;
+    }
+    if (core.osd[i].cond_item > core.osd_len) core.osd[i].cond_item = 0;
   }
 
   // read eeprom data from file (in case rombank = 4 and up)
