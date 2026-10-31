@@ -143,7 +143,7 @@ void fb_draw(uint8_t top, const char *dir, bool show_dir) {
     bool is_dir = n > 0 && names[row].name[n - 1] == '/';
     ui_row_to(0, x_end, top + row, names[row].name, i == sel && i < len, is_dir ? OSD_COLOR_CYAN_I : OSD_COLOR_WHITE);
   }
-  ui_scrollbar(top, PAGE, from, PAGE, len);
+  ui_scrollbar_pages(top, PAGE, page, kg_list_pages(len, PAGE));
   names_from = from;
   names_valid = true;
 

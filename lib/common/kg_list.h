@@ -40,10 +40,13 @@ uint16_t kg_list_window(uint16_t top, uint16_t sel, uint16_t visible, uint16_t t
 
 // the thumb of a scrollbar of height cells for total items, visible of them shown from item top
 // (a window, or the first item of a page): its first cell and its length, proportional to
-// visible / total, at least 1 and less than height. At the top only with top 0, at the bottom
+// visible / total, at least 1 and at most half the height. At the top only with top 0, at the bottom
 // only with the last items shown (when there are 3 or more positions for it). false (no
 // scrollbar) if the items fit or height is under 2.
 bool kg_list_thumb(uint16_t height, uint16_t top, uint16_t visible, uint16_t total, uint16_t *pos, uint16_t *len);
+// the thumb of a list shown a page at a time: the track in a slot per page (height / pages
+// cells, at least 1), the thumb on the slot of page (from 1). false if there is one page.
+bool kg_list_page_thumb(uint16_t height, uint16_t page, uint16_t pages, uint16_t *pos, uint16_t *len);
 
 #ifdef __cplusplus
 }

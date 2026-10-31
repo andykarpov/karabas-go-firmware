@@ -43,6 +43,13 @@ bool ui_scrollbar(uint8_t y, uint8_t height, uint16_t top, uint16_t visible, uin
   return true;
 }
 
+bool ui_scrollbar_pages(uint8_t y, uint8_t height, uint16_t page, uint16_t pages) {
+  uint16_t pos, len;
+  if (!kg_list_page_thumb(height, page, pages, &pos, &len)) return false;
+  osd_scrollbar(UI_COL_LAST, y, height, (uint8_t) pos, (uint8_t) len, OSD_COLOR_GREY, OSD_COLOR_WHITE);
+  return true;
+}
+
 void ui_hotkey(const char *key, const char *rest) {
   osd_set_color(OSD_COLOR_CYAN_I, OSD_COLOR_FLASH); osd_print(key);
   osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK); osd_print(rest);

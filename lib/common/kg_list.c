@@ -39,7 +39,7 @@ bool kg_list_thumb(uint16_t height, uint16_t top, uint16_t visible, uint16_t tot
   if (total <= visible || height < 2) return false;
   uint32_t n = ((uint32_t) height * visible + total / 2) / total;
   if (n < 1) n = 1;
-  if (n > height - 1u) n = height - 1u;
+  if (n > height / 2u) n = height / 2u; // a long thumb hid where the list was
   uint32_t last_top = total - visible;
   if (top > last_top) top = last_top; // the last page: the thumb at the bottom
   uint32_t room = height - n;
@@ -53,6 +53,18 @@ bool kg_list_thumb(uint16_t height, uint16_t top, uint16_t visible, uint16_t tot
     if (room >= 2 && p > room - 1) p = room - 1;
   }
   *pos = (uint16_t) p;
+  *len = (uint16_t) n;
+  return true;
+}
+
+bool kg_list_page_thumb(uint16_t height, uint16_t page, uint16_t pages, uint16_t *pos, uint16_t *len) {
+  if (pages < 2 || height < 2) return false;
+  if (page < 1) page = 1;
+  if (page > pages) page = pages;
+  uint32_t n = height / pages;
+  if (n < 1) n = 1;
+  uint32_t room = height - n;
+  *pos = (uint16_t) ((room * (page - 1) + (pages - 1) / 2) / (pages - 1));
   *len = (uint16_t) n;
   return true;
 }

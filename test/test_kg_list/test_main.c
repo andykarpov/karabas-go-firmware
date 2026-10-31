@@ -80,22 +80,42 @@ static void test_thumb() {
   uint16_t p, l;
   TEST_ASSERT_FALSE(kg_list_thumb(16, 0, 16, 16, &p, &l)); // fits
   TEST_ASSERT_FALSE(kg_list_thumb(1, 0, 1, 5, &p, &l));    // no room
-  // 32 items, 16 shown: half the track
-  thumb(16, 0, 16, 32, 0, 8);
-  thumb(16, 16, 16, 32, 8, 8);
-  thumb(16, 1, 16, 32, 1, 8);  // one row down: off the top
-  thumb(16, 15, 16, 32, 7, 8); // one row up from the end: off the bottom
-  // pages of 16 of 200 items: one cell, the last page (top past total - visible) at the bottom
+  // 64 items, 16 shown: a quarter of the track
+  thumb(16, 0, 16, 64, 0, 4);
+  thumb(16, 48, 16, 64, 12, 4);
+  thumb(16, 1, 16, 64, 1, 4);  // one row down: off the top
+  thumb(16, 47, 16, 64, 11, 4); // one row up from the end: off the bottom
+  // 200 items: one cell, top past total - visible at the bottom
   thumb(16, 0, 16, 200, 0, 1);
-  thumb(16, 16, 16, 200, 1, 1);
   thumb(16, 96, 16, 200, 8, 1);
   thumb(16, 192, 16, 200, 15, 1);
-  // 17 of 16: the longest thumb is height - 1
-  thumb(16, 0, 16, 17, 0, 15);
-  thumb(16, 1, 16, 17, 1, 15);
+  // 17 of 16: at most half the track
+  thumb(16, 0, 16, 17, 0, 8);
+  thumb(16, 1, 16, 17, 8, 8);
   // 2 positions: room 1
   thumb(2, 0, 1, 2, 0, 1);
   thumb(2, 1, 1, 2, 1, 1);
+}
+
+static void page_thumb(uint16_t h, uint16_t page, uint16_t pages, uint16_t pos, uint16_t len) {
+  uint16_t p = 99, l = 99;
+  TEST_ASSERT_TRUE(kg_list_page_thumb(h, page, pages, &p, &l));
+  TEST_ASSERT_EQUAL_UINT16(pos, p);
+  TEST_ASSERT_EQUAL_UINT16(len, l);
+}
+
+static void test_page_thumb() {
+  uint16_t p, l;
+  TEST_ASSERT_FALSE(kg_list_page_thumb(16, 1, 1, &p, &l));
+  page_thumb(16, 1, 2, 0, 8);
+  page_thumb(16, 2, 2, 8, 8);
+  page_thumb(16, 1, 3, 0, 5);
+  page_thumb(16, 2, 3, 6, 5);
+  page_thumb(16, 3, 3, 11, 5);
+  page_thumb(16, 1, 13, 0, 1);
+  page_thumb(16, 7, 13, 8, 1);
+  page_thumb(16, 13, 13, 15, 1);
+  page_thumb(16, 9, 2, 8, 8); // past the end: the last page
 }
 
 // a core menu: text rows (inactive) between the options
@@ -124,6 +144,7 @@ int main() {
   RUN_TEST(test_pages);
   RUN_TEST(test_window);
   RUN_TEST(test_thumb);
+  RUN_TEST(test_page_thumb);
   RUN_TEST(test_active);
   return UNITY_END();
 }

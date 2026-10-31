@@ -33,6 +33,8 @@ void ui_row_to(uint8_t x, uint8_t x_end, uint8_t y, const char *text, bool selec
 // items, visible of them shown from item top (a window, or the first item of a page). Nothing
 // if they fit; true if it was drawn. ui_list_col_end() is the last column of the rows.
 bool ui_scrollbar(uint8_t y, uint8_t height, uint16_t top, uint16_t visible, uint16_t total);
+// the same for a list shown a page at a time: a slot of the track per page
+bool ui_scrollbar_pages(uint8_t y, uint8_t height, uint16_t page, uint16_t pages);
 #define ui_list_col_end(visible, total) ((total) > (visible) ? UI_COL_LAST - 1 : UI_COL_LAST)
 // rows y1..y2 cleared, white on black
 void ui_clear_rows(uint8_t y1, uint8_t y2);

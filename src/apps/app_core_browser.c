@@ -83,7 +83,7 @@ void app_core_browser_menu(uint8_t vpos) {
     }
     ui_row_to(0, x_end, vpos + row, line, i == core_sel && i < core_to, OSD_COLOR_WHITE);
   }
-  ui_scrollbar(vpos, core_page_size, core_from, core_page_size, cores_len);
+  ui_scrollbar_pages(vpos, core_page_size, core_page, core_pages);
   osd_set_pos(8, vpos + core_page_size + 1); osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
   char b[24];
   snprintf(b, sizeof(b), "Page %02d of %02d", core_page, core_pages);
