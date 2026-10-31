@@ -156,8 +156,12 @@ static void menu_back(void) {
   curr_osd_item = e >= 0 ? e : first_item();
 }
 
-// the rows of the menu: on a sub-page the first row is its title
-static uint8_t menu_rows(void) { return cur_page ? MENU_ROWS - 1 : MENU_ROWS; }
+// the menu of a file loader core is its Options screen, opened from its file list
+static bool is_options(void) { return core.type == CORE_TYPE_FILELOADER; }
+
+// the rows of the menu: on a sub-page (and on the Options screen) the first row is its title
+static bool has_title(void) { return cur_page || is_options(); }
+static uint8_t menu_rows(void) { return has_title() ? MENU_ROWS - 1 : MENU_ROWS; }
 
 // the window keeps the cursor in view; on the first (last) option it goes to the top (bottom), so
 // the text rows before (after) it are seen too
@@ -209,14 +213,15 @@ void app_core_overlay(bool force)
         break;
       }
     }
-    if (cur_page || core.type == CORE_TYPE_FILELOADER) {
+    if (has_title()) {
       osd_print(" ");
       ui_hotkey("Esc", " back");
     }
   }
   osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK); 
   osd_line(UI_ROW_HINT);
-  osd_set_pos(0, UI_ROW_HINT + 1); osd_print("Press Menu+Esc to toggle OSD");
+  osd_set_pos(0, UI_ROW_HINT + 1);
+  osd_print(is_options() && !cur_page ? "Press Esc to return to files" : "Press Menu+Esc to toggle OSD");
   osd_update();
 }
 
@@ -234,7 +239,8 @@ static void item_value(uint8_t i, char *out, size_t size) {
   }
 }
 
-// the title of a sub-page: the names of the page entries from the main menu ("Video > Advanced")
+// the title of a sub-page: the names of the page entries from the main menu ("Video > Advanced"),
+// after "Options" on the Options screen of a file loader core
 static void page_title(uint8_t y) {
   int path[8];
   uint8_t n = 0;
@@ -244,7 +250,8 @@ static void page_title(uint8_t y) {
     e = parent ? core_osd_page_entry(parent) : -1;
   }
   char text[OSD_SIZE_X + 1];
-  size_t len = snprintf(text, sizeof(text), "%c ", OSD_CHAR_ARROW_LEFT);
+  size_t len = snprintf(text, sizeof(text), "%c %s", OSD_CHAR_ARROW_LEFT,
+    is_options() ? (n ? "Options > " : "Options") : "");
   while (n-- > 0 && len < sizeof(text)) {
     len += snprintf(text + len, sizeof(text) - len, "%s%s", core.osd[path[n]].name, n ? " > " : "");
   }
@@ -255,7 +262,7 @@ static void page_title(uint8_t y) {
 // on it; a page entry: an arrow) and the hotkey; a disabled item in grey
 void app_core_menu(uint8_t vpos) {
   menu_sync();
-  if (cur_page) page_title(vpos++);
+  if (has_title()) page_title(vpos++);
   uint8_t rows = menu_rows();
   menu_top = menu_window();
   uint8_t x_end = ui_list_col_end(rows, vis_len);
@@ -426,7 +433,7 @@ void app_core_on_keyboard() {
     if (key == KEY_ESC && cur_page) {
       menu_back();
       need_redraw = true;
-    } else if (key == KEY_ESC && core.type == CORE_TYPE_FILELOADER) {
+    } else if (key == KEY_ESC && is_options()) {
       osd_state = state_file_loader;
       return;
     }

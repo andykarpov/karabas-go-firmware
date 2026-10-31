@@ -37,8 +37,8 @@ bool fb_is_parent(uint16_t i);
 // moves the selection by a navigation key (ui_list_key); true if the key was a move
 bool fb_key(uint8_t key);
 // draws the page of the selection from row top: the names (read from dir when the page changed),
-// a line, then "Dir <dir>" when show_dir, and the page number
-void fb_draw(uint8_t top, const char *dir, bool show_dir);
+// a line, then "Dir <dir>" when show_dir, and the page number (from column 8); returns its row
+uint8_t fb_draw(uint8_t top, const char *dir, bool show_dir);
 
 #ifdef __cplusplus
 }

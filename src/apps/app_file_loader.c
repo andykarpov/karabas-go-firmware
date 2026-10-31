@@ -96,7 +96,13 @@ void app_file_loader_read_list(void) {
 void app_file_loader_menu(uint8_t vpos) {
   char d[256];
   core_dir_path(d, sizeof(d));
-  fb_draw(vpos, d, false);
+  uint8_t y = fb_draw(vpos, d, false);
+  // the core's own menu (Tab or O), left of the page number
+  if (core.osd_len > 0) {
+    osd_set_pos(0, y);
+    ui_hotkey("O", "ptions");
+    osd_update();
+  }
 }
 
 // initSD: read the list again (R); else only when it is not in the file browser
@@ -115,11 +121,6 @@ void app_file_loader_overlay(bool initSD) {
   char b[OSD_SIZE_X + 1] = "Files: ";
   kg_exts_text(core.file_extensions, b + 7, OSD_SIZE_X - 7);
   ui_hint(b[7] ? b : "Please use arrows to navigate", "Press Enter to load selection");
-  // the core's own menu (Tab or O)
-  if (core.osd_len > 0) {
-    osd_set_pos(0, UI_ROW_HINT_LINE);
-    ui_hotkey("O", "ptions");
-  }
   osd_update();
 }
 
