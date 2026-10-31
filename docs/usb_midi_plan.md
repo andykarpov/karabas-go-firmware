@@ -1,6 +1,6 @@
 # USB MIDI keyboards
 
-A USB MIDI keyboard on the USB host of the MCU, its events passed to the FPGA core. Status: planned, not started.
+A USB MIDI keyboard on the USB host of the MCU, its events passed to the FPGA core. Status: steps 1-4 (the firmware) done on the branch `usb-midi`, not checked on hardware yet; steps 5-6 (FPGA) not started.
 
 ## What there is now
 
@@ -26,6 +26,13 @@ USB keyboard -> [USB task, core 1] midi_host: IN endpoint, 4-byte packets
 6. **First core: the boot core with the thru to the SAM2695.** The keyboard plays the on-board synth, which checks the whole chain without a MIDI port of an emulated machine. The real target is an Atari ST core (it does not exist yet).
 
 Steps 1-4 are one firmware PR, steps 5-6 are in the modules / core repos. MIDI OUT to USB devices (a core playing an external USB synth) is left for later.
+
+## Done in the firmware
+
+- `usb/midi_host.c`: the class driver, registered third in `usbh_app_driver_get_cb()`. It takes the MS interface offered alone, or inside an IAD that starts with the Audio Control one. The IN transfer is re-armed from its callback, so the idle USB loop gains nothing; a stall stops it (PIO-USB cannot clear one).
+- `lib/common/usb_midi` (`kg_usb_midi_packet()`, test `test_usb_midi`): a 4-byte packet into 0..3 MIDI bytes.
+- `CMD_MIDI = 0x16`, `CAPS_MIDI = 0x10` (`fpga/link.h`); bytes go through `spi_queue()` to `INPUT`, also while the OSD is open.
+- `debug=1`: `USB MIDI mounted VID:PID ...` / `disconnected`, failed endpoint opens (a full pool); the `DIAG` line gets `midi on rx N sent N skipped N` once a keyboard was seen (skipped: the core has no caps bit 4).
 
 ## Risks
 

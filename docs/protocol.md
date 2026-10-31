@@ -67,7 +67,7 @@ Commands that the core does not know must be ignored.
 `do_configure()` in `src/fpga/core_loader.cpp`, for every core load:
 
 1. The bitstream is sent through the FPGA configuration pins (not this link).
-2. `CMD_CAPS` query, answered only by cores that support bursts or backup RAM. It is repeated until the core answers (up to 100 ms), so nothing else goes to a core whose link is still in reset after CONF_DONE. See section 7.
+2. `CMD_CAPS` query, answered only by cores that support bursts, backup RAM or MIDI IN. It is repeated until the core answers (up to 100 ms), so nothing else goes to a core whose link is still in reset after CONF_DONE. See section 7.
 3. `CMD_INIT_START` — the core shows itself busy.
 4. `CMD_HW_SETUP` `(0, HW_ID)` and `(1, dvi_only)`.
 5. OSD font: `CMD_OSD` font reset and the font data.
@@ -93,6 +93,7 @@ Commands that the core does not know must be ignored.
 | `0C` | `CMD_FILEBANK` | 0 / 1 / 2 | file address bits 15..8 / 23..16 / 31..24 | File loader (`fileloader` cores). |
 | `0D` | `CMD_FILEDATA` | address bits 7..0 | file byte | |
 | `0E` | `CMD_FILELOADER` | 0 | bit 0 reset, bit 1 active | `3` then `2` before the file, `0` after it. |
+| `16` | `CMD_MIDI` | byte counter (+1 per byte, wraps) | MIDI byte | From a USB MIDI keyboard, only to cores with caps bit 4. A plain MIDI stream without running status; SysEx, `F8` (clock) and `FE` (active sensing) are dropped. A gap in the counter means lost bytes. Sent while the OSD is open too. |
 | `20` | `CMD_OSD` | register | value | OSD overlay, see section 6. |
 | `40` | `CMD_IMG_SLOT` | 0 | slot | File mounter (`F` OSD items), see section 6. |
 | `41` | `CMD_IMG_SIZE` | byte index 0..7 | image size (LE) | First 0 (eject), then the real size. The core takes the image at byte 7. |
@@ -336,12 +337,13 @@ See [hardware diagnostics](usb_printer.md#fpga--spi-loss-localisation).
 
 ## 7. Capabilities and burst transfers
 
-`CMD_CAPS` (`F7 00 01`) asks the core what it supports. The firmware then polls with up to 16 NOP frames, and sends the query and the polls again until the core answers or 100 ms have passed. A core that supports bursts or backup RAM answers `F7 caps max_mhz` in a reply frame:
+`CMD_CAPS` (`F7 00 01`) asks the core what it supports. The firmware then polls with up to 16 NOP frames, and sends the query and the polls again until the core answers or 100 ms have passed. A core that supports bursts, backup RAM or MIDI IN answers `F7 caps max_mhz` in a reply frame:
 
 - caps bit 0: burst write;
 - caps bit 1: the core drives `BURST_READY`;
 - caps bit 2: burst read (planned);
 - caps bit 3: backup RAM (`CMD_BK_MOUNT`, `CMD_IMG_FLUSH`, section 6): the firmware flushes the save of the core before it loads another game or core.
+- caps bit 4: MIDI IN: the core takes `CMD_MIDI`, the events of a USB MIDI keyboard (for its MIDI port or a thru to the SAM2695 synth). Other cores get no `CMD_MIDI`.
 
 Old cores do not answer and stay on classic frames (their load takes the 100 ms longer).
 
