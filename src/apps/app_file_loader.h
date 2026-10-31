@@ -14,6 +14,10 @@ void app_file_loader_overlay(bool initSD);
 void app_file_loader_save();
 void app_file_loader_send_file(uint16_t file_id);
 void app_file_loader_on_keyboard();
+// a new core: its first list loads the last file
+void app_file_loader_core_loaded(void);
+// the core menu (Options) takes the file browser: remember the cursor, read the list again later
+void app_file_loader_leave(void);
 
 #ifdef __cplusplus
 }

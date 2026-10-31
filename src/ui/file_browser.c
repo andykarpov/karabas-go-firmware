@@ -124,7 +124,7 @@ static void entry_name(uint16_t i, char *name, size_t size, size_t width) {
   }
 }
 
-void fb_draw(uint8_t top, const char *dir, bool show_dir) {
+uint8_t fb_draw(uint8_t top, const char *dir, bool show_dir) {
   uint16_t page = kg_list_page(sel, PAGE);
   uint16_t from = (page - 1) * PAGE;
   bool cached = names_valid && names_from == from;
@@ -161,4 +161,5 @@ void fb_draw(uint8_t top, const char *dir, bool show_dir) {
   ui_row(0, y, "", false);
   osd_set_pos(8, y); osd_print(b);
   osd_update();
+  return y;
 }

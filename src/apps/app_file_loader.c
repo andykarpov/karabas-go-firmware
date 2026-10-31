@@ -19,6 +19,20 @@ static void core_dir_path(char *out, size_t size) {
   snprintf(out, size, "%s%s", dir[0] == '/' ? "" : "/", dir);
 }
 
+// The list of the core's files is in the file browser (fb_*), which the F / FL items of the core
+// menu (Options) fill too: list_loaded is cleared when the menu is opened, and the list is read
+// again on the way back, the cursor on the file it was on (sel_id). The last file is loaded only
+// with the first list of a core (autoload), not with a list read again.
+static bool list_loaded = false;
+static bool autoload = false;
+static uint16_t sel_id = 0;
+
+void app_file_loader_core_loaded(void) {
+  list_loaded = false;
+  autoload = true;
+  sel_id = 0;
+}
+
 // a message box shown for a second: no SD card, a dir that can't be opened
 static void read_error(const char *line2) {
   ui_box("Error occured", OSD_COLOR_RED_I, line2, OSD_COLOR_RED_I);
@@ -59,28 +73,39 @@ void app_file_loader_read_list(void) {
   
   ui_box_clear();
   osd_update();
+  list_loaded = true;
 
-  // select and load prev file on boot
-  if (has_sd && fb_len() > 0 && core.last_file_id > 0) {
-    for (uint16_t i=0; i<fb_len(); i++) {
-      if (core.last_file_id != fb_id(i)) continue;
-      fb_select(i);
-      FILINFO fi;
-      if (sd_find_id(&root1, core.last_file_id, &fi)) {
-        app_file_loader_send_file(core.last_file_id);
-      }
-      ui_osd_hide();
-      break;
+  // the cursor on the file it was on, else on the last file loaded
+  uint16_t id = sel_id ? sel_id : core.last_file_id;
+  for (uint16_t i = 0; id > 0 && i < fb_len(); i++) {
+    if (fb_id(i) == id) { fb_select(i); break; }
+  }
+
+  // load the last file with the first list of the core
+  bool load = autoload;
+  autoload = false;
+  if (load && has_sd && fb_len() > 0 && core.last_file_id > 0 && fb_id(fb_sel()) == core.last_file_id) {
+    FILINFO fi;
+    if (sd_find_id(&root1, core.last_file_id, &fi)) {
+      app_file_loader_send_file(core.last_file_id);
     }
+    ui_osd_hide();
   }
 }
 
 void app_file_loader_menu(uint8_t vpos) {
   char d[256];
   core_dir_path(d, sizeof(d));
-  fb_draw(vpos, d, false);
+  uint8_t y = fb_draw(vpos, d, false);
+  // the core's own menu (Tab or O), left of the page number
+  if (core.osd_len > 0) {
+    osd_set_pos(0, y);
+    ui_hotkey("O", "ptions");
+    osd_update();
+  }
 }
 
+// initSD: read the list again (R); else only when it is not in the file browser
 void app_file_loader_overlay(bool initSD) {
   osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
   osd_clear();
@@ -88,7 +113,7 @@ void app_file_loader_overlay(bool initSD) {
   print_time();
 
   // collect files from sd
-  if (initSD) {
+  if (initSD || !list_loaded) {
     app_file_loader_read_list();
   }
 
@@ -174,6 +199,11 @@ void app_file_loader_send_file(uint16_t file_id) {
   app_file_loader_overlay(false);
 }
 
+void app_file_loader_leave(void) {
+  if (list_loaded && fb_len() > 0) sel_id = fb_id(fb_sel());
+  list_loaded = false; // the browser of a file item takes the list
+}
+
 void app_file_loader_on_keyboard() {
   uint8_t key = ui_nav_key();
 
@@ -182,6 +212,13 @@ void app_file_loader_on_keyboard() {
     app_file_loader_overlay(true);
     return;
   }
+  // Tab / O: the core's own menu; Esc on its main page comes back here
+  if ((key == KEY_TAB || key == KEY_O) && core.osd_len > 0) {
+    app_file_loader_leave();
+    osd_state = state_main;
+    return;
+  }
+
   if (fb_len() == 0) return;
 
   // up / down, left / right a page
