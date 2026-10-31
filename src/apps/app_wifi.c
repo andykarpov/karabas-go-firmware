@@ -83,16 +83,18 @@ static void draw_list() {
     return;
   }
   uint8_t top = ws_list_top();
+  uint8_t x_end = ui_list_col_end(LIST_ROWS, w->aps_len);
   for (uint8_t row = 0; row < LIST_ROWS && top + row < w->aps_len; row++) {
     const kg_wifi_ap_t *ap = &w->aps[top + row];
     bool focused = top + row == w->sel && !w->on_rescan;
     osd_set_color(focused ? OSD_COLOR_BLACK : OSD_COLOR_WHITE, focused ? OSD_COLOR_YELLOW_I : OSD_COLOR_BLACK);
-    osd_fill(0, LIST_ROW + row, UI_COL_LAST, LIST_ROW + row, ' ');
+    osd_fill(0, LIST_ROW + row, x_end, LIST_ROW + row, ' ');
     osd_set_pos(0, LIST_ROW + row);
     osd_putc(strcmp(ap->ssid, w->cur_ssid) == 0 ? '>' : ' ');
     osd_printf("%4d %c ", ap->rssi, ap->ecn ? '*' : ' ');
-    print_text(ap->ssid, 24);
+    print_text(ap->ssid, x_end - 8 + 1); // 24 chars, 23 with the scrollbar
   }
+  ui_scrollbar(LIST_ROW, LIST_ROWS, top, LIST_ROWS, w->aps_len);
   if (w->aps_len > LIST_ROWS) {
     osd_set_color(OSD_COLOR_GREY, OSD_COLOR_BLACK);
     osd_set_pos(UI_COL_LAST - 4, 7); osd_printf("%2u/%-2u", w->sel + 1, w->aps_len);

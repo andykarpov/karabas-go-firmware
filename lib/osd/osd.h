@@ -57,7 +57,11 @@ extern "C" {
 #define OSD_CHAR_ARROW_RIGHT 16
 #define OSD_CHAR_FILLED_CELL 219
 #define OSD_CHAR_HALF_CELL 221
-#define OSD_CHAR_SCROLL_HANDLE 220
+#define OSD_CHAR_SCROLL_HANDLE 220 // a thumb of one cell: thick in the middle
+#define OSD_CHAR_SCROLL_TRACK 208  // a thin line in the middle of the cell
+#define OSD_CHAR_SCROLL_TOP 214    // a longer thumb: its first cell, the middle ones, the last
+#define OSD_CHAR_SCROLL_MID 215
+#define OSD_CHAR_SCROLL_BOTTOM 216
 #define OSD_CHAR_COPYRIGHT 127
 
 typedef void (*osd_send_t)(uint8_t cmd, uint8_t addr, uint8_t data);
@@ -79,7 +83,9 @@ void osd_fill(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, uint8_t chr);
 void osd_frame(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2);
 void osd_line(uint8_t y);
 void osd_progress(uint8_t x, uint8_t y, uint8_t size, uint32_t val, uint32_t max, uint8_t cl, uint8_t bg);
-void osd_scrollbar(uint8_t x, uint8_t y, uint8_t height, uint32_t val, uint32_t max);
+// a scrollbar in column x from row y: the track in track_ink, the thumb (cells pos..pos+len-1)
+// in thumb_ink, on black
+void osd_scrollbar(uint8_t x, uint8_t y, uint8_t height, uint8_t pos, uint8_t len, uint8_t track_ink, uint8_t thumb_ink);
 void osd_logo(uint8_t x, uint8_t y, uint8_t hw);
 void osd_header(const char *build, const char *id, uint8_t hw);
 void osd_footer(void);

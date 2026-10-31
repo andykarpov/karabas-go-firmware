@@ -27,6 +27,15 @@ void ui_hint(const char *line1, const char *line2);
 void ui_row(uint8_t x, uint8_t y, const char *text, bool selected);
 // the same in another color: ink on black, black on ink when selected
 void ui_row_ink(uint8_t x, uint8_t y, const char *text, bool selected, uint8_t ink);
+// the same up to column x_end (a list with a scrollbar leaves the last column to it)
+void ui_row_to(uint8_t x, uint8_t x_end, uint8_t y, const char *text, bool selected, uint8_t ink);
+// the scrollbar of a list in its last column (UI_COL_LAST) over its rows y..y+height-1: total
+// items, visible of them shown from item top (a window, or the first item of a page). Nothing
+// if they fit; true if it was drawn. ui_list_col_end() is the last column of the rows.
+bool ui_scrollbar(uint8_t y, uint8_t height, uint16_t top, uint16_t visible, uint16_t total);
+// the same for a list shown a page at a time: a slot of the track per page
+bool ui_scrollbar_pages(uint8_t y, uint8_t height, uint16_t page, uint16_t pages);
+#define ui_list_col_end(visible, total) ((total) > (visible) ? UI_COL_LAST - 1 : UI_COL_LAST)
 // rows y1..y2 cleared, white on black
 void ui_clear_rows(uint8_t y1, uint8_t y2);
 // the body of a screen cleared: the rows between the title line and the hint line

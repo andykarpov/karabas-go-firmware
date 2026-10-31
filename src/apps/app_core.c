@@ -11,6 +11,10 @@
 #include "kg_list.h"
 
 uint8_t curr_osd_item;
+// the rows of the core menu on screen (as many as a page of the file browser), and the first
+// item shown: a longer menu scrolls with the cursor
+#define MENU_ROWS MAX_CORES_PER_PAGE
+static uint8_t menu_top = 0;
 static bool is_filebrowser = false;
 static int filebrowser_slot = -1; // the slot of the file list read last, -1: read it again
 static bool prev_is_filebrowser = false;
@@ -96,6 +100,20 @@ static uint8_t first_item() {
   return i < core.osd_len ? i : 0;
 }
 
+// the window of the core menu keeps the cursor in view; on the first (last) option it goes to the
+// top (bottom), so the text rows before (after) it are seen too
+static uint8_t menu_window() {
+  uint16_t len = core.osd_len;
+  uint16_t top = kg_list_window(menu_top, curr_osd_item, MENU_ROWS, len);
+  if (len > MENU_ROWS) {
+    uint16_t last = len;
+    for (uint16_t i = len; i-- > 0;) if (item_active(i, NULL)) { last = i; break; }
+    if (curr_osd_item == first_item()) top = 0;
+    else if (curr_osd_item == last) top = len - MENU_ROWS;
+  }
+  return (uint8_t) top;
+}
+
 void app_core_overlay(bool force)
 {
   osd_state = state_main;
@@ -111,6 +129,7 @@ void app_core_overlay(bool force)
 
   if (force) {
     curr_osd_item = first_item();
+    menu_top = 0;
   }
   app_core_menu(APP_COREBROWSER_MENU_OFFSET);
 
@@ -151,30 +170,40 @@ static void item_value(uint8_t i, char *out, size_t size) {
 // the rows of the core menu: a text row, or the name, the value (yellow, the cursor on it) and
 // the hotkey
 void app_core_menu(uint8_t vpos) {
-  for (uint8_t i=0; i<core.osd_len; i++) {
-    const core_osd_t *item = &core.osd[i];
-    uint8_t y = vpos + i;
+  menu_top = menu_window();
+  uint8_t x_end = ui_list_col_end(MENU_ROWS, core.osd_len);
+  uint8_t hotkey_w = x_end - 22 + 1; // 10 chars, 9 with the scrollbar
+  for (uint8_t row = 0; row < MENU_ROWS; row++) {
+    uint16_t i = menu_top + row;
+    uint8_t y = vpos + row;
     char text[33];
+    if (i >= core.osd_len) {
+      ui_row_to(0, x_end, y, "", false, OSD_COLOR_WHITE);
+      continue;
+    }
+    const core_osd_t *item = &core.osd[i];
     if (item->type == CORE_OSD_TYPE_TEXT) {
       snprintf(text, sizeof(text), "%s%s", item->name, item->hotkey);
-      ui_row(0, y, text, false);
+      ui_row_to(0, x_end, y, text, false, OSD_COLOR_WHITE);
       continue;
     }
     snprintf(text, 11, "%s", item->name);
-    ui_row(0, y, text, false);
+    ui_row_to(0, x_end, y, text, false, OSD_COLOR_WHITE);
     if (core_osd_selectable(i)) {
       item_value(i, text, 11);
       osd_set_color(curr_osd_item == i ? OSD_COLOR_BLACK : OSD_COLOR_YELLOW_I, curr_osd_item == i ? OSD_COLOR_YELLOW_I : OSD_COLOR_BLACK);
       osd_set_pos(11, y); osd_print(text);
       osd_set_color(OSD_COLOR_CYAN_I, OSD_COLOR_BLACK);
-      snprintf(text, 11, "%s", item->hotkey);
+      snprintf(text, hotkey_w + 1, "%s", item->hotkey);
       osd_set_pos(22, y); osd_print(text);
     } else {
       // a trigger: the hotkey where the value would be
       osd_set_color(OSD_COLOR_CYAN_I, OSD_COLOR_BLACK);
-      osd_set_pos(11, y); osd_print(item->hotkey);
+      snprintf(text, x_end - 11 + 2, "%s", item->hotkey);
+      osd_set_pos(11, y); osd_print(text);
     }
   }
+  ui_scrollbar(vpos, MENU_ROWS, menu_top, MENU_ROWS, core.osd_len);
   // no osd_update() here: app_core_overlay() draws the footer first, else the cleared footer
   // went out and came back on every move
 }

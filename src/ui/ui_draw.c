@@ -1,5 +1,6 @@
 #include "main.h"
 #include "ui/ui_draw.h"
+#include "kg_list.h"
 
 void ui_screen(const char *title) {
   osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
@@ -26,9 +27,27 @@ void ui_row(uint8_t x, uint8_t y, const char *text, bool selected) {
 }
 
 void ui_row_ink(uint8_t x, uint8_t y, const char *text, bool selected, uint8_t ink) {
+  ui_row_to(x, UI_COL_LAST, y, text, selected, ink);
+}
+
+void ui_row_to(uint8_t x, uint8_t x_end, uint8_t y, const char *text, bool selected, uint8_t ink) {
   osd_set_color(selected ? OSD_COLOR_BLACK : ink, selected ? ink : OSD_COLOR_BLACK);
   osd_set_pos(x, y);
-  for (uint8_t i = x; i < OSD_SIZE_X; i++) osd_putc(*text ? (uint8_t) *text++ : ' ');
+  for (uint8_t i = x; i <= x_end && i < OSD_SIZE_X; i++) osd_putc(*text ? (uint8_t) *text++ : ' ');
+}
+
+bool ui_scrollbar(uint8_t y, uint8_t height, uint16_t top, uint16_t visible, uint16_t total) {
+  uint16_t pos, len;
+  if (!kg_list_thumb(height, top, visible, total, &pos, &len)) return false;
+  osd_scrollbar(UI_COL_LAST, y, height, (uint8_t) pos, (uint8_t) len, OSD_COLOR_GREY, OSD_COLOR_WHITE);
+  return true;
+}
+
+bool ui_scrollbar_pages(uint8_t y, uint8_t height, uint16_t page, uint16_t pages) {
+  uint16_t pos, len;
+  if (!kg_list_page_thumb(height, page, pages, &pos, &len)) return false;
+  osd_scrollbar(UI_COL_LAST, y, height, (uint8_t) pos, (uint8_t) len, OSD_COLOR_GREY, OSD_COLOR_WHITE);
+  return true;
 }
 
 void ui_hotkey(const char *key, const char *rest) {
