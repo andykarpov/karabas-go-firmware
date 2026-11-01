@@ -266,6 +266,19 @@ void flashboot (uint8_t data) {
 }
 
 // hang_step: the steps of a core load (0x8x, 0x9x in fpga_send, 0xax after it)
+// the build ids of the core (its .kg header) and of this firmware, 8 ASCII characters each (shorter: 0 padded),
+// for cores that show them (BaseConf: the version strings of its RTC registers F0..FF)
+static void send_build_ids(void) {
+  static const char fw_build[] = STRINGIZE_VALUE_OF(BUILD_VER);
+  bool end_core = false, end_fw = false;
+  for (uint8_t i=0; i<8; i++) {
+    if (!core.build[i]) end_core = true;
+    if (!fw_build[i]) end_fw = true;
+    spi_send(CMD_HW_SETUP, 0x10 + i, end_core ? 0 : (uint8_t) core.build[i]);
+    spi_send(CMD_HW_SETUP, 0x18 + i, end_fw ? 0 : (uint8_t) fw_build[i]);
+  }
+}
+
 void do_configure(const char* filename) {
   hang_step(0x81);
   printer_link_reset();
@@ -305,6 +318,7 @@ void do_configure(const char* filename) {
   }
   hang_step(0xa3);
   read_core(filename);
+  send_build_ids();
   hang_step(0xa4);
   if (!is_osd) {
     osd_clear();

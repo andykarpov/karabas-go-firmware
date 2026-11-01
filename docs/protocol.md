@@ -71,10 +71,11 @@ Commands that the core does not know must be ignored.
 3. `CMD_INIT_START` — the core shows itself busy.
 4. `CMD_HW_SETUP` `(0, HW_ID)` and `(1, dvi_only)`.
 5. OSD font: `CMD_OSD` font reset and the font data.
-6. ROMs: `CMD_ROMLOADER` on, the ROM data, `CMD_ROMLOADER` off.
-7. OSD switch values (`CMD_SWITCHES`) and the RTC registers (`CMD_RTC`).
-8. Keyboard cleared: `CMD_USB_KBD` 0..6 = 0.
-9. `CMD_INIT_DONE` — the core may start.
+6. The build ids of the core (its `.kg` header) and of the firmware: `CMD_HW_SETUP` `10`..`1F`.
+7. ROMs: `CMD_ROMLOADER` on, the ROM data, `CMD_ROMLOADER` off.
+8. OSD switch values (`CMD_SWITCHES`) and the RTC registers (`CMD_RTC`).
+9. Keyboard cleared: `CMD_USB_KBD` 0..6 = 0.
+10. `CMD_INIT_DONE` — the core may start.
 
 ## 4. Commands MCU → FPGA
 
@@ -112,7 +113,7 @@ Commands that the core does not know must be ignored.
 | `63` | `CMD_MATRIX_BTN` | button 0..3 | 1 / 0 | LED matrix add-on buttons ([matrix.md](matrix.md)). |
 | `F7` | `CMD_CAPS` | 0 = query | protocol version (1) | Capability query, section 7. |
 | `F8` | `CMD_ESP_UART` | 0 | byte | Byte to the ESP8266 module behind the FPGA. |
-| `F9` | `CMD_HW_SETUP` | 0 = board, 1 = DVI only | 0: `HW_ID` (1 Go, 2 Mini, 3 Mini G); 1: 0 / 1 | |
+| `F9` | `CMD_HW_SETUP` | 0 = board, 1 = DVI only, `10`..`17` core build, `18`..`1F` firmware build | 0: `HW_ID` (1 Go, 2 Mini, 3 Mini G); 1: 0 / 1; `10`..`1F`: ASCII character | The build ids: 8 characters each, first character at the lowest address, 0 after a shorter id (`DEVBUILD` for a local firmware build). |
 | `FA` | `CMD_RTC` | register | value | RTC register; the register set depends on `rtc_mode` (MC146818A, DS1307, ZX Evolution, MSM6242B). |
 | `FC` | `CMD_UART` | running index | byte | Byte from the USB serial port (or a USB-UART adapter on the USB host); `ADDR` changes with every byte, so the core can see a new one. |
 | `FD` | `CMD_INIT_START` | 0 | 0 | Core configuration starts (BUSY = 1). |
