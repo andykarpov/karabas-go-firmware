@@ -111,7 +111,16 @@ static void on_img_buf_data(uint8_t addr, uint8_t data) {
   }
 }
 
+// DSKCHG request of the core (CMD_FDD_CHNG 49 d 00): it holds the drive selected until the
+// answer, so the level is the one of that drive now
+static void on_fdd_chng(uint8_t addr, uint8_t data) {
+  if (data != 0) return;
+  int v = board_fdd_chng();
+  spi_send(CMD_FDD_CHNG, addr, v < 0 ? 2 : (uint8_t) v);
+}
+
 void img_register_handlers() {
+  link_on(CMD_FDD_CHNG, on_fdd_chng);
   link_on(CMD_IMG_LBA, on_img_lba);
   link_on(CMD_IMG_SEC, on_img_sec);
   link_on(CMD_IMG_BUF_BANK, on_img_buf_bank);

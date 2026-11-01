@@ -16,11 +16,31 @@ uint8_t board_ft_reset_pin() {
 }
 
 static bool has_extender = false;
+static bool has_fdd_chng = false;
+
+// The DSKCHG hotfix: pin 34 of the floppy connector -> U18 pin 5 (lifted off GND, 1k to VCC),
+// U18 pin 6 -> TP15 (GPIO28). TP15 is a bare test point without it. The gate drives the pin,
+// a bare pad follows the pull: if a read with the pull-up and one with the pull-down agree, the
+// wire is there (whatever the level: a selected drive with a changed disk reads 1 on both).
+static bool fdd_chng_detect() {
+  bool driven = true;
+  for (uint8_t i = 0; i < 4 && driven; i++) {
+    pin_input_pullup(PIN_FDD_CHNG);
+    busy_wait_us(50);
+    bool up = gpio_get(PIN_FDD_CHNG);
+    pin_input_pulldown(PIN_FDD_CHNG);
+    busy_wait_us(50);
+    bool down = gpio_get(PIN_FDD_CHNG);
+    driven = up == down;
+  }
+  return driven; // the pin stays pulled down: a bare test point reads 0
+}
 
 void board_init_pins() {
   // unused MCU-FPGA pins (yet)
   pin_input(PIN_MCU_SPI_IO0);
   pin_input_pulldown(PIN_MCU_SPI_IO1); // burst READY from the fpga (undriven reads as not ready)
+  has_fdd_chng = fdd_chng_detect();
 }
 
 void board_init_io() {
@@ -54,6 +74,8 @@ void board_init_io() {
   i2c_bus_unlock();
 
   sega_begin(PIN_JOY_SCK, PIN_JOY_LOAD, PIN_JOY_DATA, PIN_JOY_P7);
+
+  d_println(has_fdd_chng ? "Floppy DSKCHG line on GPIO28 (hotfix)" : "No floppy DSKCHG line");
 }
 
 uint8_t board_usb_pinout() {
@@ -70,6 +92,11 @@ void board_reset_peripherals() {
 
 bool board_has_floppy() {
   return true;
+}
+
+int board_fdd_chng() {
+  if (!has_fdd_chng) return -1;
+  return gpio_get(PIN_FDD_CHNG) ? 1 : 0;
 }
 
 bool btn_read(uint8_t num) {

@@ -104,6 +104,7 @@ Commands that the core does not know must be ignored.
 | `45` | `CMD_IMG_BUF_DATA` | offset bits 7..0 | byte | Same; also the burst type of the sector data, address = offset. |
 | `46` | `CMD_IMG_PHYS` | slot | 1 = drive DS0, 2 = DS1 | The slot is a physical floppy drive (Karabas Go), after its size 0 frames. |
 | `47` | `CMD_IMG_FLUSH` | slot | 0 | Backup RAM: write the dirty sectors of the slot now (cores with caps bit 3), see section 6. |
+| `49` | `CMD_FDD_CHNG` | drive (1 = DS0, 2 = DS1) | 1 = disk changed / no disk, 0 = disk in, 2 = no DSKCHG line | Answer to `49 drive 00` of the core, see section 6. |
 | `50` | `CMD_IOCTL_SLOT` | 0 | slot | Ioctl file loader (`FL` OSD items), see section 6. |
 | `51` | `CMD_IOCTL_SIZE` | byte index 0..7 | file size (LE) | |
 | `52` | `CMD_IOCTL_BANK` | byte index 0..2 | file address bits 15..8 / 23..16 / 31..24 | |
@@ -137,6 +138,7 @@ These are sent in the reply bytes of any transfer.
 | `44` | `CMD_IMG_BUF_BANK` | `10` / `11` | sum bits 7..0 / 15..8 | 16-bit sum of the sector written, after its data. |
 | `47` | `CMD_IMG_FLUSH` | slot | 1 = done, 2 = a write failed | Answer to `47 slot 00`: no dirty sectors left. |
 | `48` | `CMD_BK_MOUNT` | 0..3 / `10` / `80` | size in sectors (LE) / img slot / kind | Backup RAM: the core asks for its save file; `80` last (kind 0 = `.sav`). Section 6. |
+| `49` | `CMD_FDD_CHNG` | drive (1 = DS0, 2 = DS1) | 0 | DSKCHG request of a physical floppy drive (Karabas Go), section 6. |
 | `60` | `CMD_MATRIX_CTL` | 0 | bit 0 clear, bit 1 update, bit 2 set brightness (bits 7..4), bit 3 audio meter mode | LED matrix ([matrix.md](matrix.md)). |
 | `61` | `CMD_MATRIX_PIXEL` | Y (bits 7..4), X (bits 3..0) | color: 0 black, 1 red, 2 yellow, 3 green | |
 | `62` | `CMD_MATRIX_BITPLAN` | byte 0..31 | bitmap byte | a row of one color: 0..7 the left matrix red rows 0..7, 8..15 its green, 16..23 / 24..31 the right matrix; bit n is column n of the matrix |
@@ -198,6 +200,25 @@ Eject: Del / Backspace on the `F` item in the OSD, or `[ Eject ]` at the top of 
 ```
 
 Physical floppy drive (Karabas Go: `board_has_floppy()`, and an `F` item with the `physical` flag of `core.json`, bit 0 of the byte after the item type). Its file browser has the entries `[ Physical DF0 ]` / `[ Physical DF1 ]` (drive DS0 / DS1 of the floppy connector) after `[ Eject ]`. A drive is in one slot only: choosing it ejects it from another slot. The core settings keep the name `:phys0` / `:phys1` as the file of the slot. Each mount is a disk change for the core; the next size frames of the slot (eject, an image) end it.
+
+DSKCHG of a physical drive. The Go connector does not take pin 34 (DSKCHG) to the FPGA. A hotfix
+takes it to the MCU: lift pin 5 of U18 (74LVC14, the free gate; the pin is on GND) off its pad,
+wire connector pin 34 to it with a 1k pull-up to VCC (5 V; the drive output is open collector,
+as INDEX / TR00 / WPRT / RDATA with R23..R26), and wire U18 pin 6 to TP15 (RP2040 GPIO28; a bare
+test point on every revision up to C). Through the inverter GPIO28 is high when the selected drive
+reports a change (no disk, or no step since the disk went in). The firmware finds the wire at
+start: GPIO28 reads the same with its pull-up and its pull-down (a bare pad follows the pull).
+
+DSKCHG is valid only while the drive is selected, and an Amiga selects for microseconds, so the
+core asks:
+
+```
+49 d 00        fpga -> mcu: the core selects drive d (1 DS0, 2 DS1) itself, then asks
+49 d v         mcu -> fpga: GPIO28 now: v = 1 changed / no disk, 0 disk in, 2 no DSKCHG line
+```
+
+The core keeps the drive selected until the answer. No answer (older firmware) or `2`: the core
+has to go on without the line (its own disk change guess).
 
 ```
 40 00 slot

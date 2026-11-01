@@ -56,6 +56,10 @@
 #define PIN_MCU_SPI_IO0 14 // TP12 - FPGA TP4 (M11)
 #define PIN_MCU_SPI_IO1 2  // TP10 - FPGA TP1 (N9)
 
+// DSKCHG (pin 34) of the floppy connector through the free gate of U18 (74LVC14), high = changed:
+// a hotfix wire on TP15 (all revisions up to C), see board_go.c
+#define PIN_FDD_CHNG 28
+
 #define PIN_EXT_BTN1 0
 #define PIN_EXT_BTN2 1
 #define PIN_EXT_LED1 2
@@ -196,6 +200,10 @@
 // mcu -> fpga 47 slot 00: write the dirty sectors of the slot now; fpga -> mcu 47 slot 01 done,
 // 47 slot 02 a write failed
 #define CMD_IMG_FLUSH 0x47
+// DSKCHG of a physical floppy drive (Karabas Go with the pin 34 hotfix): fpga -> mcu 49 d 00 asks
+// for it (d = 1 DS0, 2 DS1; the core selects that drive until the answer), mcu -> fpga 49 d v:
+// v = 1 changed / no disk, 0 disk in, 2 the board has no DSKCHG line
+#define CMD_FDD_CHNG 0x49
 
 // fileloader files will be transferred in the following order:
 // 1. send SLOT num  - 1 byte
