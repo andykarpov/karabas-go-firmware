@@ -314,10 +314,18 @@ void rtc_set_data(uint8_t addr, uint8_t data) {
       case 9: rtc_year = rtc_is_bcd ? kg_bcd2bin(data) : data; break;
       case 0xA: rtc_set_eeprom_reg(addr, data & ~0x80); break;
       case 0xB:
-        // DM (bit 2) = 1 is binary, 0 BCD; zxevo always uses BCD; always 24 h; register B
-        // itself is not kept (tsconf maxi-clock writes it too often)
+        // DM (bit 2) = 1 is binary, 0 BCD; zxevo always uses BCD; always 24 h
         rtc_is_bcd = mc_is_bcd(data);
         rtc_is_24h = true;
+        // register B is kept in the EEPROM as in the battery-backed chip: the profi BIOS sets
+        // the binary mode only when it sets the clock and reads the time at its start without
+        // writing B (in BCD it took the time as invalid and reset the clock to 2012). SET is
+        // not kept; written only when it changes (tsconf maxi-clock writes B often); not for
+        // zxevo (always BCD)
+        if (rtc_type != RTC_TYPE_ZXEVO) {
+          uint8_t keep = data & ~MC_REG_B_SET;
+          if (rtc_get_eeprom_reg(addr) != keep) rtc_set_eeprom_reg(addr, keep);
+        }
         break;
       case 0xC: // C and D are read-only registers
       case 0xD: break;
