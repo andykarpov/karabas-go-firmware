@@ -62,6 +62,10 @@ bool board_has_floppy() {
   return false;
 }
 
+int board_fdd_chng() {
+  return -1;
+}
+
 bool btn_read(uint8_t num) {
   return !gpio_get(num == 0 ? PIN_BTN1 : PIN_BTN2);
 }

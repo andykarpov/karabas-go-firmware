@@ -34,6 +34,10 @@ void board_reset_peripherals();
 // the board has a floppy connector (Karabas Go): F slots can be a physical drive
 bool board_has_floppy();
 
+// DSKCHG of the floppy connector (Go with the pin 34 hotfix): 1 changed / no disk, 0 disk in
+// (only valid while the core selects the drive), -1 the board has no DSKCHG line
+int board_fdd_chng();
+
 bool btn_read(uint8_t num);
 void led_write(uint8_t num, bool on);
 
