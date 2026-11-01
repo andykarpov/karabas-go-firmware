@@ -261,7 +261,7 @@ void flashboot (uint8_t data) {
   // d_printf("Core filename %s", core.filename); d_println();
   if (strcmp(core.id, "zxnext") == 0) { // allow flashboot only for zxnext core
     is_flashboot = true;
-    do_configure(core.filename);
+    do_reload();
   }
 }
 
@@ -279,7 +279,12 @@ static void send_build_ids(void) {
   }
 }
 
-void do_configure(const char* filename) {
+// the boot core fills the SRAM with zeros after its start (0.2 s, sram_clear of karabas-go-core-menu): a core loaded
+// again, by the reload action or CMD_FLASHBOOT, goes through it, so it starts with clean memory as from the menu
+// (BaseConf keeps the found partitions in RAM and did not see an HDD image mounted later)
+#define SRAM_CLEAR_MS 250
+
+static void configure(const char* filename, bool clear_sram) {
   hang_step(0x81);
   printer_link_reset();
   // the whole core load (bitstream, setup, roms) is one sequence on the fpga link
@@ -299,6 +304,11 @@ void do_configure(const char* filename) {
   kb_reset(); // reset to ps/2 defaults
 
   hang_step(0x87);
+  if (clear_sram && sd_exists(FILENAME_BOOT)) {
+    d_println("SRAM clear by the boot core");
+    fpga_send(FILENAME_BOOT);
+    ms_delay(SRAM_CLEAR_MS);
+  }
   fpga_send(filename);
   hang_step(0xa0);
   // wait for the core to answer before anything else goes to it (frames sent while its link is
@@ -349,6 +359,16 @@ void do_configure(const char* filename) {
   matrix_on_configure_done(core.type);
   hang_step(0xa9);
   spi_bus_unlock();
+}
+
+void do_configure(const char* filename) {
+  configure(filename, false);
+}
+
+void do_reload(void) {
+  char filename[sizeof(core.filename)];
+  strcpy(filename, core.filename); // read_core() writes core.filename
+  configure(filename, true);
 }
 
 // the on-board button actions; FF (older core files): press goes to the core, no hold

@@ -95,12 +95,9 @@ static void btn_run(uint8_t i, uint8_t action) {
     case BTN_ACTION_MENU:
       flush_and_reboot();
       break;
-    case BTN_ACTION_RELOAD: {
-      char filename[sizeof(core.filename)];
-      strcpy(filename, core.filename);
-      do_configure(filename);
+    case BTN_ACTION_RELOAD:
+      do_reload();
       break;
-    }
     case BTN_ACTION_BOOTSEL:
       bk_flush();
       core_eeprom_flush();

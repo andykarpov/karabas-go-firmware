@@ -14,6 +14,8 @@ extern core_file_slot_t file_slots[MAX_FILE_SLOTS];
 
 // configure the fpga with a core file and load its settings and roms
 void do_configure(const char* filename);
+// the current core again, through the boot core, which clears the SRAM
+void do_reload(void);
 void read_core(const char* filename);
 void read_roms(const char* filename);
 
