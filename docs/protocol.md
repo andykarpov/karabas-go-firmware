@@ -144,7 +144,7 @@ These are sent in the reply bytes of any transfer.
 | `F7` | `CMD_CAPS` | caps | max_mhz | Answer to the capability query, section 7. |
 | `F8` | `CMD_ESP_UART` | 0 | byte | Byte from the ESP8266 module. |
 | `FA` | `CMD_RTC` | register | value | The core's CPU wrote an RTC register; the firmware updates the RTC chip. |
-| `FB` | `CMD_FLASHBOOT` | 0 | core id | Reload a core. Now it always reloads the current core (ZX Next hard reset). |
+| `FB` | `CMD_FLASHBOOT` | 0 | core id | Reload a core. Now it always reloads the current core (ZX Next hard reset), through the boot core, which clears the SRAM. |
 | `FC` | `CMD_UART` | 0 = byte at 115200 (ZiFi), 1 = DLL, 2 = DLM, 3 = byte at the DLL/DLM speed (EVO RS232) | byte / divisor | Bytes to the USB serial port, or to a USB-UART adapter on the USB host while one is plugged (its speed from DLL / DLM, 115200 otherwise). |
 | `FF` | `CMD_NOP` | | | Nothing to say. |
 

@@ -178,6 +178,9 @@ default), open the OSD, go back to the menu, reload the core, reboot into BOOTSE
 storage, on a press or on a hold. In the boot menu BTN1 reboots into BOOTSEL and BTN2 into USB mass
 storage (a hold of 2 s: with the second SD card).
 
+A reload of the core goes through the boot core, which fills the SRAM with zeros (0.2 s): the core
+starts with clean memory, as from the menu.
+
 ## SD card as a USB drive
 
 Press **BTN2** in the boot menu, or send `AT+KARABAS=msc` to the serial port. The board then shows
