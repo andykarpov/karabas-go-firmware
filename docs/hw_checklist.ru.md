@@ -67,7 +67,7 @@
 ## Время и сеть (BOOT-ядро)
 
 - [ ] RTC: Setup RTC устанавливает дату и время, они сохраняются после выключения питания.
-- [ ] RTC ядер: MC146818A (profi на Go / Mini, pcxt: время в DOS) в BCD при стёртом EEPROM (регистр B 02h), DS1307 (next), ZX Evolution (tsconf, profi на Mini G), MSM6242B (nanomig: часы Workbench).
+- [ ] RTC ядер: MC146818A (profi: время в CP/M, двоичный режим регистра B сохраняется после перезагрузки ядра, без сброса на 2012; pcxt: время в DOS) в BCD при стёртом EEPROM (регистр B 02h), DS1307 (next), ZX Evolution (tsconf), MSM6242B (nanomig: часы Workbench).
 - [ ] Часовой пояс `tz`: текстовый Setup и страница Clock на FT, сохраняется.
 - [ ] Синхронизация NTP устанавливает RTC.
 - [ ] Wi-Fi: статус, поиск, пароль, подключение; управление потоком CTS (`AT+UART_DEF`).

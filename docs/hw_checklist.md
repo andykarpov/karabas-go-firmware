@@ -67,7 +67,7 @@ Set `debug=1` in `karabas.ini` and keep a terminal on the USB serial port: most 
 ## Time and network (BOOT core)
 
 - [ ] RTC: Setup RTC sets the date and time, kept over a power cycle.
-- [ ] The RTC of the cores: MC146818A (profi on Go / Mini, pcxt: the DOS time) in BCD with an erased EEPROM (register B 02h), DS1307 (next), ZX Evolution (tsconf, profi on Mini G), MSM6242B (nanomig: the Workbench clock).
+- [ ] The RTC of the cores: MC146818A (profi: the CP/M time keeps the binary mode of register B after a core reload, no reset to 2012; pcxt: the DOS time) in BCD with an erased EEPROM (register B 02h), DS1307 (next), ZX Evolution (tsconf), MSM6242B (nanomig: the Workbench clock).
 - [ ] Time zone `tz`: text Setup and the FT Clock page, saved.
 - [ ] NTP sync sets the RTC.
 - [ ] Wi-Fi: status, scan, password, join; the CTS flow control (`AT+UART_DEF`).

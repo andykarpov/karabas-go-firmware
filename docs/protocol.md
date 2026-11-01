@@ -276,7 +276,7 @@ The firmware keeps a copy of the screen and sends only the cells that changed.
 
 At core start the firmware sends all RTC registers; then every 500 ms it sends the time registers. Both use `CMD_RTC (register, value)`. When the core's CPU writes a register, the core sends `CMD_RTC` back and the firmware writes the RTC chip. Formats:
 
-- **MC146818A:** BCD or binary, selected by the DM bit (2) of register B: 0 BCD, 1 binary; always 24 h. Registers A and B come from the EEPROM bank of the core; an erased one (FFh) reads as A 26h, B 02h (BCD). Register B is sent with the mode the time is in, SET cleared.
+- **MC146818A:** BCD or binary, selected by the DM bit (2) of register B: 0 BCD, 1 binary; always 24 h. Registers A and B come from the EEPROM bank of the core; an erased one (FFh) reads as A 26h, B 02h (BCD). A write of register B by the core is kept in that bank (SET cleared, only when it changes), as in the battery-backed chip: the profi BIOS sets the binary mode when it sets the clock and reads the time later without writing B. Register B is sent with the mode the time is in, SET cleared.
 - **DS1307:** BCD.
 - **ZX Evolution:** MC146818A registers, always BCD.
 - **MSM6242B** (`rtc_mode` 3, the Amiga clock at $DC0000): registers 0-12, one BCD digit each: S1 S10 MI1 MI10 H1 H10 D1 D10 MO1 MO10 Y1 Y10 W (year mod 100, W = 0 for Sunday), 24 h. The control registers D, E, F are in the core. The core sends the digits the CPU writes; the firmware sets the clock chip 100 ms after the last of them (the CPU writes the time a digit at a time) and does not send the time in between.
