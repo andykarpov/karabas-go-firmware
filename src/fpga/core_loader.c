@@ -224,13 +224,20 @@ void core_eeprom_set(uint8_t pos, uint8_t val) {
 }
 
 bool core_eeprom_flush(void) {
-  if (eeprom_dirty == 0) return true;
   if (core.format == CORE_FORMAT_KGO2) {
-    // kgo2: the core file is not written; the .eep file of the user comes with the settings
+    // kgo2: the user's settings and the eeprom go into /config/<id>.ini and .eep, not the core file
+    bool ok = core_state_flush();
+    if (eeprom_dirty == 0) return ok;
+    eeprom_last_save = ms_now();
+    eeprom_saved = true;
+    uint8_t buf[MAX_EEPROM_ITEMS];
+    for (uint16_t i = 0; i < MAX_EEPROM_ITEMS; i++) buf[i] = core.eeprom[i].val;
+    if (!core_state_eep_save(buf)) return false;
     for (uint16_t i = 0; i < MAX_EEPROM_ITEMS; i++) core.eeprom[i].prev_val = core.eeprom[i].val;
     eeprom_dirty = 0;
-    return true;
+    return ok;
   }
+  if (eeprom_dirty == 0) return true;
   eeprom_last_save = ms_now(); // a failed write is tried again after the gap too
   eeprom_saved = true;
   if (sd_is_open(&file1)) {
@@ -257,6 +264,7 @@ bool core_eeprom_flush(void) {
 }
 
 void core_eeprom_tick(void) {
+  core_state_tick(); // the settings of a kgo2 core
   if (eeprom_dirty == 0) return;
   if (ms_since(eeprom_last_change) < EEPROM_SAVE_QUIET_MS && ms_since(eeprom_first_change) < EEPROM_SAVE_MAX_MS) return;
   if (eeprom_saved && ms_since(eeprom_last_save) < EEPROM_SAVE_GAP_MS) return;
@@ -374,6 +382,14 @@ static void configure(const char* filename, bool clear_sram) {
 }
 
 void do_configure(const char* filename) {
+  configure(filename, false);
+}
+
+void core_reset_settings(void) {
+  eeprom_dirty = 0; // nothing of the old state is written back
+  core_state_reset();
+  char filename[sizeof(core.filename)];
+  strcpy(filename, core.filename);
   configure(filename, false);
 }
 
@@ -578,6 +594,7 @@ static bool kg2_find_file(const core_file_t *cf, int type, uint16_t ofs, uint8_t
 
 // kgo2: the sections of this board; the user's state is not in the file (the defaults here)
 static void kg2_read(const core_file_t *cf) {
+  core_state_begin();
   uint8_t rec[KG2_ITEM_SIZE];
   kg2_core_t c;
   memset(&c, 0, sizeof(c));
@@ -681,6 +698,9 @@ static void kg2_read(const core_file_t *cf) {
       }
       core_file_str(&file1, cf, opt.name, o->options[j].name, sizeof(o->options[j].name));
       o->opt_value[j] = opt.value;
+      char key[17];
+      core_file_str(&file1, cf, opt.key, key, sizeof(key));
+      core_state_opt_key(i, j, key);
       if (opt.value == it.def) def = j;
     }
     if (o->options_len == 0) def = it.def; // a hidden item without options keeps its value
@@ -754,8 +774,12 @@ void read_core(const char* filename) {
   for (uint8_t i=0; i<MAX_FILE_SLOTS; i++) { file_slots[i].is_mounted = false; }
   eeprom_dirty = 0;
 
-  if (cf.format == CORE_FORMAT_KGO2) kg2_read(&cf);
-  else kg1_read(&cf);
+  if (cf.format == CORE_FORMAT_KGO2) {
+    kg2_read(&cf);
+    core_state_load(); // the user's values: /config/<id>.ini, .eep
+  } else {
+    kg1_read(&cf);
+  }
   d_printf("Core format: kgo%u", cf.format); d_println();
 
   // show OSD on boot (only for boot and fileloader cores)

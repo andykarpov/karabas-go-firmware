@@ -199,17 +199,16 @@ static void add_color(kg_ini_item_t *items, uint8_t *count, const char *key, uin
   if (v != old) add_item(items, count, "ft812", key, buf);
 }
 
-// writes the items into karabas.ini through karabas.new, keeping the rest of the file
-static bool ini_write(kg_ini_item_t *items, uint8_t count) {
+bool ini_file_update(const char *path, const char *tmp, kg_ini_item_t *items, uint8_t count, size_t line_max) {
   if (!has_sd || msc_active()) return false;
 
   size_t old_len = 0;
-  char *old = sd_read_all(INI_FILE, INI_MAX, &old_len);
+  char *old = sd_read_all(path, INI_MAX, &old_len);
   bool has_old = old != NULL;
-  FIL *f = sd_tmp_open(INI_NEW, FA_WRITE | FA_CREATE_ALWAYS);
+  FIL *f = sd_tmp_open(tmp, FA_WRITE | FA_CREATE_ALWAYS);
   if (!f) {
     free(old);
-    d_println("karabas.ini: can't create " INI_NEW);
+    d_printf("%s: can't create %s", path, tmp); d_println();
     return false;
   }
 
@@ -227,8 +226,8 @@ static bool ini_write(kg_ini_item_t *items, uint8_t count) {
     size_t k = 0;
     for (size_t i = 0; i < len; i++) if (line[i] != '\r') line[k++] = line[i];
     line[k] = '\0';
-    if (k > KG_INI_LINE_MAX) {
-      d_printf("karabas.ini: a line is longer than %u chars", KG_INI_LINE_MAX); d_println();
+    if (k > line_max) {
+      d_printf("%s: a line is longer than %u chars", path, (unsigned) line_max); d_println();
       w.ok = false;
       break;
     }
@@ -239,16 +238,21 @@ static bool ini_write(kg_ini_item_t *items, uint8_t count) {
   if (!sd_tmp_close()) w.ok = false;
 
   if (!w.ok) {
-    f_unlink(INI_NEW);
-    d_println("karabas.ini: save failed");
+    f_unlink(tmp);
+    d_printf("%s: save failed", path); d_println();
     return false;
   }
-  if ((has_old && f_unlink(INI_FILE) != FR_OK) || f_rename(INI_NEW, INI_FILE) != FR_OK) {
-    d_println("karabas.ini: can't replace the file");
+  if ((has_old && f_unlink(path) != FR_OK) || f_rename(tmp, path) != FR_OK) {
+    d_printf("%s: can't replace the file", path); d_println();
     return false;
   }
-  d_printf("karabas.ini: %u values saved", count); d_println();
+  d_printf("%s: %u values saved", path, count); d_println();
   return true;
+}
+
+// writes the items into karabas.ini through karabas.new, keeping the rest of the file
+static bool ini_write(kg_ini_item_t *items, uint8_t count) {
+  return ini_file_update(INI_FILE, INI_NEW, items, count, KG_INI_LINE_MAX);
 }
 
 bool save_setup(const setup_t *s) {

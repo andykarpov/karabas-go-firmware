@@ -1,11 +1,12 @@
 #include <unity.h>
+#include <stdio.h>
 #include <string.h>
 #include "ini_update.h"
 
 void setUp() {}
 void tearDown() {}
 
-static char out[1024];
+static char out[2048];
 
 static void collect(void *, const char *line) {
   strcat(out, line);
@@ -165,6 +166,27 @@ static void test_line_fits() {
   TEST_ASSERT_FALSE(kg_ini_line_fits("nes", v));
 }
 
+// value NULL: the key goes (all its lines), a key that is not there is not added
+static void test_remove() {
+  kg_ini_item_t items[] = { { "setup", "burst", NULL, false }, { "setup", "nothere", NULL, false },
+                            { "osd", "video", NULL, false } };
+  run("[setup]\ndebug=0\nburst=1\nburst=0\n\n[osd]\nvideo=ntsc\njoy=swap\n", items, 3);
+  TEST_ASSERT_EQUAL_STRING("[setup]\ndebug=0\n\n[osd]\njoy=swap\n", out);
+}
+
+// a path longer than a karabas.ini line
+static void test_long_path() {
+  char path[300];
+  memset(path, 'a', sizeof(path) - 1);
+  path[0] = '/';
+  path[sizeof(path) - 1] = '\0';
+  kg_ini_item_t items[] = { { "file", "disk_a", path, false } };
+  run("", items, 1);
+  char want[400];
+  snprintf(want, sizeof(want), "[file]\ndisk_a=%s\n", path);
+  TEST_ASSERT_EQUAL_STRING(want, out);
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_replace);
@@ -178,5 +200,7 @@ int main() {
   RUN_TEST(test_no_items);
   RUN_TEST(test_long_value);
   RUN_TEST(test_line_fits);
+  RUN_TEST(test_remove);
+  RUN_TEST(test_long_path);
   return UNITY_END();
 }

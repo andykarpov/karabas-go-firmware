@@ -321,8 +321,8 @@ void app_core_menu(uint8_t vpos) {
 void app_core_save(uint8_t pos)
 {
     if (core.format != CORE_FORMAT_KGO1) {
-      core.osd_need_save = false; // kgo2: the core file is only read (the user's settings: step 3)
-      core.osd[pos].prev_val = core.osd[pos].val;
+      core.osd_need_save = false; // kgo2: /config/<id>.ini, written a moment later (core_state)
+      core_state_changed();
       return;
     }
     if (!sd_open(&file1, core.filename, FA_READ | FA_WRITE)) {
