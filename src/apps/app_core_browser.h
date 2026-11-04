@@ -32,6 +32,8 @@ void app_core_browser_ft_sound(uint8_t sound, bool wait);
 
 bool app_core_browser_get_item(const char *filename, core_list_item_t *core);
 void app_core_browser_read_list();
+// sorts the core list again by hw_setup.core_sort, the cursor stays on its core
+void app_core_browser_sort();
 
 void app_core_browser_on_keyboard();
 void app_core_browser_tick(); // the mouse

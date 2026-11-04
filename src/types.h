@@ -154,7 +154,11 @@ typedef struct {
 	uint8_t matrix_brightness;  // [matrix] brightness: 0 = by the core, 1..16
 	kg_mx_style_t matrix_style;  // [matrix] clock_* / meter_*: the clock effect and the audio meters
 	int16_t tz;                 // [setup] tz: the UTC offset of the NTP sync, minutes
+	uint8_t core_sort;          // [setup] core_sort: core_sort_e, the order of the core list
 } setup_t;
+
+// the order of the core list ([setup] core_sort = name | file | order)
+enum core_sort_e { CORE_SORT_NAME = 0, CORE_SORT_FILE, CORE_SORT_ORDER, CORE_SORT_COUNT };
 
 enum osd_state_e {
     state_main = 0,

@@ -14,7 +14,7 @@ extern "C" {
 // draw them their own way; both edit a copy of hw_setup and save it with save_setup().
 
 enum {
-  SET_DEBUG, SET_DVI, SET_MATRIX, SET_MATRIX_BRIGHTNESS, SET_MX_EFFECTS,
+  SET_DEBUG, SET_DVI, SET_CORE_SORT, SET_MATRIX, SET_MATRIX_BRIGHTNESS, SET_MX_EFFECTS,
   // the Matrix effects page, in the order of KG_MX_OPT_*, then the peak
   SET_MX_CLOCK_HOURS, SET_MX_CLOCK_MINUTES, SET_MX_CLOCK_SECONDS, SET_MX_CLOCK_SECONDS_COLOR,
   SET_MX_METER_STYLE, SET_MX_METER_COLORS, SET_MX_METER_DECAY, SET_MX_METER_PEAK,

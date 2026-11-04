@@ -3,6 +3,8 @@
 #include "ini_update.h"
 #include "time_zone.h"
 #include "matrix_style.h"
+#include "file_name.h"
+#include "apps/app_core_browser.h"
 
 // karabas.ini
 
@@ -12,6 +14,9 @@
 #define INI_MAX 16384 // the most of karabas.ini that is read
 
 // karabas.ini as read by load_setup()
+// [setup] core_sort, in the order of core_sort_e
+static const char *const core_sort_keys[CORE_SORT_COUNT] = { "name", "file", "order" };
+
 static const char *ini_text;
 static size_t ini_len;
 
@@ -57,6 +62,7 @@ void load_setup() {
 
   hw_setup.dvi_only = false;
   hw_setup.tz = 0;
+  hw_setup.core_sort = CORE_SORT_NAME;
 
   hw_setup.matrix_enabled = true;
   hw_setup.matrix_brightness = 0;
@@ -89,6 +95,12 @@ void load_setup() {
     ini_bool("setup", "dvi_only", &hw_setup.dvi_only);
     int tz;
     if (ini_get("setup", "tz", buffer, bufferLen) && kg_tz_parse(buffer, &tz)) hw_setup.tz = tz;
+    if (ini_get("setup", "core_sort", buffer, bufferLen)) {
+      kg_trim(buffer);
+      for (uint8_t i = 0; i < CORE_SORT_COUNT; i++) {
+        if (strcasecmp(buffer, core_sort_keys[i]) == 0) hw_setup.core_sort = i;
+      }
+    }
 
     
     ini_bool("ft812", "enabled", &hw_setup.ft_enabled);
@@ -150,6 +162,7 @@ void load_setup() {
     d_println(hw_setup.matrix_style.meter_peak ? " peak" : "");
     d_print("Autoload enabled: "); d_println(hw_setup.autoload_enabled ? "yes" : "no"); 
     d_printf("Autoload timeout: %u", hw_setup.autoload_timeout); d_println();
+    d_print("Core sort: "); d_println(core_sort_keys[hw_setup.core_sort]);
     d_print("Autoload core: "); d_println(hw_setup.autoload_core); 
 
     free(text);
@@ -172,7 +185,7 @@ static void write_line(void *ctx, const char *line) {
   if (sd_write(w->file, "\n", 1) != 1) w->ok = false;
 }
 
-#define SETUP_ITEMS (29 + KG_MX_OPT_COUNT + 1)
+#define SETUP_ITEMS (30 + KG_MX_OPT_COUNT + 1)
 static char item_values[SETUP_ITEMS][KG_INI_VALUE_MAX + 1]; // the values of save_setup() (APP only)
 
 static void add_item(kg_ini_item_t *items, uint8_t *count, const char *section, const char *key, const char *value) {
@@ -266,6 +279,9 @@ bool save_setup(const setup_t *s) {
     kg_tz_format(s->tz, buf, sizeof(buf));
     add_item(items, &count, "setup", "tz", buf);
   }
+  if (s->core_sort != o->core_sort && s->core_sort < CORE_SORT_COUNT) {
+    add_item(items, &count, "setup", "core_sort", core_sort_keys[s->core_sort]);
+  }
   add_bool(items, &count, "ft812", "enabled", s->ft_enabled, o->ft_enabled);
   add_uint(items, &count, "ft812", "video_mode", s->ft_video_mode, o->ft_video_mode);
   add_uint(items, &count, "ft812", "sound", s->ft_sound, o->ft_sound);
@@ -298,8 +314,10 @@ bool save_setup(const setup_t *s) {
   if (count == 0) return true;
 
   if (!ini_write(items, count)) return false;
+  bool resort = s->core_sort != o->core_sort;
   hw_setup = *s;
   matrix_setup(&hw_setup);
+  if (resort) app_core_browser_sort();
   return true;
 }
 
