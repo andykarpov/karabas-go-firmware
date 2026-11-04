@@ -76,10 +76,29 @@ void osd_handle(bool force) {
   }
 }
 
+// Esc on the root of the OSD: only a new press closes it. The events are levels (the reports as
+// they are), so an Esc still held from Menu+Esc, or after Esc on a sub-page, would close it too.
+static uint8_t prev_nav_key = 0;
+static bool esc_new = false;
+static bool esc_blocked = false;
+
 void ui_on_keyboard() {
+  uint8_t nav = ui_nav_key();
+  esc_new = nav == KEY_ESC && prev_nav_key != KEY_ESC && !ui_repeat;
+  if (nav != KEY_ESC) esc_blocked = false;
+  prev_nav_key = nav;
   if (is_osd && osd_state < apps_len) {
     apps[osd_state].on_keyboard();
   }
+}
+
+void ui_osd_opened() {
+  esc_blocked = true;
+}
+
+bool ui_root_esc(uint8_t key) {
+  return key == KEY_ESC && esc_new && !esc_blocked &&
+         core.type != CORE_TYPE_BOOT && core.type != CORE_TYPE_HIDDEN;
 }
 
 // show a popup and hide it after 500 ms
