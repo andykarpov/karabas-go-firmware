@@ -81,8 +81,8 @@ jobs:
           path: build/karabas_*.uf2
 
   # A master build with firmware changes (or a manual run) that builds and
-  # passes the tests becomes a release and goes to the karabas-go and
-  # karabas-mini repos.
+  # passes the tests becomes a release and goes to the karabas-go repo (the
+  # release repo of all the boards; karabas-mini is archived).
   release:
     if: github.ref == 'refs/heads/master' && needs.version.outputs.release == 'true'
     needs: [version, test, firmware]
@@ -128,7 +128,7 @@ jobs:
           TOKEN: ${{ secrets.SIBLING_REPOS_TOKEN }}
         run: |
           if [ -z "$TOKEN" ]; then
-            echo "::warning::SIBLING_REPOS_TOKEN is not set, karabas-go and karabas-mini are not updated"
+            echo "::warning::SIBLING_REPOS_TOKEN is not set, karabas-go is not updated"
             echo "ok=false" >> "$GITHUB_OUTPUT"
           else
             echo "ok=true" >> "$GITHUB_OUTPUT"
@@ -139,36 +139,25 @@ jobs:
           repository: andykarpov/karabas-go
           token: ${{ secrets.SIBLING_REPOS_TOKEN }}
           path: sib/karabas-go
-      - if: steps.token.outputs.ok == 'true'
-        uses: actions/checkout@v4
-        with:
-          repository: andykarpov/karabas-mini
-          token: ${{ secrets.SIBLING_REPOS_TOKEN }}
-          path: sib/karabas-mini
-      - name: Update karabas-go and karabas-mini
+      - name: Update karabas-go
         if: steps.token.outputs.ok == 'true'
         env:
           MSG: ${{ steps.msg.outputs.msg }}
         run: |
           go=sib/karabas-go
-          mini=sib/karabas-mini
-          cp dist/karabas-go-firmware.uf2 $go/firmware/firmware.uf2
-          cp dist/karabas-mini-firmware.uf2 $mini/firmware/firmware.uf2
-          cp dist/karabas-minig-firmware.uf2 $mini/firmware/firmware_g.uf2
+          cp dist/karabas-go-firmware.uf2 $go/firmware/karabas_go.uf2
+          cp dist/karabas-mini-firmware.uf2 $go/firmware/karabas_mini.uf2
+          cp dist/karabas-minig-firmware.uf2 $go/firmware/karabas_minig.uf2
           # no karabas.ini or pad drivers next to the firmware: the firmware has the defaults
           # and maps most pads itself (README.md, docs/usb_gamepads.md)
-          for repo in $go $mini; do
-            git -C $repo rm -rq --ignore-unmatch cores/karabas.ini firmware/karabas.ini firmware/drivers
-          done
-          for repo in $go $mini; do
-            git -C $repo config user.name "github-actions[bot]"
-            git -C $repo config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git -C $repo add firmware cores
-            if git -C $repo diff --cached --quiet; then
-              echo "$repo: nothing to commit"
-              continue
-            fi
-            git -C $repo commit -m "$MSG"
-            git -C $repo pull --rebase
-            git -C $repo push
-          done
+          git -C $go rm -rq --ignore-unmatch cores/karabas.ini firmware/karabas.ini firmware/drivers
+          git -C $go config user.name "github-actions[bot]"
+          git -C $go config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C $go add firmware cores
+          if git -C $go diff --cached --quiet; then
+            echo "$go: nothing to commit"
+            exit 0
+          fi
+          git -C $go commit -m "$MSG"
+          git -C $go pull --rebase
+          git -C $go push
