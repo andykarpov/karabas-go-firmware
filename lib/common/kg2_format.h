@@ -106,7 +106,9 @@ typedef struct {
   uint16_t item_size;
 } kg2_osd_head_t;
 
-bool kg2_osd_head_parse(const uint8_t *sec, size_t len, kg2_osd_head_t *out);
+// head: the first KG2_OSD_HEAD_SIZE bytes of the section (only these are read), sec_len: the
+// length of the whole section, which must hold the item records
+bool kg2_osd_head_parse(const uint8_t *head, size_t sec_len, kg2_osd_head_t *out);
 
 typedef struct {
   uint8_t type;        // as kgo1: 0 S, 1 N, 2 T, 3 H, 4 P, 5 F, 6 FL, 7 M, 8 separator

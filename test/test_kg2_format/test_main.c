@@ -126,6 +126,13 @@ static void test_osd() {
   kg2_osd_head_t head;
   TEST_ASSERT_TRUE(kg2_osd_head_parse(s, n, &head));
   TEST_ASSERT_EQUAL(7, head.count);
+  // the firmware reads the 8 bytes of the head alone, with the length of the section
+  uint8_t head_only[KG2_OSD_HEAD_SIZE];
+  memcpy(head_only, s, sizeof(head_only));
+  TEST_ASSERT_TRUE(kg2_osd_head_parse(head_only, n, &head));
+  TEST_ASSERT_EQUAL(7, head.count);
+  TEST_ASSERT_FALSE(kg2_osd_head_parse(head_only, KG2_OSD_HEAD_SIZE + 47, &head));
+  TEST_ASSERT_TRUE(kg2_osd_head_parse(head_only, n, &head));
   kg2_item_t it;
 
   // the Go variant of the disk: physical, no default file

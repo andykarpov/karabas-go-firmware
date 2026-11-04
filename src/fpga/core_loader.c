@@ -629,8 +629,7 @@ static void kg2_read(const core_file_t *cf) {
   kg2_osd_head_t head;
   uint32_t osd_len = cf->kg2.sec[KG2_SEC_OSD].length;
   if (core_file_sec_read(&file1, cf, KG2_SEC_OSD, 0, head_buf, sizeof(head_buf)) &&
-      kg2_osd_head_parse(head_buf, sizeof(head_buf), &head)) {
-    if (KG2_OSD_HEAD_SIZE + (uint32_t) head.count * head.item_size > osd_len) head.count = 0;
+      kg2_osd_head_parse(head_buf, osd_len, &head)) {
     if (head.count > MAX_OSD_ITEMS) {
       d_printf("OSD section: %u items, only %d fit", head.count, MAX_OSD_ITEMS); d_println();
       head.count = MAX_OSD_ITEMS;

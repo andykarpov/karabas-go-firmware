@@ -81,12 +81,12 @@ bool kg2_ref_at(const uint8_t *sec, size_t len, uint16_t ofs, uint8_t n, uint16_
   return true;
 }
 
-bool kg2_osd_head_parse(const uint8_t *sec, size_t len, kg2_osd_head_t *out) {
-  if (len < KG2_OSD_HEAD_SIZE) return false;
-  out->count = kg_le16(sec);
-  out->item_size = kg_le16(sec + 2);
+bool kg2_osd_head_parse(const uint8_t *head, size_t sec_len, kg2_osd_head_t *out) {
+  if (sec_len < KG2_OSD_HEAD_SIZE) return false;
+  out->count = kg_le16(head);
+  out->item_size = kg_le16(head + 2);
   return out->item_size >= KG2_ITEM_SIZE &&
-         KG2_OSD_HEAD_SIZE + (size_t) out->count * out->item_size <= len;
+         KG2_OSD_HEAD_SIZE + (size_t) out->count * out->item_size <= sec_len;
 }
 
 bool kg2_item_record_parse(const uint8_t *r, size_t len, kg2_item_t *out) {
