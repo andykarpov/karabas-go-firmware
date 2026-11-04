@@ -85,6 +85,7 @@ typedef struct {
   uint8_t rtc_mode;
   uint8_t eeprom_bank;
   uint8_t spi_freq;
+  uint16_t drives;          // string: the names of the physical floppy drives ("A,B"), "" DF0 / DF1
 } kg2_core_t;
 
 bool kg2_core_parse(const uint8_t *sec, size_t len, kg2_core_t *out);

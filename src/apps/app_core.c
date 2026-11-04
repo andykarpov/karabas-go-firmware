@@ -230,7 +230,12 @@ static void item_value(uint8_t i, char *out, size_t size) {
   if (core_osd_is_file(i)) {
     const core_file_slot_t *fs = &file_slots[item->slot_id];
     int phys = kg_phys_drive(fs->filename);
-    if (fs->is_mounted && phys >= 0) snprintf(out, size, "Phys DF%d", phys);
+    if (fs->is_mounted && phys >= 0) {
+      char label[9];
+      kg_drive_label(core.drives, phys, label, sizeof(label));
+      // the value column has 10 chars: "Phys DF0", a longer name alone
+      snprintf(out, size, strlen(label) <= 5 ? "Phys %s" : "%s", label);
+    }
     else if (fs->is_mounted) kg_short_name(fs->filename, out, size - 1); // long names: "Princ~.trd"
     else snprintf(out, size, "-NO IMAGE-");
   } else {

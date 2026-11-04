@@ -103,6 +103,7 @@ typedef struct {
 	uint8_t eeprom_bank;
 	uint8_t rtc_type;
 	uint8_t spi_freq;
+	char drives[17+1];   // kgo2: the names of the physical floppy drives ("A,B"), "" DF0 / DF1 (kg_drive_label)
 	core_osd_t osd[MAX_OSD_ITEMS];
 	uint8_t osd_len;
 	core_eeprom_t eeprom[MAX_EEPROM_ITEMS];

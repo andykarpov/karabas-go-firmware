@@ -77,6 +77,18 @@ static void test_phys() {
   TEST_ASSERT_EQUAL_INT(-1, kg_phys_drive(""));
 }
 
+static void test_drive_label() {
+  char out[9];
+  kg_drive_label("", 0, out, sizeof(out)); TEST_ASSERT_EQUAL_STRING("DF0", out);
+  kg_drive_label(NULL, 1, out, sizeof(out)); TEST_ASSERT_EQUAL_STRING("DF1", out);
+  kg_drive_label("A,B", 0, out, sizeof(out)); TEST_ASSERT_EQUAL_STRING("A", out);
+  kg_drive_label("A,B", 1, out, sizeof(out)); TEST_ASSERT_EQUAL_STRING("B", out);
+  kg_drive_label("A", 1, out, sizeof(out)); TEST_ASSERT_EQUAL_STRING("DF1", out);  // one name only
+  kg_drive_label("A,", 1, out, sizeof(out)); TEST_ASSERT_EQUAL_STRING("DF1", out);
+  kg_drive_label("Drive 0,Drive 1", 1, out, sizeof(out)); TEST_ASSERT_EQUAL_STRING("Drive 1", out);
+  kg_drive_label("LONGNAME1,B", 0, out, 5); TEST_ASSERT_EQUAL_STRING("LONG", out); // cut to the buffer
+}
+
 static void test_trim_lower() {
   char s[32];
   strcpy(s, "  Hello World \r\n"); kg_trim(s); TEST_ASSERT_EQUAL_STRING("Hello World", s);
@@ -109,6 +121,7 @@ int main() {
   RUN_TEST(test_exts_text);
   RUN_TEST(test_short_name);
   RUN_TEST(test_phys);
+  RUN_TEST(test_drive_label);
   RUN_TEST(test_trim_lower);
   RUN_TEST(test_paths);
   return UNITY_END();

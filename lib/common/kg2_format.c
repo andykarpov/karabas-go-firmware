@@ -59,6 +59,7 @@ bool kg2_core_parse(const uint8_t *sec, size_t len, kg2_core_t *out) {
   out->rtc_mode = sec[11];
   out->eeprom_bank = sec[12];
   out->spi_freq = sec[13];
+  out->drives = kg_le16(sec + 14);
   return true;
 }
 

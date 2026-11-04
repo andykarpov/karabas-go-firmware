@@ -88,8 +88,10 @@ static void test_core() {
   TEST_ASSERT_EQUAL(1, c.rtc_mode);
   TEST_ASSERT_EQUAL(4, c.eeprom_bank);
   TEST_ASSERT_EQUAL(0, c.spi_freq);
+  TEST_ASSERT_EQUAL_STRING("A,B", str(&go, c.drives));
   TEST_ASSERT_TRUE(kg2_core_parse(sec(&minig, KG2_SEC_CORE), sec_len(&minig, KG2_SEC_CORE), &c));
   TEST_ASSERT_EQUAL(16, c.spi_freq);
+  TEST_ASSERT_EQUAL_STRING("", str(&minig, c.drives));
 }
 
 static void test_strings() {

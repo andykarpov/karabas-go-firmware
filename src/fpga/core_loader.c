@@ -448,6 +448,7 @@ static void kg1_read(const core_file_t *cf) {
   file_seek(FILE_POS_FILELOADER_FILE); core.last_file_id = file_read16(FILE_POS_FILELOADER_FILE);
   file_read_str(&file1, FILE_POS_FILELOADER_EXTENSIONS, core.file_extensions, 32);
   file_seek(FILE_POS_SPI_FREQ); core.spi_freq = file_read();
+  core.drives[0] = '\0';
   file_read_str(&file1, FILE_POS_SAVE_DIR, core.save_dir, 32); // older core files: FF, no save dir
   core.loader_file[0] = '\0';
   core.loader_autoload = true;
@@ -609,6 +610,7 @@ static void kg2_read(const core_file_t *cf) {
   core.eeprom_bank = c.eeprom_bank;
   core.rtc_type = c.rtc_mode;
   core.spi_freq = c.spi_freq;
+  core_file_str(&file1, cf, c.drives, core.drives, sizeof(core.drives));
   core.last_file_id = 0;
 
   // the file loader: its dir, extensions, save dir, the default file
