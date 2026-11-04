@@ -94,6 +94,23 @@ void kg_phys_name(int drive, char *out) {
   out[5] = drive ? '1' : '0';
 }
 
+void kg_drive_label(const char *names, int drive, char *out, size_t size) {
+  if (size == 0) return;
+  const char *p = names ? names : "";
+  for (int i = 0; i < drive && *p; i++) {
+    const char *comma = strchr(p, ',');
+    p = comma ? comma + 1 : p + strlen(p);
+  }
+  size_t n = strcspn(p, ",");
+  if (n == 0) {
+    snprintf(out, size, "DF%d", drive ? 1 : 0);
+    return;
+  }
+  if (n >= size) n = size - 1;
+  memcpy(out, p, n);
+  out[n] = '\0';
+}
+
 static bool is_space(char c) {
   return c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '\f' || c == '\v';
 }

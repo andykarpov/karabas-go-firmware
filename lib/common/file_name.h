@@ -28,6 +28,9 @@ void kg_short_name(const char *name, char *out, size_t width);
 // for any other name; kg_phys_name writes the name of a drive (out: at least 7 bytes).
 int kg_phys_drive(const char *name);
 void kg_phys_name(int drive, char *out);
+// the name of physical drive 0 / 1 shown in the OSD: the drive-th of names ("A,B", the kgo2 core
+// `drives`), else "DF0" / "DF1"
+void kg_drive_label(const char *names, int drive, char *out, size_t size);
 
 // String and path helpers in place of Arduino's String.
 

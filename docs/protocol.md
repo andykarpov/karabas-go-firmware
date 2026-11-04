@@ -200,7 +200,7 @@ Eject: Del / Backspace on the `F` item in the OSD, or `[ Eject ]` at the top of 
 41 i size_i  (i = 0..7)         the image; not sent without a file
 ```
 
-Physical floppy drive (Karabas Go: `board_has_floppy()`, and an `F` item with the `physical` flag of `core.json`, bit 0 of the byte after the item type). Its file browser has the entries `[ Physical DF0 ]` / `[ Physical DF1 ]` (drive DS0 / DS1 of the floppy connector) after `[ Eject ]`. A drive is in one slot only: choosing it ejects it from another slot. The core settings keep the name `:phys0` / `:phys1` as the file of the slot. Each mount is a disk change for the core; the next size frames of the slot (eject, an image) end it.
+Physical floppy drive (Karabas Go: `board_has_floppy()`, and an `F` item with the `physical` flag of `core.json`, bit 0 of the byte after the item type). Its file browser has the entries `[ Physical DF0 ]` / `[ Physical DF1 ]` (drive DS0 / DS1 of the floppy connector; the names are the `drives` of a `.kg` core, e.g. `[ Physical A ]`) after `[ Eject ]`. A drive is in one slot only: choosing it ejects it from another slot. The core settings keep the name `:phys0` / `:phys1` as the file of the slot. Each mount is a disk change for the core; the next size frames of the slot (eject, an image) end it.
 
 DSKCHG of a physical drive. The Go connector does not take pin 34 (DSKCHG) to the FPGA. A hotfix
 takes it to the MCU: lift pin 5 of U18 (74LVC14, the free gate; the pin is on GND) off its pad,

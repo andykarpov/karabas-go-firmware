@@ -20,7 +20,7 @@ void fb_clear(void);
 bool fb_add_file(const char *name, uint16_t id);
 bool fb_add_dir(const char *name, uint16_t id);
 bool fb_add_eject(void);
-bool fb_add_phys(uint8_t drive); // DF0 / DF1
+bool fb_add_phys(uint8_t drive); // 0 / 1: shown by its name (kg_drive_label, core.drives)
 bool fb_add_root(void);          // "."
 bool fb_add_parent(void);        // ".."
 // sorts the list (the entries without a file first, then the dirs) and drops the cached names

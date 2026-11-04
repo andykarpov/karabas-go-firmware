@@ -117,7 +117,9 @@ static void entry_name(uint16_t i, char *name, size_t size, size_t width) {
   if (fb_is_eject(i)) {
     snprintf(name, size, "[ Eject ]");
   } else if (fb_phys(i) >= 0) {
-    snprintf(name, size, "[ Physical DF%d ]", fb_phys(i));
+    char label[9];
+    kg_drive_label(core.drives, fb_phys(i), label, sizeof(label));
+    snprintf(name, size, "[ Physical %s ]", label);
   } else if (fb_is_root(i)) {
     snprintf(name, size, "/");
   } else if (fb_is_parent(i)) {
