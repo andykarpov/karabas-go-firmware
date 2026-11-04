@@ -142,6 +142,29 @@ static void test_no_items() {
   TEST_ASSERT_EQUAL_STRING(ini, out);
 }
 
+// a value longer than the settings ones: the file loader dir of a core
+static void test_long_value() {
+  const char *dir = "/games/nes/Japan/Role Playing Games (translated)";
+  kg_ini_item_t items[] = { { "fileloader", "nes", dir, false } };
+  run("[setup]\ndebug=1\n", items, 1);
+  TEST_ASSERT_EQUAL_STRING(
+    "[setup]\n"
+    "debug=1\n"
+    "\n"
+    "[fileloader]\n"
+    "nes=/games/nes/Japan/Role Playing Games (translated)\n", out);
+}
+
+static void test_line_fits() {
+  char v[80];
+  memset(v, 'a', sizeof(v));
+  v[KG_INI_LINE_MAX - 4] = '\0'; // "nes=" + 74
+  TEST_ASSERT_TRUE(kg_ini_line_fits("nes", v));
+  v[KG_INI_LINE_MAX - 4] = 'a';
+  v[KG_INI_LINE_MAX - 3] = '\0';
+  TEST_ASSERT_FALSE(kg_ini_line_fits("nes", v));
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_replace);
@@ -153,5 +176,7 @@ int main() {
   RUN_TEST(test_other_sections_untouched);
   RUN_TEST(test_duplicates);
   RUN_TEST(test_no_items);
+  RUN_TEST(test_long_value);
+  RUN_TEST(test_line_fits);
   return UNITY_END();
 }

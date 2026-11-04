@@ -11,12 +11,55 @@
 #include "ui/ui_draw.h"
 #include "ui/file_browser.h"
 
-// the dir of the core's files (core.dir), trimmed and from the root: "" -> "/", "nes" -> "/nes"
-static void core_dir_path(char *out, size_t size) {
-  char dir[sizeof(core.dir)];
-  strcpy(dir, core.dir);
+// The dirs: core.dir (make_core "dir") is where the browser starts, the user can go anywhere on
+// the card from it ("/", "../", the subdirs; Backspace up, H back to core.dir). The dir of the
+// last loaded file is kept in karabas.ini, [fileloader] <core id>=<dir> (no entry, or empty: the
+// start dir), and the id of the file in the core file (FILE_POS_FILELOADER_FILE): an id is an
+// index in its dir, so the two are written together, the ini first.
+#define INI_SECTION "fileloader"
+
+static char start_dir[KG_PATH_MAX]; // core.dir, from the root
+static char cur_dir[KG_PATH_MAX];   // the dir of the list
+static char ini_dir[KG_PATH_MAX];   // the dir saved in karabas.ini ("" = the start dir)
+static bool dir_pending = false;    // cur_dir is read with the first list of a core
+
+// a dir from the root, without '/' runs and the '/' at its end: "nes/" -> "/nes"
+static void dir_norm(char *dir, size_t size) {
   kg_trim(dir);
-  snprintf(out, size, "%s%s", dir[0] == '/' ? "" : "/", dir);
+  kg_path_root(dir, size);
+  kg_path_collapse(dir);
+  size_t n = strlen(dir);
+  while (n > 1 && dir[n - 1] == '/') dir[--n] = '\0';
+}
+
+// the key of the core in karabas.ini: its id
+static void ini_key(char *out, size_t size) {
+  snprintf(out, size, "%s", core.id);
+  kg_trim(out);
+}
+
+// the start dir and the dir of the last file (karabas.ini), if it can be opened
+static void dirs_init(void) {
+  snprintf(start_dir, sizeof(start_dir), "%s", core.dir);
+  dir_norm(start_dir, sizeof(start_dir));
+  snprintf(cur_dir, sizeof(cur_dir), "%s", start_dir);
+  ini_dir[0] = '\0';
+  char key[sizeof(core.id)];
+  ini_key(key, sizeof(key));
+  if (!key[0] || !settings_ini_get(INI_SECTION, key, ini_dir, sizeof(ini_dir))) ini_dir[0] = '\0';
+  if (!ini_dir[0]) return;
+  dir_norm(ini_dir, sizeof(ini_dir));
+  if (sd_opendir(&root1, ini_dir)) {
+    snprintf(cur_dir, sizeof(cur_dir), "%s", ini_dir);
+  } else {
+    d_printf("File loader: no dir %s, back to %s", ini_dir, start_dir); d_println();
+    core.last_file_id = 0; // its id was in that dir
+  }
+}
+
+// dir is the one of the last file loaded
+static bool ini_dir_is(const char *dir) {
+  return strcmp(dir, ini_dir[0] ? ini_dir : start_dir) == 0;
 }
 
 // The list of the core's files is in the file browser (fb_*), which the F / FL items of the core
@@ -26,11 +69,14 @@ static void core_dir_path(char *out, size_t size) {
 static bool list_loaded = false;
 static bool autoload = false;
 static uint16_t sel_id = 0;
+static char sel_name[256]; // a dir to put the cursor on (the one we came up from), by name
 
 void app_file_loader_core_loaded(void) {
   list_loaded = false;
   autoload = true;
   sel_id = 0;
+  sel_name[0] = '\0';
+  dir_pending = true;
 }
 
 // a message box shown for a second: no SD card, a dir that can't be opened
@@ -46,37 +92,58 @@ void app_file_loader_read_list(void) {
   osd_update();
   ms_delay(100);
 
-  // files from sd1 card; without the card or the dir the list stays empty (the hotkeys still work)
-  char d[256];
-  core_dir_path(d, sizeof(d));
-  bool opened = has_sd && sd_opendir(&root1, d);
+  if (dir_pending && has_sd) {
+    dir_pending = false;
+    dirs_init();
+  }
+
+  // the root, the parent, the subdirs and the files with the extensions of the core, from sd1;
+  // without the card the list stays empty (the hotkeys still work), a dir that can't be opened
+  // keeps "/" and "../" to go elsewhere
+  bool opened = has_sd && sd_opendir(&root1, cur_dir);
   if (!has_sd) {
     read_error("Check SD card");
   } else if (!opened) {
     char b[UI_BOX_TEXT + 1];
-    snprintf(b, sizeof(b), "Bad dir %s", d);
+    snprintf(b, sizeof(b), "Bad dir %s", cur_dir);
     d_println(b);
     read_error(b);
   }
-  d_println("Read file list");
+  d_printf("Read file list of %s", cur_dir); d_println();
   fb_clear();
+  if (has_sd) {
+    fb_add_root();
+    if (strlen(cur_dir) > 1) fb_add_parent();
+  }
+  uint16_t name_id = 0;
   FILINFO fi;
   while (opened && f_readdir(&root1, &fi) == FR_OK && fi.fname[0]) {
     uint16_t id;
-    if (!(fi.fattrib & AM_DIR) && sd_file_id(&fi, &id) && kg_name_has_ext(fi.fname, core.file_extensions)) {
+    if (sd_is_hidden(&fi) || !sd_file_id(&fi, &id)) continue;
+    if (fi.fattrib & AM_DIR) {
+      if (!fb_add_dir(fi.fname, id)) continue;
+      if (sel_name[0] && strcasecmp(sel_name, fi.fname) == 0) name_id = id;
+    } else if (kg_name_has_ext(fi.fname, core.file_extensions)) {
       fb_add_file(fi.fname, id);
     }
   }
+  sel_name[0] = '\0';
 
-  // sort by file name
+  // dirs first, by name
   fb_sort();
   
   ui_box_clear();
   osd_update();
   list_loaded = true;
 
-  // the cursor on the file it was on, else on the last file loaded
-  uint16_t id = sel_id ? sel_id : core.last_file_id;
+  // the cursor on the dir we came up from, on the entry it was on, else on the last file loaded
+  // (in its dir), else on the first entry after "/" and "../"
+  bool in_last_dir = ini_dir_is(cur_dir);
+  uint16_t id = name_id ? name_id : sel_id ? sel_id : in_last_dir ? core.last_file_id : 0;
+  sel_id = 0;
+  uint16_t first = 0;
+  while (first + 1 < fb_len() && fb_id(first) == 0) first++;
+  fb_select(first);
   for (uint16_t i = 0; id > 0 && i < fb_len(); i++) {
     if (fb_id(i) == id) { fb_select(i); break; }
   }
@@ -84,8 +151,8 @@ void app_file_loader_read_list(void) {
   // load the last file with the first list of the core
   bool load = autoload;
   autoload = false;
-  if (load && has_sd && fb_len() > 0 && core.last_file_id > 0 && fb_id(fb_sel()) == core.last_file_id) {
-    FILINFO fi;
+  if (load && has_sd && in_last_dir && core.last_file_id > 0 && !fb_is_dir(fb_sel()) &&
+      fb_id(fb_sel()) == core.last_file_id) {
     if (sd_find_id(&root1, core.last_file_id, &fi)) {
       app_file_loader_send_file(core.last_file_id);
     }
@@ -94,9 +161,7 @@ void app_file_loader_read_list(void) {
 }
 
 void app_file_loader_menu(uint8_t vpos) {
-  char d[256];
-  core_dir_path(d, sizeof(d));
-  uint8_t y = fb_draw(vpos, d, false);
+  uint8_t y = fb_draw(vpos, cur_dir, true);
   // the core's own menu (Tab or O), left of the page number
   if (core.osd_len > 0) {
     osd_set_pos(0, y);
@@ -117,20 +182,35 @@ void app_file_loader_overlay(bool initSD) {
     app_file_loader_read_list();
   }
 
-  app_file_loader_menu(APP_COREBROWSER_MENU_OFFSET);
+  // the hints first: the dir row and the page number take the row of the hint line
   char b[OSD_SIZE_X + 1] = "Files: ";
   kg_exts_text(core.file_extensions, b + 7, OSD_SIZE_X - 7);
-  ui_hint(b[7] ? b : "Please use arrows to navigate", "Press Enter to load selection");
-  osd_update();
+  ui_hint(b[7] ? b : "Please use arrows to navigate", "Enter load/open, Bksp up, H home");
+  app_file_loader_menu(APP_COREBROWSER_MENU_OFFSET);
 }
 
+// the file of the cursor is the last one: its dir into karabas.ini (only when it changed), its id
+// into the core file; an id without its dir in the ini is written as 0 (no autoload)
 void app_file_loader_save()
 {
+    uint16_t id = fb_id(fb_sel());
+    if (!ini_dir_is(cur_dir)) {
+      char key[sizeof(core.id)];
+      ini_key(key, sizeof(key));
+      // the start dir as an empty value: the core's own dir, also if make_core moves it
+      const char *v = strcmp(cur_dir, start_dir) == 0 ? "" : cur_dir;
+      if (key[0] && settings_ini_set(INI_SECTION, key, v)) {
+        snprintf(ini_dir, sizeof(ini_dir), "%s", v);
+      } else {
+        d_printf("File loader: the dir %s is not saved", cur_dir); d_println();
+        id = 0;
+      }
+    }
     if (!sd_open(&file1, core.filename, FA_READ | FA_WRITE)) {
       d_println("Unable to open bitstream file to write");
       return;
     }
-    core.last_file_id = fb_id(fb_sel());
+    core.last_file_id = id;
     file_write16(FILE_POS_FILELOADER_FILE, core.last_file_id);
     sd_close(&file1);
 }
@@ -144,8 +224,7 @@ void app_file_loader_send_file(uint16_t file_id) {
   bk_flush();
   bk_close();
 
-  char dirname[255];
-  core_dir_path(dirname, sizeof(dirname));
+  const char *dirname = cur_dir;
   if (!sd_opendir(&root1, dirname)) {
     d_printf("Unable to open dir %s", dirname); d_println();
     app_file_loader_overlay(false); // the loading popup goes
@@ -199,6 +278,26 @@ void app_file_loader_send_file(uint16_t file_id) {
   app_file_loader_overlay(false);
 }
 
+// the list of another dir; the cursor on the subdir named child (going up), else on the first entry
+static void go_dir(const char *dir, const char *child) {
+  char d[KG_PATH_MAX];
+  snprintf(d, sizeof(d), "%s", dir);
+  dir_norm(d, sizeof(d));
+  d_printf("File loader: dir %s", d); d_println();
+  snprintf(sel_name, sizeof(sel_name), "%s", child ? child : ""); // child may be in cur_dir
+  snprintf(cur_dir, sizeof(cur_dir), "%s", d);
+  sel_id = 0;
+  app_file_loader_overlay(true);
+}
+
+static void go_up(void) {
+  char d[KG_PATH_MAX];
+  snprintf(d, sizeof(d), "%s", cur_dir);
+  const char *slash = strrchr(cur_dir, '/');
+  kg_path_parent(d);
+  go_dir(d, slash ? slash + 1 : NULL);
+}
+
 void app_file_loader_leave(void) {
   if (list_loaded && fb_len() > 0) sel_id = fb_id(fb_sel());
   list_loaded = false; // the browser of a file item takes the list
@@ -219,14 +318,42 @@ void app_file_loader_on_keyboard() {
     return;
   }
 
+  // H: back to the dir of the core; backspace: the parent dir
+  if (key == KEY_H && has_sd && strcmp(cur_dir, start_dir) != 0) {
+    go_dir(start_dir, NULL);
+    return;
+  }
+  if (key == KEY_BACKSPACE && strlen(cur_dir) > 1) {
+    go_up();
+    return;
+  }
+
   if (fb_len() == 0) return;
 
   // up / down, left / right a page
   fb_key(key);
 
   if (key == KEY_ENTER) {
+    uint16_t sel = fb_sel();
+    FILINFO fi;
+    if (fb_is_root(sel)) {
+      go_dir("/", NULL);
+      return;
+    }
+    if (fb_is_parent(sel)) {
+      go_up();
+      return;
+    }
+    if (fb_is_dir(sel)) {
+      if (sd_opendir(&root1, cur_dir) && sd_find_id(&root1, fb_id(sel), &fi)) {
+        char path[KG_PATH_MAX];
+        kg_path_join(path, sizeof(path), cur_dir, fi.fname);
+        go_dir(path, NULL);
+      }
+      return;
+    }
     app_file_loader_save();
-    app_file_loader_send_file(fb_id(fb_sel()));
+    app_file_loader_send_file(fb_id(sel));
     ui_osd_hide();
   }
 

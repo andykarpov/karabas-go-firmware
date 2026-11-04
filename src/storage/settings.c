@@ -8,6 +8,7 @@
 
 #define INI_FILE "/karabas.ini"
 #define INI_NEW "/karabas.new" // save_setup() writes it, then replaces karabas.ini with it
+#define INI_LINE_BUF 80 // the read buffer of a line: lines of 78 chars (KG_INI_LINE_MAX)
 #define INI_MAX 16384 // the most of karabas.ini that is read
 
 // karabas.ini as read by load_setup()
@@ -28,7 +29,7 @@ setup_t hw_setup;
 
 void load_setup() {
 
-  const size_t bufferLen = 80;
+  const size_t bufferLen = INI_LINE_BUF;
   char buffer[bufferLen];
   
   // defaults
@@ -171,11 +172,14 @@ static void write_line(void *ctx, const char *line) {
   if (sd_write(w->file, "\n", 1) != 1) w->ok = false;
 }
 
+#define SETUP_ITEMS (29 + KG_MX_OPT_COUNT + 1)
+static char item_values[SETUP_ITEMS][KG_INI_VALUE_MAX + 1]; // the values of save_setup() (APP only)
+
 static void add_item(kg_ini_item_t *items, uint8_t *count, const char *section, const char *key, const char *value) {
   items[(*count)].section = section;
   items[(*count)].key = key;
-  strncpy(items[(*count)].value, value, KG_INI_VALUE_MAX);
-  items[(*count)].value[KG_INI_VALUE_MAX] = '\0';
+  strlcpy(item_values[*count], value, sizeof(item_values[0]));
+  items[(*count)].value = item_values[*count];
   (*count)++;
 }
 
@@ -195,48 +199,8 @@ static void add_color(kg_ini_item_t *items, uint8_t *count, const char *key, uin
   if (v != old) add_item(items, count, "ft812", key, buf);
 }
 
-bool save_setup(const setup_t *s) {
-  kg_ini_item_t items[29 + KG_MX_OPT_COUNT + 1];
-  uint8_t count = 0;
-  const setup_t *o = &hw_setup;
-  add_bool(items, &count, "setup", "debug", s->debug_enabled, o->debug_enabled);
-  add_bool(items, &count, "setup", "dvi_only", s->dvi_only, o->dvi_only);
-  if (s->tz != o->tz) {
-    char buf[8];
-    kg_tz_format(s->tz, buf, sizeof(buf));
-    add_item(items, &count, "setup", "tz", buf);
-  }
-  add_bool(items, &count, "ft812", "enabled", s->ft_enabled, o->ft_enabled);
-  add_uint(items, &count, "ft812", "video_mode", s->ft_video_mode, o->ft_video_mode);
-  add_uint(items, &count, "ft812", "sound", s->ft_sound, o->ft_sound);
-  add_bool(items, &count, "ft812", "click", s->ft_click, o->ft_click);
-  add_bool(items, &count, "ft812", "time", s->ft_time, o->ft_time);
-  add_bool(items, &count, "ft812", "date", s->ft_date, o->ft_date);
-  add_bool(items, &count, "ft812", "char", s->ft_char, o->ft_char);
-  add_color(items, &count, "color_bg", s->color_bg, o->color_bg);
-  add_color(items, &count, "color_gradient", s->color_gradient, o->color_gradient);
-  add_color(items, &count, "color_button", s->color_button, o->color_button);
-  add_color(items, &count, "color_active", s->color_active, o->color_active);
-  add_color(items, &count, "color_text", s->color_text, o->color_text);
-  add_color(items, &count, "color_text_active", s->color_text_active, o->color_text_active);
-  add_color(items, &count, "color_copyright", s->color_copyright, o->color_copyright);
-  add_bool(items, &count, "ft812", "3d_buttons", s->ft_3d_buttons, o->ft_3d_buttons);
-  add_uint(items, &count, "ft812", "mouse_speed", s->ft_mouse_speed, o->ft_mouse_speed);
-  add_bool(items, &count, "matrix", "enabled", s->matrix_enabled, o->matrix_enabled);
-  add_uint(items, &count, "matrix", "brightness", s->matrix_brightness, o->matrix_brightness);
-  for (uint8_t i = 0; i < KG_MX_OPT_COUNT; i++) {
-    if (s->matrix_style.opt[i] == o->matrix_style.opt[i]) continue;
-    char name[16];
-    strlcpy(name, kg_mx_opt_name(i, s->matrix_style.opt[i]), sizeof(name));
-    for (char *c = name; *c; c++) *c = tolower(*c);
-    add_item(items, &count, "matrix", kg_mx_opt_key(i), name);
-  }
-  add_bool(items, &count, "matrix", "meter_peak", s->matrix_style.meter_peak, o->matrix_style.meter_peak);
-  add_bool(items, &count, "autoload", "enabled", s->autoload_enabled, o->autoload_enabled);
-  add_uint(items, &count, "autoload", "timeout", s->autoload_timeout, o->autoload_timeout);
-  if (strcmp(s->autoload_core, o->autoload_core) != 0) add_item(items, &count, "autoload", "core", s->autoload_core);
-  if (count == 0) return true;
-
+// writes the items into karabas.ini through karabas.new, keeping the rest of the file
+static bool ini_write(kg_ini_item_t *items, uint8_t count) {
   if (!has_sd || msc_active()) return false;
 
   size_t old_len = 0;
@@ -283,8 +247,70 @@ bool save_setup(const setup_t *s) {
     d_println("karabas.ini: can't replace the file");
     return false;
   }
-  hw_setup = *s;
-  matrix_setup(&hw_setup);
   d_printf("karabas.ini: %u values saved", count); d_println();
   return true;
+}
+
+bool save_setup(const setup_t *s) {
+  kg_ini_item_t items[SETUP_ITEMS];
+  uint8_t count = 0;
+  const setup_t *o = &hw_setup;
+  add_bool(items, &count, "setup", "debug", s->debug_enabled, o->debug_enabled);
+  add_bool(items, &count, "setup", "dvi_only", s->dvi_only, o->dvi_only);
+  if (s->tz != o->tz) {
+    char buf[8];
+    kg_tz_format(s->tz, buf, sizeof(buf));
+    add_item(items, &count, "setup", "tz", buf);
+  }
+  add_bool(items, &count, "ft812", "enabled", s->ft_enabled, o->ft_enabled);
+  add_uint(items, &count, "ft812", "video_mode", s->ft_video_mode, o->ft_video_mode);
+  add_uint(items, &count, "ft812", "sound", s->ft_sound, o->ft_sound);
+  add_bool(items, &count, "ft812", "click", s->ft_click, o->ft_click);
+  add_bool(items, &count, "ft812", "time", s->ft_time, o->ft_time);
+  add_bool(items, &count, "ft812", "date", s->ft_date, o->ft_date);
+  add_bool(items, &count, "ft812", "char", s->ft_char, o->ft_char);
+  add_color(items, &count, "color_bg", s->color_bg, o->color_bg);
+  add_color(items, &count, "color_gradient", s->color_gradient, o->color_gradient);
+  add_color(items, &count, "color_button", s->color_button, o->color_button);
+  add_color(items, &count, "color_active", s->color_active, o->color_active);
+  add_color(items, &count, "color_text", s->color_text, o->color_text);
+  add_color(items, &count, "color_text_active", s->color_text_active, o->color_text_active);
+  add_color(items, &count, "color_copyright", s->color_copyright, o->color_copyright);
+  add_bool(items, &count, "ft812", "3d_buttons", s->ft_3d_buttons, o->ft_3d_buttons);
+  add_uint(items, &count, "ft812", "mouse_speed", s->ft_mouse_speed, o->ft_mouse_speed);
+  add_bool(items, &count, "matrix", "enabled", s->matrix_enabled, o->matrix_enabled);
+  add_uint(items, &count, "matrix", "brightness", s->matrix_brightness, o->matrix_brightness);
+  for (uint8_t i = 0; i < KG_MX_OPT_COUNT; i++) {
+    if (s->matrix_style.opt[i] == o->matrix_style.opt[i]) continue;
+    char name[16];
+    strlcpy(name, kg_mx_opt_name(i, s->matrix_style.opt[i]), sizeof(name));
+    for (char *c = name; *c; c++) *c = tolower(*c);
+    add_item(items, &count, "matrix", kg_mx_opt_key(i), name);
+  }
+  add_bool(items, &count, "matrix", "meter_peak", s->matrix_style.meter_peak, o->matrix_style.meter_peak);
+  add_bool(items, &count, "autoload", "enabled", s->autoload_enabled, o->autoload_enabled);
+  add_uint(items, &count, "autoload", "timeout", s->autoload_timeout, o->autoload_timeout);
+  if (strcmp(s->autoload_core, o->autoload_core) != 0) add_item(items, &count, "autoload", "core", s->autoload_core);
+  if (count == 0) return true;
+
+  if (!ini_write(items, count)) return false;
+  hw_setup = *s;
+  matrix_setup(&hw_setup);
+  return true;
+}
+
+bool settings_ini_get(const char *section, const char *key, char *buf, size_t size) {
+  if (!has_sd || msc_active()) return false;
+  size_t len;
+  char *text = sd_read_all(INI_FILE, INI_MAX, &len);
+  if (!text) return false;
+  bool ok = kg_ini_valid(text, len, INI_LINE_BUF) && kg_ini_get(text, len, section, key, buf, size);
+  free(text);
+  return ok;
+}
+
+bool settings_ini_set(const char *section, const char *key, const char *value) {
+  if (!kg_ini_line_fits(key, value)) return false;
+  kg_ini_item_t item = { section, key, value, false };
+  return ini_write(&item, 1);
 }

@@ -315,6 +315,7 @@
 #define APP_COREBROWSER_MENU_OFFSET 5
 
 #define SORT_HASH_LEN 4
+#define SORT_DIR_MARK '\x01' // hash[0] of a dir in the file browser: the dirs sort before the files
 #define SORT_FILES_MAX 8000
 
 #ifndef WAIT_SERIAL

@@ -12,10 +12,18 @@ extern "C" {
 // qsort comparators of the OSD lists, case-insensitive, without heap allocations. qsort is not
 // stable: equal keys are ordered by a second one, so a list comes out the same every time.
 
-// hash is the first SORT_HASH_LEN chars of the name and is not null-terminated
+// hash is the first SORT_HASH_LEN chars of the name and is not null-terminated; a dir has
+// SORT_DIR_MARK and the first chars of its name. The entries without a file (id 0) go first,
+// then the dirs, then the files.
+static inline int file_sort_rank(const file_list_sort_item_t *e) {
+  return e->file_id == 0 ? 0 : e->hash[0] == SORT_DIR_MARK ? 1 : 2;
+}
+
 static inline int file_sort_cmp(const void *pa, const void *pb) {
   const file_list_sort_item_t *a = (const file_list_sort_item_t *) pa, *b = (const file_list_sort_item_t *) pb;
-  int c = strncasecmp(a->hash, b->hash, SORT_HASH_LEN);
+  int c = file_sort_rank(a) - file_sort_rank(b);
+  if (c) return c;
+  c = strncasecmp(a->hash, b->hash, SORT_HASH_LEN);
   return c ? c : (int) a->file_id - (int) b->file_id;
 }
 

@@ -198,6 +198,10 @@ bool sd_file_id(const FILINFO *fi, uint16_t *id) {
   return i <= 0xFFFF;
 }
 
+bool sd_is_hidden(const FILINFO *fi) {
+  return (fi->fattrib & (AM_HID | AM_SYS)) || fi->fname[0] == '.';
+}
+
 bool sd_find_id(DIR *dir, uint16_t id, FILINFO *fi) {
   if (id < id_offset()) return false;
   return f_readdir_at(dir, (DWORD) (id - id_offset()) * 32, fi) == FR_OK;
