@@ -212,12 +212,17 @@ void app_file_loader_save()
 {
     uint16_t id = fb_id(fb_sel());
     if (core.format == CORE_FORMAT_KGO2) {
-      // kgo2: kept in memory (the user's last file in /config/<id>.ini comes with step 3)
+      // kgo2: the last file into /config/<id>.ini (core_state), nothing into the core file
       FILINFO fi;
       if (sd_opendir(&root1, cur_dir) && sd_find_id(&root1, id, &fi)) {
         snprintf(ini_dir, sizeof(ini_dir), "%s", cur_dir);
         snprintf(last_name, sizeof(last_name), "%s", fi.fname);
         core.last_file_id = id;
+        char path[KG_PATH_MAX];
+        kg_path_join(path, sizeof(path), cur_dir, fi.fname);
+        kg_path_collapse(path);
+        snprintf(core.loader_file, sizeof(core.loader_file), "%s", path);
+        core_state_loader_file(path); // /config/<id>.ini [loader] file
       }
       return;
     }

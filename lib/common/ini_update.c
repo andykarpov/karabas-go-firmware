@@ -36,9 +36,11 @@ bool kg_ini_line_fits(const char *key, const char *value) {
 }
 
 static void emit_item(kg_ini_update_t *u, kg_ini_item_t *it) {
-  char line[KG_INI_LINE_MAX + 1];
-  snprintf(line, sizeof(line), "%s=%s", it->key, it->value);
-  emit(u, line);
+  if (it->value) {
+    char line[KG_INI_LONG_LINE_MAX + 1];
+    snprintf(line, sizeof(line), "%s=%s", it->key, it->value);
+    emit(u, line);
+  }
   it->done = true;
 }
 
@@ -102,7 +104,7 @@ void kg_ini_update_end(kg_ini_update_t *u) {
   bool blank = u->blanks > 0; // the file ends with a blank line: no other one before a new section
   emit_blanks(u);
   for (uint8_t i = 0; i < u->count; i++) {
-    if (u->items[i].done) continue;
+    if (u->items[i].done || u->items[i].value == NULL) continue;
     const char *section = u->items[i].section;
     if (u->any && !blank) emit(u, "");
     blank = false;
@@ -111,7 +113,7 @@ void kg_ini_update_end(kg_ini_update_t *u) {
     emit(u, line);
     for (uint8_t j = i; j < u->count; j++) {
       kg_ini_item_t *it = &u->items[j];
-      if (!it->done && section_eq(it->section, section)) emit_item(u, it);
+      if (!it->done && it->value && section_eq(it->section, section)) emit_item(u, it);
     }
   }
 }

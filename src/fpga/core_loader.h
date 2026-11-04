@@ -16,6 +16,8 @@ extern core_file_slot_t file_slots[MAX_FILE_SLOTS];
 void do_configure(const char* filename);
 // the current core again, through the boot core, which clears the SRAM
 void do_reload(void);
+// kgo2: deletes the user's settings of the core (/config/<id>.ini, .eep) and starts it again
+void core_reset_settings(void);
 void read_core(const char* filename);
 void read_roms(const char* filename);
 

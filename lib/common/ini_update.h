@@ -19,13 +19,16 @@ extern "C" {
 #define KG_INI_NAME_MAX 15
 #define KG_INI_VALUE_MAX 32 // the values of the settings (karabas.ini [setup] .. [autoload])
 
+#define KG_INI_LONG_LINE_MAX 511 // the longest key=value written (the paths of /config/<id>.ini)
+
 // section, key and value are kept by the caller until kg_ini_update_end(); key=value must fit in
-// KG_INI_LINE_MAX (kg_ini_line_fits()), a longer line is cut
+// the line limit of the file (karabas.ini: KG_INI_LINE_MAX, kg_ini_line_fits()); a line longer
+// than KG_INI_LONG_LINE_MAX is cut. value NULL removes the key: its lines are dropped.
 typedef struct {
   const char *section;
   const char *key;
   const char *value;
-  bool done; // written out
+  bool done; // written out (or removed)
 } kg_ini_item_t;
 
 // key=value fits in a line of KG_INI_LINE_MAX chars
