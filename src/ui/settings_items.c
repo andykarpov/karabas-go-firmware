@@ -11,6 +11,7 @@
 const setting_t settings[SET_COUNT] = {
   { "Debug log",      "Log to the USB serial port",     SET_KIND_BOOL },
   { "DVI only",       "No HDMI audio, next core",       SET_KIND_BOOL },
+  { "Core sort",      "The order of the core list",     SET_KIND_CHOICE },
   { "LED matrix",     "The dot matrix add-on",          SET_KIND_BOOL },
   { "Matrix bright.", "Core: as the core sets it",      SET_KIND_CHOICE },
   { "Matrix effects", "The clock and the audio meters", SET_KIND_PAGE },
@@ -52,6 +53,7 @@ const uint8_t settings_mx_len = sizeof(settings_mx_ids);
 
 static bool is_mx_opt(uint8_t id) { return id >= SET_MX_CLOCK_HOURS && id < SET_MX_CLOCK_HOURS + KG_MX_OPT_COUNT; }
 
+static const char *const core_sort_names[CORE_SORT_COUNT] = { "Name", "File name", "Order" };
 static const char *const sound_names[SOUNDS] = { "Off", "Klyuchik", "Ta-dan", "Run", "Sound 4" };
 
 typedef struct {
@@ -161,6 +163,7 @@ void settings_value_text(uint8_t id, const setup_t *s, char *out, size_t size) {
   }
   switch (id) {
     case SET_TIMEOUT: snprintf(out, size, "%u s", s->autoload_timeout); break;
+    case SET_CORE_SORT: strlcpy(out, core_sort_names[s->core_sort < CORE_SORT_COUNT ? s->core_sort : 0], size); break;
     case SET_CORE: {
       char name[sizeof(cores[0].name)];
       trim_copy(name, core_sel < cores_len ? cores[core_sel].name : s->autoload_core, sizeof(name));
@@ -212,6 +215,7 @@ void settings_change(uint8_t id, setup_t *s, int d) {
       break;
     }
     case SET_SOUND: s->ft_sound = (s->ft_sound + d + SOUNDS) % SOUNDS; break;
+    case SET_CORE_SORT: s->core_sort = (s->core_sort + d + CORE_SORT_COUNT) % CORE_SORT_COUNT; break;
     case SET_MOUSE_SPEED: s->ft_mouse_speed = (s->ft_mouse_speed - 1 + d + 5) % 5 + 1; break;
     case SET_MATRIX_BRIGHTNESS:
       s->matrix_brightness = (s->matrix_brightness + d + 17) % 17;

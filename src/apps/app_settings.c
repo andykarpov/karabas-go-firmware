@@ -16,11 +16,11 @@
 
 // the settings of the screen, then the buttons
 static const uint8_t ids[] = {
-  SET_DEBUG, SET_DVI, SET_MATRIX, SET_MATRIX_BRIGHTNESS, SET_MX_EFFECTS,
+  SET_DEBUG, SET_DVI, SET_CORE_SORT, SET_MATRIX, SET_MATRIX_BRIGHTNESS, SET_MX_EFFECTS,
   SET_AUTOLOAD, SET_TIMEOUT, SET_CORE,
   SET_FT, SET_VIDEO_MODE,
 };
-static const uint8_t rows[] = { 9, 10, 11, 12, 13, 15, 16, 17, 19, 20 };
+static const uint8_t rows[] = { 8, 9, 10, 11, 12, 13, 15, 16, 17, 19, 20 };
 // the Matrix effects page: settings_mx_ids
 static const uint8_t mx_rows[] = { 9, 10, 11, 12, 15, 16, 17, 18 };
 #define ITEMS (sizeof(ids) / sizeof(ids[0]))
@@ -28,7 +28,7 @@ static const uint8_t mx_rows[] = { 9, 10, 11, 12, 15, 16, 17, 18 };
 #define I_CANCEL (ITEMS + 1)
 #define I_COUNT (ITEMS + 2)
 
-#define ROW_SYSTEM 8
+#define ROW_SYSTEM 7
 #define ROW_AUTOLOAD 14
 #define ROW_FT 18
 #define ROW_CLOCK 8

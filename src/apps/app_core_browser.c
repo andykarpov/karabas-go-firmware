@@ -260,6 +260,17 @@ static core_list_item_t *add_core(void) {
   return &cores[cores_len++];
 }
 
+void app_core_browser_sort() {
+  if (cores_len == 0) return;
+  char sel[sizeof(cores[0].filename)];
+  strlcpy(sel, cores[core_sel < cores_len ? core_sel : 0].filename, sizeof(sel));
+  cores_sort(cores, cores_len, hw_setup.core_sort);
+  // the cursor stays on its core
+  for (uint8_t i = 0; i < cores_len; i++) {
+    if (strcmp(cores[i].filename, sel) == 0) { core_sel = i; break; }
+  }
+}
+
 void app_core_browser_read_list() {
   free(cores);
   cores = NULL;
@@ -290,8 +301,7 @@ void app_core_browser_read_list() {
       if (p) { cores = p; cores_cap = cores_len; }
     }
   }
-  // sort by core order number
-  cores_sort(cores, cores_len);
+  cores_sort(cores, cores_len, hw_setup.core_sort);
   
   autoload_enabled = false;
   // pre-select autoload core
