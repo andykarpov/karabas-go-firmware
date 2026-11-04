@@ -15,11 +15,14 @@ USB HID геймпада в браузере и загрузка его ini-др
 
 ## Платы
 
-| Плата | Файлы ядер | Файл прошивки в релизе |
+| Плата | Прошивка в [karabas-go](https://github.com/andykarpov/karabas-go) | В релизе этого репозитория |
 | --- | --- | --- |
-| Karabas Go | `*.kg` (все платы) | `karabas-go-firmware.uf2` |
-| Karabas Mini | `*.kg` (все платы) | `karabas-mini-firmware.uf2` |
-| Karabas Mini G | `*.kg` (все платы) | `karabas-minig-firmware.uf2` |
+| Karabas Go | `firmware/karabas_go.uf2` | `karabas-go-firmware.uf2` |
+| Karabas Mini (rev.C .. F3) | `firmware/karabas_mini.uf2` | `karabas-mini-firmware.uf2` |
+| Karabas Mini G (rev.G / G2) | `firmware/karabas_minig.uf2` | `karabas-minig-firmware.uf2` |
+
+Ядра — файлы `.kg`, один на ядро для всех плат (`cores/` в karabas-go); прошивка читает и
+старые файлы под одну плату `.kg1` / `.kg2` / `.kg3`.
 
 ## Возможности
 
@@ -77,15 +80,9 @@ CI собирает прошивку для каждого PR. Скачать е
 
 1. Откройте страницу PR и перейдите на вкладку **Checks**.
 2. Выберите слева **Build**, затем **Summary** в самом верху левой колонки.
-3. Внизу страницы, в блоке **Artifacts**, скачайте архив для своей платы:
-
-   | Плата | Артефакт |
-   |---|---|
-   | Karabas Go | `firmware-go` |
-   | Karabas Mini | `firmware-mini` |
-   | Karabas Mini G | `firmware-minig` |
-
-4. Распакуйте zip и прошейте `firmware.uf2`, как описано в разделе
+3. Внизу страницы, в блоке **Artifacts**, скачайте `firmware`.
+4. Распакуйте zip и прошейте файл своей платы (`karabas_go.uf2`, `karabas_mini.uf2` или
+   `karabas_minig.uf2`), как описано в разделе
    [Обновление прошивки](#обновление-прошивки).
 
 На **Checks** показан прогон последнего коммита PR, это самая свежая сборка. Это тестовая
@@ -104,9 +101,9 @@ CI собирает прошивку для каждого PR. Скачать е
 
 | Путь | Что это |
 | --- | --- |
-| `/boot.kg1` (`.kg2`, `.kg3`) | браузер ядер, загружается при включении |
-| `/*.kg1` (`.kg2`, `.kg3`) | ядра платы |
-| `/*.kg`, `/boot.kg` | ядра в новом формате kgo2: один файл для всех плат ([docs/kgo2.md](https://github.com/andykarpov/karabas-go-tools/blob/master/docs/kgo2.md)); показываются, если в файле есть эта плата, и тогда `boot.kg` берётся вместо `boot.kg1/2/3`. Файл ядра только читается: изменённое в меню хранится в `/config` |
+| `/boot.kg` | браузер ядер, загружается при включении |
+| `/*.kg` | ядра: один файл для всех плат (формат kgo2, [docs/kgo2.md](https://github.com/andykarpov/karabas-go-tools/blob/master/docs/kgo2.md)), показываются, если в файле есть эта плата. Файл ядра только читается: изменённое в меню хранится в `/config` |
+| `/*.kg1` (`.kg2`, `.kg3`), `/boot.kg1` (...) | ядра в старом формате kgo1 под одну плату, по-прежнему читаются (`boot.kg` важнее, если есть оба); настройки их меню пишутся в сам файл ядра |
 | `/config/<id ядра>.ini`, `.eep` | настройки ядра `.kg`: опции, отличные от значений по умолчанию, образы, последний файл загрузчика; его EEPROM. Создаёт прошивка; About (`A` в меню ядра) > `R` удаляет их |
 | `/karabas.ini` | настройки, см. ниже |
 | `/drivers/*.ini` | драйверы USB-геймпадов, необязательно ([формат](docs/usb_gamepads.ru.md#ini-драйвер)) |
@@ -137,7 +134,7 @@ CI собирает прошивку для каждого PR. Скачать е
 | | `mouse_speed` | `3` | скорость указателя мыши в графическом меню, 1..5 |
 | `[matrix]` | `enabled`, `brightness`, `clock_*`, `meter_*` | `1`, `0`, ... | LED-матрица, см. [docs/matrix.ru.md](docs/matrix.ru.md) |
 | `[autoload]` | `enabled`, `timeout`, `core` | `0`, `15`, нет | запуск ядра `core` через `timeout` секунд |
-| `[fileloader]` | `<id ядра>` | нет | каталог последнего файла, загруженного ядром-загрузчиком (пишет прошивка; пусто или нет ключа — каталог ядра) |
+| `[fileloader]` | `<id ядра>` | нет | каталог последнего файла, загруженного ядром-загрузчиком в старом формате `.kgN` (пишет прошивка; пусто или нет ключа — каталог ядра); ядро `.kg` хранит его в `/config/<id ядра>.ini` |
 
 Пример:
 
@@ -260,7 +257,7 @@ cmake -S test -B build-test -G Ninja && ninja -C build-test && ctest --test-dir 
 - [Пакетная передача](docs/burst_protocol.ru.md): быстрый режим передачи ПЗУ и файлов.
 - [LED-матрица](docs/matrix.ru.md).
 - [Проверка на железе](docs/hw_checklist.ru.md): что проверить на плате перед рискованным изменением, с базовыми замерами.
-- Файлы ядер (`.kg1` / `.kg2` / `.kg3`) и `core.json`:
+- Файлы ядер (`.kg`, kgo2: [docs/kgo2.md](https://github.com/andykarpov/karabas-go-tools/blob/master/docs/kgo2.md); старые `.kg1` / `.kg2` / `.kg3`) и `core.json`:
   [karabas-go-tools/make_core](https://github.com/andykarpov/karabas-go-tools/tree/master/make_core).
 
 У каждого документа есть английская версия (ссылка в его начале).

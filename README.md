@@ -16,11 +16,14 @@ Map USB gamepad (text and graphic menus), see [USB HID gamepads](docs/usb_gamepa
 
 ## Boards
 
-| Board | Core files | Firmware file in a release |
+| Board | Firmware in [karabas-go](https://github.com/andykarpov/karabas-go) | In a release of this repo |
 | --- | --- | --- |
-| Karabas Go | `*.kg` (all boards) | `karabas-go-firmware.uf2` |
-| Karabas Mini | `*.kg` (all boards) | `karabas-mini-firmware.uf2` |
-| Karabas Mini G | `*.kg` (all boards) | `karabas-minig-firmware.uf2` |
+| Karabas Go | `firmware/karabas_go.uf2` | `karabas-go-firmware.uf2` |
+| Karabas Mini (rev.C .. F3) | `firmware/karabas_mini.uf2` | `karabas-mini-firmware.uf2` |
+| Karabas Mini G (rev.G / G2) | `firmware/karabas_minig.uf2` | `karabas-minig-firmware.uf2` |
+
+The cores are `.kg` files, one per core for all the boards (`cores/` of karabas-go); the
+firmware also reads the older per-board files `.kg1` / `.kg2` / `.kg3`.
 
 ## Features
 
@@ -77,15 +80,9 @@ the repository are needed.
 
 1. Open the PR page and go to the **Checks** tab.
 2. Pick **Build** on the left, then **Summary** at the top of the left column.
-3. At the bottom of the page, under **Artifacts**, download the archive for your board:
-
-   | Board | Artifact |
-   |---|---|
-   | Karabas Go | `firmware-go` |
-   | Karabas Mini | `firmware-mini` |
-   | Karabas Mini G | `firmware-minig` |
-
-4. Unzip it and flash `firmware.uf2` as described in
+3. At the bottom of the page, under **Artifacts**, download `firmware`.
+4. Unzip it and flash the file of your board (`karabas_go.uf2`, `karabas_mini.uf2` or
+   `karabas_minig.uf2`) as described in
    [Updating the firmware](#updating-the-firmware).
 
 **Checks** shows the run of the latest commit of the PR, the newest build. It is a test build,
@@ -104,9 +101,9 @@ artifacts for 90 days.
 
 | Path | What |
 | --- | --- |
-| `/boot.kg1` (`.kg2`, `.kg3`) | the core browser, loaded at power on |
-| `/*.kg1` (`.kg2`, `.kg3`) | the cores of the board |
-| `/*.kg`, `/boot.kg` | cores in the new format kgo2: one file for all boards ([docs/kgo2.md](https://github.com/andykarpov/karabas-go-tools/blob/master/docs/kgo2.md)); listed if the file has the board, `boot.kg` is used instead of `boot.kg1/2/3` then. The core file is only read: what you change in its menu is kept in `/config` |
+| `/boot.kg` | the core browser, loaded at power on |
+| `/*.kg` | the cores: one file for all the boards (format kgo2, [docs/kgo2.md](https://github.com/andykarpov/karabas-go-tools/blob/master/docs/kgo2.md)), listed if the file has the board. The core file is only read: what you change in its menu is kept in `/config` |
+| `/*.kg1` (`.kg2`, `.kg3`), `/boot.kg1` (...) | cores in the older per-board format kgo1, still read (`boot.kg` wins when both are there); their menu settings are written into the core file |
 | `/config/<core id>.ini`, `.eep` | the settings of a `.kg` core: the options that differ from the core's defaults, the images, the last file of a file loader; its EEPROM. Made by the firmware; About (`A` in the core menu) > `R` deletes them |
 | `/karabas.ini` | settings, optional, see below |
 | `/drivers/*.ini` | USB gamepad drivers, optional ([format](docs/usb_gamepads.md#driver-ini)) |
@@ -137,7 +134,7 @@ characters long, or the whole file is ignored.
 | | `mouse_speed` | `3` | mouse pointer speed in the graphic menu, 1..5 |
 | `[matrix]` | `enabled`, `brightness`, `clock_*`, `meter_*` | `1`, `0`, ... | the LED matrix, see [docs/matrix.md](docs/matrix.md) |
 | `[autoload]` | `enabled`, `timeout`, `core` | `0`, `15`, none | start `core` after `timeout` seconds |
-| `[fileloader]` | `<core id>` | none | the dir of the last file loaded by a file loader core (written by the firmware; empty or none: the dir of the core) |
+| `[fileloader]` | `<core id>` | none | the dir of the last file loaded by a file loader core in the older `.kgN` format (written by the firmware; empty or none: the dir of the core); a `.kg` core keeps it in `/config/<core id>.ini` |
 
 Example:
 
@@ -261,7 +258,7 @@ and the conventions of the code.
 - [Burst transfers](docs/burst_protocol.md): the fast ROM / file transfer mode.
 - [LED matrix add-on](docs/matrix.md).
 - [Hardware checklist](docs/hw_checklist.md): what to check on a board before a risky change, with the baseline measurements.
-- Core files (`.kg1` / `.kg2` / `.kg3`) and `core.json`:
+- Core files (`.kg`, kgo2: [docs/kgo2.md](https://github.com/andykarpov/karabas-go-tools/blob/master/docs/kgo2.md); the older `.kg1` / `.kg2` / `.kg3`) and `core.json`:
   [karabas-go-tools/make_core](https://github.com/andykarpov/karabas-go-tools/tree/master/make_core).
 
 ## License
