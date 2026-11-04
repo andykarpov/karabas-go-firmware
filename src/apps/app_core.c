@@ -320,6 +320,11 @@ void app_core_menu(uint8_t vpos) {
 
 void app_core_save(uint8_t pos)
 {
+    if (core.format != CORE_FORMAT_KGO1) {
+      core.osd_need_save = false; // kgo2: the core file is only read (the user's settings: step 3)
+      core.osd[pos].prev_val = core.osd[pos].val;
+      return;
+    }
     if (!sd_open(&file1, core.filename, FA_READ | FA_WRITE)) {
       d_println("Unable to open bitstream file to write");
       return;

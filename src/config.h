@@ -265,6 +265,9 @@
 
 // osd item flags (the byte after the type in the core file)
 #define CORE_OSD_FLAG_PHYS 0x01          // F item: can be a physical floppy drive (board_has_floppy)
+#define CORE_OSD_FLAG_READONLY 0x02      // F item (kgo2): the image without writes
+#define CORE_OSD_FLAG_AUTOLOAD 0x04      // FL item (kgo2): the file goes to the core at its start
+#define CORE_OSD_NO_SWITCH 0xFF          // core_osd_t.sw of an item without a CMD_SWITCHES number
 
 #define MAX_CORES 255 // cores_len is uint8_t
 #define MAX_FILES 255

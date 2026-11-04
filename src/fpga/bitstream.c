@@ -128,12 +128,14 @@ uint32_t fpga_send(const char* filename) {
     halt("Unable to open bitstream file to read");
   }
 
-  // get bitstream size
-  uint32_t total = file_read32(FILE_POS_BITSTREAM_LEN);
+  // the bitstream of this board (kgo1: at FILE_POS_BITSTREAM_START, kgo2: its section)
+  core_file_t cf;
+  if (!core_file_open(&file1, filename, &cf)) {
+    halt("Not a core file of this board");
+  }
+  uint32_t total = cf.bitstream_len;
   d_printf("Bitstream size: %lu", (unsigned long) total); d_println();
-
-  // seek to bitstream start
-  file_seek(FILE_POS_BITSTREAM_START);
+  file_seek(cf.bitstream_ofs);
 
   pin_output(PIN_CONF_CLK);
   pin_output(PIN_CONF_IO1);

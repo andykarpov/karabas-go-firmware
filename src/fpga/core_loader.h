@@ -23,6 +23,8 @@ void read_roms(const char* filename);
 void flashboot(uint8_t data);
 
 void core_send(uint8_t pos);
+// the byte sent to the core for the value of the osd item pos (its option value, kgo2)
+uint8_t core_osd_value(uint8_t pos);
 // the osd item pos is a file item (F: the file mounter, FL: the ioctl file loader)
 bool core_osd_is_file(uint8_t pos);
 // the osd item pos takes the cursor of the core menu: it has options, it is a file item or a page

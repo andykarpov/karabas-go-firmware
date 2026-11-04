@@ -32,6 +32,7 @@
 #include "fpga/link.h"
 #include "fpga/bitstream.h"
 #include "fpga/core_loader.h"
+#include "fpga/core_file.h"
 #include "input/input.h"
 #include "periph/matrix.h"
 #include "periph/oled.h"

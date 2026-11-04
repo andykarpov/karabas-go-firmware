@@ -38,12 +38,27 @@ static void ini_key(char *out, size_t size) {
   kg_trim(out);
 }
 
-// the start dir and the dir of the last file (karabas.ini), if it can be opened
+// kgo2: the last file by its name (in ini_dir); its id is found when the list is read
+static char last_name[256];
+
+// the start dir and the dir of the last file (kgo1: karabas.ini; kgo2: the default file of the
+// core, the user's last file comes with step 3), if it can be opened
 static void dirs_init(void) {
   snprintf(start_dir, sizeof(start_dir), "%s", core.dir);
   dir_norm(start_dir, sizeof(start_dir));
   snprintf(cur_dir, sizeof(cur_dir), "%s", start_dir);
   ini_dir[0] = '\0';
+  last_name[0] = '\0';
+  if (core.format == CORE_FORMAT_KGO2) {
+    if (!core.loader_file[0]) return;
+    snprintf(ini_dir, sizeof(ini_dir), "%s", core.loader_file);
+    const char *slash = strrchr(core.loader_file, '/');
+    snprintf(last_name, sizeof(last_name), "%s", slash ? slash + 1 : core.loader_file);
+    kg_path_parent(ini_dir);
+    dir_norm(ini_dir, sizeof(ini_dir));
+    snprintf(cur_dir, sizeof(cur_dir), "%s", ini_dir);
+    return;
+  }
   char key[sizeof(core.id)];
   ini_key(key, sizeof(key));
   if (!key[0] || !settings_ini_get(INI_SECTION, key, ini_dir, sizeof(ini_dir))) ini_dir[0] = '\0';
@@ -116,6 +131,7 @@ void app_file_loader_read_list(void) {
     if (strlen(cur_dir) > 1) fb_add_parent();
   }
   uint16_t name_id = 0;
+  bool in_last_dir = ini_dir_is(cur_dir);
   FILINFO fi;
   while (opened && f_readdir(&root1, &fi) == FR_OK && fi.fname[0]) {
     uint16_t id;
@@ -125,6 +141,8 @@ void app_file_loader_read_list(void) {
       if (sel_name[0] && strcasecmp(sel_name, fi.fname) == 0) name_id = id;
     } else if (kg_name_has_ext(fi.fname, core.file_extensions)) {
       fb_add_file(fi.fname, id);
+      // kgo2: the id of the last file, by its name
+      if (in_last_dir && last_name[0] && strcmp(last_name, fi.fname) == 0) core.last_file_id = id;
     }
   }
   sel_name[0] = '\0';
@@ -138,7 +156,6 @@ void app_file_loader_read_list(void) {
 
   // the cursor on the dir we came up from, on the entry it was on, else on the last file loaded
   // (in its dir), else on the first entry after "/" and "../"
-  bool in_last_dir = ini_dir_is(cur_dir);
   uint16_t id = name_id ? name_id : sel_id ? sel_id : in_last_dir ? core.last_file_id : 0;
   sel_id = 0;
   uint16_t first = 0;
@@ -151,7 +168,7 @@ void app_file_loader_read_list(void) {
   // load the last file with the first list of the core
   bool load = autoload;
   autoload = false;
-  if (load && has_sd && in_last_dir && core.last_file_id > 0 && !fb_is_dir(fb_sel()) &&
+  if (load && has_sd && core.loader_autoload && in_last_dir && core.last_file_id > 0 && !fb_is_dir(fb_sel()) &&
       fb_id(fb_sel()) == core.last_file_id) {
     if (sd_find_id(&root1, core.last_file_id, &fi)) {
       app_file_loader_send_file(core.last_file_id);
@@ -194,6 +211,16 @@ void app_file_loader_overlay(bool initSD) {
 void app_file_loader_save()
 {
     uint16_t id = fb_id(fb_sel());
+    if (core.format == CORE_FORMAT_KGO2) {
+      // kgo2: kept in memory (the user's last file in /config/<id>.ini comes with step 3)
+      FILINFO fi;
+      if (sd_opendir(&root1, cur_dir) && sd_find_id(&root1, id, &fi)) {
+        snprintf(ini_dir, sizeof(ini_dir), "%s", cur_dir);
+        snprintf(last_name, sizeof(last_name), "%s", fi.fname);
+        core.last_file_id = id;
+      }
+      return;
+    }
     if (!ini_dir_is(cur_dir)) {
       char key[sizeof(core.id)];
       ini_key(key, sizeof(key));

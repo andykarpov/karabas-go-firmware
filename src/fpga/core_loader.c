@@ -66,15 +66,20 @@ void core_osd_change(uint8_t pos, int d) {
   if (item->type == CORE_OSD_TYPE_SWITCH) core.osd_need_save = true;
 }
 
+uint8_t core_osd_value(uint8_t pos) {
+  const core_osd_t *o = &core.osd[pos];
+  return o->options_len > 0 && o->val < o->options_len ? o->opt_value[o->val] : o->val;
+}
+
 void core_send(uint8_t pos)
 {
   if (core.osd[pos].type == CORE_OSD_TYPE_FILEMOUNTER) {
     img_mount(core.osd[pos].slot_id);
   } else if (core.osd[pos].type == CORE_OSD_TYPE_FILELOADER) {
     // do nothing
-  } else {
-    spi_send(CMD_SWITCHES, pos, core.osd[pos].val);
-    d_printf("Switch: %s %d", core.osd[pos].name, core.osd[pos].val);
+  } else if (core.osd[pos].sw != CORE_OSD_NO_SWITCH) {
+    spi_send(CMD_SWITCHES, core.osd[pos].sw, core_osd_value(pos));
+    d_printf("Switch: %s %d", core.osd[pos].name, core_osd_value(pos));
   }
   d_println();
 }
@@ -157,8 +162,8 @@ void core_send_all()
   for (uint8_t i=0; i<core.osd_len; i++) {
     if (core_osd_is_file(i)) {
       // images are mounted by read_core(), after the core settings
-    } else {
-      spi_send(CMD_SWITCHES, i, core.osd[i].val);
+    } else if (core.osd[i].sw != CORE_OSD_NO_SWITCH) {
+      spi_send(CMD_SWITCHES, core.osd[i].sw, core_osd_value(i));
     }
   }
 }
@@ -178,9 +183,10 @@ void core_trigger(uint8_t pos)
     ms_delay(100);
   }
 
-  spi_send(CMD_SWITCHES, pos, 1);
+  if (core.osd[pos].sw == CORE_OSD_NO_SWITCH) return;
+  spi_send(CMD_SWITCHES, core.osd[pos].sw, 1);
   ms_delay(100);
-  spi_send(CMD_SWITCHES, pos, 0);
+  spi_send(CMD_SWITCHES, core.osd[pos].sw, 0);
 }
 
 // The EEPROM of banks 4..254 is kept in the core file (FILE_POS_EEPROM_DATA, all 256 bytes in
@@ -219,6 +225,12 @@ void core_eeprom_set(uint8_t pos, uint8_t val) {
 
 bool core_eeprom_flush(void) {
   if (eeprom_dirty == 0) return true;
+  if (core.format == CORE_FORMAT_KGO2) {
+    // kgo2: the core file is not written; the .eep file of the user comes with the settings
+    for (uint16_t i = 0; i < MAX_EEPROM_ITEMS; i++) core.eeprom[i].prev_val = core.eeprom[i].val;
+    eeprom_dirty = 0;
+    return true;
+  }
   eeprom_last_save = ms_now(); // a failed write is tried again after the gap too
   eeprom_saved = true;
   if (sd_is_open(&file1)) {
@@ -304,9 +316,9 @@ static void configure(const char* filename, bool clear_sram) {
   kb_reset(); // reset to ps/2 defaults
 
   hang_step(0x87);
-  if (clear_sram && sd_exists(FILENAME_BOOT)) {
+  if (clear_sram && sd_exists(core_file_boot())) {
     d_println("SRAM clear by the boot core");
-    fpga_send(FILENAME_BOOT);
+    fpga_send(core_file_boot());
     ms_delay(SRAM_CLEAR_MS);
   }
   fpga_send(filename);
@@ -371,14 +383,14 @@ void do_reload(void) {
   configure(filename, true);
 }
 
-// the on-board button actions; FF (older core files): press goes to the core, no hold
-static void read_buttons() {
+// the on-board button actions: 3 bytes per button (press, hold, hold time / 100 ms) for n of them;
+// FF or missing (older core files): press goes to the core, no hold
+static void set_buttons(const uint8_t *b, uint8_t n) {
   static const char *const names[BTN_ACTION_COUNT] = {"core", "none", "osd", "menu", "reload", "bootsel", "msc", "msc2"};
-  file_seek(FILE_POS_BUTTONS);
   for (uint8_t i=0; i<CORE_BUTTONS; i++) {
-    uint8_t press = file_read();
-    uint8_t hold = file_read();
-    uint8_t hold_time = file_read();
+    uint8_t press = i < n ? b[i * 3] : 0xFF;
+    uint8_t hold = i < n ? b[i * 3 + 1] : 0xFF;
+    uint8_t hold_time = i < n ? b[i * 3 + 2] : 0xFF;
     core.btn[i].press = press < BTN_ACTION_COUNT ? press : BTN_ACTION_CORE;
     core.btn[i].hold = (hold < BTN_ACTION_COUNT && hold_time > 0 && hold_time != 0xFF) ? hold : BTN_ACTION_NONE;
     core.btn[i].hold_ms = core.btn[i].hold == BTN_ACTION_NONE ? 0 : hold_time * 100;
@@ -388,13 +400,10 @@ static void read_buttons() {
   }
 }
 
-// the LED matrix settings; zeros (older core files): the core draws
-static void read_matrix() {
+// the LED matrix settings (KG_MATRIX_BLOCK_SIZE bytes); zeros (older core files): the core draws
+static void set_matrix(const uint8_t *block) {
   static const char *const modes[KG_MATRIX_MODE_COUNT] = {"core", "scroll", "effect", "image", "blank"};
-  static uint8_t block[KG_MATRIX_BLOCK_SIZE];
   static kg_matrix_cfg_t cfg;
-  file_seek(FILE_POS_MATRIX);
-  file_read_bytes((char *) block, sizeof(block));
   kg_matrix_parse(block, &cfg);
   matrix_set_config(&cfg, core.name, core.build);
   d_printf("Matrix: %s", modes[cfg.mode]);
@@ -405,38 +414,16 @@ static void read_matrix() {
   d_println();
 }
 
-void read_core(const char* filename) {
+static uint8_t matrix_block[KG_MATRIX_BLOCK_SIZE];
 
-  if (!sd_open(&file1, filename, FA_READ)) {
-    halt("Unable to open bitstream file to read");
-  }
-
-  {
-    FILINFO fi; // the name as it is on the card
-    snprintf(core.filename, sizeof(core.filename), "%s", f_stat(filename, &fi) == FR_OK ? fi.fname : filename);
-    core.filename[32] = '\0';
-  }
+// kgo1: the header at fixed offsets, the OSD section after the roms, the eeprom and the saved
+// switches of the user in the file
+static void kg1_read(const core_file_t *cf) {
   file_read_str(&file1, FILE_POS_CORE_NAME, core.name, 32);
   uint8_t visible; file_seek(FILE_POS_CORE_VISIBLE); visible = file_read(); core.visible = (visible > 0);
   file_seek(FILE_POS_CORE_ORDER); core.order = file_read();
   file_seek(FILE_POS_CORE_TYPE); core.type = file_read();
-  // show OSD on boot (only for boot and fileloader cores)
-  is_osd = false;
-  switch (core.type) {
-    case CORE_TYPE_BOOT: is_osd = true; break;
-    case CORE_TYPE_OSD: is_osd = false; break;
-    case CORE_TYPE_FILELOADER: is_osd = true; break;
-    default: is_osd = false;
-  }  
-  d_print("Core type: ");
-  switch (core.type) {
-    case CORE_TYPE_BOOT: d_println("Boot"); break;
-    case CORE_TYPE_OSD: d_println("Normal"); break;
-    case CORE_TYPE_FILELOADER: d_println("Fileloader"); break;
-    case CORE_TYPE_HIDDEN: d_println("Hidden"); break;
-    default: d_println("Reserved");
-  }
-  core.bitstream_length = file_read32(FILE_POS_BITSTREAM_LEN);
+  core.bitstream_length = cf->bitstream_len;
   file_read_str(&file1, FILE_POS_CORE_ID, core.id, 32);
   file_read_str(&file1, FILE_POS_CORE_BUILD, core.build, 8);
   file_seek(FILE_POS_CORE_EEPROM_BANK); core.eeprom_bank = file_read();
@@ -446,11 +433,17 @@ void read_core(const char* filename) {
   file_read_str(&file1, FILE_POS_FILELOADER_EXTENSIONS, core.file_extensions, 32);
   file_seek(FILE_POS_SPI_FREQ); core.spi_freq = file_read();
   file_read_str(&file1, FILE_POS_SAVE_DIR, core.save_dir, 32); // older core files: FF, no save dir
-  link_set_freq(core.spi_freq);
-  read_buttons();
-  read_matrix();
-  uint32_t roms_len = file_read32(FILE_POS_ROM_LEN);
-  uint32_t offset = FILE_POS_BITSTREAM_START + core.bitstream_length + roms_len;
+  core.loader_file[0] = '\0';
+  core.loader_autoload = true;
+  uint8_t b[3 * CORE_BUTTONS];
+  file_seek(FILE_POS_BUTTONS);
+  file_read_bytes((char *) b, sizeof(b));
+  set_buttons(b, CORE_BUTTONS);
+  file_seek(FILE_POS_MATRIX);
+  file_read_bytes((char *) matrix_block, sizeof(matrix_block));
+  set_matrix(matrix_block);
+
+  uint32_t offset = cf->roms_ofs + cf->roms_len;
   //d_print("OSD section: "); d_println(offset);
   file_seek(offset); core.osd_len = file_read();
   // a broken core file (cut short, a wrong roms_len) reads FF here: no more items than fit
@@ -458,14 +451,6 @@ void read_core(const char* filename) {
     d_printf("OSD section: %u items, only %d fit", core.osd_len, MAX_OSD_ITEMS); d_println();
     core.osd_len = MAX_OSD_ITEMS;
   }
-  //d_print("OSD len: "); d_println(core.osd_len);
-
-  if (core.spi_freq > 0 && core.spi_freq < 255) { d_printf("Core SPI Frequency: %u MHz", core.spi_freq); d_println(); } else { d_println("Core SPI Frequency: default"); }
-  
-  app_file_loader_core_loaded();
-  img_close_all(); // the images of the previous core
-  bk_forget();
-  for (uint8_t i=0; i<MAX_FILE_SLOTS; i++) { file_slots[i].is_mounted = false; }
 
   for (uint8_t i=0; i<core.osd_len; i++) {
     if (f_tell(&file1) >= f_size(&file1)) {
@@ -479,6 +464,9 @@ void read_core(const char* filename) {
     core.osd[i].def = file_read();
     core.osd[i].val = core.osd[i].def;
     core.osd[i].prev_val = core.osd[i].def;
+    core.osd[i].sw = i; // kgo1: the position, the option values the option positions
+    for (uint8_t j=0; j<MAX_OSD_ITEM_OPTIONS; j++) core.osd[i].opt_value[j] = j;
+    core.osd[i].key[0] = '\0';
 
     // filemounter osd type:
     // loading initial dir, filename, extensions and trying to mount file, if any
@@ -545,7 +533,6 @@ void read_core(const char* filename) {
 
   // read eeprom data from file (in case rombank = 4 and up)
   // 255 means no eeprom allowed by core
-  eeprom_dirty = 0;
   if (core.eeprom_bank >= MAX_EEPROM_BANKS && core.eeprom_bank != NO_EEPROM_BANK) {
     for (uint16_t i=0; i<MAX_EEPROM_ITEMS; i++) {
       file_seek(FILE_POS_EEPROM_DATA + i);
@@ -553,9 +540,6 @@ void read_core(const char* filename) {
       core.eeprom[i].prev_val = core.eeprom[i].val;
     }
   }
-  rtc_set_eeprom_bank(core.eeprom_bank);
-  rtc_set_rtc_type(core.rtc_type);
-  rtc_send_all();
 
   // read saved switches
   for(uint8_t i=0; i<core.osd_len; i++) {
@@ -566,6 +550,234 @@ void read_core(const char* filename) {
     }
     core.osd[i].prev_val = core.osd[i].val;
   }
+}
+
+// kgo2: the first of the file candidates (refs at ofs of a section) that exists, relative to dir
+// or from the root: its dir and name into dir_out / name_out; false if none exists
+static bool kg2_find_file(const core_file_t *cf, int type, uint16_t ofs, uint8_t count, const char *dir,
+                          char *dir_out, size_t dir_size, char *name_out, size_t name_size) {
+  for (uint8_t j = 0; j < count; j++) {
+    uint8_t r[2];
+    if (!core_file_sec_read(&file1, cf, type, (uint32_t) ofs + 2u * j, r, sizeof(r))) return false;
+    char c[KG_PATH_MAX], full[KG_PATH_MAX];
+    core_file_str(&file1, cf, kg_le16(r), c, sizeof(c));
+    if (!c[0]) continue;
+    if (c[0] == '/') snprintf(full, sizeof(full), "%s", c);
+    else kg_path_join(full, sizeof(full), dir, c);
+    kg_path_collapse(full);
+    if (!sd_exists(full)) continue;
+    const char *slash = strrchr(full, '/');
+    snprintf(name_out, name_size, "%s", slash ? slash + 1 : full);
+    if (slash) *(char *) slash = '\0';
+    snprintf(dir_out, dir_size, "%s", full);
+    kg_path_root(dir_out, dir_size);
+    return true;
+  }
+  return false;
+}
+
+// kgo2: the sections of this board; the user's state is not in the file (the defaults here)
+static void kg2_read(const core_file_t *cf) {
+  uint8_t rec[KG2_ITEM_SIZE];
+  kg2_core_t c;
+  memset(&c, 0, sizeof(c));
+  if (core_file_sec_read(&file1, cf, KG2_SEC_CORE, 0, rec, KG2_CORE_SIZE)) kg2_core_parse(rec, KG2_CORE_SIZE, &c);
+  core_file_str(&file1, cf, c.name, core.name, sizeof(core.name));
+  core_file_str(&file1, cf, c.id, core.id, sizeof(core.id));
+  core_file_str(&file1, cf, c.build, core.build, sizeof(core.build));
+  core.visible = c.visible > 0;
+  core.order = c.order;
+  core.type = c.type;
+  core.bitstream_length = cf->bitstream_len;
+  core.eeprom_bank = c.eeprom_bank;
+  core.rtc_type = c.rtc_mode;
+  core.spi_freq = c.spi_freq;
+  core.last_file_id = 0;
+
+  // the file loader: its dir, extensions, save dir, the default file
+  core.dir[0] = core.file_extensions[0] = core.save_dir[0] = core.loader_file[0] = '\0';
+  core.loader_autoload = false;
+  kg2_loader_t ld;
+  if (core_file_sec_read(&file1, cf, KG2_SEC_LOADER, 0, rec, KG2_LOADER_SIZE) &&
+      kg2_loader_parse(rec, KG2_LOADER_SIZE, &ld)) {
+    core_file_str(&file1, cf, ld.dir, core.dir, sizeof(core.dir));
+    core_file_str(&file1, cf, ld.exts, core.file_extensions, sizeof(core.file_extensions));
+    core_file_str(&file1, cf, ld.save_dir, core.save_dir, sizeof(core.save_dir));
+    core.loader_autoload = (ld.flags & KG2_LOADER_AUTOLOAD) != 0;
+    char dir[KG_PATH_MAX], d[KG_PATH_MAX], name[KG_PATH_MAX];
+    snprintf(dir, sizeof(dir), "%s", core.dir);
+    kg_path_root(dir, sizeof(dir));
+    if (kg2_find_file(cf, KG2_SEC_LOADER, ld.files_ofs, ld.files, dir, d, sizeof(d), name, sizeof(name))) {
+      kg_path_join(core.loader_file, sizeof(core.loader_file), d, name);
+      kg_path_collapse(core.loader_file);
+    }
+  }
+
+  uint8_t b[1 + 3 * CORE_BUTTONS];
+  memset(b, 0xFF, sizeof(b));
+  uint32_t blen = cf->kg2.sec[KG2_SEC_BUTTONS].length;
+  if (blen > sizeof(b)) blen = sizeof(b);
+  core_file_sec_read(&file1, cf, KG2_SEC_BUTTONS, 0, b, blen);
+  set_buttons(b + 1, b[0] == 0xFF ? 0 : (uint8_t) (b[0] < (blen - 1) / 3 ? b[0] : (blen - 1) / 3));
+  memset(matrix_block, 0, sizeof(matrix_block));
+  core_file_sec_read(&file1, cf, KG2_SEC_MATRIX, 0, matrix_block, sizeof(matrix_block));
+  set_matrix(matrix_block);
+
+  // the OSD items
+  core.osd_len = 0;
+  uint8_t head_buf[KG2_OSD_HEAD_SIZE];
+  kg2_osd_head_t head;
+  uint32_t osd_len = cf->kg2.sec[KG2_SEC_OSD].length;
+  if (core_file_sec_read(&file1, cf, KG2_SEC_OSD, 0, head_buf, sizeof(head_buf)) &&
+      kg2_osd_head_parse(head_buf, sizeof(head_buf), &head)) {
+    if (KG2_OSD_HEAD_SIZE + (uint32_t) head.count * head.item_size > osd_len) head.count = 0;
+    if (head.count > MAX_OSD_ITEMS) {
+      d_printf("OSD section: %u items, only %d fit", head.count, MAX_OSD_ITEMS); d_println();
+      head.count = MAX_OSD_ITEMS;
+    }
+  } else {
+    head.count = 0;
+  }
+  uint8_t cond_value[MAX_OSD_ITEMS];
+  for (uint16_t i = 0; i < head.count; i++) {
+    kg2_item_t it;
+    if (!core_file_sec_read(&file1, cf, KG2_SEC_OSD, KG2_OSD_HEAD_SIZE + (uint32_t) i * head.item_size, rec, KG2_ITEM_SIZE) ||
+        !kg2_item_record_parse(rec, KG2_ITEM_SIZE, &it)) break;
+    core_osd_t *o = &core.osd[i];
+    memset(o, 0, sizeof(*o));
+    o->type = it.type;
+    o->flags = it.flags;
+    o->sw = it.index;
+    o->page = it.page;
+    o->open_page = it.type == CORE_OSD_TYPE_PAGE ? it.open_page : 0;
+    o->cond_item = it.cond_item;
+    o->cond = it.cond_flags & (CORE_OSD_COND_DISABLE | CORE_OSD_COND_INVERT);
+    cond_value[i] = it.cond_value;
+    o->keys[0] = it.keys[0];
+    o->keys[1] = it.keys[1];
+    core_file_str(&file1, cf, it.key, o->key, sizeof(o->key));
+    // a text line has up to 32 chars: the second half in hotkey, as kgo1
+    char text[33];
+    core_file_str(&file1, cf, it.name, text, sizeof(text));
+    snprintf(o->name, sizeof(o->name), "%s", text);
+    if (it.type == CORE_OSD_TYPE_TEXT) {
+      snprintf(o->hotkey, sizeof(o->hotkey), "%s", strlen(text) > 16 ? text + 16 : "");
+    } else {
+      core_file_str(&file1, cf, it.hotkey, o->hotkey, sizeof(o->hotkey));
+    }
+    // the options: their names and the values sent; the default is the option with its value
+    o->options_len = it.options > MAX_OSD_ITEM_OPTIONS ? MAX_OSD_ITEM_OPTIONS : it.options;
+    uint8_t def = 0xFF;
+    for (uint8_t j = 0; j < o->options_len; j++) {
+      kg2_option_t opt;
+      uint8_t r[KG2_OPTION_SIZE];
+      if (!core_file_sec_read(&file1, cf, KG2_SEC_OSD, (uint32_t) it.options_ofs + (uint32_t) j * KG2_OPTION_SIZE, r, sizeof(r)) ||
+          !kg2_option_record_parse(r, sizeof(r), &opt)) {
+        o->options_len = j;
+        break;
+      }
+      core_file_str(&file1, cf, opt.name, o->options[j].name, sizeof(o->options[j].name));
+      o->opt_value[j] = opt.value;
+      if (opt.value == it.def) def = j;
+    }
+    if (o->options_len == 0) def = it.def; // a hidden item without options keeps its value
+    else if (def >= o->options_len) def = 0;
+    o->def = o->val = o->prev_val = (it.type == CORE_OSD_TYPE_PAGE) ? 0 : def;
+
+    if (core_osd_is_file(i)) {
+      o->options_len = 0;
+      o->slot_id = it.slot;
+      if (o->slot_id >= MAX_FILE_SLOTS) {
+        d_printf("OSD item %u: file slot %u, only %d exist", i, o->slot_id, MAX_FILE_SLOTS); d_println();
+        break; // the items after it can't be trusted either
+      }
+      core_file_slot_t *fs = &file_slots[o->slot_id];
+      fs->is_autoload = (it.flags & KG2_ITEM_AUTOLOAD) != 0;
+      fs->is_mounted = false;
+      fs->offset_dir = fs->offset_filename = 0; // kgo2: nothing is written into the file
+      core_file_str(&file1, cf, it.exts, fs->ext, sizeof(fs->ext));
+      core_file_str(&file1, cf, it.dir, fs->dir, sizeof(fs->dir));
+      kg_trim(fs->dir);
+      kg_path_root(fs->dir, sizeof(fs->dir));
+      fs->filename[0] = '\0';
+      // the default file: the first candidate that exists
+      if (kg2_find_file(cf, KG2_SEC_OSD, it.files_ofs, it.files, fs->dir, fs->dir, sizeof(fs->dir),
+                        fs->filename, sizeof(fs->filename))) {
+        fs->is_mounted = true;
+      }
+    }
+    core.osd_len = i + 1;
+  }
+  // the conditions: the option value of the item they name -> its position, as kgo1
+  for (uint8_t i = 0; i < core.osd_len; i++) {
+    core_osd_t *o = &core.osd[i];
+    if (o->cond_item == 0) continue;
+    if (o->cond_item > core.osd_len) { o->cond_item = 0; continue; }
+    const core_osd_t *c = &core.osd[o->cond_item - 1];
+    uint8_t j = 0;
+    while (j < c->options_len && c->opt_value[j] != cond_value[i]) j++;
+    if (j == c->options_len) { o->cond_item = 0; continue; } // make_core checks it: a broken file
+    o->cond |= j & CORE_OSD_COND_VALUE;
+  }
+
+  // the eeprom of banks 4..254: its first content (step 3: the .eep file of the user)
+  if (core.eeprom_bank >= MAX_EEPROM_BANKS && core.eeprom_bank != NO_EEPROM_BANK) {
+    uint8_t e[MAX_EEPROM_ITEMS];
+    if (!core_file_sec_read(&file1, cf, KG2_SEC_EEPROM_INIT, 0, e, sizeof(e))) memset(e, 0xFF, sizeof(e));
+    for (uint16_t i = 0; i < MAX_EEPROM_ITEMS; i++) core.eeprom[i].val = core.eeprom[i].prev_val = e[i];
+  }
+}
+
+void read_core(const char* filename) {
+
+  if (!sd_open(&file1, filename, FA_READ)) {
+    halt("Unable to open bitstream file to read");
+  }
+  core_file_t cf;
+  if (!core_file_open(&file1, filename, &cf)) {
+    halt("Not a core file of this board");
+  }
+  core.format = cf.format;
+
+  {
+    FILINFO fi; // the name as it is on the card
+    snprintf(core.filename, sizeof(core.filename), "%s", f_stat(filename, &fi) == FR_OK ? fi.fname : filename);
+    core.filename[32] = '\0';
+  }
+
+  app_file_loader_core_loaded();
+  img_close_all(); // the images of the previous core
+  bk_forget();
+  for (uint8_t i=0; i<MAX_FILE_SLOTS; i++) { file_slots[i].is_mounted = false; }
+  eeprom_dirty = 0;
+
+  if (cf.format == CORE_FORMAT_KGO2) kg2_read(&cf);
+  else kg1_read(&cf);
+  d_printf("Core format: kgo%u", cf.format); d_println();
+
+  // show OSD on boot (only for boot and fileloader cores)
+  is_osd = false;
+  switch (core.type) {
+    case CORE_TYPE_BOOT: is_osd = true; break;
+    case CORE_TYPE_OSD: is_osd = false; break;
+    case CORE_TYPE_FILELOADER: is_osd = true; break;
+    default: is_osd = false;
+  }  
+  d_print("Core type: ");
+  switch (core.type) {
+    case CORE_TYPE_BOOT: d_println("Boot"); break;
+    case CORE_TYPE_OSD: d_println("Normal"); break;
+    case CORE_TYPE_FILELOADER: d_println("Fileloader"); break;
+    case CORE_TYPE_HIDDEN: d_println("Hidden"); break;
+    default: d_println("Reserved");
+  }
+  link_set_freq(core.spi_freq);
+  if (core.spi_freq > 0 && core.spi_freq < 255) { d_printf("Core SPI Frequency: %u MHz", core.spi_freq); d_println(); } else { d_println("Core SPI Frequency: default"); }
+
+  rtc_set_eeprom_bank(core.eeprom_bank);
+  rtc_set_rtc_type(core.rtc_type);
+  rtc_send_all();
+
   core_send_all();
 
   // re-send rtc registers
@@ -676,8 +888,11 @@ void read_roms(const char* filename) {
     halt("Unable to open bitstream file to read");
   }
 
-  uint32_t bitstream_length = file_read32(FILE_POS_BITSTREAM_LEN);
-  uint32_t roms_len = file_read32(FILE_POS_ROM_LEN);
+  core_file_t cf;
+  if (!core_file_open(&file1, filename, &cf)) {
+    halt("Not a core file of this board");
+  }
+  uint32_t roms_len = cf.roms_len;
   d_printf("ROMS len %lu", (unsigned long) roms_len); d_println();
   if (roms_len > 0) {
     spi_send(CMD_ROMLOADER, 0, 1);
@@ -688,12 +903,21 @@ void read_roms(const char* filename) {
   uint32_t offset = 0;
   uint32_t rom_idx = 0;
   while (roms_len > 0) {
-    uint32_t rom_pos = FILE_POS_BITSTREAM_START + bitstream_length + offset;
+    uint32_t rom_pos = cf.roms_ofs + offset;
     uint8_t rom_hdr[KG_ROM_BLOCK_HEADER_SIZE] = {0};
     file_seek(rom_pos);
     file_read_bytes((char*) rom_hdr, sizeof(rom_hdr));
     kg_rom_block_t rom;
-    bool rom_valid = kg_rom_block_parse(rom_hdr, roms_len, &rom);
+    bool rom_valid;
+    if (cf.format == CORE_FORMAT_KGO2) { // little-endian
+      kg2_rom_block_t r2;
+      rom_valid = kg2_rom_block_parse(rom_hdr, roms_len, &r2);
+      rom.len = r2.len;
+      rom.addr = r2.addr;
+      rom.external = r2.external;
+    } else {
+      rom_valid = kg_rom_block_parse(rom_hdr, roms_len, &rom);
+    }
     uint32_t rom_len = rom.len;
     bool rom_is_external = rom.external;
     uint32_t rom_addr = rom.addr;

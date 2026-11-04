@@ -230,17 +230,13 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
 }
 
 
-// the header of the open core file (file1)
-core_list_item_t app_core_browser_get_item(const char *filename) {
-  core_list_item_t core;
-  snprintf(core.filename, sizeof(core.filename), "%s", filename);
-  file_read_str(&file1, FILE_POS_CORE_ID, core.id, 32);
-  file_read_str(&file1, FILE_POS_CORE_NAME, core.name, 32);
-  uint8_t visible; file_seek(FILE_POS_CORE_VISIBLE); visible = file_read(); core.visible = (visible > 0);
-  file_seek(FILE_POS_CORE_ORDER); core.order = file_read();
-  file_seek(FILE_POS_CORE_TYPE); core.type = file_read();
-  file_read_str(&file1, FILE_POS_CORE_BUILD, core.build, 8);
-  return core;
+// the header of the open core file (file1); false if it is not a core of this board
+bool app_core_browser_get_item(const char *filename, core_list_item_t *core) {
+  core_file_t cf;
+  if (!core_file_open(&file1, filename, &cf)) return false;
+  snprintf(core->filename, sizeof(core->filename), "%s", filename);
+  core_file_info(&file1, &cf, core);
+  return true;
 }
 
 // the next free item of cores[], NULL at MAX_CORES or out of memory
@@ -277,12 +273,15 @@ void app_core_browser_read_list() {
     }
     FILINFO fi;
     while (f_readdir(&root1, &fi) == FR_OK && fi.fname[0]) {
-      if (!(fi.fattrib & AM_DIR) && strlen(fi.fname) < 32 && kg_name_has_ext(fi.fname, CORE_EXT) &&
+      if (!(fi.fattrib & AM_DIR) && strlen(fi.fname) < 32 && core_file_is_core(fi.fname) &&
           sd_open(&file1, fi.fname, FA_READ)) {
-        core_list_item_t *item = add_core();
-        if (item) *item = app_core_browser_get_item(fi.fname);
+        core_list_item_t item;
+        bool ok = app_core_browser_get_item(fi.fname, &item); // a .kg of other boards is left out
         sd_close(&file1);
-        if (!item) break;
+        if (!ok) continue;
+        core_list_item_t *p = add_core();
+        if (!p) break;
+        *p = item;
       }
     }
     // give the unused end of the last chunk back

@@ -122,14 +122,15 @@ static void at_list_cores() {
   FILINFO fi;
   FIL *f;
   while (f_readdir(&root, &fi) == FR_OK && fi.fname[0]) {
-    if (!(fi.fattrib & AM_DIR) && kg_name_has_ext(fi.fname, CORE_EXT) && (f = sd_tmp_open(fi.fname, FA_READ)) != NULL) {
-      char id[33], name[33], build[9];
-      file_read_str(f, FILE_POS_CORE_ID, id, 32);
-      file_read_str(f, FILE_POS_CORE_NAME, name, 32);
-      file_read_str(f, FILE_POS_CORE_BUILD, build, 8);
-      char line[160];
-      snprintf(line, sizeof(line), "+KARABAS:%s;%s;%s;%s\r\n", fi.fname, id, name, build);
-      host_print(line);
+    if (!(fi.fattrib & AM_DIR) && core_file_is_core(fi.fname) && (f = sd_tmp_open(fi.fname, FA_READ)) != NULL) {
+      core_file_t cf;
+      core_list_item_t c;
+      if (core_file_open(f, fi.fname, &cf)) { // a .kg of other boards is left out
+        core_file_info(f, &cf, &c);
+        char line[160];
+        snprintf(line, sizeof(line), "+KARABAS:%s;%s;%s;%s\r\n", fi.fname, c.id, c.name, c.build);
+        host_print(line);
+      }
       sd_tmp_close();
     }
   }
