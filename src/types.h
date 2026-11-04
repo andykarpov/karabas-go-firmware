@@ -58,6 +58,9 @@ typedef struct {
 	uint8_t open_page; // a page entry: the page it opens
 	uint8_t cond_item; // the switch the item depends on + 1, 0: none
 	uint8_t cond;      // CORE_OSD_COND_*
+	uint8_t sw;        // the CMD_SWITCHES number (kgo1: the position), 255: none
+	uint8_t opt_value[MAX_OSD_ITEM_OPTIONS]; // the byte sent for an option (kgo1: its position)
+	char key[16+1];    // kgo2: the key of the item (the user's settings)
 } core_osd_t;
 
 typedef struct {
@@ -102,12 +105,15 @@ typedef struct {
 	uint8_t osd_len;
 	core_eeprom_t eeprom[MAX_EEPROM_ITEMS];
 	bool osd_need_save;
-	char dir[32+1];
-	char save_dir[32+1]; // backup RAM files (FILE_POS_SAVE_DIR)
+	uint8_t format;      // CORE_FORMAT_KGO1 / KGO2 (fpga/core_file.h)
+	char dir[256];       // the start dir of the file loader
+	char save_dir[256];  // backup RAM files (FILE_POS_SAVE_DIR)
+	char loader_file[256]; // kgo2: the default file of the loader (its full path), "" none
+	bool loader_autoload;  // the last / default file is loaded at the start (kgo1: always)
 	core_btn_t btn[CORE_BUTTONS];
 //	char last_file[32+1];
 	uint16_t last_file_id;
-	char file_extensions[32+1];
+	char file_extensions[256];
 } core_item_t;
 
 typedef struct {

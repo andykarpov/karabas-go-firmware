@@ -106,6 +106,7 @@ artifacts for 90 days.
 | --- | --- |
 | `/boot.kg1` (`.kg2`, `.kg3`) | the core browser, loaded at power on |
 | `/*.kg1` (`.kg2`, `.kg3`) | the cores of the board |
+| `/*.kg`, `/boot.kg` | cores in the new format kgo2: one file for all boards ([docs/kgo2.md](https://github.com/andykarpov/karabas-go-tools/blob/master/docs/kgo2.md)); listed if the file has the board, `boot.kg` is used instead of `boot.kg1/2/3` then. The settings changed in its menu are not kept yet |
 | `/karabas.ini` | settings, optional, see below |
 | `/drivers/*.ini` | USB gamepad drivers, optional ([format](docs/usb_gamepads.md#driver-ini)) |
 

@@ -1,0 +1,32 @@
+{
+  "id": "test",
+  "name": "Test Core",
+  "build": "26110401",
+  "type": "osd",
+  "visible": true,
+  "order": 7,
+  "eeprom_bank": 4,
+  "rtc_mode": 1,
+  "eeprom_init": "eeprom.bin",
+  "roms": [
+    {"filename": "rom.bin", "address": 4096},
+    {"filename": "/roms/ext.rom", "address": 65536, "external": true}
+  ],
+  "loader": {"dir": "/test", "exts": ["tap", ".tzx"], "file": ["missing.tap", "game.tap"], "autoload": false},
+  "buttons": {"btn1": "core", "btn2": {"press": "osd", "hold": "menu", "hold_ms": 2000}},
+  "boards": {
+    "go": {"bitstream": "go.bin"},
+    "minig": {"bitstream": "minig.bin", "spi_freq": 16}
+  },
+  "osd": [
+    {"type": "F", "key": "disk", "name": "Disk", "slot": 1, "exts": "dsk", "dir": "/test", "physical": 1, "boards": ["go"], "hotkey": "Menu+F3"},
+    {"type": "F", "key": "disk", "name": "Disk", "slot": 1, "exts": "dsk", "dir": "/test", "file": "a.dsk", "readonly": true, "boards": ["minig"], "hotkey": "Menu+F3"},
+    {"type": "S", "key": "video", "index": 20, "name": "Video", "default": "ntsc", "hotkey": "Menu+V",
+     "options": [{"name": "PAL 50Hz", "key": "pal", "value": 3}, {"name": "NTSC 60Hz", "key": "ntsc", "value": 5}]},
+    {"type": "S", "name": "Speed", "options": ["Normal", "Turbo"], "enable_if": {"item": "video", "value": "pal", "not": true}},
+    {"type": "P", "name": "A text line longer than 16 c"},
+    {"type": "M", "name": "More", "open": 1},
+    {"type": "T", "name": "Reset", "hotkey": "F12", "page": 1},
+    {"type": "FL", "name": "BIOS", "slot": 2, "exts": "rom", "dir": "/test", "file": ["bios1.rom", "/roms/bios.rom"], "autoload": 1, "page": 1}
+  ]
+}

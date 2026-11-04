@@ -156,15 +156,15 @@ static void karabas_setup()
   if (msc_active()) {
     // the boot core shows the msc screen; the card is read before the PC gets it
     osd_state = state_msc;
-    if (has_sd && sd_exists(FILENAME_BOOT)) do_configure(FILENAME_BOOT);
+    if (has_sd && sd_exists(core_file_boot())) do_configure(core_file_boot());
     msc_start();
   } else {
     osd_state = state_main;
     if (hw_setup.debug_enabled) hang_diag_start();
 
     // load boot from SD or flashfs
-    if (has_sd && sd_exists(FILENAME_BOOT)) {  
-      do_configure(FILENAME_BOOT);
+    if (has_sd && sd_exists(core_file_boot())) {
+      do_configure(core_file_boot());
     } else {
       halt("Boot file not found. System stopped");
     }
