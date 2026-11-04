@@ -35,6 +35,7 @@ bool link_caps_query();                   // ask the loaded core for its capabil
 bool link_burst_available();
 #define CAPS_BK 0x08                      // caps bit 3: backup RAM (CMD_BK_MOUNT, CMD_IMG_FLUSH)
 #define CAPS_MIDI 0x10                    // caps bit 4: MIDI IN (CMD_MIDI from a USB MIDI keyboard)
+#define CAPS_IMG_WP 0x20                  // caps bit 5: write protected images (CMD_IMG_FLAGS, IMG_RES_PROTECTED)
 uint8_t link_core_caps();                 // the caps of the loaded core (0: no answer)
 // send data to `type`'s target starting at addr; returns how many bytes went out as bursts
 // (less than len if the fpga stopped being ready: send the rest with classic frames)

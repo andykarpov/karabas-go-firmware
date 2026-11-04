@@ -99,12 +99,13 @@ Commands that the core does not know must be ignored.
 | `40` | `CMD_IMG_SLOT` | 0 | slot | File mounter (`F` OSD items), see section 6. |
 | `41` | `CMD_IMG_SIZE` | byte index 0..7 | image size (LE) | First 0 (eject), then the real size. The core takes the image at byte 7. |
 | `42` | `CMD_IMG_LBA` | 0 / 1 | sum bits 7..0 / 15..8 | 16-bit sum of the sector read, after its data. |
-| `43` | `CMD_IMG_SEC` | slot | 1 = done, 2 = error | End of a sector request. |
+| `43` | `CMD_IMG_SEC` | slot | 1 = done, 2 = error, 3 = write protected | End of a sector request (3 only to cores with caps bit 5). |
 | `44` | `CMD_IMG_BUF_BANK` | 0 | sector offset bits 8..15 | Sector data of a read request (classic frames). |
 | `45` | `CMD_IMG_BUF_DATA` | offset bits 7..0 | byte | Same; also the burst type of the sector data, address = offset. |
 | `46` | `CMD_IMG_PHYS` | slot | 1 = drive DS0, 2 = DS1 | The slot is a physical floppy drive (Karabas Go), after its size 0 frames. |
 | `47` | `CMD_IMG_FLUSH` | slot | 0 | Backup RAM: write the dirty sectors of the slot now (cores with caps bit 3), see section 6. |
 | `49` | `CMD_FDD_CHNG` | drive (1 = DS0, 2 = DS1) | 1 = disk changed / no disk, 0 = disk in, 2 = no DSKCHG line | Answer to `49 drive 00` of the core, see section 6. |
+| `4A` | `CMD_IMG_FLAGS` | slot | bit 0 = write protected | The flags of a mounted image, after its size frames; only to cores with caps bit 5. Section 6. |
 | `50` | `CMD_IOCTL_SLOT` | 0 | slot | Ioctl file loader (`FL` OSD items), see section 6. |
 | `51` | `CMD_IOCTL_SIZE` | byte index 0..7 | file size (LE) | |
 | `52` | `CMD_IOCTL_BANK` | byte index 0..2 | file address bits 15..8 / 23..16 / 31..24 | |
@@ -243,9 +244,24 @@ FPGA: 42 i lba_i (i = 0..3), 43 slot 02,
       then 512 bytes: 44 00 offset_hi / 45 offset_lo byte, then 44 10 sum_lo, 44 11 sum_hi
 MCU:  polls with NOPs until the 512 bytes and the sum are in, writes the sector
 MCU:  43 slot 01 (done) or 43 slot 02 (error: data lost, no file)
+      or 43 slot 03 (write protected, the data is dropped; cores with caps bit 5)
 ```
 
 One request at a time: the core waits for `43 slot status` before the next one.
+
+Write protected images. An image is mounted read only when its `F` item is `readonly` (kgo2
+core files, the `readonly` key of `core.json`) or its file cannot be opened for writing (a read
+only file). The firmware never writes it: the data of a write request is pulled (the link stays
+in step) and dropped. A core with caps bit 5 gets the flags after the size frames and `03` for
+such a write, and can show the disk as write protected; an older core gets `01`, so it does not
+send the write again, and its writes are lost.
+
+```
+40 00 slot
+41 i 00      (i = 0..7)         size 0
+41 i size_i  (i = 0..7)         the image
+4A slot flags                   bit 0 = write protected (cores with caps bit 5)
+```
 
 A frame used to get lost on the link now and then (on Mini G: chip select spikes and a reply queue that took two words in one frame, both fixed in the core). Requests are still checked end to end:
 
@@ -366,6 +382,7 @@ See [hardware diagnostics](usb_printer.md#fpga--spi-loss-localisation).
 - caps bit 2: burst read (planned);
 - caps bit 3: backup RAM (`CMD_BK_MOUNT`, `CMD_IMG_FLUSH`, section 6): the firmware flushes the save of the core before it loads another game or core.
 - caps bit 4: MIDI IN: the core takes `CMD_MIDI`, the events of a USB MIDI keyboard (for its MIDI port or a thru to the SAM2695 synth). Other cores get no `CMD_MIDI`.
+- caps bit 5: write protected images: the core takes `CMD_IMG_FLAGS` and the answer `43 slot 03` (section 6).
 
 Old cores do not answer and stay on classic frames (their load takes the 100 ms longer).
 

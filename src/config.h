@@ -204,6 +204,10 @@
 // for it (d = 1 DS0, 2 DS1; the core selects that drive until the answer), mcu -> fpga 49 d v:
 // v = 1 changed / no disk, 0 disk in, 2 the board has no DSKCHG line
 #define CMD_FDD_CHNG 0x49
+// the flags of a mounted image, mcu -> fpga after its size frames, cores with CAPS_IMG_WP only:
+// addr = slot, data bit 0 = write protected (the core answer to a write is 43 slot 03 then)
+#define CMD_IMG_FLAGS 0x4A
+#define IMG_FLAG_WP 0x01
 
 // fileloader files will be transferred in the following order:
 // 1. send SLOT num  - 1 byte
