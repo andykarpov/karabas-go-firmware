@@ -214,10 +214,8 @@ void app_core_overlay(bool force)
         break;
       }
     }
-    if (has_title()) {
-      osd_print(" ");
-      ui_hotkey("Esc", " back");
-    }
+    osd_print(" ");
+    ui_hotkey("Esc", has_title() ? " back" : " hide");
   }
   osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK); 
   osd_line(UI_ROW_HINT);
@@ -453,6 +451,10 @@ void app_core_on_keyboard() {
       need_redraw = true;
     } else if (key == KEY_ESC && is_options()) {
       osd_state = state_file_loader;
+      return;
+    } else if (ui_root_esc(key)) {
+      // the main page: Esc closes the OSD, as Menu+Esc
+      ui_osd_hide();
       return;
     }
 

@@ -29,6 +29,11 @@ void ui_popup_start(uint8_t i);
 void ui_tick();
 // hide the OSD of a core; is_osd goes off 200 ms later (the Esc of the menu does not reach the core)
 void ui_osd_hide();
+// the OSD was opened (Menu+Esc, Start+C, the osd button): the Esc held from it does not close it
+void ui_osd_opened();
+// key is a new Esc press (no repeat, not the one that opened the OSD) on the root of a core's
+// OSD (not the BOOT core): the screen closes the OSD with it
+bool ui_root_esc(uint8_t key);
 void print_time();
 // a button of the OSD apps: width chars, the label centered; yellow when focused, else grey
 void ui_button(uint8_t x, uint8_t y, uint8_t width, const char *label, bool focused);

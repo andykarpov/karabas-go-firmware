@@ -165,7 +165,7 @@ core=tsconf
 | `S` | Start (core browser) | Setup: clock, Wi-Fi and Settings (core browser), USB gamepad mapper; in the graphic browser, the graphic setup (settings, video mode, color themes) |
 | `A` (core OSD) | | About |
 | Enter, Right (core OSD) | A / B, Right | open the sub-menu of a `►` item |
-| Esc (core OSD) | C or Select | back from a sub-menu to the menu above it |
+| Esc (core OSD) | C or Select | back from a sub-menu to the menu above it; on the main menu (or the file list of a file loader core) it closes the OSD |
 | Delete / Backspace (core OSD) | | eject the disk image of the selected drive |
 | Backspace (file list) | | the parent dir |
 | `H` (file list of a file loader core) | | back to the dir of the core |

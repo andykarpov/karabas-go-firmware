@@ -179,12 +179,14 @@ void app_file_loader_read_list(void) {
 
 void app_file_loader_menu(uint8_t vpos) {
   uint8_t y = fb_draw(vpos, cur_dir, true);
-  // the core's own menu (Tab or O), left of the page number
+  // the core's own menu (Tab or O) left of the page number, Esc right of it
   if (core.osd_len > 0) {
     osd_set_pos(0, y);
     ui_hotkey("O", "ptions");
-    osd_update();
   }
+  osd_set_pos(OSD_SIZE_X - 8, y);
+  ui_hotkey("Esc", " hide");
+  osd_update();
 }
 
 // initSD: read the list again (R); else only when it is not in the file browser
@@ -341,6 +343,11 @@ void app_file_loader_on_keyboard() {
   // R = recreate file index (also an empty list: the dir may be readable now)
   if (key == KEY_R) {
     app_file_loader_overlay(true);
+    return;
+  }
+  // esc: close the OSD, as Menu+Esc
+  if (ui_root_esc(key)) {
+    ui_osd_hide();
     return;
   }
   // Tab / O: the core's own menu; Esc on its main page comes back here

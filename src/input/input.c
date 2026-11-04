@@ -80,6 +80,7 @@ static void osd_toggle() {
     // a file loader core opens on its files, also when it was left in its menu (Options)
     if (core.type == CORE_TYPE_FILELOADER && osd_state == state_main) osd_state = state_file_loader;
     is_osd = true;
+    ui_osd_opened();
     osd_show_menu();
   } else {
     ui_osd_hide();
