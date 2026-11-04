@@ -33,6 +33,7 @@ static uint8_t wr_sum_seen = 0;       // bit 0: low byte, bit 1: high byte
 
 // written sectors are flushed to the sd card once the writes stop (a sync per sector takes ~40 ms)
 static bool img_dirty[MAX_FILE_SLOTS];
+static uint8_t wp_logged = 0; // the slots whose dropped writes are logged, one bit each
 static uint32_t img_last_write_ms = 0;
 #define IMG_SYNC_IDLE_MS 500
 
@@ -164,16 +165,22 @@ void img_mount(uint8_t slot) {
     spi_bus_unlock();
     return;
   }
+  fs->wp = false;
+  wp_logged &= ~(1u << slot);
   if (fs->is_mounted) {
     char fname[KG_PATH_MAX];
     img_path(slot, fname, sizeof(fname));
-    // read-write, so the core can write sectors back; read only if the file is write protected
-    if (!sd_open(&fs->file, fname, FA_READ | FA_WRITE) && !sd_open(&fs->file, fname, FA_READ)) {
+    // read-write, so the core can write sectors back; read only if the file is write protected,
+    // or the item is read-only (kgo2 "readonly")
+    bool rw = !fs->readonly && sd_open(&fs->file, fname, FA_READ | FA_WRITE);
+    if (!rw && !sd_open(&fs->file, fname, FA_READ)) {
       d_printf("Mount slot %d: unable to open %s", slot, fname); d_println();
       fs->is_mounted = false;
     } else {
+      fs->wp = !rw;
       fsize = f_size(&fs->file);
-      d_printf("Mount slot %d: %s, %llu bytes", slot, fname, (unsigned long long) fsize); d_println();
+      d_printf("Mount slot %d: %s, %llu bytes%s", slot, fname, (unsigned long long) fsize,
+        fs->wp ? ", write protected" : ""); d_println();
     }
   }
   matrix_drive_mount(slot, (uint32_t) ((fsize + IMG_SECTOR_SIZE - 1) / IMG_SECTOR_SIZE));
@@ -183,6 +190,7 @@ void img_mount(uint8_t slot) {
   spi_send64(CMD_IMG_SIZE, 0);
   if (fsize > 0) {
     spi_send64(CMD_IMG_SIZE, fsize);
+    if (link_core_caps() & CAPS_IMG_WP) spi_send(CMD_IMG_FLAGS, slot, fs->wp ? IMG_FLAG_WP : 0);
   }
   spi_bus_unlock();
 }
@@ -273,6 +281,8 @@ static bool img_serve() {
   uint8_t slot = req_slot;
   uint32_t lba = req_lba;
   bool ok = false;
+  uint8_t res = 0; // the answer, if not done / error
+  bool dropped = false; // a write to a write protected image
   const char *what = req_op == IMG_REQ_WRITE ? "wr" : "rd";
   spi_bus_lock(); // the sector and its result stay together on the link
   if (!req_complete) {
@@ -285,6 +295,15 @@ static bool img_serve() {
     } else if (req_op == IMG_REQ_WRITE) {
       if (!img_receive_sector()) {
         what = "wr, data lost";
+      } else if (file_slots[slot].wp) {
+        // the data is pulled (the link stays in step) and dropped: a core that knows write
+        // protection gets "protected", an older one "done", so it does not ask again forever
+        dropped = true;
+        res = (link_core_caps() & CAPS_IMG_WP) ? IMG_RES_PROTECTED : IMG_RES_DONE;
+        if (!(wp_logged & (1u << slot))) {
+          wp_logged |= 1u << slot;
+          d_printf("Image slot %d: write protected, writes dropped", slot); d_println();
+        }
       } else {
         ok = img_seek(slot, lba) && sd_write(f, img_buf, IMG_SECTOR_SIZE) == IMG_SECTOR_SIZE;
         img_dirty[slot] = true;
@@ -292,7 +311,9 @@ static bool img_serve() {
       }
     }
   }
-  spi_send(CMD_IMG_SEC, slot, ok ? IMG_RES_DONE : IMG_RES_ERROR);
+  if (res == 0) res = ok ? IMG_RES_DONE : IMG_RES_ERROR;
+  else ok = true; // a write protected write: answered, logged once per mount
+  spi_send(CMD_IMG_SEC, slot, res);
   if (req_complete) matrix_drive_access(slot, lba, req_op == IMG_REQ_WRITE);
   uint32_t end_us = us_now();
   uint32_t wait_us = serve_us - req_start_us, took_us = end_us - serve_us;
@@ -302,7 +323,7 @@ static bool img_serve() {
     d_println();
   } else {
     if (log_rd + log_wr == 0) log_first_ms = ms_now();
-    if (req_op == IMG_REQ_WRITE) { log_wr++; writes++; } else log_rd++;
+    if (req_op == IMG_REQ_WRITE) { if (!dropped) { log_wr++; writes++; } } else log_rd++;
     if (slot < 8) log_slots |= 1 << slot;
     if (wait_us > log_max_wait_us) log_max_wait_us = wait_us;
     if (took_us > log_max_serve_us) log_max_serve_us = took_us;

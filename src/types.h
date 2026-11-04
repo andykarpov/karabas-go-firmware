@@ -32,6 +32,8 @@ typedef struct {
 	char filename[256];
 	uint32_t offset_dir; // core file pos to write dir name
 	uint32_t offset_filename; // core file pos to write file name
+	bool readonly;            // kgo2 "readonly": the image is never written (CORE_OSD_FLAG_READONLY)
+	bool wp;                  // the mounted image is write protected (readonly, or a read only file)
 	FIL file;
 } core_file_slot_t;
 

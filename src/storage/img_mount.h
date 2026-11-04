@@ -18,6 +18,7 @@ extern "C" {
 // IMG_SEC to the fpga: the result
 #define IMG_RES_DONE 1
 #define IMG_RES_ERROR 2
+#define IMG_RES_PROTECTED 3 // a write to a write protected image (cores with CAPS_IMG_WP)
 
 void img_register_handlers();
 // open the file of the slot (dir + filename, if is_mounted) and send its size to the fpga;

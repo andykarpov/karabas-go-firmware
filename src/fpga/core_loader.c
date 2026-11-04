@@ -717,6 +717,7 @@ static void kg2_read(const core_file_t *cf) {
       }
       core_file_slot_t *fs = &file_slots[o->slot_id];
       fs->is_autoload = (it.flags & KG2_ITEM_AUTOLOAD) != 0;
+      fs->readonly = (it.flags & KG2_ITEM_READONLY) != 0;
       fs->is_mounted = false;
       fs->offset_dir = fs->offset_filename = 0; // kgo2: nothing is written into the file
       core_file_str(&file1, cf, it.exts, fs->ext, sizeof(fs->ext));
@@ -771,7 +772,7 @@ void read_core(const char* filename) {
   app_file_loader_core_loaded();
   img_close_all(); // the images of the previous core
   bk_forget();
-  for (uint8_t i=0; i<MAX_FILE_SLOTS; i++) { file_slots[i].is_mounted = false; }
+  for (uint8_t i=0; i<MAX_FILE_SLOTS; i++) { file_slots[i].is_mounted = false; file_slots[i].readonly = false; }
   eeprom_dirty = 0;
 
   if (cf.format == CORE_FORMAT_KGO2) {
