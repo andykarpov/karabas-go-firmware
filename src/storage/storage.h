@@ -52,6 +52,9 @@ bool sd_mkdirs(const char *path);
 bool sd_file_id(const FILINFO *fi, uint16_t *id);
 // the item of an id in the open dir
 bool sd_find_id(DIR *dir, uint16_t id, FILINFO *fi);
+// an entry the OSD file lists skip: hidden or system (System Volume Information), or a name
+// starting with '.' (the "._" files and .Trashes of macOS, .Spotlight-V100)
+bool sd_is_hidden(const FILINFO *fi);
 
 #ifdef __cplusplus
 }

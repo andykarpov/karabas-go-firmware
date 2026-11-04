@@ -33,8 +33,11 @@ Map USB gamepad (text and graphic menus), see [USB HID gamepads](docs/usb_gamepa
   shown or enabled only with a value of another option (the `core.json` keys are in
   [make_core](https://github.com/andykarpov/karabas-go-tools/blob/master/make_core/README.md#sub-menus-pages-and-conditional-items)).
   Disk images are mounted from the SD card and stay open while the core runs, with reads and
-  writes. File loaders are supported too; a file loader core with menu items opens them from its
-  file list by Tab or O (Options), Esc goes back to the files. On Karabas Go, physical floppy drives can be selected
+  writes. File loaders are supported too: their file list starts in the dir of the core and goes
+  into the subdirs and anywhere on the card, it opens in the dir of the last file loaded (kept in
+  `karabas.ini`); a file loader core with menu items opens them from its
+  file list by Tab or O (Options), Esc goes back to the files. The file lists hide hidden and
+  system entries and the names starting with `.`, and show the dirs first. On Karabas Go, physical floppy drives can be selected
   instead of an image.
 - **Input.**
   - USB keyboards (including NKRO) and mice.
@@ -112,7 +115,7 @@ The card can be FAT16, FAT32 or exFAT. The cores are built with
 
 ### karabas.ini
 
-The file is optional: without it the firmware uses the defaults below. Every key can be changed
+The file is optional: without it the firmware uses the defaults below. Every key but `[fileloader]` can be changed
 in the menus: Setup > Settings of the text core browser (`[setup]`, `[autoload]`, `[matrix]`,
 `enabled` / `video_mode` of `[ft812]`) and the graphic setup (all of them). A save creates the
 file, or writes only the changed keys and keeps the rest of it. Lines must be at most 79
@@ -132,6 +135,7 @@ characters long, or the whole file is ignored.
 | | `mouse_speed` | `3` | mouse pointer speed in the graphic menu, 1..5 |
 | `[matrix]` | `enabled`, `brightness`, `clock_*`, `meter_*` | `1`, `0`, ... | the LED matrix, see [docs/matrix.md](docs/matrix.md) |
 | `[autoload]` | `enabled`, `timeout`, `core` | `0`, `15`, none | start `core` after `timeout` seconds |
+| `[fileloader]` | `<core id>` | none | the dir of the last file loaded by a file loader core (written by the firmware; empty or none: the dir of the core) |
 
 Example:
 
@@ -164,6 +168,8 @@ core=tsconf
 | Enter, Right (core OSD) | A / B, Right | open the sub-menu of a `►` item |
 | Esc (core OSD) | C or Select | back from a sub-menu to the menu above it |
 | Delete / Backspace (core OSD) | | eject the disk image of the selected drive |
+| Backspace (file list) | | the parent dir |
+| `H` (file list of a file loader core) | | back to the dir of the core |
 | Space (graphical browser) | | switch to the text browser |
 | mouse (graphical browser, Setup) | | hover, click, wheel; right button = Esc |
 | `G` (text browser) | | switch to the graphical browser, also when it is off in `karabas.ini` |

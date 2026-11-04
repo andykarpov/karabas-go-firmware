@@ -413,6 +413,14 @@ void app_core_on_keyboard() {
       need_redraw = true;
     }
 
+    // backspace: the parent dir
+    if (key == KEY_BACKSPACE && strlen(cur_slot()->dir) > 1) {
+      kg_path_parent(cur_slot()->dir);
+      kg_path_collapse(cur_slot()->dir);
+      filebrowser_dir_changed(); // saved with the image chosen, as Enter on ".."
+      return;
+    }
+
     // esc: back to the dir of the mounted image
     if (key == KEY_ESC) {
       core_file_slot_t *fs = cur_slot();
@@ -540,8 +548,9 @@ int app_core_init_filebrowser() {
   FILINFO fi;
   while (sd_dir_is_open(&root1) && f_readdir(&root1, &fi) == FR_OK && fi.fname[0]) {
     uint16_t id;
-    if (!(fi.fattrib & AM_DIR) && !kg_name_has_ext(fi.fname, exts)) continue;
-    if (!sd_file_id(&fi, &id) || !fb_add_file(fi.fname, id)) continue;
+    bool is_dir = (fi.fattrib & AM_DIR) != 0;
+    if (sd_is_hidden(&fi) || (!is_dir && !kg_name_has_ext(fi.fname, exts))) continue;
+    if (!sd_file_id(&fi, &id) || !(is_dir ? fb_add_dir(fi.fname, id) : fb_add_file(fi.fname, id))) continue;
     if (core_f[0] && strcasecmp(core_f, fi.fname) == 0) presel_id = id;
     if (presel_after[0] && strcasecmp(presel_after, fi.fname) == 0) after_id = id;
   }

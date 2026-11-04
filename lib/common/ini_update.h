@@ -17,14 +17,19 @@ extern "C" {
 
 #define KG_INI_LINE_MAX 78 // chars of a line: kg_ini_valid() with the 80-byte buffer of load_setup()
 #define KG_INI_NAME_MAX 15
-#define KG_INI_VALUE_MAX 32
+#define KG_INI_VALUE_MAX 32 // the values of the settings (karabas.ini [setup] .. [autoload])
 
+// section, key and value are kept by the caller until kg_ini_update_end(); key=value must fit in
+// KG_INI_LINE_MAX (kg_ini_line_fits()), a longer line is cut
 typedef struct {
   const char *section;
   const char *key;
-  char value[KG_INI_VALUE_MAX + 1];
+  const char *value;
   bool done; // written out
 } kg_ini_item_t;
+
+// key=value fits in a line of KG_INI_LINE_MAX chars
+bool kg_ini_line_fits(const char *key, const char *value);
 
 typedef void (*kg_ini_out_t)(void *ctx, const char *line);
 

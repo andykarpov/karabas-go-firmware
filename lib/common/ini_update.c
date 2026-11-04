@@ -31,6 +31,10 @@ static void emit_blanks(kg_ini_update_t *u) {
   for (; u->blanks > 0; u->blanks--) emit(u, "");
 }
 
+bool kg_ini_line_fits(const char *key, const char *value) {
+  return strlen(key) + 1 + strlen(value) <= KG_INI_LINE_MAX;
+}
+
 static void emit_item(kg_ini_update_t *u, kg_ini_item_t *it) {
   char line[KG_INI_LINE_MAX + 1];
   snprintf(line, sizeof(line), "%s=%s", it->key, it->value);

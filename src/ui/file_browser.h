@@ -16,13 +16,14 @@ extern "C" {
 
 // filling: the list empty, the selection on the first entry
 void fb_clear(void);
-// a file of the dir by its name and id; false if the list is full
+// a file / a subdir of the dir by its name and id; false if the list is full
 bool fb_add_file(const char *name, uint16_t id);
+bool fb_add_dir(const char *name, uint16_t id);
 bool fb_add_eject(void);
 bool fb_add_phys(uint8_t drive); // DF0 / DF1
 bool fb_add_root(void);          // "."
 bool fb_add_parent(void);        // ".."
-// sorts the list (the entries without a file first) and drops the cached names
+// sorts the list (the entries without a file first, then the dirs) and drops the cached names
 void fb_sort(void);
 
 uint16_t fb_len(void);
@@ -33,11 +34,13 @@ bool fb_is_eject(uint16_t i);
 int fb_phys(uint16_t i);         // the drive of a physical drive entry, else -1
 bool fb_is_root(uint16_t i);
 bool fb_is_parent(uint16_t i);
+bool fb_is_dir(uint16_t i);      // a subdir (not the root or the parent)
 
 // moves the selection by a navigation key (ui_list_key); true if the key was a move
 bool fb_key(uint8_t key);
 // draws the page of the selection from row top: the names (read from dir when the page changed),
-// a line, then "Dir <dir>" when show_dir, and the page number (from column 8); returns its row
+// a line, then "Dir <dir>" when show_dir (its end, if it is long), and the page number (from
+// column 8); returns its row
 uint8_t fb_draw(uint8_t top, const char *dir, bool show_dir);
 
 #ifdef __cplusplus

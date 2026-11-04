@@ -56,7 +56,16 @@ static file_list_sort_item_t *append(void) {
 bool fb_add_file(const char *name, uint16_t id) {
   file_list_sort_item_t *item = append();
   if (!item) return false;
-  memcpy(item->hash, name, SORT_HASH_LEN); // not terminated: the first chars of the name
+  strncpy(item->hash, name, SORT_HASH_LEN); // not terminated: the first chars of the name
+  item->file_id = id;
+  return true;
+}
+
+bool fb_add_dir(const char *name, uint16_t id) {
+  file_list_sort_item_t *item = append();
+  if (!item) return false;
+  item->hash[0] = SORT_DIR_MARK;
+  strncpy(item->hash + 1, name, SORT_HASH_LEN - 1);
   item->file_id = id;
   return true;
 }
@@ -95,6 +104,7 @@ int fb_phys(uint16_t i) {
 }
 bool fb_is_root(uint16_t i) { return entry_is(i, '.', 0); }
 bool fb_is_parent(uint16_t i) { return entry_is(i, '.', '.'); }
+bool fb_is_dir(uint16_t i) { return i < len && files[i].file_id != 0 && files[i].hash[0] == SORT_DIR_MARK; }
 
 bool fb_key(uint8_t key) {
   return ui_list_key(&sel, len, PAGE, key);
@@ -150,11 +160,14 @@ uint8_t fb_draw(uint8_t top, const char *dir, bool show_dir) {
   osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
   osd_line(top + PAGE);
   uint8_t y = top + PAGE + 1;
-  char b[32];
+  char b[OSD_SIZE_X + 1];
   if (show_dir) {
-    snprintf(b, sizeof(b), "Dir %.20s", dir);
-    ui_row(0, y, "", false);
-    osd_set_pos(8, y); osd_print(b);
+    // the whole row; a long path keeps its end, the dir the list is in
+    const size_t w = OSD_SIZE_X - 4;
+    size_t n = strlen(dir);
+    if (n <= w) snprintf(b, sizeof(b), "Dir %s", dir);
+    else snprintf(b, sizeof(b), "Dir ...%s", dir + n - (w - 3));
+    ui_row(0, y, b, false);
     y++;
   }
   snprintf(b, sizeof(b), "Page %03u of %03u", page, kg_list_pages(len, PAGE));
