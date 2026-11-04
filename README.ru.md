@@ -17,9 +17,9 @@ USB HID геймпада в браузере и загрузка его ini-др
 
 | Плата | Файлы ядер | Файл прошивки в релизе |
 | --- | --- | --- |
-| Karabas Go | `*.kg1` | `karabas-go-firmware.uf2` |
-| Karabas Mini | `*.kg2` | `karabas-mini-firmware.uf2` |
-| Karabas Mini G | `*.kg3` | `karabas-minig-firmware.uf2` |
+| Karabas Go | `*.kg` (все платы) | `karabas-go-firmware.uf2` |
+| Karabas Mini | `*.kg` (все платы) | `karabas-mini-firmware.uf2` |
+| Karabas Mini G | `*.kg` (все платы) | `karabas-minig-firmware.uf2` |
 
 ## Возможности
 
@@ -66,9 +66,9 @@ USB HID геймпада в браузере и загрузка его ini-др
 
 Каждая сборка `master`, которая меняет прошивку, становится
 [релизом](https://github.com/andykarpov/karabas-go-firmware/releases) с тремя `.uf2` файлами.
-Эти же файлы попадают в папки `firmware/` репозиториев
-[karabas-go](https://github.com/andykarpov/karabas-go) и
-[karabas-mini](https://github.com/andykarpov/karabas-mini).
+Эти же файлы попадают в `firmware/` репозитория [karabas-go](https://github.com/andykarpov/karabas-go),
+релизного репозитория всех плат (вместе с ядрами): `karabas_go.uf2`, `karabas_mini.uf2`,
+`karabas_minig.uf2`.
 
 ### Тестовая прошивка из pull request
 

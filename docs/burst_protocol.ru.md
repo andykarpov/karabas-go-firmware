@@ -28,7 +28,7 @@ Burst передаёт один короткий заголовок, а зате
 | Mini G | `BURST_CS_N` | GPIO14 (`PIN_MCU_SPI_IO0`) | `MCU_IO[0]` | G6 |
 | Mini G | `BURST_READY` | GPIO15 (`PIN_MCU_SPI_IO1`) | `MCU_IO[1]` | F6 |
 
-**MCU_IO4 недоступен.** На платах Mini до Rev.G с [доработкой тактирования FT812](https://github.com/andykarpov/karabas-mini/blob/master/revF_mod.md) по нему идёт тактовый сигнал FT812 8 МГц, который формирует FPGA. На Rev.G он больше не подключён к RP2040. Прошивка держит GPIO18 входом.
+**MCU_IO4 недоступен.** На платах Mini до Rev.G с [доработкой тактирования FT812](https://github.com/andykarpov/karabas-go/blob/master/docs/mini/revF_mod.md) по нему идёт тактовый сигнал FT812 8 МГц, который формирует FPGA. На Rev.G он больше не подключён к RP2040. Прошивка держит GPIO18 входом.
 
 MCU управляет `BURST_CS_N` только после того, как загруженное ядро объявило поддержку burst (см. ниже). До этого вывод остаётся входом, как раньше. При каждой загрузке ядра он возвращается во вход.
 

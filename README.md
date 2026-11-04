@@ -18,9 +18,9 @@ Map USB gamepad (text and graphic menus), see [USB HID gamepads](docs/usb_gamepa
 
 | Board | Core files | Firmware file in a release |
 | --- | --- | --- |
-| Karabas Go | `*.kg1` | `karabas-go-firmware.uf2` |
-| Karabas Mini | `*.kg2` | `karabas-mini-firmware.uf2` |
-| Karabas Mini G | `*.kg3` | `karabas-minig-firmware.uf2` |
+| Karabas Go | `*.kg` (all boards) | `karabas-go-firmware.uf2` |
+| Karabas Mini | `*.kg` (all boards) | `karabas-mini-firmware.uf2` |
+| Karabas Mini G | `*.kg` (all boards) | `karabas-minig-firmware.uf2` |
 
 ## Features
 
@@ -66,9 +66,9 @@ Map USB gamepad (text and graphic menus), see [USB HID gamepads](docs/usb_gamepa
 
 Each build of `master` that changes the firmware becomes a
 [release](https://github.com/andykarpov/karabas-go-firmware/releases) with the three `.uf2` files.
-The same files go to the `firmware/` folders of
-[karabas-go](https://github.com/andykarpov/karabas-go) and
-[karabas-mini](https://github.com/andykarpov/karabas-mini).
+The same files go to `firmware/` of [karabas-go](https://github.com/andykarpov/karabas-go), the
+release repo of all the boards (with the cores): `karabas_go.uf2`, `karabas_mini.uf2`,
+`karabas_minig.uf2`.
 
 ### Test firmware from a pull request
 
