@@ -641,9 +641,13 @@ static void kg2_read(const core_file_t *cf) {
   for (uint16_t i = 0; i < head.count; i++) {
     kg2_item_t it;
     if (!core_file_sec_read(&file1, cf, KG2_SEC_OSD, KG2_OSD_HEAD_SIZE + (uint32_t) i * head.item_size, rec, KG2_ITEM_SIZE) ||
-        !kg2_item_record_parse(rec, KG2_ITEM_SIZE, &it)) break;
+        !kg2_item_record_parse(rec, KG2_ITEM_SIZE, &it)) {
+      core.osd_len = i;
+      break;
+    }
     core_osd_t *o = &core.osd[i];
     memset(o, 0, sizeof(*o));
+    core.osd_len = i + 1; // core_osd_is_file() looks at the items below osd_len
     o->type = it.type;
     o->flags = it.flags;
     o->sw = it.index;
@@ -688,7 +692,8 @@ static void kg2_read(const core_file_t *cf) {
       o->slot_id = it.slot;
       if (o->slot_id >= MAX_FILE_SLOTS) {
         d_printf("OSD item %u: file slot %u, only %d exist", i, o->slot_id, MAX_FILE_SLOTS); d_println();
-        break; // the items after it can't be trusted either
+        core.osd_len = i; // the items after it can't be trusted either
+        break;
       }
       core_file_slot_t *fs = &file_slots[o->slot_id];
       fs->is_autoload = (it.flags & KG2_ITEM_AUTOLOAD) != 0;
@@ -705,7 +710,6 @@ static void kg2_read(const core_file_t *cf) {
         fs->is_mounted = true;
       }
     }
-    core.osd_len = i + 1;
   }
   // the conditions: the option value of the item they name -> its position, as kgo1
   for (uint8_t i = 0; i < core.osd_len; i++) {
