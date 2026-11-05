@@ -24,6 +24,7 @@ Set `debug=1` in `karabas.ini` and keep a terminal on the USB serial port: most 
 - [ ] The heaviest core (nanomig): loads, Kickstart autoload (`FL` item with `autoload`), runs.
 - [ ] Autoload (`[autoload]`): the countdown, a key stops it.
 - [ ] Ctrl+Alt+Backspace (joy Start+X) reboots into BOOT, also from inside the OSD.
+- [ ] UKNC Run SAV: with `RT11BASE.DSK` in `/mc0511-media`, a `.SAV` boots RT-11 and runs (log `Run SAV: name as NAME.SAV`, `RT11SAV.DSK` in FDD0); a second run keeps the disk before it as `RT11OLD.DSK`; without the template the OSD shows `No RT11BASE.DSK` and nothing changes.
 
 ## OSD
 
