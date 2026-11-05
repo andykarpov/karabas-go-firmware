@@ -605,7 +605,9 @@ void app_core_filebrowser(uint8_t vpos) {
 void app_core_on_select_file() {
   if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILELOADER) {
 
-    core_ioctl_send(core.osd[curr_osd_item].slot_id, true);
+    uint8_t slot = core.osd[curr_osd_item].slot_id;
+    if (uknc_sav_slot(slot)) uknc_sav_run(slot);
+    else core_ioctl_send(slot, true);
 
   } else if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER) {
     // open the image and send its size (eject first)
