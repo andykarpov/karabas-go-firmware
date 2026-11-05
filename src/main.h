@@ -50,6 +50,7 @@
 #include "storage/msc.h"
 #include "storage/img_mount.h"
 #include "storage/bk_save.h"
+#include "storage/uknc_sav.h"
 #include "storage/sd2.h"
 #include "usb/usb_device.h"
 #include "ui/osd_ui.h"
