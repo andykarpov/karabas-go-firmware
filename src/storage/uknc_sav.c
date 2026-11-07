@@ -10,9 +10,11 @@
 
 #define MEDIA_DIR "/mc0511-media"
 #define BASE_FILE "RT11BASE.DSK"
+#define BASE_FILE2 "BASERT11.DSK" // the name tang-uknc ships it under (soft/)
 #define DISK_FILE "RT11SAV.DSK"
 #define OLD_FILE "RT11OLD.DSK"
 #define BASE_PATH MEDIA_DIR "/" BASE_FILE
+#define BASE_PATH2 MEDIA_DIR "/" BASE_FILE2
 #define DISK_PATH MEDIA_DIR "/" DISK_FILE
 #define OLD_PATH MEDIA_DIR "/" OLD_FILE
 #define TMP_PATH MEDIA_DIR "/RT11NEW.TMP"
@@ -32,18 +34,23 @@ typedef struct {
 
 bool uknc_sav_slot(uint8_t slot) { return slot == SAV_SLOT && strcmp(core.id, "uknc") == 0; }
 
+// the block i/o and the SAV source feed the hang watchdog (debug=1) themselves: a slow card writes
+// a long program for seconds
 static int block_read(void *ctx, unsigned blk, void *buf) {
   UINT n;
+  hang_step(1);
   return f_lseek((FIL *) ctx, (FSIZE_t) blk * 512) != FR_OK || f_read((FIL *) ctx, buf, 512, &n) != FR_OK || n != 512;
 }
 
 static int block_write(void *ctx, unsigned blk, const void *buf) {
   UINT n;
+  hang_step(2);
   return f_lseek((FIL *) ctx, (FSIZE_t) blk * 512) != FR_OK || f_write((FIL *) ctx, buf, 512, &n) != FR_OK || n != 512;
 }
 
 static int source_read(void *arg, uint8_t *buf) {
   UINT n;
+  hang_step(3);
   return f_read((FIL *) arg, buf, 512, &n) != FR_OK;
 }
 
@@ -63,7 +70,7 @@ static int item_of_slot(uint8_t slot) {
 
 // the new disk in TMP_PATH; the template and what is mounted stay as they are
 static const char *make_disk(work_t *w, const char *sav_path, const char *sav_name) {
-  if (!sd_open(&w->base, BASE_PATH, FA_READ)) return "No " BASE_FILE;
+  if (!sd_open(&w->base, BASE_PATH, FA_READ) && !sd_open(&w->base, BASE_PATH2, FA_READ)) return "No " BASE_FILE;
   const char *error = NULL;
   if (f_size(&w->base) != DISK_SIZE) error = "Bad " BASE_FILE;
   else if (!sd_open(&w->sav, sav_path, FA_READ)) error = "Cannot open SAV";
@@ -126,7 +133,9 @@ static const char *install_disk(void) {
 
 bool uknc_sav_run(uint8_t slot) {
   const char *error = NULL;
-  work_t *w = malloc(sizeof(work_t));
+  // zeroed: sd_open() closes a FIL that looks open first, and a FIL of malloc() garbage looked
+  // open (f_close on it: a fault, the reboot after a SAV was chosen)
+  work_t *w = calloc(1, sizeof(work_t));
   if (!w) {
     error = "No memory";
   } else {
