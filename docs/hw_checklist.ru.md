@@ -24,7 +24,7 @@
 - [ ] Самое тяжёлое ядро (nanomig): загружается, Kickstart подгружается сам (пункт `FL` с `autoload`), работает.
 - [ ] Автозапуск (`[autoload]`): обратный отсчёт, клавиша его останавливает.
 - [ ] Ctrl+Alt+Backspace (джойстик Start+X) перезагружает в BOOT, в том числе из OSD.
-- [ ] Run SAV ядра UKNC: при `RT11BASE.DSK` в `/mc0511-media` программа `.SAV` загружает RT-11 и запускается (в логе `Run SAV: name as NAME.SAV`, `RT11SAV.DSK` в FDD0); второй запуск оставляет предыдущий диск как `RT11OLD.DSK`; без шаблона OSD показывает `No RT11BASE.DSK`, и ничего не меняется.
+- [ ] Run SAV ядра UKNC: при `RT11BASE.DSK` (или `BASERT11.DSK`) в `/mc0511-media` программа `.SAV` загружает RT-11 и запускается (в логе `Run SAV: name as NAME.SAV`, `RT11SAV.DSK` в FDD0); второй запуск оставляет предыдущий диск как `RT11OLD.DSK`; без шаблона OSD показывает `No RT11BASE.DSK`, и ничего не меняется.
 
 ## OSD
 
