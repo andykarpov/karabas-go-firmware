@@ -17,6 +17,36 @@ static uint32_t fx_rand(matrix_fx_t *fx) {
   return x;
 }
 
+// the card and the chip of the core load picture; the arrow runs in columns 5..8, row 7 is the bar
+static const char *const loading_icon[KG_MATRIX_H - 1] = {
+  "GGGG......R.R.R.",
+  "G.G.G....RRRRRRR",
+  "G...G....R.....R",
+  "G...G....R.....R",
+  "G...G....R.....R",
+  "GGGGG....RRRRRRR",
+  "..........R.R.R.",
+};
+
+void matrix_fx_loading(uint8_t fb[KG_MATRIX_H][KG_MATRIX_W], uint32_t val, uint32_t max, uint32_t phase) {
+  memset(fb, KG_MX_OFF, KG_MATRIX_H * KG_MATRIX_W);
+  for (uint8_t y = 0; y < KG_MATRIX_H - 1; y++) {
+    for (uint8_t x = 0; x < KG_MATRIX_W; x++) {
+      char c = loading_icon[y][x];
+      if (c == 'G') fb[y][x] = KG_MX_GREEN;
+      else if (c == 'R') fb[y][x] = KG_MX_RED;
+    }
+  }
+  uint8_t arrow = 5 + phase % 3;
+  fb[2][arrow] = KG_MX_YELLOW;
+  fb[3][arrow + 1] = KG_MX_YELLOW;
+  fb[4][arrow] = KG_MX_YELLOW;
+
+  uint32_t lit = max ? (uint32_t) ((uint64_t) val * KG_MATRIX_W / max) : 0;
+  if (lit > KG_MATRIX_W) lit = KG_MATRIX_W;
+  for (uint8_t x = 0; x < lit; x++) fb[KG_MATRIX_H - 1][x] = KG_MX_GREEN;
+}
+
 uint8_t matrix_fx_default_speed(uint8_t effect) {
   switch (effect) {
     case KG_MATRIX_FX_FIRE: return 3;

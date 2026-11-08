@@ -68,6 +68,10 @@ void matrix_fx_init(matrix_fx_t *fx, uint8_t effect, uint8_t color, uint32_t see
 // one step: fx->fb holds the picture after it; in is used by the clock and the drive effect
 void matrix_fx_step(matrix_fx_t *fx, const matrix_fx_input_t *in);
 
+// the picture of a core load: SD card -> running arrow (phase: any counter) -> FPGA, the bottom
+// row shows val of max (max 0: an empty row)
+void matrix_fx_loading(uint8_t fb[KG_MATRIX_H][KG_MATRIX_W], uint32_t val, uint32_t max, uint32_t phase);
+
 // life: one generation of the cells on a 16x8 torus (exposed for the tests)
 void matrix_fx_life_next(const uint16_t *cells, uint16_t *out);
 
