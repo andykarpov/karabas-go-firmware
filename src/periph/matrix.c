@@ -15,7 +15,7 @@
 #define MATRIX_MODE_SCROLL 0
 #define MATRIX_MODE_DRAW 1    // the core draws (CMD_MATRIX_PIXEL / BITPLAN)
 #define MATRIX_MODE_AUDIO 2   // the audio meters of the core
-#define MATRIX_MODE_LOADING 3 // core load in progress: the loader draws its progress bar
+#define MATRIX_MODE_LOADING 3 // core load in progress: the card -> chip picture with its progress bar
 #define MATRIX_MODE_ICON 4    // a static icon (msc, bootsel): nothing is redrawn
 #define MATRIX_MODE_EFFECT 5
 #define MATRIX_MODE_IMAGE 6
@@ -25,10 +25,13 @@
 #define MATRIX_SCROLL_FRAMES 5  // default: scroll text one pixel every 5 frames (100 ms)
 #define MATRIX_IMAGE_FRAMES 10  // default: next image frame every 10 frames (200 ms)
 #define MATRIX_POLL_FRAMES 5    // poll the buttons every 5 frames (100 ms)
+#define MATRIX_LOADING_MS 100   // a step of the arrow of the core load picture
 
 static bool has_matrix = false;
 static volatile uint8_t matrix_mode = MATRIX_MODE_SCROLL;
 static volatile uint16_t audio_l, audio_r; // peak meters: raised by APP, decayed by matrix_frame
+static volatile uint32_t load_val, load_max; // the bar of the core load: set by APP
+static uint32_t load_drawn; // ms of the last picture, with the I2C lock held
 
 // the settings of the core (core.json "matrix", FILE_POS_MATRIX), set by read_core()
 static kg_matrix_cfg_t cfg;
@@ -331,15 +334,24 @@ void matrix_register_handlers() {
   link_on(CMD_AUDIO_PEAKS_R, on_audio_peaks_r);
 }
 
+// the core load picture, with the I2C lock held. Drawn from the loader (the MATRIX task does not
+// run yet during the first load) and from matrix_frame (nothing reports progress while the ROMs
+// go), so the arrow steps by the clock
+static void matrix_draw_loading(bool force) {
+  if (!mx_enabled) return;
+  if (!force && ms_since(load_drawn) < MATRIX_LOADING_MS) return;
+  load_drawn = ms_now();
+  static uint8_t fb[KG_MATRIX_H][KG_MATRIX_W];
+  matrix_fx_loading(fb, load_val, load_max, load_drawn / MATRIX_LOADING_MS);
+  matrix_draw_fb(fb);
+}
+
 void matrix_progress(uint32_t val, uint32_t max) {
-  if (has_matrix && mx_enabled) {
+  load_val = val;
+  load_max = max;
+  if (has_matrix) {
     i2c_bus_lock();
-    int16_t x = max ? (int16_t) ((uint64_t) val * 15 / max) : 0; // val 0..max -> x 0..15
-    for (int16_t i = 0; i <= x; i++) {
-      ht16k33_pixel(i, 0, HT16K33_GREEN);
-      ht16k33_pixel(i, 1, HT16K33_GREEN);
-    }
-    ht16k33_show();
+    matrix_draw_loading(val >= max); // the full bar stays through the ROMs
     i2c_bus_unlock();
   }
 }
@@ -389,9 +401,16 @@ void matrix_preview(uint8_t what) {
 }
 
 void matrix_on_configure_start() {
+  load_val = 0;
+  load_max = 0;
   matrix_mode = MATRIX_MODE_LOADING;
   if (has_matrix) {
     i2c_bus_lock();
+    // karabas.ini for the progress bar too: the first load comes before anything applied it, and
+    // the core before may have set its own level over the link
+    mx_enabled = hw_setup.matrix_enabled;
+    mx_brightness = hw_setup.matrix_brightness;
+    matrix_init();
     ht16k33_clear();
     ht16k33_show();
     i2c_bus_unlock();
@@ -471,6 +490,9 @@ void matrix_frame() {
     switch (matrix_mode) {
       case MATRIX_MODE_AUDIO:
         matrix_draw_audio();
+        break;
+      case MATRIX_MODE_LOADING:
+        matrix_draw_loading(false);
         break;
       case MATRIX_MODE_SCROLL:
         if (++step_count >= step_frames) {

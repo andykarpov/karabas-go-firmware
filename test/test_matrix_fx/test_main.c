@@ -228,8 +228,48 @@ static void test_drive() {
   TEST_ASSERT_EQUAL_UINT8(6, count(&fx, KG_MX_YELLOW));
 }
 
+static uint8_t bar_len(uint8_t fb[KG_MATRIX_H][KG_MATRIX_W]) {
+  uint8_t n = 0;
+  for (int x = 0; x < KG_MATRIX_W; x++) {
+    if (fb[KG_MATRIX_H - 1][x] == KG_MX_GREEN) n++;
+  }
+  return n;
+}
+
+static void test_loading_bar(void) {
+  static uint8_t fb[KG_MATRIX_H][KG_MATRIX_W];
+  matrix_fx_loading(fb, 0, 0, 0);
+  TEST_ASSERT_EQUAL_UINT8(0, bar_len(fb));
+  matrix_fx_loading(fb, 0, 1000, 0);
+  TEST_ASSERT_EQUAL_UINT8(0, bar_len(fb));
+  matrix_fx_loading(fb, 500, 1000, 0);
+  TEST_ASSERT_EQUAL_UINT8(8, bar_len(fb));
+  matrix_fx_loading(fb, 1000, 1000, 0);
+  TEST_ASSERT_EQUAL_UINT8(16, bar_len(fb));
+  matrix_fx_loading(fb, 2000, 1000, 0); // never past the display
+  TEST_ASSERT_EQUAL_UINT8(16, bar_len(fb));
+  matrix_fx_loading(fb, 0xFFFFFFFFu, 0xFFFFFFFFu, 0); // no 32 bit overflow
+  TEST_ASSERT_EQUAL_UINT8(16, bar_len(fb));
+}
+
+static void test_loading_arrow(void) {
+  static uint8_t fb[KG_MATRIX_H][KG_MATRIX_W];
+  for (uint32_t phase = 0; phase < 7; phase++) {
+    matrix_fx_loading(fb, 0, 0, phase);
+    uint8_t x = 5 + phase % 3;
+    TEST_ASSERT_EQUAL_UINT8(KG_MX_YELLOW, fb[2][x]);
+    TEST_ASSERT_EQUAL_UINT8(KG_MX_YELLOW, fb[3][x + 1]);
+    TEST_ASSERT_EQUAL_UINT8(KG_MX_YELLOW, fb[4][x]);
+    // the card and the chip stay whole
+    TEST_ASSERT_EQUAL_UINT8(KG_MX_GREEN, fb[3][4]);
+    TEST_ASSERT_EQUAL_UINT8(KG_MX_RED, fb[3][9]);
+  }
+}
+
 int main() {
   UNITY_BEGIN();
+  RUN_TEST(test_loading_bar);
+  RUN_TEST(test_loading_arrow);
   RUN_TEST(test_life_blinker);
   RUN_TEST(test_life_wraps);
   RUN_TEST(test_life_reseeds);
