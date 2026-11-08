@@ -22,6 +22,7 @@ extern "C" {
 #define KG2_OSD_HEAD_SIZE 8
 #define KG2_ITEM_SIZE 48       // the fields of an OSD item record this parser knows
 #define KG2_OPTION_SIZE 8
+#define KG2_OPTION_HOTKEY_SIZE 4
 #define KG2_ROM_BLOCK_HEADER_SIZE 8
 #define KG2_BOARD_BIT(hw_id) ((uint16_t) (1u << (hw_id)))
 
@@ -42,6 +43,7 @@ enum {
 #define KG2_ITEM_PHYSICAL 0x01 // F: the physical floppy drives (Karabas Go)
 #define KG2_ITEM_READONLY 0x02 // F: the image without writes
 #define KG2_ITEM_AUTOLOAD 0x04 // FL: the file goes to the core at its start
+#define KG2_ITEM_RADIO 0x08    // S: one row per option, each with its own hotkey
 
 #define KG2_LOADER_AUTOLOAD 0x01
 
@@ -127,6 +129,7 @@ typedef struct {
   uint8_t files;
   uint16_t key, name, hotkey, exts, dir; // strings
   uint16_t options_ofs, files_ofs;       // in the section
+  uint16_t option_hotkeys_ofs;           // radio: in the section, 0 none
 } kg2_item_t;
 
 // the item n (byte offset KG2_OSD_HEAD_SIZE + n * item_size)
@@ -143,6 +146,14 @@ typedef struct {
 bool kg2_option_parse(const uint8_t *sec, size_t len, uint16_t ofs, uint8_t n, kg2_option_t *out);
 // one option record (KG2_OPTION_SIZE bytes)
 bool kg2_option_record_parse(const uint8_t *rec, size_t len, kg2_option_t *out);
+
+typedef struct {
+  uint8_t keys[2];  // modifiers, key code
+  uint16_t text;    // string
+} kg2_option_hotkey_t;
+
+// the hotkey of an option of a radio item (KG2_OPTION_HOTKEY_SIZE bytes)
+bool kg2_option_hotkey_parse(const uint8_t *rec, size_t len, kg2_option_hotkey_t *out);
 
 // a ROM block header (as kgo1, little-endian); remaining = bytes left in the ROMS section
 typedef struct {

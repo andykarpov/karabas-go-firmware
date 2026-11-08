@@ -30,7 +30,8 @@ bool core_osd_is_file(uint8_t pos) {
 
 bool core_osd_selectable(uint8_t pos) {
   return pos < core.osd_len && (core.osd[pos].options_len > 0 || core_osd_is_file(pos) ||
-                                core.osd[pos].type == CORE_OSD_TYPE_PAGE);
+                                core.osd[pos].type == CORE_OSD_TYPE_PAGE ||
+                                core.osd[pos].type == CORE_OSD_TYPE_RADIO);
 }
 
 // the condition of an item met (no condition: met)
@@ -66,6 +67,15 @@ void core_osd_set(uint8_t pos, uint8_t n) {
 
 void core_osd_change(uint8_t pos, int d) {
   core_osd_t *item = &core.osd[pos];
+  if (item->type == CORE_OSD_TYPE_RADIO) {
+    // the row selects its option; the one selected already sends nothing
+    uint8_t sw = item->radio_item, opt = pos - sw - 1;
+    if (core.osd[sw].val == opt) return;
+    core.osd[sw].val = opt;
+    core_send(sw);
+    core.osd_need_save = true;
+    return;
+  }
   if (item->options_len == 0) return;
   if (d > 0) core_osd_set(pos, item->val + 1 < item->options_len ? item->val + 1 : 0);
   else core_osd_set(pos, item->val > 0 ? item->val - 1 : item->options_len - 1);
@@ -666,16 +676,20 @@ static void kg2_read(const core_file_t *cf) {
     head.count = 0;
   }
   uint8_t cond_value[MAX_OSD_ITEMS];
-  for (uint16_t i = 0; i < head.count; i++) {
+  uint8_t row_of[MAX_OSD_ITEMS]; // the position in core.osd of an item of the file: a radio item takes more rows
+  uint16_t items_read = 0;
+  for (uint16_t i = 0; i < head.count && core.osd_len < MAX_OSD_ITEMS; i++) {
+    uint8_t p = core.osd_len;
     kg2_item_t it;
     if (!core_file_sec_read(&file1, cf, KG2_SEC_OSD, KG2_OSD_HEAD_SIZE + (uint32_t) i * head.item_size, rec, KG2_ITEM_SIZE) ||
         !kg2_item_record_parse(rec, KG2_ITEM_SIZE, &it)) {
-      core.osd_len = i;
       break;
     }
-    core_osd_t *o = &core.osd[i];
+    core_osd_t *o = &core.osd[p];
     memset(o, 0, sizeof(*o));
-    core.osd_len = i + 1; // core_osd_is_file() looks at the items below osd_len
+    core.osd_len = p + 1; // core_osd_is_file() looks at the items below osd_len
+    row_of[i] = p;
+    items_read = i + 1;
     o->type = it.type;
     o->flags = it.flags;
     o->sw = it.index;
@@ -683,7 +697,7 @@ static void kg2_read(const core_file_t *cf) {
     o->open_page = it.type == CORE_OSD_TYPE_PAGE ? it.open_page : 0;
     o->cond_item = it.cond_item;
     o->cond = it.cond_flags & (CORE_OSD_COND_DISABLE | CORE_OSD_COND_INVERT);
-    cond_value[i] = it.cond_value;
+    cond_value[p] = it.cond_value;
     o->keys[0] = it.keys[0];
     o->keys[1] = it.keys[1];
     core_file_str(&file1, cf, it.key, o->key, sizeof(o->key));
@@ -711,19 +725,20 @@ static void kg2_read(const core_file_t *cf) {
       o->opt_value[j] = opt.value;
       char key[17];
       core_file_str(&file1, cf, opt.key, key, sizeof(key));
-      core_state_opt_key(i, j, key);
+      core_state_opt_key(p, j, key);
       if (opt.value == it.def) def = j;
     }
     if (o->options_len == 0) def = it.def; // a hidden item without options keeps its value
     else if (def >= o->options_len) def = 0;
     o->def = o->val = o->prev_val = (it.type == CORE_OSD_TYPE_PAGE) ? 0 : def;
 
-    if (core_osd_is_file(i)) {
+    if (core_osd_is_file(p)) {
       o->options_len = 0;
       o->slot_id = it.slot;
       if (o->slot_id >= MAX_FILE_SLOTS) {
         d_printf("OSD item %u: file slot %u, only %d exist", i, o->slot_id, MAX_FILE_SLOTS); d_println();
-        core.osd_len = i; // the items after it can't be trusted either
+        core.osd_len = p; // the items after it can't be trusted either
+        items_read = i;
         break;
       }
       core_file_slot_t *fs = &file_slots[o->slot_id];
@@ -742,12 +757,43 @@ static void kg2_read(const core_file_t *cf) {
         fs->is_mounted = true;
       }
     }
+
+    // a radio switch: the item stays (the value, the settings, the switch number), each option is
+    // a row after it. No room for the rows: an ordinary switch
+    o->flags &= ~CORE_OSD_FLAG_RADIO;
+    if ((it.flags & KG2_ITEM_RADIO) && it.type == CORE_OSD_TYPE_SWITCH && o->options_len > 0 &&
+        p + 1 + o->options_len <= MAX_OSD_ITEMS) {
+      o->flags |= CORE_OSD_FLAG_RADIO;
+      for (uint8_t j = 0; j < o->options_len; j++) {
+        uint8_t q = core.osd_len++;
+        core_osd_t *r = &core.osd[q];
+        memset(r, 0, sizeof(*r));
+        r->type = CORE_OSD_TYPE_RADIO;
+        r->sw = CORE_OSD_NO_SWITCH;
+        r->radio_item = p;
+        r->page = o->page;
+        r->cond_item = o->cond_item;
+        r->cond = o->cond;
+        cond_value[q] = it.cond_value;
+        snprintf(r->name, sizeof(r->name), "%s", o->options[j].name);
+        uint8_t h[KG2_OPTION_HOTKEY_SIZE];
+        kg2_option_hotkey_t hk;
+        if (it.option_hotkeys_ofs &&
+            core_file_sec_read(&file1, cf, KG2_SEC_OSD, (uint32_t) it.option_hotkeys_ofs + (uint32_t) j * KG2_OPTION_HOTKEY_SIZE, h, sizeof(h)) &&
+            kg2_option_hotkey_parse(h, sizeof(h), &hk)) {
+          r->keys[0] = hk.keys[0];
+          r->keys[1] = hk.keys[1];
+          core_file_str(&file1, cf, hk.text, r->hotkey, sizeof(r->hotkey));
+        }
+      }
+    }
   }
-  // the conditions: the option value of the item they name -> its position, as kgo1
+  // the conditions: the item they name -> its row, the option value -> its position, as kgo1
   for (uint8_t i = 0; i < core.osd_len; i++) {
     core_osd_t *o = &core.osd[i];
     if (o->cond_item == 0) continue;
-    if (o->cond_item > core.osd_len) { o->cond_item = 0; continue; }
+    if (o->cond_item > items_read) { o->cond_item = 0; continue; }
+    o->cond_item = row_of[o->cond_item - 1] + 1;
     const core_osd_t *c = &core.osd[o->cond_item - 1];
     uint8_t j = 0;
     while (j < c->options_len && c->opt_value[j] != cond_value[i]) j++;

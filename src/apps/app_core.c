@@ -102,7 +102,7 @@ static uint8_t page_cursor[256]; // the item + 1 the cursor was on when a page w
 static void build_vis(void) {
   vis_len = 0;
   for (uint8_t i = 0; i < core.osd_len; i++) {
-    if (core.osd[i].page == cur_page && core_osd_shown(i)) vis[vis_len++] = i;
+    if (core.osd[i].page == cur_page && core_osd_shown(i) && !(core.osd[i].flags & CORE_OSD_FLAG_RADIO)) vis[vis_len++] = i;
   }
 }
 
@@ -239,6 +239,8 @@ static void item_value(uint8_t i, char *out, size_t size) {
     }
     else if (fs->is_mounted) kg_short_name(fs->filename, out, size - 1); // long names: "Princ~.trd"
     else snprintf(out, size, "-NO IMAGE-");
+  } else if (item->type == CORE_OSD_TYPE_RADIO) {
+    snprintf(out, size, "%-10s", core.osd[item->radio_item].val == i - item->radio_item - 1 ? "(*)" : "( )");
   } else {
     snprintf(out, size, "%-10s", item->options[item->val].name);
   }
