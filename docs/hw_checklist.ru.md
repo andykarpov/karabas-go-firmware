@@ -80,6 +80,9 @@
 - [ ] Байты хоста доходят до UART ядра и обратно.
 - [ ] `AT+KARABAS=list`, `version`, `boot` (BOOTSEL), `msc`, `msc2`, `esp` / `uart` (BOOT-ядро: консоль AT модуля ESP и обратно).
 - [ ] `AT+KARABAS=key:menu+esc` открывает OSD, `key:esc` закрывает; `type:dir` + `key:enter` в ядре; `hold:alt` / `release`. (Mini G 2026-10-31: так управлялись меню ядер, OSD и выбор файла PC XT, Ctrl+Alt+Del.)
+- [ ] `AT+KARABAS=state` в boot-ядре и в ядре; `load:<id>` из boot-ядра и из работающего ядра, `load:boot`; `reset`.
+- [ ] `AT+KARABAS=osd`, `osd:<item>=<value>` (значение сохраняется после перезагрузки ядра), триггер; `mount:<item>:<path>` / `eject:<item>` (OSD показывает образ).
+- [ ] `AT+KARABAS=mouse:`, `click` в ядре и в графическом меню; `pad:0:up` в ядре; `sync` отвечает после окончания ввода; `debug:1` / `debug:0`.
 - [ ] USB-UART переходник (FTDI, CP210x, CH34x, CDC ACM) на USB host: `USB UART mounted` в логе, UART ядра идёт через него в обе стороны на 115200 (ZiFi в tsconf) и на скорости EVO RS232; на CDC-порту остаются лог и `AT+KARABAS=`; после отключения мост возвращается на CDC-порт; второй переходник игнорируется.
 
 ## Дисплеи

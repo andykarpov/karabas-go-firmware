@@ -80,6 +80,9 @@ Set `debug=1` in `karabas.ini` and keep a terminal on the USB serial port: most 
 - [ ] The host's bytes reach the core UART and back.
 - [ ] `AT+KARABAS=list`, `version`, `boot` (BOOTSEL), `msc`, `msc2`, `esp` / `uart` (BOOT core: the ESP AT console and back).
 - [ ] `AT+KARABAS=key:menu+esc` opens the OSD, `key:esc` closes it; `type:dir` + `key:enter` in a core; `hold:alt` / `release`. (Mini G 2026-10-31: boot menu, PC XT OSD and file browser, Ctrl+Alt+Del driven this way.)
+- [ ] `AT+KARABAS=state` in the boot core and in a core; `load:<id>` from the boot core and from a running core, `load:boot`; `reset`.
+- [ ] `AT+KARABAS=osd`, `osd:<item>=<value>` (the value stays after a reload), a trigger; `mount:<item>:<path>` / `eject:<item>` (the OSD shows the image).
+- [ ] `AT+KARABAS=mouse:`, `click` in a core and in the graphic menu; `pad:0:up` in a core; `sync` answers after the input ended; `debug:1` / `debug:0`.
 - [ ] A USB-UART adapter (FTDI, CP210x, CH34x, CDC ACM) on the USB host: `USB UART mounted` in the log, the core UART goes to it both ways at 115200 (tsconf ZiFi) and at the EVO RS232 speed; the CDC port keeps the log and `AT+KARABAS=`; unplugged, the bridge goes back to the CDC port; a second adapter is ignored.
 
 ## Displays
