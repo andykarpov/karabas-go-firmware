@@ -57,13 +57,18 @@ int core_osd_page_entry(uint8_t page) {
   return -1;
 }
 
+void core_osd_set(uint8_t pos, uint8_t n) {
+  core_osd_t *item = &core.osd[pos];
+  item->val = n;
+  core_send(pos);
+  if (item->type == CORE_OSD_TYPE_SWITCH) core.osd_need_save = true;
+}
+
 void core_osd_change(uint8_t pos, int d) {
   core_osd_t *item = &core.osd[pos];
   if (item->options_len == 0) return;
-  if (d > 0) item->val = item->val + 1 < item->options_len ? item->val + 1 : 0;
-  else item->val = item->val > 0 ? item->val - 1 : item->options_len - 1;
-  core_send(pos);
-  if (item->type == CORE_OSD_TYPE_SWITCH) core.osd_need_save = true;
+  if (d > 0) core_osd_set(pos, item->val + 1 < item->options_len ? item->val + 1 : 0);
+  else core_osd_set(pos, item->val > 0 ? item->val - 1 : item->options_len - 1);
 }
 
 uint8_t core_osd_value(uint8_t pos) {
@@ -383,6 +388,10 @@ static void configure(const char* filename, bool clear_sram) {
 
 void do_configure(const char* filename) {
   configure(filename, false);
+}
+
+void do_configure_clean(const char* filename) {
+  configure(filename, true);
 }
 
 void core_reset_settings(void) {

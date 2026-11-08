@@ -1,6 +1,7 @@
 #include "main.h"
 #include "tusb.h"
 #include "diag/hang_diag.h"
+#include "periph/at_control.h"
 #include "at_cmd.h"
 #include "file_name.h"
 #include "kg_keys.h"
@@ -22,7 +23,8 @@
 //          "menu+esc", "f3", "enter", "0x29"); a press 100 ms, a release 40 ms
 //   type:<text> - type the printable chars of the text (US layout, Shift for the shifted ones)
 //   hold:<k> - press a key and keep it down (until release or the next key / type)
-//   release - all keys up
+//   release - all keys, mouse buttons and pad buttons up
+//   the others: periph/at_control
 
 static uint8_t uart_idx = 0;
 static uint8_t evo_rs232_dll = 0;
@@ -68,6 +70,14 @@ static void host_print(const char *s) {
 
 static void host_flush(void) {
   tud_cdc_write_flush();
+}
+
+void serial_host_print(const char *s) {
+  host_print(s);
+}
+
+void serial_host_flush(void) {
+  host_flush();
 }
 
 void serial_set_speed(uint8_t dll, uint8_t dlm) {
@@ -227,11 +237,12 @@ static void at_command(const char *arg) {
     host_print("OK\r\n");
   } else if (strcasecmp(arg, "release") == 0) {
     key_report(0, 0);
+    at_control_release();
     host_print("OK\r\n");
   } else if (strncasecmp(arg, "key:", 4) == 0 || strncasecmp(arg, "type:", 5) == 0 ||
              strncasecmp(arg, "hold:", 5) == 0) {
     host_print(at_keys(arg) ? "OK\r\n" : "ERROR\r\n");
-  } else {
+  } else if (!at_control_command(arg)) {
     host_print("ERROR\r\n");
   }
 }
@@ -287,6 +298,7 @@ void serial_bridge_tick() {
   // TinyUSB sends only full 64-byte packets by itself: the tail of what the core, the ESP or
   // at_command() wrote would wait for the next 64 bytes
   host_flush();
+  at_control_tick();
   if (esp_mode && core.type != CORE_TYPE_BOOT) esp_mode = false;
   if (esp_mode) { esp_tick(); return; }
 

@@ -90,6 +90,7 @@ void hid_kbd_report_get(hid_keyboard_report_t *report)
 #define KBD_RELEASE_US 40000
 static hid_keyboard_report_t inject_q[KBD_INJECT_N];
 static uint16_t inject_head = 0, inject_tail = 0;
+static uint32_t inject_last = 0, inject_hold = 0;
 
 int hid_kbd_inject_free()
 {
@@ -115,20 +116,104 @@ bool hid_kbd_inject(const hid_keyboard_report_t *report)
 
 void __not_in_flash_func(hid_kbd_inject_tick)()
 {
-  static uint32_t last = 0, hold = 0;
-  if (inject_head == inject_tail || time_us_32() - last < hold) return;
+  if (inject_head == inject_tail || time_us_32() - inject_last < inject_hold) return;
   hid_keyboard_report_t r;
   uint32_t save = spin_lock_blocking(usb_host_lock());
   bool have = inject_head != inject_tail;
   if (have) {
     r = inject_q[inject_tail];
     inject_tail = (inject_tail + 1) % KBD_INJECT_N;
+    inject_last = time_us_32();
+    inject_hold = (r.modifier || r.keycode[0]) ? KBD_PRESS_US : KBD_RELEASE_US;
   }
   spin_unlock(usb_host_lock(), save);
   if (!have) return;
-  last = time_us_32();
-  hold = (r.modifier || r.keycode[0]) ? KBD_PRESS_US : KBD_RELEASE_US;
   process_kbd_report(0, 0, &r, 8);
+}
+
+// mouse reports and pad words of AT+KARABAS: queued by APP, taken by core1, each kept for its
+// hold_us; the mouse goes the way of a real mouse, the pads over the USB joystick ports
+#define EXT_INJECT_N 128
+typedef struct {
+  bool pad;
+  uint8_t port;
+  uint16_t word;
+  hid_mouse_report_ext_t mouse;
+  uint32_t hold_us;
+} ext_inject_t;
+static ext_inject_t ext_q[EXT_INJECT_N];
+static uint16_t ext_head = 0, ext_tail = 0;
+static uint32_t ext_last = 0, ext_hold = 0;
+
+int hid_ext_inject_free()
+{
+  uint32_t save = spin_lock_blocking(usb_host_lock());
+  int n = EXT_INJECT_N - 1 - (ext_head + EXT_INJECT_N - ext_tail) % EXT_INJECT_N;
+  spin_unlock(usb_host_lock(), save);
+  return n;
+}
+
+static bool ext_inject(const ext_inject_t *e)
+{
+  bool ok = false;
+  uint32_t save = spin_lock_blocking(usb_host_lock());
+  uint16_t next = (ext_head + 1) % EXT_INJECT_N;
+  if (next != ext_tail) {
+    ext_q[ext_head] = *e;
+    ext_head = next;
+    ok = true;
+  }
+  spin_unlock(usb_host_lock(), save);
+  return ok;
+}
+
+bool hid_mouse_inject(int8_t dx, int8_t dy, int8_t wheel, uint8_t buttons, uint32_t hold_us)
+{
+  ext_inject_t e = {0};
+  e.mouse.x = dx;
+  e.mouse.y = dy;
+  e.mouse.wheel = wheel;
+  e.mouse.buttons = buttons;
+  e.hold_us = hold_us;
+  return ext_inject(&e);
+}
+
+bool hid_pad_inject(uint8_t port, uint16_t word, uint32_t hold_us)
+{
+  ext_inject_t e = {0};
+  e.pad = true;
+  e.port = port;
+  e.word = word;
+  e.hold_us = hold_us;
+  return ext_inject(&e);
+}
+
+void __not_in_flash_func(hid_ext_inject_tick)()
+{
+  if (ext_head == ext_tail || time_us_32() - ext_last < ext_hold) return;
+  ext_inject_t e;
+  uint32_t save = spin_lock_blocking(usb_host_lock());
+  bool have = ext_head != ext_tail;
+  if (have) {
+    e = ext_q[ext_tail];
+    ext_tail = (ext_tail + 1) % EXT_INJECT_N;
+    ext_last = time_us_32();
+    ext_hold = e.hold_us;
+  }
+  spin_unlock(usb_host_lock(), save);
+  if (!have) return;
+  if (e.pad) usb_joy_inject(e.port, e.word);
+  else process_mouse_report_ext(0, 0, &e.mouse, sizeof(e.mouse));
+}
+
+bool hid_inject_idle()
+{
+  uint32_t save = spin_lock_blocking(usb_host_lock());
+  uint32_t now = time_us_32();
+  bool idle = inject_head == inject_tail && ext_head == ext_tail &&
+              now - inject_last >= inject_hold && now - ext_last >= ext_hold;
+  spin_unlock(usb_host_lock(), save);
+  return idle;
 }
 
 // the mouse moves since the last hid_mouse_take(): written by core1, read by APP, under usb_host_lock()

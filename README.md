@@ -214,7 +214,17 @@ answered by the firmware:
 | `AT+KARABAS=uart` | back to the UART of the core |
 | `AT+KARABAS=key:<keys>` | press and release keys as a USB keyboard would (core, OSD, hotkeys): keys apart by spaces, each modifiers and one key joined by `+` (`ctrl+alt+del`, `menu+esc`, `menu+f3`, `enter`, `f12`, `0x29` a HID usage), 100 ms down, 40 ms up |
 | `AT+KARABAS=type:<text>` | type the text (printable ASCII, US layout) |
-| `AT+KARABAS=hold:<key>` / `release` | keep a key down (until `release` or the next key) / all keys up |
+| `AT+KARABAS=hold:<key>` / `release` | keep a key down (until `release` or the next key) / all keys, mouse buttons and pad buttons up |
+| `AT+KARABAS=sync` | `OK` once everything queued by `key`, `type`, `mouse`, `click` and `pad` has been delivered |
+| `AT+KARABAS=mouse:<dx>,<dy>[,<buttons>[,<wheel>]]` | move as a USB mouse would (each axis up to 4000); buttons: bit 0 left, 1 right, 2 middle, left out or empty: the ones held stay |
+| `AT+KARABAS=click[:left\|right\|middle]` | a mouse click (left by default) |
+| `AT+KARABAS=pad:<port>:<buttons> ...` / `padhold:<port>:<buttons>` | press and release pad buttons on USB joystick port 0 or 1, e.g. `pad:0:up up+a` / keep them down until `release` or the next `pad`. Buttons: up down left right start a b c x y z mode |
+| `AT+KARABAS=state` | `+KARABAS:core;<file>;<id>;<name>;<build>;<boot, osd, fileloader or hidden>`, `+KARABAS:osd;<open>;<screen>;<file browser open>`, then an `item` line per file item |
+| `AT+KARABAS=load:<file or id>` | start a core from any core, `OK` when it has started; the boot core: a reboot |
+| `AT+KARABAS=reset` | start the running core again with clean memory; in the boot core: a reboot |
+| `AT+KARABAS=osd` / `osd:<item>` / `osd:<item>=<value>` | the menu items of the core: `+KARABAS:item;<pos>;<key>;<name>;<kind>;<enabled>;<value number>;<value>;<options or extensions>`; set by the number or the name of the option, a trigger with `=1` |
+| `AT+KARABAS=mount:<item>:<path>` / `eject:<item>` | the image of a file item, saved like one chosen in the OSD. An item is its key or name (any case) or `#<pos>`; the argument of a line is at most 80 characters |
+| `AT+KARABAS=debug:0` / `debug:1` | the debug log off / on until the next reboot; `karabas.ini` does not change |
 
 ### USB-UART adapter
 

@@ -1,8 +1,10 @@
 #include "usb_joy.h"
 #include "usb_joy_slots.h"
 #include "hardware/sync.h"
+#include "sega.h"
 
 static usb_joy_slots_t slots;
+static uint16_t injected[2]; // usb_joy_inject
 // irqs off for a few word copies: it never waits through FreeRTOS, unlike pico mutexes, whose
 // wakeups from irq context go through the FreeRTOS timer task
 static spin_lock_t *joy_lock;
@@ -32,6 +34,15 @@ void usb_joy_remove(uint8_t address, uint8_t instance, bool xinput) {
 void usb_joy_snapshot(uint16_t buttons[2]) {
   uint32_t save = spin_lock_blocking(joy_lock);
   usb_joy_slots_snapshot(&slots, buttons);
+  for (uint8_t i = 0; i < 2; i++) {
+    if (injected[i]) buttons[i] |= injected[i] | SC_CTL_ON;
+  }
+  spin_unlock(joy_lock, save);
+}
+
+void __not_in_flash_func(usb_joy_inject)(uint8_t port, uint16_t buttons) { // the USB loop runs from RAM
+  uint32_t save = spin_lock_blocking(joy_lock);
+  injected[port] = buttons;
   spin_unlock(joy_lock, save);
 }
 

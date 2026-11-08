@@ -14,6 +14,8 @@ extern core_file_slot_t file_slots[MAX_FILE_SLOTS];
 
 // configure the fpga with a core file and load its settings and roms
 void do_configure(const char* filename);
+// ... through the boot core, which clears the SRAM: another core takes over from a running one
+void do_configure_clean(const char* filename);
 // the current core again, through the boot core, which clears the SRAM
 void do_reload(void);
 // kgo2: deletes the user's settings of the core (/config/<id>.ini, .eep) and starts it again
@@ -42,6 +44,8 @@ int core_osd_page_entry(uint8_t page);
 // the option of the osd item pos one up (d = 1) or down (d = -1), around the ends: sent to the
 // core, a switch is saved into the core file later (core.osd_need_save)
 void core_osd_change(uint8_t pos, int d);
+// ... to the option n (below options_len), the same way
+void core_osd_set(uint8_t pos, uint8_t n);
 // the F osd item pos can be a physical floppy drive (its flag, and the board has the connector)
 bool core_osd_can_phys(uint8_t pos);
 // filename is a physical drive (":phys0" / ":phys1") that the F osd item pos can be
