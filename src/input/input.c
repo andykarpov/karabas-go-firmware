@@ -259,13 +259,41 @@ static void post_to_app(bool wait) {
   input_waiting = false;
 }
 
+// the keys of this report make a Menu+key hotkey of the core (called from both MCU cores: the table
+// of hotkeys only changes while a core is loaded)
+bool input_is_menu_hotkey(const hid_keyboard_report_t *kbd) {
+  if (!kbd->keycode[0] || !(kbd->modifier & (KEY_MOD_LMETA | KEY_MOD_RMETA))) return false;
+  for (uint8_t i=0; i<core.osd_len; i++) {
+    if ((core.osd[i].keys[0] & (KEY_MOD_LMETA | KEY_MOD_RMETA)) && (kbd->modifier & core.osd[i].keys[0]) &&
+        core.osd[i].keys[1] == kbd->keycode[0]) {
+      return true;
+    }
+  }
+  return false;
+}
+
 static void input_route(const queue_spi_t *packet) {
-  if (packet->cmd == CMD_USB_KBD && packet->addr == 1 && packet->data != 0) {
-    // key press: APP runs on_keyboard(); for a hotkey wait for it, since it may open the OSD
-    hid_keyboard_report_t kbd;
-    hid_kbd_report_get(&kbd);
-    bool hotkey = !is_osd && hotkey_find(&kbd, joyL, joyR) != HOTKEY_NONE;
-    post_to_app(hotkey);
+  // the key of a Menu+key hotkey of the core: the machine in the core does not get it (here the USB
+  // report; the PS/2 stream of the same keys in hid_app.c). It stays hidden
+  // until the key is released, also when Menu is released first (the report is sent again then, with
+  // the key and without the modifier). Hotkeys without Menu (F12, Ctrl+Alt+Del) still reach the core.
+  static uint8_t hidden_key = 0;
+  if (packet->cmd == CMD_USB_KBD && packet->addr == 1) {
+    if (packet->data != hidden_key) hidden_key = 0;
+    if (packet->data != 0) {
+      // key press: APP runs on_keyboard(); for a hotkey wait for it, since it may open the OSD
+      hid_keyboard_report_t kbd;
+      hid_kbd_report_get(&kbd);
+      int hotkey = is_osd ? HOTKEY_NONE : hotkey_find(&kbd, joyL, joyR);
+      post_to_app(hotkey != HOTKEY_NONE);
+      if (input_is_menu_hotkey(&kbd)) hidden_key = packet->data;
+    }
+    if (hidden_key) {
+      queue_spi_t none = *packet;
+      none.data = 0;
+      event_forward(&none);
+      return;
+    }
   }
   event_forward(packet);
 }

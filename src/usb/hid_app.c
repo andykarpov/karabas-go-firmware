@@ -11,6 +11,7 @@
 #include "main.h"
 #include "host/usbh.h"
 #include "input/ps2kbd.h"
+#include "input/input.h"
 #include "input/sega.h"
 #include "hardware/sync.h"
 
@@ -296,7 +297,20 @@ static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_
     for(uint8_t i=0; i<6; i++) {
       spi_queue(CMD_USB_KBD, i+1, report->keycode[i]);
     }
-    kb_usb_receive(report);
+    // the PS/2 stream without the key of a Menu+key hotkey, until it is released (as input_route for
+    // the USB report): no make code, so no typematic repeat either
+    static uint8_t hidden_key = 0;
+    hid_keyboard_report_t ps2_report = *report;
+    if (input_is_menu_hotkey(report)) hidden_key = report->keycode[0];
+    bool hidden_held = false;
+    for (uint8_t i=0; i<6; i++) {
+      if (hidden_key && ps2_report.keycode[i] == hidden_key) {
+        ps2_report.keycode[i] = 0;
+        hidden_held = true;
+      }
+    }
+    if (!hidden_held) hidden_key = 0;
+    kb_usb_receive(&ps2_report);
     d_printf("HID Keyboard: %02x %02x %02x %02x %02x %02x %02x", 
       report->modifier, 
       report->keycode[0], 

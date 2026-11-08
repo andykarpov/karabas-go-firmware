@@ -81,7 +81,7 @@ Commands that the core does not know must be ignored.
 
 | Code | Name | ADDR | DATA | Notes |
 |---|---|---|---|---|
-| `01` | `CMD_USB_KBD` | 0 = modifiers, 1–6 = key codes | USB HID boot report byte | Not sent while the OSD is open. |
+| `01` | `CMD_USB_KBD` | 0 = modifiers, 1–6 = key codes | USB HID boot report byte | Not sent while the OSD is open. The key of a `Menu+key` hotkey of the core is sent as 0 until it is released. |
 | `02` | `CMD_USB_MOUSE` | 0 = X, 1 = Y, 2 = wheel, 3 = buttons | signed delta / button bits | One frame set per USB report that moves or changes the buttons; the core adds the deltas on the buttons frame. Not sent while the OSD is open. |
 | `03` | `CMD_JOYSTICK` | 0/1 = left low/high byte, 2/3 = right low/high byte | 16-bit joystick state | Bits: 0 connected, 1 up, 2 down, 3 left, 4 right, 5 start, 6 A, 7 B, 8 C, 9 X, 10 Y, 11 Z, 12 mode. USB gamepads are mapped onto the same bits (`drivers/*.ini`). |
 | `04` | `CMD_BTN` | 0 / 1 = on-board button | 1 pressed, 0 released | Only for a button whose press action is `core` (the core file header, make_core `buttons`; the default). |
