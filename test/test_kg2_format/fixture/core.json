@@ -27,6 +27,7 @@
     {"type": "P", "name": "A text line longer than 16 c"},
     {"type": "M", "name": "More", "open": 1},
     {"type": "T", "name": "Reset", "hotkey": "F12", "page": 1},
-    {"type": "FL", "name": "BIOS", "slot": 2, "exts": "rom", "dir": "/test", "file": ["bios1.rom", "/roms/bios.rom"], "autoload": 1, "page": 1}
+    {"type": "FL", "name": "BIOS", "slot": 2, "exts": "rom", "dir": "/test", "file": ["bios1.rom", "/roms/bios.rom"], "autoload": 1, "page": 1},
+    { "type": "R", "name": "Bank", "default": "b", "page": 1, "options": [ {"name": "A", "hotkey": "Menu+F1"}, {"name": "B"} ] }
   ]
 }

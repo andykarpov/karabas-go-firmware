@@ -61,6 +61,7 @@ typedef struct {
 	uint8_t cond_item; // the switch the item depends on + 1, 0: none
 	uint8_t cond;      // CORE_OSD_COND_*
 	uint8_t sw;        // the CMD_SWITCHES number (kgo1: the position), 255: none
+	uint8_t radio_item; // a radio row: its switch; the option is the distance from it - 1
 	uint8_t opt_value[MAX_OSD_ITEM_OPTIONS]; // the byte sent for an option (kgo1: its position)
 	char key[16+1];    // kgo2: the key of the item (the user's settings)
 } core_osd_t;

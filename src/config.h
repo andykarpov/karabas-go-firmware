@@ -261,6 +261,7 @@
 #define CORE_OSD_TYPE_FILELOADER 0x06    // immediately transfer a selected file to the fpga side (ioctl_*)
 #define CORE_OSD_TYPE_PAGE 0x07          // a page entry (M): opens the items of its page, a sub-menu
 #define CORE_OSD_TYPE_SEPARATOR 0x08     // a line
+#define CORE_OSD_TYPE_RADIO 0x09         // kgo2, in memory only: the row of one option of a radio switch
 // the condition byte of an item (show_if / enable_if of make_core): shown / enabled when (the value
 // of the condition item == the value) xor invert
 #define CORE_OSD_COND_DISABLE 0x80       // else hide
@@ -271,6 +272,7 @@
 #define CORE_OSD_FLAG_PHYS 0x01          // F item: can be a physical floppy drive (board_has_floppy)
 #define CORE_OSD_FLAG_READONLY 0x02      // F item (kgo2): the image without writes
 #define CORE_OSD_FLAG_AUTOLOAD 0x04      // FL item (kgo2): the file goes to the core at its start
+#define CORE_OSD_FLAG_RADIO 0x08         // S item (kgo2): not a row, its options follow as CORE_OSD_TYPE_RADIO rows
 #define CORE_OSD_NO_SWITCH 0xFF          // core_osd_t.sw of an item without a CMD_SWITCHES number
 
 #define MAX_CORES 255 // cores_len is uint8_t

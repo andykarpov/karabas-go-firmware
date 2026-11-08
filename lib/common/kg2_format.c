@@ -113,6 +113,7 @@ bool kg2_item_record_parse(const uint8_t *r, size_t len, kg2_item_t *out) {
   out->dir = kg_le16(r + 24);
   out->options_ofs = kg_le16(r + 26);
   out->files_ofs = kg_le16(r + 28);
+  out->option_hotkeys_ofs = kg_le16(r + 30);
   return true;
 }
 
@@ -123,6 +124,15 @@ bool kg2_item_parse(const uint8_t *sec, size_t len, const kg2_osd_head_t *head, 
   // lists out of the section are dropped
   if (out->options && (size_t) out->options_ofs + (size_t) KG2_OPTION_SIZE * out->options > len) out->options = 0;
   if (out->files && (size_t) out->files_ofs + 2u * out->files > len) out->files = 0;
+  if ((size_t) out->option_hotkeys_ofs + (size_t) KG2_OPTION_HOTKEY_SIZE * out->options > len) out->option_hotkeys_ofs = 0;
+  return true;
+}
+
+bool kg2_option_hotkey_parse(const uint8_t *r, size_t len, kg2_option_hotkey_t *out) {
+  if (len < KG2_OPTION_HOTKEY_SIZE) return false;
+  out->keys[0] = r[0];
+  out->keys[1] = r[1];
+  out->text = kg_le16(r + 2);
   return true;
 }
 

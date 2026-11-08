@@ -127,12 +127,12 @@ static void test_osd() {
   size_t n = sec_len(&go, KG2_SEC_OSD);
   kg2_osd_head_t head;
   TEST_ASSERT_TRUE(kg2_osd_head_parse(s, n, &head));
-  TEST_ASSERT_EQUAL(7, head.count);
+  TEST_ASSERT_EQUAL(8, head.count);
   // the firmware reads the 8 bytes of the head alone, with the length of the section
   uint8_t head_only[KG2_OSD_HEAD_SIZE];
   memcpy(head_only, s, sizeof(head_only));
   TEST_ASSERT_TRUE(kg2_osd_head_parse(head_only, n, &head));
-  TEST_ASSERT_EQUAL(7, head.count);
+  TEST_ASSERT_EQUAL(8, head.count);
   TEST_ASSERT_FALSE(kg2_osd_head_parse(head_only, KG2_OSD_HEAD_SIZE + 47, &head));
   TEST_ASSERT_TRUE(kg2_osd_head_parse(head_only, n, &head));
   kg2_item_t it;
@@ -196,7 +196,25 @@ static void test_osd() {
   uint16_t ref;
   TEST_ASSERT_TRUE(kg2_ref_at(s, n, it.files_ofs, 1, &ref));
   TEST_ASSERT_EQUAL_STRING("/roms/bios.rom", str(&go, ref));
-  TEST_ASSERT_FALSE(kg2_item_parse(s, n, &head, 7, &it));
+
+  // a radio item: a switch with the flag, a hotkey per option
+  TEST_ASSERT_TRUE(kg2_item_parse(s, n, &head, 7, &it));
+  TEST_ASSERT_EQUAL(0, it.type);
+  TEST_ASSERT_EQUAL(KG2_ITEM_RADIO, it.flags);
+  TEST_ASSERT_EQUAL(1, it.page);
+  TEST_ASSERT_EQUAL(2, it.options);
+  TEST_ASSERT_EQUAL(0, it.keys[1]);
+  TEST_ASSERT_NOT_EQUAL(0, it.option_hotkeys_ofs);
+  kg2_option_hotkey_t hk;
+  TEST_ASSERT_TRUE(kg2_option_hotkey_parse(s + it.option_hotkeys_ofs, KG2_OPTION_HOTKEY_SIZE, &hk));
+  TEST_ASSERT_EQUAL_HEX8(0x88, hk.keys[0]);
+  TEST_ASSERT_EQUAL_HEX8(0x3a, hk.keys[1]);
+  TEST_ASSERT_EQUAL_STRING("Menu+F1", str(&go, hk.text));
+  TEST_ASSERT_TRUE(kg2_option_hotkey_parse(s + it.option_hotkeys_ofs + KG2_OPTION_HOTKEY_SIZE, KG2_OPTION_HOTKEY_SIZE, &hk));
+  TEST_ASSERT_EQUAL(0, hk.keys[1]);
+  TEST_ASSERT_EQUAL_STRING("", str(&go, hk.text));
+  TEST_ASSERT_FALSE(kg2_option_hotkey_parse(s, KG2_OPTION_HOTKEY_SIZE - 1, &hk));
+  TEST_ASSERT_FALSE(kg2_item_parse(s, n, &head, 8, &it));
 
   // the Mini G variant of the disk: read-only, a default file
   s = sec(&minig, KG2_SEC_OSD);

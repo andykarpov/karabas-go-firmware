@@ -353,6 +353,19 @@ void input_tick_ui() {
 }
 
 
+// the popup of a switch changed by a hotkey
+static void hotkey_popup(uint8_t i) {
+  osd_clear();
+  osd_logo(0, 0, HW_ID);
+  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
+  osd_set_pos(0, 5);
+  osd_print(core.osd[i].name);
+  osd_set_pos(0,6);
+  osd_print(core.osd[i].options[core.osd[i].val].name);
+  osd_update();
+  ui_popup_start(i);
+}
+
 bool on_global_hotkeys() {
 
   bool joy = ui_joy_hotkeys();
@@ -374,18 +387,12 @@ bool on_global_hotkeys() {
       if (core.osd[i].options_len > 0) {
         curr_osd_item = i;
         core_osd_change(i, 1);
-        if (!is_osd) {
-          osd_clear();
-          osd_logo(0, 0, HW_ID);
-          osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-          osd_set_pos(0, 5);
-          osd_print(core.osd[i].name);
-          osd_set_pos(0,6);
-          osd_print(core.osd[i].options[core.osd[i].val].name);
-          osd_update();
-          ui_popup_start(i);
-        }
+        if (!is_osd) hotkey_popup(i);
       }
+    } else if (core.osd[i].type == CORE_OSD_TYPE_RADIO) {
+      curr_osd_item = i;
+      core_osd_change(i, 1);
+      if (!is_osd) hotkey_popup(core.osd[i].radio_item);
     } else if (core.osd[i].type == CORE_OSD_TYPE_TRIGGER) {
         core_trigger(i);
     } else if (core_osd_is_file(i)) {
@@ -398,6 +405,8 @@ bool on_global_hotkeys() {
       curr_osd_item = i;
       osd_show_menu();
     }
+    // kgo2: only marks the settings as changed, so a hotkey is saved without waiting for the next key
+    if (core.osd_need_save && core.format != CORE_FORMAT_KGO1) app_core_save(curr_osd_item);
     return true;
   }
 
