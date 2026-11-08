@@ -30,6 +30,7 @@ Set `debug=1` in `karabas.ini` and keep a terminal on the USB serial port: most 
 
 - [ ] Switches change the core at once, are saved into the core file and come back after a reload.
 - [ ] Hotkeys of OSD items (Ctrl+Alt+Del of tsconf).
+- [x] The key of a `Menu+key` hotkey does not reach the machine (Mini G, RK core, Specialist, 2026-11-08: `Menu+M` shows no `M` in the Monitor, also when Menu is released first; the switch still changes; F12 still resets). Ctrl+Alt+Del: same path as F12, not tried.
 - [ ] A tree menu (nanomig): Enter / Right open a `►` page, Esc goes back, the cursor is kept per page, the path in the title row; a `show_if` item appears and an `enable_if` item turns grey with its switch; a hotkey of an item on another page opens that page. A flat core (tsconf) looks as before.
 - [ ] Long lists: the scrollbar in the last column of the core browser and the file browser (a slot per page), the core menu and the Wi-Fi list (a thumb at most half the track); no scrollbar and no empty column when the list fits; the core menu scrolls with the cursor.
 - [ ] `F` / `FL` browsers list the dirs (cyan, ending with `/`) and only the files with the item's extensions ("Files: ..." on the hint row).

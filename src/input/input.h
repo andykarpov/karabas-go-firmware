@@ -15,6 +15,7 @@ void input_tick_buttons();  // the on-board buttons by the actions of the core (
 void input_tick_ui();        // APP: handle the events INPUT handed over (on_keyboard)
 void input_tick_repeat();
 void input_task_start(); // start the INPUT task (after the core is loaded)
+bool input_is_menu_hotkey(const hid_keyboard_report_t *kbd); // the report is a Menu+key hotkey of the core
 void on_keyboard();
 
 #ifdef __cplusplus
