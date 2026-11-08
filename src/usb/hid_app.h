@@ -26,6 +26,16 @@ bool hid_kbd_inject(const hid_keyboard_report_t *report);
 int hid_kbd_inject_free();
 void hid_kbd_inject_tick(); // core1, usb_host_loop
 
+// AT+KARABAS=mouse / click / pad (APP): a mouse report as from a USB mouse, the button word of a
+// USB joystick port; each stays hold_us before the next one. false: the queue is full.
+// hid_ext_inject_free(): the entries that still fit.
+bool hid_mouse_inject(int8_t dx, int8_t dy, int8_t wheel, uint8_t buttons, uint32_t hold_us);
+bool hid_pad_inject(uint8_t port, uint16_t word, uint32_t hold_us);
+int hid_ext_inject_free();
+void hid_ext_inject_tick(); // core1, usb_host_loop
+// everything injected (keyboard, mouse, pads) has been delivered and its hold time is over
+bool hid_inject_idle();
+
 // The mouse moves for the graphic menus (APP): the sums since the last take, the buttons held and
 // the ones pressed since then (a short click between two takes is not lost).
 typedef struct {

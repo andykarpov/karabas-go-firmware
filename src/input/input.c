@@ -64,7 +64,7 @@ static int hotkey_find(const hid_keyboard_report_t *kbd, uint16_t jl, uint16_t j
 }
 
 // the backup RAM first, then the log (the result of the flush) gets to the port before the reboot
-static void flush_and_reboot() {
+void flush_and_reboot() {
   bk_flush();
   core_eeprom_flush();
   sd1_sync_before_reboot();

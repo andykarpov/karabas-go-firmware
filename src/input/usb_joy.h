@@ -23,6 +23,8 @@ bool usb_joy_set(uint8_t address, uint8_t instance, bool xinput, uint16_t button
 void usb_joy_remove(uint8_t address, uint8_t instance, bool xinput);
 // button words of both ports (0 for a free port)
 void usb_joy_snapshot(uint16_t buttons[2]);
+// AT+KARABAS=pad: buttons held on port (0 / 1) on top of a real pad there; 0: none
+void usb_joy_inject(uint8_t port, uint16_t buttons);
 
 // the pads on the ports (address 0: a free port)
 typedef struct {

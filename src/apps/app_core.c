@@ -6,6 +6,7 @@
 #include "apps/app_core.h"
 #include "ui/sorts.h"
 #include "file_name.h"
+#include "at_args.h"
 #include "ui/ui_draw.h"
 #include "ui/file_browser.h"
 #include "kg_list.h"
@@ -602,15 +603,52 @@ void app_core_filebrowser(uint8_t vpos) {
   fb_draw(vpos, cur_slot()->dir, true); // sends the OSD
 }
 
-void app_core_on_select_file() {
-  if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILELOADER) {
+static void send_file(uint8_t pos, bool popup) {
+  if (core.osd[pos].type == CORE_OSD_TYPE_FILELOADER) {
 
-    uint8_t slot = core.osd[curr_osd_item].slot_id;
+    uint8_t slot = core.osd[pos].slot_id;
     if (uknc_sav_slot(slot)) uknc_sav_run(slot);
-    else core_ioctl_send(slot, true);
+    else core_ioctl_send(slot, popup);
 
-  } else if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER) {
+  } else if (core.osd[pos].type == CORE_OSD_TYPE_FILEMOUNTER) {
     // open the image and send its size (eject first)
-    img_mount(core.osd[curr_osd_item].slot_id);
+    img_mount(core.osd[pos].slot_id);
   }
+}
+
+void app_core_on_select_file() {
+  send_file(curr_osd_item, true);
+}
+
+bool app_core_in_browser(void) {
+  return is_filebrowser;
+}
+
+void app_core_leave_browser(void) {
+  if (is_filebrowser) sd_close(&file1);
+  is_filebrowser = false;
+  filebrowser_slot = -1;
+}
+
+bool app_core_mount_path(uint8_t pos, const char *path) {
+  core_file_slot_t *fs = &file_slots[core.osd[pos].slot_id];
+  char dir[sizeof(fs->dir)], name[sizeof(fs->filename)];
+  FILINFO fi;
+  if (!has_sd || !kg_at_path_split(path, dir, sizeof(dir), name, sizeof(name))) return false;
+  if (f_stat(path, &fi) != FR_OK || (fi.fattrib & AM_DIR) || !kg_name_has_ext(fi.fname, fs->ext)) return false;
+  app_core_leave_browser();
+  strcpy(fs->dir, dir);
+  strcpy(fs->filename, fi.fname); // the name as it is on the card
+  fs->is_mounted = true;
+  if (core.osd[pos].type == CORE_OSD_TYPE_FILEMOUNTER) last_mount_slot = core.osd[pos].slot_id;
+  send_file(pos, false);
+  core.osd_need_save = true;
+  app_core_save(pos);
+  return true;
+}
+
+void app_core_eject_item(uint8_t pos) {
+  app_core_leave_browser();
+  app_core_eject(pos);
+  app_core_save(pos);
 }

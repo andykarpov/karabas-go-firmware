@@ -7,6 +7,7 @@
 #include "input/sega.h"
 #include "input/usb_hid_keys.h"
 #include "apps/app_core_browser.h"
+#include "apps/app_core.h"
 #include "apps/app_setup.h"
 #include "ui/sorts.h"
 #include "file_name.h"
@@ -318,6 +319,16 @@ void app_core_browser_read_list() {
 
 }
 
+// the screen a core starts on
+static void set_core_screen() {
+  switch (core.type) {
+    case CORE_TYPE_BOOT: osd_state = state_core_browser; break;
+    case CORE_TYPE_OSD: osd_state = state_main; break;
+    case CORE_TYPE_FILELOADER: osd_state = state_file_loader; break;
+    default: osd_state = state_main;
+  }
+}
+
 // sound: the start sound of the graphic menu (a core chosen by the user, not the autoload)
 static void start_core(bool sound) {
   autoload_enabled = false;
@@ -327,12 +338,17 @@ static void start_core(bool sound) {
   d_printf("Selected core %s to boot from menu", cores[core_sel].filename); d_println();
   has_ft = false;
   do_configure(cores[core_sel].filename);
-  switch (core.type) {
-    case CORE_TYPE_BOOT: osd_state = state_core_browser; break;
-    case CORE_TYPE_OSD: osd_state = state_main; break;
-    case CORE_TYPE_FILELOADER: osd_state = state_file_loader; break;
-    default: osd_state = state_main;
-  }
+  set_core_screen();
+}
+
+void app_core_browser_start_file(const char *filename) {
+  bool from_boot = core.type == CORE_TYPE_BOOT;
+  autoload_enabled = false;
+  has_ft = false;
+  app_core_leave_browser();
+  if (from_boot) do_configure(filename);
+  else do_configure_clean(filename);
+  set_core_screen();
 }
 
 // the graphic setup on the FT812, else the classic one
