@@ -184,7 +184,7 @@ The core writes each byte to `address + offset`. Cores detect a write from a new
 55 00 00                        end
 ```
 
-The file is sent when it is chosen in the OSD. An `FL` item with `autoload` (bit 7 of its slot byte) and a file that exists (its `dir` / `filename` from `core.json`, or the last chosen one) is also sent at core start, after the switches and before `CMD_INIT_DONE`, e.g. the Kickstart of the NanoMig core.
+The file is sent when it is chosen in the OSD. An `FL` item with `autoload` (bit 7 of its slot byte) and a file that exists (its `dir` / `filename` from `core.json`, or the last chosen one) is also sent at core start, after the switches and the ROMs of the core file and before `CMD_INIT_DONE`, e.g. the Kickstart of the NanoMig core; a file over the address of such a ROM replaces it (the BIOS file of the MSX core over its C-BIOS).
 
 ### File mounter (`F` OSD items)
 
