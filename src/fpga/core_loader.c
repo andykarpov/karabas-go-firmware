@@ -319,6 +319,8 @@ static void send_build_ids(void) {
 // (BaseConf keeps the found partitions in RAM and did not see an HDD image mounted later)
 #define SRAM_CLEAR_MS 250
 
+static void send_autoload_files(void);
+
 static void configure(const char* filename, bool clear_sram) {
   hang_step(0x81);
   printer_link_reset();
@@ -376,6 +378,7 @@ static void configure(const char* filename, bool clear_sram) {
   }
   hang_step(0xa5);
   read_roms(filename);
+  send_autoload_files(); // after the ROMs: a file over a ROM of the core file wins
   hang_step(0xa6);
   if (!is_osd) {
     osd_hide_popup();
@@ -935,15 +938,6 @@ void read_core(const char* filename) {
         (sd_exists(sfullname) || core_osd_phys(i, sfilename));
       core_send(i); // opens the image and sends its size (or the physical drive)
     }
-    // FL items with autoload: the file goes to the core before it starts (a Kickstart rom)
-    else if (core.osd[i].type == CORE_OSD_TYPE_FILELOADER && file_slots[core.osd[i].slot_id].is_autoload &&
-             file_slots[core.osd[i].slot_id].is_mounted) {
-      core_ioctl_send(core.osd[i].slot_id, false);
-    }
-    else if (core.osd[i].type == CORE_OSD_TYPE_FILELOADER && file_slots[core.osd[i].slot_id].is_autoload) {
-      d_printf("Ioctl slot %d: no file to autoload (%s/%s)", core.osd[i].slot_id,
-        file_slots[core.osd[i].slot_id].dir, file_slots[core.osd[i].slot_id].filename); d_println();
-    }
   }
 
   osd_hide_popup();
@@ -966,6 +960,21 @@ static void rom_progress(uint32_t sent, void *ctx) {
   osd_update();
 }
 
+
+// FL items with autoload: the file goes to the core before it starts (a Kickstart rom, the BIOS file
+// of the MSX core). After read_roms(): a file over the address of a ROM of the core file (the MSX
+// BIOS over the C-BIOS of its roms) must win, the ROMs used to overwrite it.
+static void send_autoload_files(void) {
+  for (uint8_t i = 0; i < core.osd_len; i++) {
+    if (core.osd[i].type != CORE_OSD_TYPE_FILELOADER || !file_slots[core.osd[i].slot_id].is_autoload) continue;
+    if (file_slots[core.osd[i].slot_id].is_mounted) {
+      core_ioctl_send(core.osd[i].slot_id, false);
+    } else {
+      d_printf("Ioctl slot %d: no file to autoload (%s/%s)", core.osd[i].slot_id,
+        file_slots[core.osd[i].slot_id].dir, file_slots[core.osd[i].slot_id].filename); d_println();
+    }
+  }
+}
 
 void read_roms(const char* filename) {
 
