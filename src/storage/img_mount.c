@@ -187,8 +187,8 @@ static bool img_serve() {
   uint32_t end_us = us_now();
   uint32_t wait_us = serve_us - req.start_us, took_us = end_us - serve_us;
   if (!ok) {
-    d_printf("Image slot %d: %s %lu FAILED, wait %lu us, %lu us", slot, what, (unsigned long) lba,
-      (unsigned long) wait_us, (unsigned long) took_us);
+    d_printf("Image slot %d: %s %lu FAILED, wait %lu us, %lu us, lba bytes %x", slot, what, (unsigned long) lba,
+      (unsigned long) wait_us, (unsigned long) took_us, req.parts);
     d_println();
   } else {
     if (log_rd + log_wr == 0) log_first_ms = ms_now();

@@ -182,6 +182,7 @@ static uint8_t req_slot = 0;
 static uint8_t req_op = 0;
 static uint8_t lba_mask = 0;          // IMG_LBA bytes since IMG_LBA 0
 static bool req_complete = false;     // the request had all 4 IMG_LBA bytes
+static uint8_t req_parts = 0;         // the IMG_LBA bytes of the request, for the log
 static volatile bool req_pending = false;
 static volatile bool req_started = false; // IMG_LBA seen, IMG_SEC not yet
 static uint32_t req_start_us = 0;
@@ -230,6 +231,7 @@ static void on_img_sec(uint8_t addr, uint8_t data) {
   req_op = data;
   if (data == IMG_REQ_WRITE) wr_reset();
   req_complete = (lba_mask == 0x0F);
+  req_parts = lba_mask;
   lba_mask = 0;
   req_pending = true;
   req_started = false;
@@ -307,6 +309,7 @@ bool link_img_take(link_img_req_t *req) {
   req->op = req_op;
   req->lba = req_lba;
   req->complete = req_complete;
+  req->parts = req_parts;
   req->start_us = req_start_us;
   return true;
 }

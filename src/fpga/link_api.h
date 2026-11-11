@@ -102,6 +102,7 @@ typedef struct {
   uint8_t op;          // IMG_REQ_READ / IMG_REQ_WRITE
   uint32_t lba;
   bool complete;       // the request arrived whole (v1: all four LBA bytes)
+  uint8_t parts;       // v1: the LBA bytes seen, one bit each (for the log)
   uint32_t start_us;   // when it started
 } link_img_req_t;
 
