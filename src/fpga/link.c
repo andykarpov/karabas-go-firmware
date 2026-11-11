@@ -17,7 +17,7 @@ static uint8_t link_freq = 0; // core spi frequency in MHz, 0 or 255 = default
 static bool link_rx_enabled = true;
 static link_handler_t handlers[256] = { NULL };
 
-// events from core1 (usb hid, ps/2) to core0. sized to survive a core load (a few seconds) without drops
+// events from core1 (usb hid, ps/2: link_event_kind_t, idx, val) to core0. sized to survive a core load (a few seconds) without drops
 #define SPI_EVENT_QUEUE_SIZE 512
 static queue_t spi_event_queue;
 static volatile uint32_t spi_queue_dropped = 0;
@@ -151,11 +151,11 @@ void process_in_cmd(uint8_t cmd, uint8_t addr, uint8_t data) {
   }
 }
 
-void spi_queue(uint8_t cmd, uint8_t addr, uint8_t data) {
+void link_event_push(uint8_t kind, uint8_t idx, uint8_t val) {
   queue_spi_t packet;
-  packet.cmd = cmd;
-  packet.addr = addr;
-  packet.data = data;
+  packet.cmd = kind;
+  packet.addr = idx;
+  packet.data = val;
   if (!queue_try_add(&spi_event_queue, &packet)) {
     spi_queue_dropped++;
     return;

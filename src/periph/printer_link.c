@@ -1,4 +1,5 @@
 #include "printer_link.h"
+#include "fpga/link_api.h"
 #include "printer.h"
 #include "printer_trace.h"
 #include "config.h"
@@ -38,8 +39,7 @@ static void flush_pending(void) {
   }
 }
 
-static void receive(uint8_t addr, uint8_t data) {
-  if (addr != 0) return;
+static void receive(uint8_t data) {
   active = true;
   ++received;
   printer_trace_append(&rx_trace, &data, 1); // exactly what arrived from FPGA, before enqueue
@@ -60,14 +60,13 @@ static void receive(uint8_t addr, uint8_t data) {
   }
 }
 
-static void request(uint8_t addr, uint8_t data) {
-  (void) data;
-  if (addr == 0) active = reply = true;
+static void request(void) {
+  active = reply = true;
 }
 
 void printer_link_begin() {
-  link_on(CMD_PRINTER_DATA, receive);
-  link_on(CMD_PRINTER_STATUS, request);
+  link_printer_on_data(receive);
+  link_printer_on_status_request(request);
 }
 
 void printer_link_reset() {
@@ -98,11 +97,11 @@ void printer_link_tick() {
   }
   if (reply || status != last_status || (uint32_t) (now - last_status_sent) >= STATUS_REPEAT_MS) {
     printer_trace_flush(&rx_trace); // also expose a short final line when the source stops
-    // Unsigned subtraction handles ms_now() wraparound. Update before spi_send:
+    // Unsigned subtraction handles ms_now() wraparound. Update before sending:
     // SPI dispatch may re-enter the handlers and set a new reply request.
     reply = false;
     last_status = status;
     last_status_sent = now;
-    spi_send(CMD_PRINTER_STATUS, 0, status);
+    link_printer_status(status);
   }
 }

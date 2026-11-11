@@ -146,7 +146,7 @@ void input_tick_buttons() {
       pressed_for[i] = ms_now();
     }
     if (b->press == BTN_ACTION_CORE) {
-      spi_send(CMD_BTN, i, pressed);
+      link_sys_btn(i, pressed);
     } else if (pressed ? b->hold == BTN_ACTION_NONE : (b->hold != BTN_ACTION_NONE && !held[i])) {
       btn_run(i, b->press);
     }
@@ -179,30 +179,23 @@ static void joy_poll(bool *changedL, bool *changedR) {
 
 static void joy_send(bool changedL, bool changedR) {
   uint16_t l = joyL, r = joyR;
-  if (changedL) {
-    spi_send(CMD_JOYSTICK, 0, (uint8_t) l);
-    spi_send(CMD_JOYSTICK, 1, (uint8_t) (l >> 8));
-  }
-  if (changedR) {
-    spi_send(CMD_JOYSTICK, 2, (uint8_t) r);
-    spi_send(CMD_JOYSTICK, 3, (uint8_t) (r >> 8));
-  }
+  if (changedL) link_hid_joy(0, l);
+  if (changedR) link_hid_joy(1, r);
 }
 
 // forward one event from core1 to the fpga (keys, joysticks and the mouse are not forwarded while
 // the OSD is open)
-static void event_forward(const queue_spi_t *packet) {
-  switch (packet->cmd) {
-    case CMD_USB_KBD:
-    case CMD_PS2_SCANCODE:
-    case CMD_JOYSTICK:
-    case CMD_USB_MOUSE:
+static void event_forward(const link_event_t *ev) {
+  switch (ev->kind) {
+    case LINK_EV_KBD:
+    case LINK_EV_PS2:
+    case LINK_EV_MOUSE:
       if (!is_osd) {
-        spi_send(packet->cmd, packet->addr, packet->data);
+        link_hid_forward(ev);
       }
       break;
     default:
-      spi_send(packet->cmd, packet->addr, packet->data);
+      link_hid_forward(ev);
   }
 }
 
@@ -272,25 +265,25 @@ bool input_is_menu_hotkey(const hid_keyboard_report_t *kbd) {
   return false;
 }
 
-static void input_route(const queue_spi_t *packet) {
+static void input_route(const link_event_t *packet) {
   // the key of a Menu+key hotkey of the core: the machine in the core does not get it (here the USB
   // report; the PS/2 stream of the same keys in hid_app.c). It stays hidden
   // until the key is released, also when Menu is released first (the report is sent again then, with
   // the key and without the modifier). Hotkeys without Menu (F12, Ctrl+Alt+Del) still reach the core.
   static uint8_t hidden_key = 0;
-  if (packet->cmd == CMD_USB_KBD && packet->addr == 1) {
-    if (packet->data != hidden_key) hidden_key = 0;
-    if (packet->data != 0) {
+  if (packet->kind == LINK_EV_KBD && packet->idx == 1) {
+    if (packet->val != hidden_key) hidden_key = 0;
+    if (packet->val != 0) {
       // key press: APP runs on_keyboard(); for a hotkey wait for it, since it may open the OSD
       hid_keyboard_report_t kbd;
       hid_kbd_report_get(&kbd);
       int hotkey = is_osd ? HOTKEY_NONE : hotkey_find(&kbd, joyL, joyR);
       post_to_app(hotkey != HOTKEY_NONE);
-      if (input_is_menu_hotkey(&kbd)) hidden_key = packet->data;
+      if (input_is_menu_hotkey(&kbd)) hidden_key = packet->val;
     }
     if (hidden_key) {
-      queue_spi_t none = *packet;
-      none.data = 0;
+      link_event_t none = *packet;
+      none.val = 0;
       event_forward(&none);
       return;
     }
@@ -300,12 +293,12 @@ static void input_route(const queue_spi_t *packet) {
 
 static void input_task(void *param) {
   for (;;) {
-    // woken by spi_queue, or every tick to poll the joysticks
+    // woken by link_hid_queue, or every tick to poll the joysticks
     ulTaskNotifyTake(pdTRUE, 1);
     if (msc_active()) {
       // no core is loaded in msc mode
-      queue_spi_t packet;
-      while (link_queue_pop(&packet)) {}
+      link_event_t ev;
+      while (link_hid_queue_pop(&ev)) {}
       continue;
     }
 
@@ -315,9 +308,9 @@ static void input_task(void *param) {
     if (changedR) post_to_app(false);
     joy_send(changedL, changedR);
 
-    queue_spi_t packet;
-    while (link_queue_pop(&packet)) {
-      input_route(&packet);
+    link_event_t ev;
+    while (link_hid_queue_pop(&ev)) {
+      input_route(&ev);
     }
   }
 }

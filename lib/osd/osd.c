@@ -10,7 +10,6 @@
 #include <stdarg.h>
 #include <stdio.h>
 
-#define CMD_OSD 0x20
 #define ADDR_SHOW 0x01
 #define ADDR_POPUP 0x02
 #define ADDR_SET_POS_X 0x10
@@ -78,10 +77,10 @@ void osd_update(void) {
   for (uint8_t y = 0; y < OSD_SIZE_Y; y++) {
     for (uint8_t x = 0; x < OSD_SIZE_X; x++) {
       if (changed[y][x]) {
-        send(CMD_OSD, ADDR_SET_POS_X, x);
-        send(CMD_OSD, ADDR_SET_POS_Y, y);
-        send(CMD_OSD, ADDR_CHAR, data[y][x]);
-        send(CMD_OSD, ADDR_ATTR, attr[y][x]);
+        send(ADDR_SET_POS_X, x);
+        send(ADDR_SET_POS_Y, y);
+        send(ADDR_CHAR, data[y][x]);
+        send(ADDR_ATTR, attr[y][x]);
         changed[y][x] = false;
       }
     }
@@ -223,17 +222,17 @@ void osd_footer(void) {
   osd_print("Press ESC to return");
 }
 
-void osd_show_menu(void) { send(CMD_OSD, ADDR_SHOW, 1); }
-void osd_hide_menu(void) { send(CMD_OSD, ADDR_SHOW, 0); }
-void osd_show_popup(uint8_t i) { send(CMD_OSD, ADDR_POPUP, (i << 4) + 1); }
-void osd_hide_popup(void) { send(CMD_OSD, ADDR_POPUP, 0); }
+void osd_show_menu(void) { send(ADDR_SHOW, 1); }
+void osd_hide_menu(void) { send(ADDR_SHOW, 0); }
+void osd_show_popup(uint8_t i) { send(ADDR_POPUP, (i << 4) + 1); }
+void osd_hide_popup(void) { send(ADDR_POPUP, 0); }
 
 void osd_font_reset(void) {
-  send(CMD_OSD, ADDR_FONT_RST, 1);
-  send(CMD_OSD, ADDR_FONT_RST, 0);
+  send(ADDR_FONT_RST, 1);
+  send(ADDR_FONT_RST, 0);
 }
 
 void osd_font_send(uint8_t d) {
-  send(CMD_OSD, ADDR_FONT_DATA, d);
-  send(CMD_OSD, ADDR_FONT_DATA_WR, 1);
+  send(ADDR_FONT_DATA, d);
+  send(ADDR_FONT_DATA_WR, 1);
 }

@@ -26,7 +26,6 @@
 //   release - all keys, mouse buttons and pad buttons up
 //   the others: periph/at_control
 
-static uint8_t uart_idx = 0;
 static uint8_t evo_rs232_dll = 0;
 static uint8_t evo_rs232_dlm = 0;
 static uint32_t serial_speed = 115200;
@@ -106,20 +105,20 @@ static void core_out(uint8_t data) {
   else host_write(&data, 1);
 }
 
-void serial_data(uint8_t addr, uint8_t data) {
-    if (addr == 0) {
+void serial_data(uint8_t kind, uint8_t data) {
+    if (kind == 0) {
       // ts zifi 115200
       if (serial_speed != 115200) { serial_speed = 115200; speed_changed = ms_now(); }
       core_out(data);
-    } else if (addr == 1) {
+    } else if (kind == 1) {
       // evo rs232 dll
       evo_rs232_dll = data;
       serial_set_speed(evo_rs232_dll, evo_rs232_dlm);
-    } else if (addr == 2) {
+    } else if (kind == 2) {
       // evo rs232 set dlm
       evo_rs232_dlm = data;
       serial_set_speed(evo_rs232_dll, evo_rs232_dlm);
-    } else if (addr == 3) {
+    } else if (kind == 3) {
       // evo rs232 data
       core_out(data);
     }
@@ -338,7 +337,6 @@ void serial_bridge_tick() {
     }
   }
 
-  uart_idx++;
   uart_rx_last = us_now();
-  spi_send(CMD_UART, uart_idx, (uint8_t) tx_buf[tx_pos++]);
+  link_uart_put((uint8_t) tx_buf[tx_pos++]);
 }

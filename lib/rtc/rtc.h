@@ -8,8 +8,8 @@
 #pragma once
 
 // The RTC of the cores: the DS3231 and the 24C08 EEPROM (lib/i2c) seen through the
-// registers of the clock chip a core expects (MC146818A, ZX Evo, DS1307, MSM6242B), CMD_RTC
-// frames both ways. The I2C bus lock is taken around the I2C calls only, never around the
+// registers of the clock chip a core expects (MC146818A, ZX Evo, DS1307, MSM6242B),
+// both ways. The I2C bus lock is taken around the I2C calls only, never around the
 // send / event callbacks. Pure C.
 
 #include <stdbool.h>
@@ -20,7 +20,6 @@
 extern "C" {
 #endif
 
-#define CMD_RTC 0xFA
 #define RTC_TYPE_MC146818A 0
 #define RTC_TYPE_DS1307 1
 #define RTC_TYPE_ZXEVO 2
@@ -28,7 +27,7 @@ extern "C" {
 // D1 D10 MO1 MO10 Y1 Y10 W, 24 h. The core keeps D, E, F (control) itself.
 #define RTC_TYPE_MSM6242B 3
 
-typedef void (*rtc_send_t)(uint8_t cmd, uint8_t addr, uint8_t data);
+typedef void (*rtc_send_t)(uint8_t reg, uint8_t data); // a register to the core
 typedef void (*rtc_event_t)(void);
 
 // the EEPROM of eeprom banks 4..254: in the core file (the firmware has them)

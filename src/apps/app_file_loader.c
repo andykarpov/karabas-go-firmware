@@ -285,8 +285,7 @@ void app_file_loader_send_file(uint16_t file_id) {
   spi_bus_lock();
 
   // trigger reset
-  spi_send(CMD_FILELOADER, 0, 3); // 11 - active = 1, reset = 1
-  spi_send(CMD_FILELOADER, 0, 2); // 10 - active = 1, reset = 0
+  link_load_start(LINK_LOAD_FILE, 0, 0, NULL); // active + reset, then active
 
   uint32_t file_size = f_size(&file1);
   d_printf("Sending file %d (%lu bytes)", file_id, (unsigned long) file_size); d_println();
@@ -294,18 +293,17 @@ void app_file_loader_send_file(uint16_t file_id) {
 
   uint32_t send_timer = ms_now();
   uint32_t crc = KG_CRC32_INIT; // debug: compare with the crc32 of the file on a pc
-  uint32_t cnt = core_send_file(&file1, file_size, CMD_FILEDATA, CMD_FILEBANK, 0, core_loading_popup, &file_size,
+  uint32_t cnt = core_send_file(&file1, file_size, LINK_LOAD_FILE, 0, core_loading_popup, &file_size,
     hw_setup.debug_enabled ? &crc : NULL);
   osd_loading_popup(file_size, file_size);
   osd_update();
 
-  // 00 - active = 0, reset = 0
-  spi_send(CMD_FILELOADER, 0, 0);
+  link_load_end(LINK_LOAD_FILE);
   spi_bus_unlock();
 
   sd_close(&file1);
   d_printf("Sent %lu bytes in %lu ms (%s), crc32 %08lx", (unsigned long) cnt, (unsigned long) ms_since(send_timer),
-    link_burst_available() ? "burst" : "classic", (unsigned long) kg_crc32_final(crc)); d_println();
+    link_mode_name(), (unsigned long) kg_crc32_final(crc)); d_println();
   ms_delay(100);
 
   // reload menu

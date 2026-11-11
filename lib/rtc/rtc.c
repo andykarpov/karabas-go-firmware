@@ -78,7 +78,7 @@ static uint8_t get_year(int year) {
 }
 
 static void send(uint8_t reg, uint8_t data) {
-  send_cb(CMD_RTC, reg, data);
+  send_cb(reg, data);
 }
 
 void rtc_begin(rtc_send_t s, rtc_event_t evt) {

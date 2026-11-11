@@ -2,34 +2,11 @@
 #include "img_mount.h"
 #include "file_name.h"
 
-// The fpga asks for a sector in its reply frames: IMG_LBA (4 bytes), then IMG_SEC (addr = slot,
-// data = read / write). The handlers only take the request; img_tick() serves it from the main
-// loop, so a sector transfer never lands in the middle of another sequence on the link.
-//
-// A frame can get lost on the link now and then, so every request is checked end to end and the
-// core sends it again when the answer is an error:
-// - a request counts only with all 4 IMG_LBA bytes since IMG_LBA 0;
-// - read: the 16-bit sum of the sector follows the data (IMG_LBA 0 / 1, mcu -> fpga);
-// - write: the sum follows the data (IMG_BUF_BANK 10 / 11); the sector is written only with all
-//   512 bytes and the same sum.
+// Sector requests of the core come through link_api (link_img_take); img_tick() serves them from
+// the main loop, so a sector transfer never lands in the middle of another sequence on the link.
+// The link checks a request end to end (docs/protocol.md section 6).
 
-static uint32_t req_lba = 0;
-static uint8_t req_slot = 0;
-static uint8_t req_op = 0;
-static uint8_t lba_mask = 0;          // IMG_LBA bytes since IMG_LBA 0
-static bool req_complete = false;     // the request had all 4 IMG_LBA bytes
-static volatile bool req_pending = false;
-static volatile bool req_started = false; // IMG_LBA seen, IMG_SEC not yet
-static uint32_t req_start_us = 0;
-
-// sector data written by the core: IMG_BUF_BANK (offset bits 8..15) + IMG_BUF_DATA (offset
-// bits 0..7, byte), then its sum in IMG_BUF_BANK 10 / 11
 static uint8_t img_buf[IMG_SECTOR_SIZE];
-static uint8_t wr_seen[IMG_SECTOR_SIZE / 8]; // bytes received, one bit each
-static uint16_t wr_bank = 0;
-static uint16_t wr_count = 0;
-static uint16_t wr_sum = 0;
-static uint8_t wr_sum_seen = 0;       // bit 0: low byte, bit 1: high byte
 
 // written sectors are flushed to the sd card once the writes stop (a sync per sector takes ~40 ms)
 static bool img_dirty[MAX_FILE_SLOTS];
@@ -47,85 +24,19 @@ static uint32_t log_max_wait_us = 0, log_max_serve_us = 0;
 static uint32_t log_first_ms = 0, log_last_ms = 0;
 static uint8_t log_slots = 0; // slots in the summary, one bit each
 
-#define IMG_WRITE_POLLS 4000 // NOPs to pull one sector of write data (519 frames with the request)
-#define IMG_REQ_POLLS 32     // NOPs to pull the rest of a request (5 frames)
 #define IMG_FOLLOW_US 2000   // after a request, poll for the next one (the next sector of a track)
 #define IMG_TICK_MAX_US 20000 // at most this long in one img_tick()
 
-// a write request: the data follows it at once, and any frame on the link pulls it, also the
-// ones of the INPUT task (mouse, keys) before img_serve() holds the bus; so start counting here
-static void wr_reset() {
-  wr_bank = 0;
-  wr_count = 0;
-  wr_sum_seen = 0;
-  memset(wr_seen, 0, sizeof(wr_seen));
-}
-
-static uint16_t img_sum(const uint8_t *buf) {
-  uint16_t sum = 0;
-  for (int i = 0; i < IMG_SECTOR_SIZE; i++) sum += buf[i];
-  return sum;
-}
-
-static void on_img_lba(uint8_t addr, uint8_t data) {
-  if (addr == 0) {
-    req_started = true;
-    req_start_us = us_now();
-    lba_mask = 0;
-  }
-  if (addr < 4) {
-    req_lba = (req_lba & ~(0xFFUL << (8 * addr))) | ((uint32_t) data << (8 * addr));
-    lba_mask |= 1 << addr;
-  }
-}
-
-static void on_img_sec(uint8_t addr, uint8_t data) {
-  req_slot = addr;
-  req_op = data;
-  if (data == IMG_REQ_WRITE) wr_reset();
-  req_complete = (lba_mask == 0x0F);
-  lba_mask = 0;
-  req_pending = true;
-  req_started = false;
-}
-
-static void on_img_buf_bank(uint8_t addr, uint8_t data) {
-  if (addr == 0) {
-    wr_bank = data;
-  } else if (addr == 0x10) {
-    wr_sum = (wr_sum & 0xFF00) | data;
-    wr_sum_seen |= 1;
-  } else if (addr == 0x11) {
-    wr_sum = (wr_sum & 0x00FF) | (data << 8);
-    wr_sum_seen |= 2;
-  }
-}
-
-static void on_img_buf_data(uint8_t addr, uint8_t data) {
-  uint16_t pos = (wr_bank << 8) | addr;
-  if (pos < IMG_SECTOR_SIZE) {
-    img_buf[pos] = data;
-    if (!(wr_seen[pos >> 3] & (1 << (pos & 7)))) {
-      wr_seen[pos >> 3] |= 1 << (pos & 7);
-      wr_count++;
-    }
-  }
-}
-
-// DSKCHG request of the core (CMD_FDD_CHNG 49 d 00): it holds the drive selected until the
-// answer, so the level is the one of that drive now
-static void on_fdd_chng(uint8_t addr, uint8_t data) {
-  if (data != 0) return;
-  int v = board_fdd_chng();
-  spi_send(CMD_FDD_CHNG, addr, v < 0 ? 2 : (uint8_t) v);
+// DSKCHG request of the core: it holds the drive selected until the answer, so the level is the
+// one of that drive now
+static int fdd_chng(uint8_t drive) {
+  (void) drive;
+  return board_fdd_chng();
 }
 
 void img_register_handlers() {
-  link_on(CMD_FDD_CHNG, on_fdd_chng);
-  link_on(CMD_IMG_LBA, on_img_lba);
-  link_on(CMD_IMG_SEC, on_img_sec);
-  link_on(CMD_IMG_BUF_BANK, on_img_buf_bank);
-  link_on(CMD_IMG_BUF_DATA, on_img_buf_data);
+  link_img_begin();
+  link_img_on_fdd_chng(fdd_chng);
 }
 
 void img_close_all() {
@@ -134,9 +45,7 @@ void img_close_all() {
     img_dirty[i] = false;
     matrix_drive_mount(i, 0);
   }
-  req_pending = false;
-  req_started = false;
-  lba_mask = 0;
+  link_img_reset();
 }
 
 // the path of the image of a slot
@@ -158,11 +67,7 @@ void img_mount(uint8_t slot) {
   if (phys >= 0) {
     // a physical floppy drive: the core gets no image, then the drive
     d_printf("Mount slot %d: physical drive DS%d", slot, phys); d_println();
-    spi_bus_lock();
-    spi_send(CMD_IMG_SLOT, 0, slot);
-    spi_send64(CMD_IMG_SIZE, 0);
-    spi_send(CMD_IMG_PHYS, slot, phys + 1);
-    spi_bus_unlock();
+    link_img_mount_phys(slot, phys);
     return;
   }
   fs->wp = false;
@@ -184,15 +89,7 @@ void img_mount(uint8_t slot) {
     }
   }
   matrix_drive_mount(slot, (uint32_t) ((fsize + IMG_SECTOR_SIZE - 1) / IMG_SECTOR_SIZE));
-  // size 0 first: the core sees an eject before a new image
-  spi_bus_lock();
-  spi_send(CMD_IMG_SLOT, 0, slot);
-  spi_send64(CMD_IMG_SIZE, 0);
-  if (fsize > 0) {
-    spi_send64(CMD_IMG_SIZE, fsize);
-    if (link_core_caps() & CAPS_IMG_WP) spi_send(CMD_IMG_FLAGS, slot, fs->wp ? IMG_FLAG_WP : 0);
-  }
-  spi_bus_unlock();
+  link_img_mount(slot, fsize, fs->wp); // an eject first, then the image
 }
 
 // FatFs marks a FIL after a disk error (fp->err) and fails everything on it from then on:
@@ -243,43 +140,15 @@ static bool img_read_sector(uint8_t slot, uint32_t lba) {
   return res == FR_OK && n > 0;
 }
 
-static void img_send_sector() {
-  // a burst if the core supports it (~0.2 ms a sector), classic bank + data frames for the rest
-  // (~5 ms a sector, a real floppy ~18 ms). The core checks the sum either way.
-  size_t done = link_burst_write(CMD_IMG_BUF_DATA, 0, img_buf, IMG_SECTOR_SIZE);
-  for (size_t i = done; i < IMG_SECTOR_SIZE; i++) {
-    if (i == done || (i & 0xFF) == 0) {
-      spi_send(CMD_IMG_BUF_BANK, 0, i >> 8);
-    }
-    spi_send(CMD_IMG_BUF_DATA, i & 0xFF, img_buf[i]);
-  }
-  // the sum, so the core can check what it got
-  uint16_t sum = img_sum(img_buf);
-  spi_send(CMD_IMG_LBA, 0, sum & 0xFF);
-  spi_send(CMD_IMG_LBA, 1, sum >> 8);
-}
-
-static bool img_receive_sector() {
-  // the core queues its write data and the sum behind the request: pull the rest with NOPs
-  // (wr_reset() ran on the request, some of it may have come already)
-  for (int i = 0; i < IMG_WRITE_POLLS && (wr_count < IMG_SECTOR_SIZE || wr_sum_seen != 3); i++) {
-    spi_send(CMD_NOP, 0, 0);
-  }
-  return wr_count == IMG_SECTOR_SIZE && wr_sum_seen == 3 && wr_sum == img_sum(img_buf);
-}
-
 // one request; false if none came
 static bool img_serve() {
-  // the fpga answers only in the reply bytes of a transfer: a started request is pulled at once,
-  // not one frame per main loop iteration
-  for (int i = 0; i < IMG_REQ_POLLS && req_started && !req_pending; i++) {
-    spi_send(CMD_NOP, 0, 0);
-  }
-  if (!req_pending) return false;
-  req_pending = false;
+  link_img_req_t req;
+  if (!link_img_take(&req)) return false;
   uint32_t serve_us = us_now();
-  uint8_t slot = req_slot;
-  uint32_t lba = req_lba;
+  uint8_t slot = req.slot;
+  uint32_t lba = req.lba;
+  uint8_t req_op = req.op;
+  bool req_complete = req.complete;
   bool ok = false;
   uint8_t res = 0; // the answer, if not done / error
   bool dropped = false; // a write to a write protected image
@@ -291,15 +160,15 @@ static bool img_serve() {
     FIL *f = &file_slots[slot].file;
     if (req_op == IMG_REQ_READ) {
       ok = img_read_sector(slot, lba);
-      img_send_sector();
+      link_img_send_sector(img_buf);
     } else if (req_op == IMG_REQ_WRITE) {
-      if (!img_receive_sector()) {
+      if (!link_img_receive_sector(img_buf)) {
         what = "wr, data lost";
       } else if (file_slots[slot].wp) {
         // the data is pulled (the link stays in step) and dropped: a core that knows write
         // protection gets "protected", an older one "done", so it does not ask again forever
         dropped = true;
-        res = (link_core_caps() & CAPS_IMG_WP) ? IMG_RES_PROTECTED : IMG_RES_DONE;
+        res = link_has(LINK_CAP_IMG_WP) ? IMG_RES_PROTECTED : IMG_RES_DONE;
         if (!(wp_logged & (1u << slot))) {
           wp_logged |= 1u << slot;
           d_printf("Image slot %d: write protected, writes dropped", slot); d_println();
@@ -313,10 +182,10 @@ static bool img_serve() {
   }
   if (res == 0) res = ok ? IMG_RES_DONE : IMG_RES_ERROR;
   else ok = true; // a write protected write: answered, logged once per mount
-  spi_send(CMD_IMG_SEC, slot, res);
+  link_img_done(slot, res);
   if (req_complete) matrix_drive_access(slot, lba, req_op == IMG_REQ_WRITE);
   uint32_t end_us = us_now();
-  uint32_t wait_us = serve_us - req_start_us, took_us = end_us - serve_us;
+  uint32_t wait_us = serve_us - req.start_us, took_us = end_us - serve_us;
   if (!ok) {
     d_printf("Image slot %d: %s %lu FAILED, wait %lu us, %lu us", slot, what, (unsigned long) lba,
       (unsigned long) wait_us, (unsigned long) took_us);
@@ -364,15 +233,12 @@ static void img_sync_idle() {
 
 void img_tick() {
   img_log_summary();
-  if (!req_pending && !req_started) {
+  if (!link_img_waiting()) {
     img_sync_idle();
     return;
   }
   if (!img_serve()) {
-    // a request that started but never got its IMG_SEC: the core sends it again
-    if (req_started && us_now() - req_start_us > 100000) {
-      req_started = false;
-    }
+    link_img_expire(100000); // a request that never ended: the core sends it again
     return;
   }
   // a track is read sector by sector: keep polling for the next request for a while, but give
@@ -380,10 +246,10 @@ void img_tick() {
   uint32_t t = us_now();
   uint32_t start = t;
   while (us_now() - t < IMG_FOLLOW_US && us_now() - start < IMG_TICK_MAX_US) {
-    if (req_started || req_pending) {
+    if (link_img_waiting()) {
       if (img_serve()) t = us_now();
     } else {
-      spi_send(CMD_NOP, 0, 0);
+      link_poll_once();
     }
   }
 }

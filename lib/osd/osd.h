@@ -64,7 +64,7 @@ extern "C" {
 #define OSD_CHAR_SCROLL_BOTTOM 216
 #define OSD_CHAR_COPYRIGHT 127
 
-typedef void (*osd_send_t)(uint8_t cmd, uint8_t addr, uint8_t data);
+typedef void (*osd_send_t)(uint8_t reg, uint8_t data); // an OSD register of the core
 
 // hooks of the firmware: osd_update() holds the bus for all its frames
 void osd_bus_lock(void);

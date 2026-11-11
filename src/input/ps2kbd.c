@@ -111,14 +111,14 @@ void kb_reset() {
 
 void kb_send(uint8_t byte) {
   //if (kb_scancodeset == 2) {
-    spi_queue(CMD_PS2_SCANCODE, 0x00, byte);
+    link_hid_queue(LINK_EV_PS2, 0x00, byte);
     //d_printf("PS/2 Scancode: %02x", byte); d_println();
   //}
 }
 
 void kb_send_xt(uint8_t byte, bool state) {
   //if (kb_scancodeset == 1) {
-    spi_queue(CMD_PS2_SCANCODE, 0x01, byte | (state ? 0x00 : 0x80) );
+    link_hid_queue(LINK_EV_PS2, 0x01, byte | (state ? 0x00 : 0x80) );
     //d_printf("XT Scancode: %02x", byte | (state ? 0x00 : 0x80)); d_println();
   //}
 }
