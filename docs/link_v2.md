@@ -157,9 +157,8 @@ The core scales the bitmap by an integer factor that fits its video mode (×2 fo
 A popup gets the same border and shadow around its window. `ENABLE` and `POPUP` are independent
 as in v1 (show and popup): the OSD is visible while either is on; with both on, the window is shown.
 
-One colour pair for the whole OSD (v1 had 16 ink / paper colours per cell): emphasis in v2 is drawn
-(inverse bars, frames, icons, fonts). A second bitplane (4 colours, 8 KB) can be added later as a
-new command and a caps bit, if the block RAM of the cores allows it.
+Monochrome by design: one colour pair for the whole OSD (v1 had 16 ink / paper colours per cell).
+Emphasis is drawn (inverse bars, frames, icons, fonts). No colour planes are planned.
 
 #### Popups and dialogs
 
