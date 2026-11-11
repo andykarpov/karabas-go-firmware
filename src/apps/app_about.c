@@ -1,6 +1,7 @@
 #include "config.h"
 #include "types.h"
 #include "main.h"
+#include "ui/dialog.h"
 #include "osd.h"
 #include "input/usb_hid_keys.h"
 #include "input/sega.h"
@@ -43,8 +44,7 @@ void app_about_on_keyboard()
   uint8_t key = ui_nav_key();
   if (confirm) {
     if (key == KEY_ENTER) {
-      ui_box("Settings reset", OSD_COLOR_GREEN_I, "Restarting...", OSD_COLOR_MAGENTA_I);
-      osd_update();
+      dialog_box(DIALOG_BUSY, "Settings reset", "Restarting...");
       osd_state = osd_return_state;
       core_reset_settings();
     } else if (key == KEY_ESC) {
@@ -54,8 +54,7 @@ void app_about_on_keyboard()
   }
   if (key == KEY_R && can_reset()) {
     confirm = true;
-    ui_box("Reset settings?", OSD_COLOR_YELLOW_I, "Enter: yes", OSD_COLOR_WHITE);
-    osd_update();
+    dialog_box(DIALOG_ASK, "Reset settings?", "Enter: yes");
     return;
   }
   if (key == KEY_ESC || (key == KEY_LEFT && !ui_repeat)) {

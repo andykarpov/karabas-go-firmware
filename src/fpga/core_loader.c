@@ -1,4 +1,5 @@
 #include "main.h"
+#include "ui/dialog.h"
 #include "diag/hang_diag.h"
 #include "ui/osd_font.h"
 #include "input/ps2kbd.h"
@@ -120,17 +121,13 @@ uint32_t core_send_file(FIL *f, uint32_t len, link_load_kind_t kind, uint32_t ad
 }
 
 void core_loading_popup(uint32_t sent, void *ctx) {
-  osd_loading_popup(sent, *(const uint32_t *) ctx);
-  osd_update();
+  dialog_loading(sent, *(const uint32_t *) ctx);
 }
 
 void core_ioctl_send(uint8_t slot, bool popup)
 {
   if (slot >= MAX_FILE_SLOTS) return;
-  if (popup) {
-    osd_loading_popup(0, 100);
-    osd_update();
-  }
+  if (popup) dialog_loading(0, 100);
 
   // send ioctl slot id, file data for file loader type
   spi_bus_lock(); // keep the whole ioctl transfer together on the fpga link
@@ -156,10 +153,7 @@ void core_ioctl_send(uint8_t slot, bool popup)
     (unsigned long) ms_since(send_timer), link_mode_name());
   d_println();
 
-  if (popup) {
-    osd_loading_popup(fsize, fsize);
-    osd_update();
-  }
+  if (popup) dialog_loading(fsize, fsize);
   spi_bus_unlock();
 }
 
@@ -351,21 +345,13 @@ static void configure(const char* filename, bool clear_sram) {
   read_core(filename);
   send_build_ids();
   hang_step(0xa4);
-  if (!is_osd) {
-    osd_clear();
-    osd_logo(0,0, HW_ID);
-    osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-    osd_set_pos(0,5);
-    osd_print("ROM ");
-    osd_update();
-    osd_show_popup(0);
-  }
+  if (!is_osd) dialog_load_screen();
   hang_step(0xa5);
   read_roms(filename);
   send_autoload_files(); // after the ROMs: a file over a ROM of the core file wins
   hang_step(0xa6);
   if (!is_osd) {
-    osd_hide_popup();
+    dialog_hide();
     osd_handle(true); // reinit osd
   }
   for (uint8_t i=0; i<7; i++) { // cleanup kbd: modifier + 6 keycodes
@@ -924,7 +910,7 @@ void read_core(const char* filename) {
     }
   }
 
-  osd_hide_popup();
+  dialog_hide();
   if (is_osd) {
     osd_show_menu();
   } else {
@@ -936,12 +922,7 @@ void read_core(const char* filename) {
 
 // the bytes sent of the ROM *ctx (uint32_t, from 0) on its row of the loading screen
 static void rom_progress(uint32_t sent, void *ctx) {
-  uint32_t rom_idx = *(const uint32_t *) ctx;
-  osd_set_pos(4,5+rom_idx);
-  osd_printf("%lu: ", (unsigned long) rom_idx + 1);
-  char b[40];
-  sprintf(b, "%05lu", (unsigned long) sent); osd_print(b); osd_print(" ");
-  osd_update();
+  dialog_load_rom_sent(*(const uint32_t *) ctx, sent);
 }
 
 
@@ -1020,9 +1001,7 @@ void read_roms(const char* filename) {
         rom_bytes += core_send_file(&file2, UINT32_MAX, LINK_LOAD_ROM, rom_addr, rom_progress, &rom_idx, NULL);
         sd_close(&file2);
       } else {
-        osd_set_pos(4,5+rom_idx);
-        osd_printf("%lu:  NO FILE", (unsigned long) rom_idx + 1);
-        osd_update();
+        dialog_load_rom_missing(rom_idx);
       }
     } else {
       file_seek(rom_pos + KG_ROM_BLOCK_HEADER_SIZE);
@@ -1032,10 +1011,7 @@ void read_roms(const char* filename) {
     roms_len = roms_len - rom_len - KG_ROM_BLOCK_HEADER_SIZE;
     rom_idx++;
     if (roms_len > 0) {
-      // next rom
-      osd_set_pos(0, 5+rom_idx);
-      osd_print("ROM ");
-      osd_update();
+      dialog_load_rom(rom_idx); // next rom
     }
   }
   //delay(100);

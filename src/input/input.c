@@ -1,5 +1,6 @@
 #include "usb_joy.h"
 #include "main.h"
+#include "ui/dialog.h"
 #include "input/ps2kbd.h"
 #include "input/usb_hid_keys.h"
 #include "apps/app_core.h"
@@ -348,15 +349,7 @@ void input_tick_ui() {
 
 // the popup of a switch changed by a hotkey
 static void hotkey_popup(uint8_t i) {
-  osd_clear();
-  osd_logo(0, 0, HW_ID);
-  osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-  osd_set_pos(0, 5);
-  osd_print(core.osd[i].name);
-  osd_set_pos(0,6);
-  osd_print(core.osd[i].options[core.osd[i].val].name);
-  osd_update();
-  ui_popup_start(i);
+  dialog_toast(core.osd[i].name, core.osd[i].options[core.osd[i].val].name, i);
 }
 
 bool on_global_hotkeys() {

@@ -1,4 +1,5 @@
 #include "main.h"
+#include "ui/dialog.h"
 #include "bk_save.h"
 #include "file_name.h"
 
@@ -148,15 +149,13 @@ bool bk_flush() {
         osd_clear();
         osd_show_menu();
       }
-      osd_progress_popup("Saving...", n, bk_sectors);
-      osd_update();
+      dialog_progress("Saving...", n, bk_sectors);
       shown = n;
     }
     link_poll_once();
   }
   if (shown > 0) {
-    osd_progress_popup("Saving...", 1, 1);
-    osd_update();
+    dialog_progress("Saving...", 1, 1);
   }
   bool ok = flush_result == IMG_RES_DONE;
   d_printf("Save: flush slot %d %s in %lu ms", bk_slot, flush_result == 0 ? "no answer" : ok ? "done" : "FAILED",

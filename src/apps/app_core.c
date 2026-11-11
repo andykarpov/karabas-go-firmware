@@ -4,6 +4,7 @@
 #include "input/usb_hid_keys.h"
 #include "input/sega.h"
 #include "apps/app_core.h"
+#include "ui/dialog.h"
 #include "ui/sorts.h"
 #include "file_name.h"
 #include "at_args.h"
@@ -185,7 +186,7 @@ void app_core_overlay(bool force)
   osd_state = state_main;
 
   // disable popup in overlay mode
-  osd_hide_popup();
+  dialog_hide();
 
   osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
   osd_clear();
