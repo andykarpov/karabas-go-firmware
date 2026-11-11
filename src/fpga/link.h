@@ -24,7 +24,7 @@ void link_set_rx_enabled(bool enabled);   // ignore incoming commands while the 
 void spi_bus_lock();
 void spi_bus_unlock();
 void link_set_dispatch_task(void *task);  // task that runs the incoming command handlers (APP)
-void link_set_event_task(void *task);     // task woken by spi_queue (INPUT)
+void link_set_event_task(void *task);     // task woken by link_event_push (INPUT)
 void link_dispatch_pending();             // handle frames received by other tasks
 void link_poll();                         // once per main loop: NOP to the fpga if the link was idle
 
@@ -45,7 +45,9 @@ size_t link_burst_write(uint8_t type, uint32_t addr, const uint8_t *data, size_t
 // 8..31 (before the first byte and at every 256), data_cmd with the low byte of the address
 void link_write_data(uint8_t data_cmd, uint8_t bank_cmd, uint32_t addr, const uint8_t *buf, size_t len);
 
-void spi_queue(uint8_t cmd, uint8_t addr, uint8_t data); // enqueue from any core / irq, sent by the input handler
+// the HID event queue of link_api (link_hid_queue / link_hid_queue_pop): from any core / irq,
+// forwarded by the INPUT task
+void link_event_push(uint8_t kind, uint8_t idx, uint8_t val);
 bool link_queue_pop(queue_spi_t *packet);
 void link_report_drops();
 

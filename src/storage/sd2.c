@@ -117,7 +117,7 @@ static bool read_pass(uint8_t *buf, uint8_t mhz, uint8_t n, uint32_t ref_crc, ui
       continue;
     }
     (*crc) = kg_crc32_update((*crc), buf, n * 512);
-    spi_send(CMD_NOP, 0, 0);
+    link_poll_once();
   }
   (*crc) = kg_crc32_final((*crc));
   if (errors) { out_printf(" %lu errors", (unsigned long) errors); return false; }

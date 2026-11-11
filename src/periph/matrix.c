@@ -327,11 +327,11 @@ static void on_audio_peaks_r(uint8_t addr, uint8_t data) {
 }
 
 void matrix_register_handlers() {
-  link_on(CMD_MATRIX_CTL, matrix_ctl_data);
-  link_on(CMD_MATRIX_PIXEL, on_matrix_pixel);
-  link_on(CMD_MATRIX_BITPLAN, on_matrix_bitplan);
-  link_on(CMD_AUDIO_PEAKS_L, on_audio_peaks_l);
-  link_on(CMD_AUDIO_PEAKS_R, on_audio_peaks_r);
+  link_aux_on(LINK_AUX_MATRIX_CTL, matrix_ctl_data);
+  link_aux_on(LINK_AUX_MATRIX_PIXEL, on_matrix_pixel);
+  link_aux_on(LINK_AUX_MATRIX_BITPLAN, on_matrix_bitplan);
+  link_aux_on(LINK_AUX_PEAK_L, on_audio_peaks_l);
+  link_aux_on(LINK_AUX_PEAK_R, on_audio_peaks_r);
 }
 
 // the core load picture, with the I2C lock held. Drawn from the loader (the MATRIX task does not
@@ -531,7 +531,7 @@ void matrix_frame() {
     bool btn = (btns >> i) & 1;
     if (btn != (bool) ((prev_btns >> i) & 1)) {
       d_printf("Matrix Button %u: %s", i + 1, btn ? "on" : "off"); d_println();
-      spi_send(CMD_MATRIX_BTN, i, btn);
+      link_hid_matrix_btn(i, btn);
     }
   }
   prev_btns = btns;

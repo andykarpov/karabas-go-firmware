@@ -1,4 +1,5 @@
 #include "main.h"
+#include "ui/dialog.h"
 #include "uknc_sav.h"
 #include "file_name.h"
 #include "rt11_volume.h"
@@ -85,8 +86,7 @@ static const char *make_disk(work_t *w, const char *sav_path, const char *sav_na
         }
         hang_step(0); // a slow card takes seconds
         if (pos % POPUP_STEP == 0) {
-          osd_progress_popup("Run SAV", pos, DISK_SIZE);
-          osd_update();
+          dialog_progress("Run SAV", pos, DISK_SIZE);
         }
       }
       if (!error) {
@@ -142,18 +142,16 @@ bool uknc_sav_run(uint8_t slot) {
     char path[KG_PATH_MAX];
     kg_path_join(path, sizeof(path), file_slots[slot].dir, file_slots[slot].filename);
     kg_path_collapse(path);
-    osd_progress_popup("Run SAV", 0, DISK_SIZE);
-    osd_update();
+    dialog_progress("Run SAV", 0, DISK_SIZE);
     error = make_disk(w, path, file_slots[slot].filename);
     free(w);
     if (!error) error = install_disk();
     if (error) f_unlink(TMP_PATH);
-    osd_hide_popup();
+    dialog_hide();
   }
   if (error) {
     d_printf("Run SAV: %s", error); d_println();
-    ui_box("Run SAV", OSD_COLOR_RED_I, error, OSD_COLOR_RED_I);
-    osd_update();
+    dialog_box(DIALOG_ERROR, "Run SAV", error);
     ms_delay(2000);
     return false;
   }

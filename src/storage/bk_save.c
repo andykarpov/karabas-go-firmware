@@ -1,16 +1,17 @@
 #include "main.h"
+#include "ui/dialog.h"
 #include "bk_save.h"
 #include "file_name.h"
 
-// CMD_BK_MOUNT from the fpga: 48 00..03 size in sectors (LE), 48 10 slot, 48 80 kind (the last
-// one asks: 0 = .sav, n = save state n). The handler only takes it; bk_tick() makes the file, so
-// the sd card is used from the main loop only.
+// The core asks for its save (link_img_on_bk_mount: size in sectors, slot, kind 0 = .sav, n = save
+// state n). The handler only takes it; bk_tick() makes the file, so the sd card is used from the
+// main loop only.
 static uint32_t req_size = 0;
 static uint8_t req_slot = 0;
 static uint8_t req_kind = 0;
 static volatile bool req_pending = false;
 
-// CMD_IMG_FLUSH answer: 47 slot 01 done / 02 error
+// the answer to a flush: IMG_RES_DONE / IMG_RES_ERROR
 static volatile uint8_t flush_result = 0;
 
 static int8_t bk_slot = -1;      // the img slot of the mounted save
@@ -21,24 +22,20 @@ static char game_name[256] = "";
 #define BK_FLUSH_TIMEOUT_MS 3000 // 64 sectors: ~5 ms each on the link, plus the sd card
 #define BK_MAX_SECTORS 2048      // 1 MB: a sane limit for a request
 
-static void on_bk_mount(uint8_t addr, uint8_t data) {
-  if (addr < 4) {
-    req_size = (req_size & ~(0xFFUL << (8 * addr))) | ((uint32_t) data << (8 * addr));
-  } else if (addr == 0x10) {
-    req_slot = data;
-  } else if (addr == 0x80) {
-    req_kind = data;
-    req_pending = true;
-  }
+static void on_bk_mount(uint32_t sectors, uint8_t slot, uint8_t kind) {
+  req_size = sectors;
+  req_slot = slot;
+  req_kind = kind;
+  req_pending = true;
 }
 
-static void on_img_flush(uint8_t addr, uint8_t data) {
-  if (bk_slot >= 0 && addr == (uint8_t) bk_slot) flush_result = data;
+static void on_img_flush(uint8_t slot, uint8_t result) {
+  if (bk_slot >= 0 && slot == (uint8_t) bk_slot) flush_result = result;
 }
 
 void bk_register_handlers() {
-  link_on(CMD_BK_MOUNT, on_bk_mount);
-  link_on(CMD_IMG_FLUSH, on_img_flush);
+  link_img_on_bk_mount(on_bk_mount);
+  link_img_on_flush(on_img_flush);
 }
 
 void bk_set_game(const char *dir, const char *name) {
@@ -135,9 +132,9 @@ void bk_tick() {
 }
 
 bool bk_flush() {
-  if (bk_slot < 0 || !(link_core_caps() & CAPS_BK)) return true;
+  if (bk_slot < 0 || !link_has(LINK_CAP_BK)) return true;
   flush_result = 0;
-  spi_send(CMD_IMG_FLUSH, bk_slot, 0);
+  link_img_flush(bk_slot);
   uint32_t timer = ms_now();
   timer = ms_now();
   // the core writes its sectors through the file mounter: serve them while waiting for the answer.
@@ -152,15 +149,13 @@ bool bk_flush() {
         osd_clear();
         osd_show_menu();
       }
-      osd_progress_popup("Saving...", n, bk_sectors);
-      osd_update();
+      dialog_progress("Saving...", n, bk_sectors);
       shown = n;
     }
-    spi_send(CMD_NOP, 0, 0);
+    link_poll_once();
   }
   if (shown > 0) {
-    osd_progress_popup("Saving...", 1, 1);
-    osd_update();
+    dialog_progress("Saving...", 1, 1);
   }
   bool ok = flush_result == IMG_RES_DONE;
   d_printf("Save: flush slot %d %s in %lu ms", bk_slot, flush_result == 0 ? "no answer" : ok ? "done" : "FAILED",

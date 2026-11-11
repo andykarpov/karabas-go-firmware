@@ -2,6 +2,7 @@
 #include "config.h"
 #include "types.h"
 #include "main.h"
+#include "ui/dialog.h"
 #include "osd.h"
 #include "input/usb_hid_keys.h"
 #include "input/sega.h"
@@ -96,15 +97,13 @@ void app_file_loader_core_loaded(void) {
 
 // a message box shown for a second: no SD card, a dir that can't be opened
 static void read_error(const char *line2) {
-  ui_box("Error occured", OSD_COLOR_RED_I, line2, OSD_COLOR_RED_I);
-  osd_update();
+  dialog_box(DIALOG_ERROR, "Error occured", line2);
   ms_delay(1000);
 }
 
 void app_file_loader_read_list(void) {
 
-  ui_box("Scanning files", OSD_COLOR_GREEN_I, "Please wait...", OSD_COLOR_MAGENTA_I);
-  osd_update();
+  dialog_box(DIALOG_BUSY, "Scanning files", "Please wait...");
   ms_delay(100);
 
   if (dir_pending && has_sd) {
@@ -150,8 +149,7 @@ void app_file_loader_read_list(void) {
   // dirs first, by name
   fb_sort();
   
-  ui_box_clear();
-  osd_update();
+  dialog_box_clear();
   list_loaded = true;
 
   // the cursor on the dir we came up from, on the entry it was on, else on the last file loaded
@@ -251,8 +249,7 @@ void app_file_loader_save()
 
 void app_file_loader_send_file(uint16_t file_id) {
 
-  osd_loading_popup(0, 100);
-  osd_update();
+  dialog_loading(0, 100);
 
   // the save of the game before: written and closed before the core loads another one
   bk_flush();
@@ -285,8 +282,7 @@ void app_file_loader_send_file(uint16_t file_id) {
   spi_bus_lock();
 
   // trigger reset
-  spi_send(CMD_FILELOADER, 0, 3); // 11 - active = 1, reset = 1
-  spi_send(CMD_FILELOADER, 0, 2); // 10 - active = 1, reset = 0
+  link_load_start(LINK_LOAD_FILE, 0, 0, NULL); // active + reset, then active
 
   uint32_t file_size = f_size(&file1);
   d_printf("Sending file %d (%lu bytes)", file_id, (unsigned long) file_size); d_println();
@@ -294,18 +290,16 @@ void app_file_loader_send_file(uint16_t file_id) {
 
   uint32_t send_timer = ms_now();
   uint32_t crc = KG_CRC32_INIT; // debug: compare with the crc32 of the file on a pc
-  uint32_t cnt = core_send_file(&file1, file_size, CMD_FILEDATA, CMD_FILEBANK, 0, core_loading_popup, &file_size,
+  uint32_t cnt = core_send_file(&file1, file_size, LINK_LOAD_FILE, 0, core_loading_popup, &file_size,
     hw_setup.debug_enabled ? &crc : NULL);
-  osd_loading_popup(file_size, file_size);
-  osd_update();
+  dialog_loading(file_size, file_size);
 
-  // 00 - active = 0, reset = 0
-  spi_send(CMD_FILELOADER, 0, 0);
+  link_load_end(LINK_LOAD_FILE);
   spi_bus_unlock();
 
   sd_close(&file1);
   d_printf("Sent %lu bytes in %lu ms (%s), crc32 %08lx", (unsigned long) cnt, (unsigned long) ms_since(send_timer),
-    link_burst_available() ? "burst" : "classic", (unsigned long) kg_crc32_final(crc)); d_println();
+    link_mode_name(), (unsigned long) kg_crc32_final(crc)); d_println();
   ms_delay(100);
 
   // reload menu

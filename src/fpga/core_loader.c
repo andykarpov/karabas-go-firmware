@@ -1,4 +1,5 @@
 #include "main.h"
+#include "ui/dialog.h"
 #include "diag/hang_diag.h"
 #include "ui/osd_font.h"
 #include "input/ps2kbd.h"
@@ -93,7 +94,7 @@ void core_send(uint8_t pos)
   } else if (core.osd[pos].type == CORE_OSD_TYPE_FILELOADER) {
     // do nothing
   } else if (core.osd[pos].sw != CORE_OSD_NO_SWITCH) {
-    spi_send(CMD_SWITCHES, core.osd[pos].sw, core_osd_value(pos));
+    link_sys_setval(core.osd[pos].sw, core_osd_value(pos));
     d_printf("Switch: %s %d", core.osd[pos].name, core_osd_value(pos));
   }
   d_println();
@@ -101,14 +102,14 @@ void core_send(uint8_t pos)
 
 #define SEND_PROGRESS_STEP 32768 // an OSD redraw costs: a popup every 8 KB made a 256 KB file 18% slower
 
-uint32_t core_send_file(FIL *f, uint32_t len, uint8_t data_cmd, uint8_t bank_cmd, uint32_t addr,
+uint32_t core_send_file(FIL *f, uint32_t len, link_load_kind_t kind, uint32_t addr,
     core_send_progress_t progress, void *ctx, uint32_t *crc) {
   uint8_t *buf = bitstream_buf(); // free while no bitstream is sent
   uint32_t sent = 0, shown = 0;
   UINT n;
   while (sent < len && (n = sd_read(f, buf, len - sent < BITSTREAM_BUF_SIZE ? len - sent : BITSTREAM_BUF_SIZE)) > 0) {
     if (crc) *crc = kg_crc32_update(*crc, buf, n);
-    link_write_data(data_cmd, bank_cmd, addr + sent, buf, n);
+    link_load_data(kind, addr + sent, buf, n);
     sent += n;
     if (progress && sent - shown >= SEND_PROGRESS_STEP) {
       progress(sent, ctx);
@@ -120,25 +121,16 @@ uint32_t core_send_file(FIL *f, uint32_t len, uint8_t data_cmd, uint8_t bank_cmd
 }
 
 void core_loading_popup(uint32_t sent, void *ctx) {
-  osd_loading_popup(sent, *(const uint32_t *) ctx);
-  osd_update();
+  dialog_loading(sent, *(const uint32_t *) ctx);
 }
 
 void core_ioctl_send(uint8_t slot, bool popup)
 {
   if (slot >= MAX_FILE_SLOTS) return;
-  if (popup) {
-    osd_loading_popup(0, 100);
-    osd_update();
-  }
+  if (popup) dialog_loading(0, 100);
 
   // send ioctl slot id, file data for file loader type
   spi_bus_lock(); // keep the whole ioctl transfer together on the fpga link
-  spi_send(CMD_IOCTL_STATE, 0, 1); // start
-  spi_send(CMD_IOCTL_SLOT, 0, slot);
-
-  uint64_t fsize = 0;
-  spi_send64(CMD_IOCTL_SIZE, fsize);
   char fname[KG_PATH_MAX];
   kg_path_join(fname, sizeof(fname), file_slots[slot].dir, file_slots[slot].filename);
   kg_path_collapse(fname);
@@ -147,28 +139,21 @@ void core_ioctl_send(uint8_t slot, bool popup)
   if (!open) {
     d_printf("Ioctl slot %d: unable to open %s", slot, fname); d_println();
   }
-  fsize = open ? f_size(file) : 0;
-  spi_send64(CMD_IOCTL_SIZE, fsize);
-
+  uint64_t fsize = open ? f_size(file) : 0;
   const char *dot = strrchr(fname, '.');
   const char *ext = dot ? dot + 1 : fname;
-  for(uint8_t i = 0; ext[i] && i < 255; i++) {
-    spi_send(CMD_IOCTL_EXT, i, ext[i]);
-  }
+  link_load_start(LINK_LOAD_IOCTL, slot, fsize, ext); // the size 0, then the real one
 
   uint32_t send_timer = ms_now();
   uint32_t total = (uint32_t) fsize;
-  uint32_t i = open ? core_send_file(file, total, CMD_IOCTL_DATA, CMD_IOCTL_BANK, 0, popup ? core_loading_popup : NULL, &total, NULL) : 0;
+  uint32_t i = open ? core_send_file(file, total, LINK_LOAD_IOCTL, 0, popup ? core_loading_popup : NULL, &total, NULL) : 0;
   sd_tmp_close();
-  spi_send(CMD_IOCTL_STATE, 0, 0); // finish
+  link_load_end(LINK_LOAD_IOCTL);
   d_printf("Ioctl slot %d: %s, %lu bytes in %lu ms (%s)", slot, fname, (unsigned long) i,
-    (unsigned long) ms_since(send_timer), link_burst_available() ? "burst" : "classic");
+    (unsigned long) ms_since(send_timer), link_mode_name());
   d_println();
 
-  if (popup) {
-    osd_loading_popup(fsize, fsize);
-    osd_update();
-  }
+  if (popup) dialog_loading(fsize, fsize);
   spi_bus_unlock();
 }
 
@@ -178,7 +163,7 @@ void core_send_all()
     if (core_osd_is_file(i)) {
       // images are mounted by read_core(), after the core settings
     } else if (core.osd[i].sw != CORE_OSD_NO_SWITCH) {
-      spi_send(CMD_SWITCHES, core.osd[i].sw, core_osd_value(i));
+      link_sys_setval(core.osd[i].sw, core_osd_value(i));
     }
   }
 }
@@ -199,9 +184,9 @@ void core_trigger(uint8_t pos)
   }
 
   if (core.osd[pos].sw == CORE_OSD_NO_SWITCH) return;
-  spi_send(CMD_SWITCHES, core.osd[pos].sw, 1);
+  link_sys_setval(core.osd[pos].sw, 1);
   ms_delay(100);
-  spi_send(CMD_SWITCHES, core.osd[pos].sw, 0);
+  link_sys_setval(core.osd[pos].sw, 0);
 }
 
 // The EEPROM of banks 4..254 is kept in the core file (FILE_POS_EEPROM_DATA, all 256 bytes in
@@ -305,13 +290,7 @@ void flashboot (uint8_t data) {
 // for cores that show them (BaseConf: the version strings of its RTC registers F0..FF)
 static void send_build_ids(void) {
   static const char fw_build[] = STRINGIZE_VALUE_OF(BUILD_VER);
-  bool end_core = false, end_fw = false;
-  for (uint8_t i=0; i<8; i++) {
-    if (!core.build[i]) end_core = true;
-    if (!fw_build[i]) end_fw = true;
-    spi_send(CMD_HW_SETUP, 0x10 + i, end_core ? 0 : (uint8_t) core.build[i]);
-    spi_send(CMD_HW_SETUP, 0x18 + i, end_fw ? 0 : (uint8_t) fw_build[i]);
-  }
+  link_sys_build_ids(core.build, fw_build);
 }
 
 // the boot core fills the SRAM with zeros after its start (0.2 s, sram_clear of karabas-go-core-menu): a core loaded
@@ -332,8 +311,7 @@ static void configure(const char* filename, bool clear_sram) {
   bk_flush(); // the save of the game of the core before (it is still running)
   core_eeprom_flush(); // and its eeprom (bank 4..254), before core is read again
   hang_step(0x84);
-  link_set_rx_enabled(false);
-  link_burst_reset(); // the new core may not support bursts
+  link_core_unload();
   hang_step(0x85);
   ft_vga(false); // FT off
   ft_spi(false);
@@ -351,11 +329,11 @@ static void configure(const char* filename, bool clear_sram) {
   // wait for the core to answer before anything else goes to it (frames sent while its link is
   // still in reset are lost: a Kickstart sent then never arrived); burst transfers for the roms /
   // files below, if the core supports them
-  link_caps_query();
+  link_core_hello();
   hang_step(0xa1);
-  spi_send(CMD_INIT_START, 0, 0);
-  spi_send(CMD_HW_SETUP, 0, HW_ID); // hw id
-  spi_send(CMD_HW_SETUP, 1, hw_setup.dvi_only); // dvi only flag
+  link_sys_init(true);
+  link_sys_hw_setup(LINK_HW_BOARD, HW_ID);
+  link_sys_hw_setup(LINK_HW_DVI_ONLY, hw_setup.dvi_only);
   // trigger font loader reset
   hang_step(0xa2);
   osd_font_reset();
@@ -367,30 +345,22 @@ static void configure(const char* filename, bool clear_sram) {
   read_core(filename);
   send_build_ids();
   hang_step(0xa4);
-  if (!is_osd) {
-    osd_clear();
-    osd_logo(0,0, HW_ID);
-    osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
-    osd_set_pos(0,5);
-    osd_print("ROM ");
-    osd_update();
-    osd_show_popup(0);
-  }
+  if (!is_osd) dialog_load_screen();
   hang_step(0xa5);
   read_roms(filename);
   send_autoload_files(); // after the ROMs: a file over a ROM of the core file wins
   hang_step(0xa6);
   if (!is_osd) {
-    osd_hide_popup();
+    dialog_hide();
     osd_handle(true); // reinit osd
   }
   for (uint8_t i=0; i<7; i++) { // cleanup kbd: modifier + 6 keycodes
-    spi_queue(CMD_USB_KBD, i, 0);
+    link_hid_queue(LINK_EV_KBD, i, 0);
   }
   hang_step(0xa7);
-  spi_send(CMD_INIT_DONE, 0, 0);
+  link_sys_init(false);
   is_flashboot = false;
-  link_set_rx_enabled(true);
+  link_core_ready();
 
   // reinit matrix
   hang_step(0xa8);
@@ -859,7 +829,7 @@ void read_core(const char* filename) {
     case CORE_TYPE_HIDDEN: d_println("Hidden"); break;
     default: d_println("Reserved");
   }
-  link_set_freq(core.spi_freq);
+  link_core_freq(core.spi_freq);
   if (core.spi_freq > 0 && core.spi_freq < 255) { d_printf("Core SPI Frequency: %u MHz", core.spi_freq); d_println(); } else { d_println("Core SPI Frequency: default"); }
 
   rtc_set_eeprom_bank(core.eeprom_bank);
@@ -940,7 +910,7 @@ void read_core(const char* filename) {
     }
   }
 
-  osd_hide_popup();
+  dialog_hide();
   if (is_osd) {
     osd_show_menu();
   } else {
@@ -952,12 +922,7 @@ void read_core(const char* filename) {
 
 // the bytes sent of the ROM *ctx (uint32_t, from 0) on its row of the loading screen
 static void rom_progress(uint32_t sent, void *ctx) {
-  uint32_t rom_idx = *(const uint32_t *) ctx;
-  osd_set_pos(4,5+rom_idx);
-  osd_printf("%lu: ", (unsigned long) rom_idx + 1);
-  char b[40];
-  sprintf(b, "%05lu", (unsigned long) sent); osd_print(b); osd_print(" ");
-  osd_update();
+  dialog_load_rom_sent(*(const uint32_t *) ctx, sent);
 }
 
 
@@ -989,7 +954,7 @@ void read_roms(const char* filename) {
   uint32_t roms_len = cf.roms_len;
   d_printf("ROMS len %lu", (unsigned long) roms_len); d_println();
   if (roms_len > 0) {
-    spi_send(CMD_ROMLOADER, 0, 1);
+    link_load_start(LINK_LOAD_ROM, 0, 0, NULL);
   }
   uint32_t rom_timer = ms_now();
   rom_timer = ms_now();
@@ -1033,33 +998,28 @@ void read_roms(const char* filename) {
       d_print("External ROM "); d_println(rom_filename);
 
       if (sd_open(&file2, rom_filename, FA_READ)) {
-        rom_bytes += core_send_file(&file2, UINT32_MAX, CMD_ROMDATA, CMD_ROMBANK, rom_addr, rom_progress, &rom_idx, NULL);
+        rom_bytes += core_send_file(&file2, UINT32_MAX, LINK_LOAD_ROM, rom_addr, rom_progress, &rom_idx, NULL);
         sd_close(&file2);
       } else {
-        osd_set_pos(4,5+rom_idx);
-        osd_printf("%lu:  NO FILE", (unsigned long) rom_idx + 1);
-        osd_update();
+        dialog_load_rom_missing(rom_idx);
       }
     } else {
       file_seek(rom_pos + KG_ROM_BLOCK_HEADER_SIZE);
-      rom_bytes += core_send_file(&file1, rom_len, CMD_ROMDATA, CMD_ROMBANK, rom_addr, rom_progress, &rom_idx, NULL);
+      rom_bytes += core_send_file(&file1, rom_len, LINK_LOAD_ROM, rom_addr, rom_progress, &rom_idx, NULL);
     }
     offset = offset + rom_len + KG_ROM_BLOCK_HEADER_SIZE;
     roms_len = roms_len - rom_len - KG_ROM_BLOCK_HEADER_SIZE;
     rom_idx++;
     if (roms_len > 0) {
-      // next rom
-      osd_set_pos(0, 5+rom_idx);
-      osd_print("ROM ");
-      osd_update();
+      dialog_load_rom(rom_idx); // next rom
     }
   }
   //delay(100);
-  spi_send(CMD_ROMLOADER, 0, 0);
+  link_load_end(LINK_LOAD_ROM);
 
   if (rom_bytes > 0) {
     d_printf("ROMs: %lu bytes in %lu ms (%s)", (unsigned long) rom_bytes, (unsigned long) ms_since(rom_timer),
-      link_burst_available() ? "burst" : "classic");
+      link_mode_name());
     d_println();
   }
 
