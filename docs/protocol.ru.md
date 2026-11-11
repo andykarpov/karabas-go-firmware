@@ -1,6 +1,6 @@
 # Протокол обмена MCU ↔ FPGA
 
-[English version](protocol.md) · Burst-передачи: [burst_protocol.md](burst_protocol.md) · Файлы ядер и `core.json`: [karabas-go-tools/make_core](https://github.com/andykarpov/karabas-go-tools/tree/master/make_core)
+[English version](protocol.md) · Burst-передачи: [burst_protocol.md](burst_protocol.md) · Файлы ядер и `core.json`: [karabas-go-tools/make_core](https://github.com/andykarpov/karabas-go-tools/tree/master/make_core) · Линк v2 (черновик): [link_v2.ru.md](link_v2.ru.md)
 
 RP2040 (MCU) и ядро в FPGA общаются по одному SPI-линку. По нему MCU:
 
