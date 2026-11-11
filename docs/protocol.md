@@ -1,6 +1,6 @@
 # MCU ↔ FPGA protocol
 
-[Русская версия](protocol.ru.md) · Burst transfers: [burst_protocol.md](burst_protocol.md) · Core files and `core.json`: [karabas-go-tools/make_core](https://github.com/andykarpov/karabas-go-tools/tree/master/make_core)
+[Русская версия](protocol.ru.md) · Burst transfers: [burst_protocol.md](burst_protocol.md) · Core files and `core.json`: [karabas-go-tools/make_core](https://github.com/andykarpov/karabas-go-tools/tree/master/make_core) · Link v2 (draft): [link_v2.md](link_v2.md)
 
 The RP2040 (MCU) and the FPGA core talk over one SPI link. Over it the MCU:
 
