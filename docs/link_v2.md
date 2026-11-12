@@ -1,10 +1,14 @@
-# MCU ↔ FPGA link v2 (draft)
+# MCU ↔ FPGA link v2 (preview)
 
 [Русская версия](link_v2.ru.md) · Link v1: [protocol.md](protocol.md), [burst_protocol.md](burst_protocol.md)
 
-Status: **draft, nothing implemented**. Link v2 is a second protocol on the same wires. It lives
-next to v1: the core file says which link a core speaks, and the firmware keeps v1 for every core
-that does not say v2.
+Status: **preview**. Link v2 is implemented: the firmware on the branch `link-v2` (not released yet),
+the core side in karabas-go-modules (`kg_mcu2`, `kg_l2_*`, guide `docs/link_v2_migration.md`), the
+core file key `"link": 2` in karabas-go-tools `make_core`. Cores on it: vic20, boot menu, macplus,
+profi, tsconf, baseconf (Mini G). New cores can be written on it, but the protocol may still change
+until the release of the firmware (the Go / Mini boards are not moved yet): follow the changes of
+this file. Link v2 is a second protocol on the same wires. It lives next to v1: the core file says
+which link a core speaks, and the firmware keeps v1 for every core that does not say v2.
 
 ## 1. Why
 
