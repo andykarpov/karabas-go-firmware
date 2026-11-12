@@ -83,7 +83,10 @@ static void draw_tz(bool focused) {
 // the bitmap OSD (link v2)
 static void draw2(void) {
   const kg_field_t *d = ce_field(CE_DATE), *t = ce_field(CE_TIME);
+  ui2_center(0, 0);
   for (uint8_t r = 0; r < UI2_ROWS; r++) ui2_text(r, "", 0);
+  // the fields and the buttons in the middle (the message rows under them fit below)
+  ui2_center(has_ntp() ? 6 : 5, 204);
   ui2_field(0, "Date", d->text, d->pos, focus == F_DATE, "DD.MM.YYYY");
   ui2_field(1, "Time", t->text, t->pos, focus == F_TIME, "HH:MM");
   uint8_t row = 2;

@@ -33,6 +33,9 @@ void ui2_screen(const char *title);           // cleared; the header: NULL the c
 // the header with a note (the extensions of a browser) in place of the clock (NULL: the clock),
 // back: the triangle "back"
 void ui2_screen_note(const char *title, const char *note, bool back);
+// a short screen of n rows, width pixels wide in the middle of the rows area (until ui2_screen);
+// 0, 0: from the top left again
+void ui2_center(uint8_t n, int width);
 void ui2_clock(void);                          // the clock of the header again (every second)
 void ui2_row(uint8_t row, const char *label, const char *value, const char *hotkey, uint8_t flags);
 void ui2_text(uint8_t row, const char *text, uint8_t flags); // a row of plain text

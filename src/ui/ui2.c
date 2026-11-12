@@ -25,7 +25,8 @@ static const uint8_t logo_full[112] = { // 56x16, rows MSB first
 #define Y_END OSD2_H // no hint lines (the user: they only take room)
 
 uint8_t ui2_rows(void) { return (Y_END - Y_ROWS + 1) / ROW_H; }
-static int x_value(void) { return 2 + 14 * 6; }
+static int col_shift_of(void);
+static int x_value(void) { return col_shift_of() + 2 + 14 * 6; }
 
 static void clock_text(char *out, size_t size) {
   snprintf(out, size, "%02u:%02u:%02u", rtc_get_hour(), rtc_get_minute(), rtc_get_second());
@@ -54,10 +55,13 @@ static void begin_draw(void) {
 // the header: the name from the left edge (a title: after a triangle "back"), the clock or a note
 // in the small font at the right
 static bool head_clock = true;
+static int row_shift = 0; // pixels down / right: a short screen in the middle of the rows
+static int col_shift = 0;
 
 void ui2_screen_note(const char *title, const char *note, bool back) {
   begin_draw();
   u8g2_ClearBuffer(&osd2);
+  row_shift = col_shift = 0;
   char c[12];
   clock_text(c, sizeof(c));
   head_clock = !note;
@@ -91,7 +95,14 @@ void ui2_clock(void) {
   osd2_flush();
 }
 
-static int row_y(uint8_t row) { return Y_ROWS + row * ROW_H; }
+void ui2_center(uint8_t n, int width) {
+  row_shift = n && n < ui2_rows() ? (ui2_rows() - n) * ROW_H / 2 : 0;
+  col_shift = width > 0 && width < X_SCROLL - 4 ? (X_SCROLL - 4 - width) / 2 : 0;
+}
+
+static int col_shift_of(void) { return col_shift; }
+
+static int row_y(uint8_t row) { return Y_ROWS + row_shift + row * ROW_H; }
 
 // a row is cleared before it is drawn: a screen may draw one row again (a cursor moved)
 static void row_clear(uint8_t row) {
@@ -126,11 +137,11 @@ void ui2_row(uint8_t row, const char *label, const char *value, const char *hotk
   int ty = dimmed ? y + (ROW_H - 8) / 2 - 1 : y;
   // without a value the label goes up to the hotkey; a page entry has its arrow at the right
   int arrow_x = hk_x - 10;
-  int lx = 2;
+  int lx = 2 + col_shift;
   if (flags & UI2_RADIO) { // a circle of 9 pixels, a dot in it when chosen
-    u8g2_DrawCircle(&osd2, 6, y + 4, 4, U8G2_DRAW_ALL);
-    if (flags & UI2_ON) u8g2_DrawDisc(&osd2, 6, y + 4, 2, U8G2_DRAW_ALL);
-    lx = 16;
+    u8g2_DrawCircle(&osd2, lx + 4, y + 4, 4, U8G2_DRAW_ALL);
+    if (flags & UI2_ON) u8g2_DrawDisc(&osd2, lx + 4, y + 4, 2, U8G2_DRAW_ALL);
+    lx += 14;
   }
   bool check = flags & UI2_CHECK;
   text_to(lx, ty, (value || check) ? x_value() - 4 : ((flags & UI2_ARROW) ? arrow_x - 4 : hk_x - 4), label);
@@ -155,7 +166,7 @@ void ui2_text(uint8_t row, const char *text, uint8_t flags) {
   row_bar(row, flags);
   bool dimmed = flags & UI2_DIM;
   u8g2_SetFont(&osd2, dimmed ? F_SMALL : F_MAIN);
-  text_to(2, dimmed ? y + (ROW_H - 8) / 2 - 1 : y, X_SCROLL - 2, text);
+  text_to(2 + col_shift, dimmed ? y + (ROW_H - 8) / 2 - 1 : y, X_SCROLL - 2, text);
   u8g2_SetDrawColor(&osd2, 1);
   if (flags & UI2_TITLE) u8g2_DrawHLine(&osd2, 0, y + ROW_H - 2, X_SCROLL - 1);
 }
@@ -190,7 +201,7 @@ void ui2_buttons(uint8_t row, const char *const *labels, uint8_t n, int focus) {
   int y = row_y(row) - 1;
   u8g2_SetFont(&osd2, F_MAIN);
   for (uint8_t i = 0; i < n; i++) {
-    int x = 2 + i * (BTN_W + 4);
+    int x = 2 + col_shift + i * (BTN_W + 4);
     int w = u8g2_GetUTF8Width(&osd2, labels[i]);
     if ((int) i == focus) {
       u8g2_DrawBox(&osd2, x, y, BTN_W, ROW_H);
@@ -209,7 +220,7 @@ void ui2_field(uint8_t row, const char *label, const char *text, int cursor, boo
   int y = row_y(row);
   u8g2_SetFont(&osd2, F_MAIN);
   int cw = u8g2_GetMaxCharWidth(&osd2);
-  text_to(2, y, x_value() - 4, label);
+  text_to(2 + col_shift, y, x_value() - 4, label);
   int x = x_value();
   if (focused) u8g2_DrawFrame(&osd2, x - 2, y - 1, (int) strlen(text) * cw + 4, ROW_H);
   for (int i = 0; text[i]; i++) {
