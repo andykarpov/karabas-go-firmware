@@ -16,6 +16,7 @@
 static uint8_t link_freq = 0; // core spi frequency in MHz, 0 or 255 = default
 static uint8_t link_ver = 1;  // the MCU link of the loaded core: 1 frames, 2 packets (docs/link_v2.md)
 static volatile uint32_t link_v1_dropped = 0; // v1 frames not sent to a v2 core
+static uint32_t v1_dropped_seen = 0;          // the count link_report_drops logged last
 static bool link_rx_enabled = true;
 static link_handler_t handlers[256] = { NULL };
 
@@ -183,9 +184,9 @@ bool link_queue_pop(queue_spi_t *packet) {
 }
 
 void link_report_drops() {
-  static uint32_t prev_v1_dropped = 0, v1_drop_ms = 0;
-  if (link_v1_dropped != prev_v1_dropped && ms_since(v1_drop_ms) >= 5000) {
-    prev_v1_dropped = link_v1_dropped;
+  static uint32_t v1_drop_ms = 0;
+  if (link_v1_dropped != v1_dropped_seen && ms_since(v1_drop_ms) >= 5000) {
+    v1_dropped_seen = link_v1_dropped;
     v1_drop_ms = ms_now();
     d_printf("Link v2: %lu v1 frames not sent", (unsigned long) link_v1_dropped); d_println();
   }
@@ -378,6 +379,8 @@ void link_write_data(uint8_t data_cmd, uint8_t bank_cmd, uint32_t addr, const ui
 
 void link_select(uint8_t version) {
   link_ver = version == 2 ? 2 : 1;
+  link_v1_dropped = 0; // the count is per core
+  v1_dropped_seen = 0;
   d_printf("MCU link v%u", link_ver); d_println();
 }
 
