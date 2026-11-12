@@ -2,68 +2,40 @@
 #include "ui/ui2.h"
 #include "ui/osd2.h"
 
-#define F_MAIN u8g2_font_6x12_t_cyrillic
+// the logo of About: the OLED logo of bitmaps.h at its own size
+static const uint8_t logo_full[112] = { // 56x16, rows MSB first
+  0x8e, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x80, 0x00,
+  0x00, 0x00, 0x80, 0x00, 0x00, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0x82, 0x02, 0x80, 0x02,
+  0x82, 0x02, 0x80, 0x82, 0xfe, 0x80, 0xfe, 0x82, 0xfe, 0xfe, 0x82, 0x82, 0x80, 0x82, 0x82, 0x82,
+  0x02, 0x82, 0xfe, 0x80, 0xfe, 0xfe, 0xfe, 0xfe, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0e, 0xee, 0xe0,
+  0x00, 0x82, 0xfe, 0xfe, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x82, 0x00, 0x00, 0x00, 0x3c, 0xb2,
+  0xbe, 0x82, 0x00, 0x00, 0x00, 0x2a, 0xaa, 0x82, 0x82, 0x00, 0x00, 0x00, 0x2a, 0xaa, 0xfe, 0xfe,
+};
+
+
 #define F_SMALL u8g2_font_5x8_t_cyrillic
 
-#define Y_ROWS 13
+#define F_MAIN u8g2_font_6x12_t_cyrillic
 #define ROW_H 12
-#define X_VALUE 86           // 14 characters of the label
-#define X_SCROLL 252
-#define Y_HINT 112
 
-// the logo of the header: four bricks and KARABAS (as the colour bricks of the text OSD)
-static void logo(void) {
-  for (uint8_t i = 0; i < 4; i++) u8g2_DrawBox(&osd2, 1 + i * 5, 4, 4, 4);
-  u8g2_SetFont(&osd2, F_MAIN);
-  u8g2_DrawStr(&osd2, 23, 0, "Karabas");
-}
+#define Y_HEAD_LINE 12
+#define Y_ROWS 14
+#define X_SCROLL 252
+#define Y_END OSD2_H // no hint lines (the user: they only take room)
+
+uint8_t ui2_rows(void) { return (Y_END - Y_ROWS + 1) / ROW_H; }
+static int x_value(void) { return 2 + 14 * 6; }
 
 static void clock_text(char *out, size_t size) {
   snprintf(out, size, "%02u:%02u:%02u", rtc_get_hour(), rtc_get_minute(), rtc_get_second());
 }
 
-void ui2_screen(const char *title) {
-  osd2_begin();
-  u8g2_ClearBuffer(&osd2);
-  u8g2_SetFontPosTop(&osd2);
-  u8g2_SetFontMode(&osd2, 1);
-  u8g2_SetDrawColor(&osd2, 1);
-  logo();
-  u8g2_SetFont(&osd2, F_MAIN);
-  // the title between the logo and the clock, cut to fit
-  char t[40];
-  snprintf(t, sizeof(t), "%s", title ? title : core.name);
-  int x = 23 + 7 * 6 + 6;
-  int room = OSD2_W - 50 - x;
-  while (t[0] && u8g2_GetUTF8Width(&osd2, t) > room) t[strlen(t) - 1] = '\0';
-  u8g2_DrawUTF8(&osd2, x, 0, t);
-  char c[12];
-  clock_text(c, sizeof(c));
-  u8g2_DrawStr(&osd2, OSD2_W - 1 - u8g2_GetStrWidth(&osd2, c), 0, c);
-  u8g2_DrawHLine(&osd2, 0, 12, OSD2_W);
-  u8g2_DrawHLine(&osd2, 0, 110, OSD2_W);
-}
-
-void ui2_clock(void) {
-  if (!osd2_active()) return;
-  char c[12];
-  clock_text(c, sizeof(c));
-  u8g2_SetFont(&osd2, F_MAIN);
-  u8g2_SetFontPosTop(&osd2);
-  int w = u8g2_GetStrWidth(&osd2, c);
-  u8g2_SetDrawColor(&osd2, 0);
-  u8g2_DrawBox(&osd2, OSD2_W - 1 - w, 0, w, 12);
-  u8g2_SetDrawColor(&osd2, 1);
-  u8g2_DrawStr(&osd2, OSD2_W - 1 - w, 0, c);
-  osd2_flush();
-}
-
-// a string drawn from x, cut at x_end
+// a string drawn from x, cut at x_end (whole UTF-8 characters)
 static void text_to(int x, int y, int x_end, const char *s) {
   char t[64];
   snprintf(t, sizeof(t), "%s", s ? s : "");
   while (t[0] && x + u8g2_GetUTF8Width(&osd2, t) > x_end) {
-    // cut a whole UTF-8 character
     size_t n = strlen(t);
     do { n--; } while (n > 0 && (t[n] & 0xC0) == 0x80);
     t[n] = '\0';
@@ -71,21 +43,54 @@ static void text_to(int x, int y, int x_end, const char *s) {
   u8g2_DrawUTF8(&osd2, x, y, t);
 }
 
+static void begin_draw(void) {
+  osd2_begin();
+  u8g2_SetFontPosTop(&osd2);
+  u8g2_SetFontMode(&osd2, 1);
+  u8g2_SetDrawColor(&osd2, 1);
+  u8g2_SetBitmapMode(&osd2, 1);
+}
+
+// the header: the name from the left edge, the clock in the small font at the right
+void ui2_screen(const char *title) {
+  begin_draw();
+  u8g2_ClearBuffer(&osd2);
+  char c[12];
+  clock_text(c, sizeof(c));
+  u8g2_SetFont(&osd2, F_SMALL);
+  int cw = u8g2_GetStrWidth(&osd2, c);
+  text_to(OSD2_W - cw, 2, OSD2_W, c);
+  u8g2_SetFont(&osd2, F_MAIN);
+  text_to(1, 0, OSD2_W - 6 - cw, title ? title : core.name);
+  u8g2_DrawHLine(&osd2, 0, Y_HEAD_LINE, OSD2_W);
+}
+
+void ui2_clock(void) {
+  if (!osd2_active()) return;
+  begin_draw();
+  char c[12];
+  clock_text(c, sizeof(c));
+  u8g2_SetFont(&osd2, F_SMALL);
+  int w = u8g2_GetStrWidth(&osd2, c);
+  u8g2_SetDrawColor(&osd2, 0);
+  u8g2_DrawBox(&osd2, OSD2_W - w, 0, w, Y_HEAD_LINE);
+  u8g2_SetDrawColor(&osd2, 1);
+  text_to(OSD2_W - w, 2, OSD2_W, c);
+  osd2_flush();
+}
+
 static int row_y(uint8_t row) { return Y_ROWS + row * ROW_H; }
 
 static void row_bar(uint8_t row, uint8_t flags) {
-  int y = row_y(row);
+  u8g2_SetDrawColor(&osd2, 1);
   if (flags & UI2_SEL) {
-    u8g2_SetDrawColor(&osd2, 1);
-    u8g2_DrawBox(&osd2, 0, y, X_SCROLL - 1, ROW_H);
+    u8g2_DrawBox(&osd2, 0, row_y(row) - 1, X_SCROLL - 1, ROW_H);
     u8g2_SetDrawColor(&osd2, 0);
-  } else {
-    u8g2_SetDrawColor(&osd2, 1);
   }
 }
 
 void ui2_row(uint8_t row, const char *label, const char *value, const char *hotkey, uint8_t flags) {
-  if (row >= UI2_ROWS) return;
+  if (row >= ui2_rows()) return;
   int y = row_y(row);
   row_bar(row, flags);
   int hk_x = X_SCROLL - 2;
@@ -93,63 +98,60 @@ void ui2_row(uint8_t row, const char *label, const char *value, const char *hotk
     u8g2_SetFont(&osd2, F_SMALL);
     int w = u8g2_GetUTF8Width(&osd2, hotkey);
     hk_x = X_SCROLL - 3 - w;
-    u8g2_DrawUTF8(&osd2, hk_x, y + 2, hotkey);
+    u8g2_DrawUTF8(&osd2, hk_x, y + (ROW_H - 8) / 2 - 1, hotkey);
   }
   // a disabled row in the small font: readable, but plainly not the others
   bool dimmed = flags & UI2_DIM;
   u8g2_SetFont(&osd2, dimmed ? F_SMALL : F_MAIN);
-  int ty = dimmed ? y + 2 : y;
+  int ty = dimmed ? y + (ROW_H - 8) / 2 - 1 : y;
   // without a value the label goes up to the hotkey; a page entry has its arrow at the right
   int arrow_x = hk_x - 10;
-  text_to(2, ty, value ? X_VALUE - 4 : ((flags & UI2_ARROW) ? arrow_x - 4 : hk_x - 4), label);
+  text_to(2, ty, value ? x_value() - 4 : ((flags & UI2_ARROW) ? arrow_x - 4 : hk_x - 4), label);
   if (flags & UI2_ARROW) {
-    u8g2_DrawStr(&osd2, arrow_x, ty, ">");
+    text_to(arrow_x, ty, hk_x, ">");
   } else if (value) {
-    text_to(X_VALUE, ty, hk_x - 4, value);
+    text_to(x_value(), ty, hk_x - 4, value);
   }
   u8g2_SetDrawColor(&osd2, 1);
 }
 
 void ui2_text(uint8_t row, const char *text, uint8_t flags) {
-  if (row >= UI2_ROWS) return;
+  if (row >= ui2_rows()) return;
   int y = row_y(row);
   row_bar(row, flags);
-  u8g2_SetFont(&osd2, (flags & UI2_DIM) ? F_SMALL : F_MAIN);
-  text_to(2, (flags & UI2_DIM) ? y + 2 : y, X_SCROLL - 2, text);
+  bool dimmed = flags & UI2_DIM;
+  u8g2_SetFont(&osd2, dimmed ? F_SMALL : F_MAIN);
+  text_to(2, dimmed ? y + (ROW_H - 8) / 2 - 1 : y, X_SCROLL - 2, text);
   u8g2_SetDrawColor(&osd2, 1);
-  if (flags & UI2_TITLE) u8g2_DrawHLine(&osd2, 0, y + ROW_H - 1, X_SCROLL - 1);
+  if (flags & UI2_TITLE) u8g2_DrawHLine(&osd2, 0, y + ROW_H - 2, X_SCROLL - 1);
 }
 
 void ui2_sep(uint8_t row) {
-  if (row >= UI2_ROWS) return;
-  int y = row_y(row) + ROW_H / 2;
+  if (row >= ui2_rows()) return;
+  int y = row_y(row) + ROW_H / 2 - 1;
   for (int x = 2; x < X_SCROLL - 2; x += 2) u8g2_DrawPixel(&osd2, x, y);
 }
 
 void ui2_scrollbar(uint16_t top, uint16_t total) {
-  if (total <= UI2_ROWS) return;
-  int y0 = Y_ROWS, h = UI2_ROWS * ROW_H;
+  uint8_t rows = ui2_rows();
+  if (total <= rows) return;
+  int y0 = Y_ROWS - 1, h = rows * ROW_H;
   for (int y = y0; y < y0 + h; y += 2) u8g2_DrawPixel(&osd2, X_SCROLL + 1, y); // the track, dotted
-  int th = h * UI2_ROWS / total;
+  int th = h * rows / total;
   if (th < 4) th = 4;
-  int ty = y0 + (h - th) * top / (total - UI2_ROWS);
+  int ty = y0 + (h - th) * top / (total - rows);
   u8g2_DrawBox(&osd2, X_SCROLL, ty, 3, th);
 }
 
 void ui2_hint(const char *line1, const char *line2) {
-  u8g2_SetDrawColor(&osd2, 0);
-  u8g2_DrawBox(&osd2, 0, Y_HINT - 1, OSD2_W, OSD2_H - Y_HINT + 1);
-  u8g2_SetDrawColor(&osd2, 1);
-  u8g2_SetFont(&osd2, F_SMALL);
-  if (line1) text_to(1, Y_HINT, OSD2_W - 1, line1);
-  if (line2) text_to(1, Y_HINT + 8, OSD2_W - 1, line2);
+  (void) line1; (void) line2; // the v2 screens have no hint lines
 }
 
 #define BTN_W 60
 
 void ui2_buttons(uint8_t row, const char *const *labels, uint8_t n, int focus) {
-  if (row >= UI2_ROWS) return;
-  int y = row_y(row);
+  if (row >= ui2_rows()) return;
+  int y = row_y(row) - 1;
   u8g2_SetFont(&osd2, F_MAIN);
   for (uint8_t i = 0; i < n; i++) {
     int x = 2 + i * (BTN_W + 4);
@@ -160,32 +162,43 @@ void ui2_buttons(uint8_t row, const char *const *labels, uint8_t n, int focus) {
     } else {
       u8g2_DrawFrame(&osd2, x, y, BTN_W, ROW_H);
     }
-    u8g2_DrawUTF8(&osd2, x + (BTN_W - w) / 2, y, labels[i]);
+    text_to(x + (BTN_W - w) / 2, y + 1, x + BTN_W, labels[i]);
     u8g2_SetDrawColor(&osd2, 1);
   }
 }
 
 void ui2_field(uint8_t row, const char *label, const char *text, int cursor, bool focused, const char *note) {
-  if (row >= UI2_ROWS) return;
+  if (row >= ui2_rows()) return;
   int y = row_y(row);
   u8g2_SetFont(&osd2, F_MAIN);
-  text_to(2, y, X_VALUE - 4, label);
-  int x = X_VALUE;
-  if (focused) u8g2_DrawFrame(&osd2, x - 2, y, (int) strlen(text) * 6 + 4, ROW_H);
+  int cw = u8g2_GetMaxCharWidth(&osd2);
+  text_to(2, y, x_value() - 4, label);
+  int x = x_value();
+  if (focused) u8g2_DrawFrame(&osd2, x - 2, y - 1, (int) strlen(text) * cw + 4, ROW_H);
   for (int i = 0; text[i]; i++) {
     char c[2] = { text[i], 0 };
     if (focused && i == cursor) {
-      u8g2_DrawBox(&osd2, x, y + 1, 6, ROW_H - 2);
+      u8g2_DrawBox(&osd2, x, y, cw, ROW_H - 2);
       u8g2_SetDrawColor(&osd2, 0);
     }
-    u8g2_DrawStr(&osd2, x, y, c);
+    text_to(x, y, x + cw + 1, c);
     u8g2_SetDrawColor(&osd2, 1);
-    x += 6;
+    x += cw;
   }
   if (note) {
     u8g2_SetFont(&osd2, F_SMALL);
-    text_to(x + 8, y + 2, X_SCROLL - 2, note);
+    text_to(x + 8, y + (ROW_H - 8) / 2 - 1, X_SCROLL - 2, note);
   }
+}
+
+void ui2_logo(int x, int y) {
+  begin_draw();
+  u8g2_DrawBitmap(&osd2, x, y, 7, 16, logo_full);
+#if HW_ID == HW_ID_GO
+  u8g2_SetDrawColor(&osd2, 0); // the logo is of the Mini: no "mini" on a Go
+  u8g2_DrawBox(&osd2, x + 26, y + 11, 13, 5);
+  u8g2_SetDrawColor(&osd2, 1);
+#endif
 }
 
 void ui2_done(void) {
@@ -198,28 +211,34 @@ void ui2_done(void) {
 #define BOX_Y 40
 #define BOX_W 192
 #define BOX_H 40
+#define BAR_H 14 // the title bar
 
 void ui2_box(const char *line1, const char *line2, bool inverse) {
-  osd2_begin();
-  u8g2_SetFontPosTop(&osd2);
-  u8g2_SetFontMode(&osd2, 1);
-  u8g2_SetDrawColor(&osd2, 0);
-  u8g2_DrawBox(&osd2, BOX_X, BOX_Y, BOX_W, BOX_H);
+  begin_draw();
+  u8g2_SetDrawColor(&osd2, 0); // with a free margin of 3 pixels: the rows do not touch the frame
+  u8g2_DrawBox(&osd2, BOX_X - 3, BOX_Y - 3, BOX_W + 6, BOX_H + 6);
   u8g2_SetDrawColor(&osd2, 1);
   u8g2_DrawFrame(&osd2, BOX_X, BOX_Y, BOX_W, BOX_H);
   u8g2_SetFont(&osd2, F_MAIN);
+  int fh = u8g2_GetMaxCharHeight(&osd2);
   if (inverse) {
-    u8g2_DrawBox(&osd2, BOX_X, BOX_Y, BOX_W, 13);
+    // the title on a bar, the text in the middle of the rest
+    u8g2_DrawBox(&osd2, BOX_X, BOX_Y, BOX_W, BAR_H);
     u8g2_SetDrawColor(&osd2, 0);
+    text_to(BOX_X + 4, BOX_Y + (BAR_H - fh) / 2 + 1, BOX_X + BOX_W - 4, line1);
+    u8g2_SetDrawColor(&osd2, 1);
+    text_to(BOX_X + 4, BOX_Y + BAR_H + (BOX_H - BAR_H - fh) / 2, BOX_X + BOX_W - 4, line2);
+  } else {
+    // two lines in the middle of the box
+    int gap = (BOX_H - 2 * fh) / 3;
+    text_to(BOX_X + 4, BOX_Y + gap, BOX_X + BOX_W - 4, line1);
+    text_to(BOX_X + 4, BOX_Y + 2 * gap + fh, BOX_X + BOX_W - 4, line2);
   }
-  text_to(BOX_X + 4, BOX_Y + 1, BOX_X + BOX_W - 4, line1);
-  u8g2_SetDrawColor(&osd2, 1);
-  text_to(BOX_X + 4, BOX_Y + 16, BOX_X + BOX_W - 4, line2);
 }
 
 void ui2_box_progress(const char *title, uint32_t val, uint32_t max) {
   ui2_box(title, NULL, true);
-  int x = BOX_X + 6, y = BOX_Y + 20, w = BOX_W - 12;
+  int x = BOX_X + 6, y = BOX_Y + BAR_H + (BOX_H - BAR_H - 12) / 2, w = BOX_W - 12;
   u8g2_DrawFrame(&osd2, x, y, w, 12);
   int fill = max ? (int) ((uint64_t) (w - 4) * (val > max ? max : val) / max) : 0;
   u8g2_DrawBox(&osd2, x + 2, y + 2, fill, 8);
@@ -230,21 +249,22 @@ void ui2_box_popup(void) {
   osd2_popup(BOX_X / 8, BOX_Y / 8, BOX_W / 8, BOX_H / 8, 0, false);
 }
 
-// the toast: a box of 2 lines at the top left of the bitmap, shown as a popup at the top, zoomed
+// the toast: a box of 2 lines at the top left of the bitmap, shown as a popup in the middle of the
+// picture, zoomed
 #define TOAST_W 128
 #define TOAST_H 32
 
 void ui2_toast(const char *line1, const char *line2) {
-  osd2_begin();
-  u8g2_SetFontPosTop(&osd2);
-  u8g2_SetFontMode(&osd2, 1);
+  begin_draw();
   u8g2_SetDrawColor(&osd2, 0);
   u8g2_DrawBox(&osd2, 0, 0, TOAST_W, TOAST_H);
   u8g2_SetDrawColor(&osd2, 1);
   u8g2_DrawFrame(&osd2, 0, 0, TOAST_W, TOAST_H);
   u8g2_SetFont(&osd2, F_MAIN);
-  text_to(4, 3, TOAST_W - 4, line1);
-  text_to(4, 17, TOAST_W - 4, line2);
+  int fh = u8g2_GetMaxCharHeight(&osd2);
+  int gap = (TOAST_H - 2 * fh) / 3;
+  text_to(4, gap, TOAST_W - 4, line1);
+  text_to(4, 2 * gap + fh, TOAST_W - 4, line2);
   osd2_flush();
-  osd2_popup(0, 0, TOAST_W / 8, TOAST_H / 8, 1, true);
+  osd2_popup(0, 0, TOAST_W / 8, TOAST_H / 8, 0, true);
 }

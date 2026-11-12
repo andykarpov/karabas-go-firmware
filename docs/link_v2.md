@@ -148,7 +148,7 @@ top. The size comes from `STATUS` (bytes 5..6), so a core with less block RAM ma
 |---|---|---|---|
 | `01` | `ENABLE` | bit 0 show | |
 | `02` | `WRITE` | tile (2 bytes, LE), data bytes | tile = page × (width / 8) + column / 8; bytes go on from `tile × 8`, wrapping at the end. u8g2 sends a tile row at a time |
-| `03` | `COLORS` | fg R G B, bg R G B, bg alpha (0..3) | Defaults: white on dark blue, alpha 2 |
+| `03` | `COLORS` | fg R G B, bg R G B, bg alpha: 0 none, 1 a half, 2 three quarters, 3 opaque | Defaults: white on dark blue, alpha 2 (the firmware sets 3) |
 | `04` | `POPUP` | x, y, w, h (in tiles), place, zoom | Show only this part of the bitmap, as a popup; w = 0 ends the popup (the whole bitmap again). place: 0 centre, 1 top, 2 bottom of the screen. zoom: 0 the scale of the OSD, 1 twice that (as the large cells of the v1 popup) |
 
 The core scales the bitmap by an integer factor that fits its video mode (×2 for 640 / 800 wide,

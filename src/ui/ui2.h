@@ -1,12 +1,11 @@
 #pragma once
 
-// The screens of the bitmap OSD (link v2, 256 x 128, ui/osd2): a header (logo, the name of the
-// core or a title, the clock), UI2_ROWS list rows in the 6x12 font, a scrollbar, two hint lines
-// in the 5x8 font; boxes and progress bars for the dialogs. Strings are UTF-8 (Cyrillic works).
+// The screens of the bitmap OSD (link v2, 256 x 128, ui/osd2): a header (the name of the core or
+// a title from the left, the clock in the 5x8 font at the right), UI2_ROWS list rows in the 6x12
+// font, a scrollbar; boxes and progress bars for the dialogs. Strings are UTF-8 (Cyrillic works).
 //
-//   y 0..11    header            y 12       line
-//   y 13..108  8 rows of 12      y 110      line
-//   y 112..127 2 hint lines of 8
+//   y 0..11    header (title, clock), y 12 a line
+//   y 14..127  the rows: 9 of 12 pixels; no hint lines
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -15,7 +14,8 @@
 extern "C" {
 #endif
 
-#define UI2_ROWS 8
+#define UI2_ROWS ui2_rows() // 9 rows of 12 pixels
+uint8_t ui2_rows(void);
 #define UI2_COLS 41          // characters of a row in the 6x12 font (the scrollbar keeps 4 pixels)
 
 // row flags
@@ -30,12 +30,13 @@ void ui2_row(uint8_t row, const char *label, const char *value, const char *hotk
 void ui2_text(uint8_t row, const char *text, uint8_t flags); // a row of plain text
 void ui2_sep(uint8_t row);                     // a separator line
 void ui2_scrollbar(uint16_t top, uint16_t total); // the rows show items top..top+UI2_ROWS-1
-void ui2_hint(const char *line1, const char *line2);
+void ui2_hint(const char *line1, const char *line2); // nothing: no hint lines (kept for the callers)
 // buttons on a row, of equal width from the left; focus = the index of the focused one, -1 none
 void ui2_buttons(uint8_t row, const char *const *labels, uint8_t n, int focus);
 // a typed field: label, the text with the character at cursor inverted (focused), a note after it
 void ui2_field(uint8_t row, const char *label, const char *text, int cursor, bool focused, const char *note);
 void ui2_done(void);                           // the screen to the core
+void ui2_logo(int x, int y);                   // the whole logo, 56 x 16
 
 // a box in the middle of the screen: two lines; inverse = a title bar
 void ui2_box(const char *line1, const char *line2, bool inverse);

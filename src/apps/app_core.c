@@ -640,7 +640,9 @@ void app_core_filebrowser(uint8_t vpos) {
     char b[64] = "Enter choose  Bksp up  Esc back   ";
     size_t k = strlen(b);
     kg_exts_text(cur_slot()->ext, b + k, sizeof(b) - k);
-    ui2_screen(core.osd[curr_osd_item].name);
+    char title[80]; // the item and the dir (no hint lines)
+    snprintf(title, sizeof(title), "%s: %s", core.osd[curr_osd_item].name, cur_slot()->dir);
+    ui2_screen(title);
     fb_draw_v2(cur_slot()->dir, b);
     return;
   }
@@ -735,7 +737,7 @@ static void app_core_menu2(void) {
     uint8_t row = row0 + r;
     if (i == VIS_SEP) { ui2_sep(row); continue; }
     if (is_virtual(i)) {
-      ui2_row(row, i == VIS_ABOUT ? "About" : app_setup_label(i - VIS_APP), NULL, i == VIS_ABOUT ? "A" : NULL,
+      ui2_row(row, i == VIS_ABOUT ? "About" : app_setup_label(i - VIS_APP), NULL, NULL,
               (curr_osd_item == i ? UI2_SEL : 0) | UI2_ARROW);
       continue;
     }

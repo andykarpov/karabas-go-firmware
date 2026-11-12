@@ -199,9 +199,12 @@ void app_file_loader_menu(uint8_t vpos) {
 // initSD: read the list again (R); else only when it is not in the file browser
 void app_file_loader_overlay(bool initSD) {
   if (osd2_active()) {
-    ui2_screen(NULL);
+    char title[80]; // the core and the dir (no hint lines)
+    snprintf(title, sizeof(title), "%s: %s", core.name, cur_dir);
+    ui2_screen(title);
     if (initSD || !list_loaded) app_file_loader_read_list();
-    ui2_screen(NULL); // the box of the scan gone
+    snprintf(title, sizeof(title), "%s: %s", core.name, cur_dir);
+    ui2_screen(title); // the box of the scan gone
     app_file_loader_menu(APP_COREBROWSER_MENU_OFFSET);
     return;
   }

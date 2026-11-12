@@ -164,7 +164,7 @@ void link_osd_reg(uint8_t reg, uint8_t value); // the text OSD of v1 (nothing on
 bool link_osd2(void);                             // the core has the bitmap OSD (its STATUS size)
 void link_osd2_enable(bool on);
 void link_osd2_write(uint16_t tile, const uint8_t *data, size_t len); // bytes from tile x 8 on
-void link_osd2_colors(uint32_t fg, uint32_t bg, uint8_t alpha);       // 0xRRGGBB, alpha 0..3
+void link_osd2_colors(uint32_t fg, uint32_t bg, uint8_t alpha);       // 0xRRGGBB, alpha 0 none, 1 1/2, 2 3/4, 3 opaque
 // a popup window in tiles (w 0 = none), place 0 centre / 1 top / 2 bottom, zoom twice as large
 void link_osd2_popup(uint8_t x, uint8_t y, uint8_t w, uint8_t h, uint8_t place, bool zoom);
 
