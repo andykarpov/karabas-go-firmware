@@ -251,8 +251,6 @@ static void karabas_loop()
   // sector requests of the file mounter
   hang_mark(0x0c00);
   img_tick();
-  // the open sd card transfer after a pause
-  sd1_idle_tick();
   // a backup RAM file the core asked for
   bk_tick();
   core_eeprom_tick();
