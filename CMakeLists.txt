@@ -66,6 +66,10 @@ function(karabas_firmware target hw_id)
     CFG_TUH_XINPUT=1
     # the pico-sdk's stdio is not used: the log is src/diag/debug_out on the CDC
     PICO_STDIO_ENABLE_CRLF_SUPPORT=0
+    # the crystal of some Mini / Mini G boards starts slowly: with the pico-sdk default (6 ms)
+    # they hang after a power-up or a RUN reset (a watchdog reboot keeps the XOSC running, so
+    # the start after a uf2 copy works); 64 as in arduino-pico, which the firmware used up to #83
+    PICO_XOSC_STARTUP_DELAY_MULTIPLIER=64
   )
   if (BUILD_VER)
     target_compile_definitions(${target} PRIVATE BUILD_VER=${BUILD_VER})

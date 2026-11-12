@@ -20,6 +20,8 @@ sd_card_t *sd1_card();
 // before a reboot of the MCU alone: end the multi-sector transfer that sd_card keeps open on the
 // dedicated bus of SD1. APP only; nothing in MSC mode (the card is the PC's, the eject ends it).
 void sd1_sync_before_reboot();
+// APP main loop: ends the open transfer of SD1 after a pause (the card deselected, its LED off)
+void sd1_idle_tick();
 bool sd_is_exfat();
 bool sd_exists(const char *path);
 bool sd_is_dir(const char *path);
