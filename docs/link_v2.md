@@ -292,13 +292,23 @@ There is no font download (the font is in the MCU) and no caps query apart from 
   u8g2 backend of v2 share the menu, the file browser and the dialogs (toast, progress, busy,
   message / confirm, section 5.3): the callers (`hotkey_popup()`, the loaders, `bk_save`,
   `uknc_sav`) ask for a dialog, not for cells. The OLED of the backlog can reuse the u8g2 backend.
-- The header with the logo, the build ids and the footer become graphics (a small bitmap logo,
-  not font characters).
-- New fonts with Cyrillic, from u8g2: `u8g2_font_6x12_t_cyrillic` for the menu (42 columns, 10
-  lines), `u8g2_font_5x8_t_cyrillic` for long lists and the status line (51 × 16),
-  `u8g2_font_haxrcorp4089_t_cyrillic` as a proportional option. Titles and icons are drawn as
-  graphics. The CP866 font of the text OSD and its logo characters are not used in v2.
-
+- The screens (`ui/ui2`, `ui/osd2`; agreed on the board 2026-11-12):
+  - Font `u8g2_font_6x12_t_cyrillic` only (bold fonts were tried and dropped: letters merge),
+    `u8g2_font_5x8_t_cyrillic` for hotkeys, notes, the clock, disabled rows.
+  - Header (y 0..11, a line at 12): the core name from the left edge on the main page; on every
+    level under it a triangle "back" and the title (the page path "Options > Video", the app,
+    "Disk 8: /dir" of a browser). At the right the clock, in a browser its extensions instead.
+  - 9 rows of 12 pixels, no hint lines; a scrollbar at the right.
+  - The setup apps (Setup RTC, Map USB gamepad; the boot core also Wi-Fi, Settings) and About are
+    the last items of the main page, after a separator.
+  - Switches: Left / Right and the hotkey step the options; Enter opens a screen of the options
+    (radio buttons, Up / Down, Enter takes one, Esc back). Off / On, No / Yes, Disabled / Enabled
+    pairs are a check box; radio groups are circles.
+  - Focus: a filled bar / button has the focus, a frame marks the chosen one while the focus is
+    elsewhere (the port of Map USB gamepad).
+  - Boxes in the middle with a clear margin, the toast in the middle (zoomed popup), About with
+    the logo of the OLED (no "mini" on a Go). The background opaque (COLORS alpha 3).
+  - Later (backlog): marquee of long names, activity icons.
 ## 9. FPGA side (karabas-go-modules)
 
 - `kg_l2_link`: the transport: the byte shifter on `MCU_SCK` (`kg_spi_slave`, 8 bits, mode 0,
