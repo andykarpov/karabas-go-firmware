@@ -173,11 +173,11 @@ void print_time() {
 
 void on_time() {
   if (osd2_active()) {
-    if (is_osd) ui2_clock(); // the header of the v2 screens
-    return;
+    if (is_osd && !has_ft) ui2_clock(); // the header of the v2 screens
+  } else {
+    print_time();
+    osd_update();
   }
-  print_time();
-  osd_update();
 
   if (osd_state == state_msc) {
     if (has_ft) app_msc_ft_draw();

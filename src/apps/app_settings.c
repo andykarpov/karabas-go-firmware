@@ -8,6 +8,8 @@
 #include "ui/settings_items.h"
 #include "apps/app_settings.h"
 #include "ui/ui_draw.h"
+#include "ui/ui2.h"
+#include "ui/osd2.h"
 
 // Setup > Settings (BOOT core only): the karabas.ini settings. Up / Down / Tab pick a setting,
 // Left / Right / Enter change it. Save writes the changed values into karabas.ini and keeps the
@@ -67,6 +69,7 @@ static void section(uint8_t row, const char *title) {
 
 // the sections and the footer of the main page or of the Matrix effects page
 static void draw_frame() {
+  if (osd2_active()) return; // draw2 draws all of it
   osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
   osd_fill(0, UI_ROW_BODY, UI_COL_LAST, UI_ROW_BODY_LAST, ' ');
   if (mx_page) {
@@ -83,7 +86,14 @@ static void draw_frame() {
   }
 }
 
+static void draw2();
+
 static void draw() {
+  if (osd2_active()) {
+    settings_preview(mx_page ? settings_mx_ids[mx_focus] : SET_COUNT);
+    draw2();
+    return;
+  }
   uint8_t hint_id = SET_COUNT;
   if (mx_page) {
     for (uint8_t i = 0; i < settings_mx_len; i++) draw_item(settings_mx_ids[i], mx_rows[i], mx_focus == i);
@@ -104,15 +114,72 @@ static void draw() {
   osd_update();
 }
 
+// ---- the bitmap OSD (link v2): a list with the section titles, Save / Cancel on the last row ----
+
+typedef struct { const char *title; uint8_t from, to; } section_t;
+static const section_t secs[] = { { "System", 0, 6 }, { "Autoload", 6, 9 }, { "Graphic menu (FT812)", 9, 11 } };
+static const section_t mx_secs[] = { { "Clock", 0, 4 }, { "Audio meters", 4, 8 } };
+static uint8_t top2 = 0;
+
+static void draw2() {
+  const section_t *sc = mx_page ? mx_secs : secs;
+  uint8_t nsc = mx_page ? 2 : 3;
+  const uint8_t *list = mx_page ? settings_mx_ids : ids;
+  uint8_t cur = mx_page ? mx_focus : focus;
+  // the entries: a section title (0xFF00 | section) or the index of a setting in its list
+  uint16_t e[24];
+  uint8_t n = 0, cur_e = 0;
+  for (uint8_t k = 0; k < nsc; k++) {
+    e[n++] = 0xFF00 | k;
+    for (uint8_t i = sc[k].from; i < sc[k].to; i++) {
+      if (i == cur) cur_e = n;
+      e[n++] = i;
+    }
+  }
+  uint8_t rows = mx_page ? UI2_ROWS : UI2_ROWS - 1; // the buttons have the last row
+  if (cur < (mx_page ? settings_mx_len : ITEMS)) {
+    if (cur_e < top2 + 1 && cur_e > 0) top2 = cur_e - 1; // its section title with it, when it is first
+    if (cur_e < top2) top2 = cur_e;
+    if (cur_e >= top2 + rows) top2 = cur_e - rows + 1;
+  }
+  if (top2 + rows > n) top2 = n > rows ? n - rows : 0;
+  uint8_t hint_id = cur < (mx_page ? settings_mx_len : ITEMS) ? list[cur] : SET_COUNT;
+  ui2_screen_note(mx_page ? "Matrix effects" : "Settings",
+    error ? error : (hint_id < SET_COUNT ? settings[hint_id].hint : NULL), true);
+  for (uint8_t r = 0; r < rows && top2 + r < n; r++) {
+    uint16_t x = e[top2 + r];
+    if (x & 0xFF00) { ui2_text(r, sc[x & 0xFF].title, UI2_TITLE); continue; }
+    uint8_t id = list[x];
+    uint8_t fl = x == cur ? UI2_SEL : 0;
+    const char *label = id == SET_FT ? "Enabled" : settings[id].label;
+    if (settings[id].kind == SET_KIND_BOOL) {
+      ui2_row(r, label, NULL, NULL, fl | UI2_CHECK | (settings_bool(id, &s) ? UI2_ON : 0));
+    } else if (settings[id].kind == SET_KIND_PAGE) {
+      ui2_row(r, label, NULL, NULL, fl | UI2_ARROW);
+    } else {
+      char value[24];
+      settings_value_text(id, &s, value, sizeof(value));
+      ui2_row(r, label, value, NULL, fl);
+    }
+  }
+  ui2_scrollbar(top2, n);
+  if (!mx_page) {
+    static const char *const btn[] = { "Save", "Cancel" };
+    ui2_buttons(UI2_ROWS - 1, btn, 2, focus >= ITEMS ? focus - ITEMS : -1);
+  }
+  ui2_done();
+}
+
 static void show_page(bool mx) {
   mx_page = mx;
   mx_focus = 0;
+  top2 = 0;
   draw_frame();
   draw();
 }
 
 void app_settings_overlay() {
-  ui_screen("");
+  if (!osd2_active()) ui_screen("");
 
   s = hw_setup;
   settings_begin(&s);
