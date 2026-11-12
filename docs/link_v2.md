@@ -324,7 +324,7 @@ One branch and one PR per phase and repository.
 |---|---|
 | Ф0 | This specification |
 | Ф1 | Firmware refactor without a change of behaviour: the services (input, OSD, img, loaders, RTC, ports, matrix) call a link interface instead of building frames, and the popups go through the dialog API (section 5.3) on the text backend; v1 byte for byte, checked on the board |
-| Ф2 | Transport + SYS / HID / LOAD: `kg_l2_link`, `kg_l2_sys` / `_hid` / `_load`, `kg_mcu2` with a testbench and an MCU model; firmware `link2` (DMA for long packets, the INT task); make_core `link` + section 10. Pilot cores on Mini G: the **boot core** and **vic20** |
+| Ф2 | Transport + SYS / HID / LOAD: `kg_l2_link`, `kg_l2_sys` / `_hid` / `_load`, `kg_mcu2` with a testbench and an MCU model; firmware `link2` (DMA for long packets, the INT task); make_core `link` + section 10. Pilot core on Mini G: **vic20** (done: Mini G hw ok); the boot core moves in Ф3 / Ф5 (it needs the OSD, the ESP and MIDI ports). Moving a core: karabas-go-modules `docs/link_v2_migration.md` |
 | Ф3 | OSD: `kg_l2_osd` (bitmap, `POPUP` windows with zoom), u8g2 and the display layer, the Cyrillic fonts, the menu and the dialogs in graphics |
 | Ф4 | IMG: mounter, `.sav`, write protection, physical floppy drives |
 | Ф5 | PORT, RTC, AUX, `SPI_CONTROL` / FT812 |
