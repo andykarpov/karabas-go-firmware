@@ -153,7 +153,7 @@ static void draw2() {
     }
     case WS_SCAN: ui2_center(1, 0); t2("Scanning...", 0); break;
     case WS_LIST: {
-      t2("    dBm   Network", UI2_TITLE);
+      t2("   dBm   Network", UI2_TITLE);
       if (w->aps_len == 0) {
         t2("No networks found", 0);
       } else {

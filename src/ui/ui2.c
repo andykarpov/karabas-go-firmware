@@ -65,9 +65,14 @@ void ui2_screen_note(const char *title, const char *note, bool back) {
   char c[12];
   clock_text(c, sizeof(c));
   head_clock = !note;
+  // a note gets the room the title leaves (the title is short on the screens with notes)
+  u8g2_SetFont(&osd2, F_MAIN);
+  int tw = u8g2_GetUTF8Width(&osd2, title ? title : core.name) + (back ? 10 : 1) + 6;
   u8g2_SetFont(&osd2, F_SMALL);
   int cw = note ? u8g2_GetUTF8Width(&osd2, note) : u8g2_GetStrWidth(&osd2, c);
-  if (cw > OSD2_W / 2) cw = OSD2_W / 2;
+  int room = OSD2_W - tw;
+  if (room < OSD2_W / 2) room = OSD2_W / 2;
+  if (cw > room) cw = room;
   text_to(OSD2_W - cw, 2, OSD2_W, note ? note : c);
   u8g2_SetFont(&osd2, F_MAIN);
   int x = 1;
