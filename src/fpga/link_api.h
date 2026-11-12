@@ -156,9 +156,17 @@ typedef enum {
 
 void link_aux_on(link_aux_kind_t kind, void (*cb)(uint8_t a, uint8_t b));
 
-// ---- OSD (the text OSD of v1) ----
+// ---- OSD ----
 
-void link_osd_reg(uint8_t reg, uint8_t value);
+void link_osd_reg(uint8_t reg, uint8_t value); // the text OSD of v1 (nothing on a v2 core)
+
+// the bitmap OSD of v2 (docs/link_v2.md 5.3); nothing on a v1 core
+bool link_osd2(void);                             // the core has the bitmap OSD (its STATUS size)
+void link_osd2_enable(bool on);
+void link_osd2_write(uint16_t tile, const uint8_t *data, size_t len); // bytes from tile x 8 on
+void link_osd2_colors(uint32_t fg, uint32_t bg, uint8_t alpha);       // 0xRRGGBB, alpha 0 none, 1 1/2, 2 3/4, 3 opaque
+// a popup window in tiles (w 0 = none), place 0 centre / 1 top / 2 bottom, zoom twice as large
+void link_osd2_popup(uint8_t x, uint8_t y, uint8_t w, uint8_t h, uint8_t place, bool zoom);
 
 #ifdef __cplusplus
 }

@@ -1,6 +1,7 @@
 #include "config.h"
 #include "types.h"
 #include "main.h"
+#include "apps/app_setup.h"
 #include "osd.h"
 #include "input/usb_hid_keys.h"
 #include "input/sega.h"
@@ -239,7 +240,7 @@ static void on_key(uint8_t key, bool shift, bool joy) {
     draw();
   } else {
     ws_stop();
-    osd_state = state_setup;
+    osd_state = app_setup_back();
   }
 }
 

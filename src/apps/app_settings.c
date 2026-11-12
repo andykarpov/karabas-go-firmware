@@ -1,6 +1,7 @@
 #include "config.h"
 #include "types.h"
 #include "main.h"
+#include "apps/app_setup.h"
 #include "osd.h"
 #include "input/usb_hid_keys.h"
 #include "input/sega.h"
@@ -146,7 +147,7 @@ void app_settings_on_keyboard() {
 
   if (esc) {
     settings_end();
-    osd_state = state_setup;
+    osd_state = app_setup_back();
     return;
   }
   if (up) {
@@ -161,13 +162,13 @@ void app_settings_on_keyboard() {
   } else if (!button && (left || right || enter)) {
     settings_change(ids[focus], &s, left ? -1 : 1);
   } else if (enter && focus == I_SAVE) {
-    if (save_setup(&s)) { osd_state = state_setup; return; }
+    if (save_setup(&s)) { osd_state = app_setup_back(); return; }
     error = "Can't save karabas.ini";
     draw();
     return;
   } else if (enter && focus == I_CANCEL) {
     settings_end();
-    osd_state = state_setup;
+    osd_state = app_setup_back();
     return;
   } else {
     return;

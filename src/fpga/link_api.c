@@ -18,6 +18,8 @@
 #define V2_CAP_LOAD_READY 0x0010
 #define V2_CAP_MIDI 0x0200
 static uint16_t v2_caps = 0;
+static uint8_t v2_osd_w8 = 0, v2_osd_h8 = 0; // the OSD size of STATUS, / 8
+#define T_OSD 0x02
 
 static void v2_send(const uint8_t *p, size_t n) {
   link2_xfer(p, n, NULL, 0);
@@ -71,6 +73,8 @@ bool link_core_hello(void) {
     v2_read(T_SYS, 0x00, st, sizeof(st));
     if (st[0] == 'K' && st[1] == 'G' && st[2] == 2) {
       v2_caps = st[3] | (st[4] << 8);
+      v2_osd_w8 = st[5];
+      v2_osd_h8 = st[6];
       uint8_t causes;
       v2_read(T_SYS, 0x02, &causes, 1); // clears the coldboot cause
       d_printf("Link v2: core answered in %lu ms, caps %04x, osd %ux%u, ports %02x", (unsigned long) ms_since(t),
@@ -79,6 +83,7 @@ bool link_core_hello(void) {
     }
   } while (ms_since(t) < V2_HELLO_MS);
   v2_caps = 0;
+  v2_osd_w8 = v2_osd_h8 = 0;
   d_printf("Link v2: no answer of the core (%02x %02x %02x)", st[0], st[1], st[2]); d_println();
   return false;
 }
@@ -627,7 +632,52 @@ void link_aux_on(link_aux_kind_t kind, void (*cb)(uint8_t a, uint8_t b)) {
 // ---- OSD ----
 
 void link_osd_reg(uint8_t reg, uint8_t value) {
+  if (V2) {
+    // the text OSD is not a command of v2; its show / hide (lib/osd osd_show_menu / hide, from
+    // everywhere in the UI) switch the bitmap OSD, a popup off ends the popup window
+    if (reg == 0x01) link_osd2_enable(value & 1);
+    else if (reg == 0x02 && !(value & 1)) link_osd2_popup(0, 0, 0, 0, 0, false);
+    return;
+  }
   spi_send(CMD_OSD, reg, value);
+}
+
+
+bool link_osd2(void) {
+  return V2 && v2_osd_w8 == 32 && v2_osd_h8 == 16;
+}
+
+void link_osd2_enable(bool on) {
+  if (!link_osd2()) return;
+  const uint8_t p[3] = { T_OSD, 0x01, on ? 1 : 0 };
+  v2_send(p, 3);
+}
+
+void link_osd2_write(uint16_t tile, const uint8_t *data, size_t len) {
+  if (!link_osd2()) return;
+  static uint8_t p[4 + 512];
+  spi_bus_lock();
+  while (len > 0) {
+    size_t n = len < 512 ? len : 512;
+    p[0] = T_OSD; p[1] = 0x02; p[2] = (uint8_t) tile; p[3] = (uint8_t) (tile >> 8);
+    memcpy(p + 4, data, n);
+    v2_send(p, 4 + n);
+    data += n; len -= n; tile += n / 8;
+  }
+  spi_bus_unlock();
+}
+
+void link_osd2_colors(uint32_t fg, uint32_t bg, uint8_t alpha) {
+  if (!link_osd2()) return;
+  const uint8_t p[9] = { T_OSD, 0x03, (uint8_t) (fg >> 16), (uint8_t) (fg >> 8), (uint8_t) fg,
+                         (uint8_t) (bg >> 16), (uint8_t) (bg >> 8), (uint8_t) bg, alpha };
+  v2_send(p, 9);
+}
+
+void link_osd2_popup(uint8_t x, uint8_t y, uint8_t w, uint8_t h, uint8_t place, bool zoom) {
+  if (!link_osd2()) return;
+  const uint8_t p[8] = { T_OSD, 0x04, x, y, w, h, place, zoom ? 1 : 0 };
+  v2_send(p, 8);
 }
 
 // ---- link v2: the events of the core ----
