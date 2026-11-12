@@ -18,6 +18,9 @@
 
 static rtc_send_t send_cb;
 static rtc_event_t event_cb;
+static void (*flush_cb)(void) = NULL;
+void rtc_set_flush(void (*flush)(void)) { flush_cb = flush; }
+static void flush(void) { if (flush_cb) flush_cb(); }
 static bool is_started = false;
 static bool has_eeprom = false;
 static bool has_clock = false;
@@ -172,6 +175,7 @@ static void send_time(void) {
     send(8, rtc_is_bcd ? kg_bin2bcd(rtc_month) : rtc_month);
     send(9, rtc_is_bcd ? kg_bin2bcd(rtc_year) : rtc_year);
   }
+  flush();
 }
 
 static void msm_commit(void) {
@@ -265,6 +269,7 @@ void rtc_send_all(void) {
       }
     }
   }
+  flush();
 }
 
 void rtc_set_data(uint8_t addr, uint8_t data) {

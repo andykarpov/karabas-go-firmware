@@ -247,18 +247,19 @@ IRQ bit 5 while any port has tx bytes.
 
 | C | Name | → | ← | Notes |
 |---|---|---|---|---|
-| `01` | `SET` | first register, values | | All registers at start, the time registers every 500 ms (formats of v1 `rtc_mode`) |
-| `02` | `GET` | | count n, (register, value) × n | Registers the CPU of the core wrote; IRQ bit 6 |
+| `01` | `SET` | first register, values | | Register first + k = value k. All registers at start, the time registers every 500 ms (formats of v1 `rtc_mode`); the firmware sends each run of consecutive registers as one packet |
+| `02` | `GET` | | count n, (register, value) × n | Z first. Registers the CPU of the core wrote (a fifo of 8, not while busy, not C, nor D with SKIP_0D); IRQ bit 6 |
 
 ### 5.8 AUX (`07`)
 
 | C | Name | → | ← | Notes |
 |---|---|---|---|---|
-| `01` | `MATRIX` | | control, 32 bitplane bytes | The picture of the core for the LED matrix (bytes 0..7 the red rows of the left matrix, 8..15 its green, 16..31 the right one; control: bit 2 brightness in bits 7..4, bit 3 meter mode). The core draws into its own bitplanes (pixels or rows), the MCU reads them whole when they changed |
-| `02` | `PEAKS` | | left (2), right (2) | The audio peaks for the matrix meters, at most ~50 times a second |
-| `03` | `DEBUG` | | addr (2), data (2) | Debug values of the core for the log, when they changed |
+| `01` | `MATRIX` | | control, 32 bitplane bytes | Z first. The picture of the core for the LED matrix (bytes 0..7 the red rows of the left matrix, 8..15 its green, 16..31 the right one; control: bit 2 brightness in bits 7..4, bit 3 meter mode). The core draws into its own bitplanes (pixels or rows), the MCU reads them whole when they changed |
+| `02` | `PEAKS` | | left (2), right (2) | Z first, LE. The highest audio peaks since the last read (it clears them), for the matrix meters |
+| `03` | `DEBUG` | | addr (2), data (2) | Z first, LE. Debug values of the core for the log, when they changed |
+| `04` | `CHANGED` | | bits | Z first. Bit 0 the matrix (an update, a new mode or brightness), 1 new peaks, 2 the debug values; the read of `MATRIX` / `PEAKS` / `DEBUG` clears its bit |
 
-IRQ bit 7 while one of them changed since it was read.
+IRQ bit 7 while one of them changed since it was read. The core keeps the frames of v1 (`MATRIX_CMD`: CTL, PIXEL, BITPLAN, the peaks of `audio_peaks.v`): `kg_l2_aux` keeps the bitplanes for the MCU.
 
 ## 6. Core start
 

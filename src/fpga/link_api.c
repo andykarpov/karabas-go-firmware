@@ -23,6 +23,10 @@ static uint8_t v2_osd_w8 = 0, v2_osd_h8 = 0; // the OSD size of STATUS, / 8
 static uint8_t v2_ports = 0;                  // the PORT mask of STATUS
 static uint8_t v2_free[4];                    // PORT: the room of the core as last asked
 #define T_PORT 0x05
+#define T_RTC 0x06
+#define T_AUX 0x07
+#define V2_CAP_RTC 0x0020
+#define V2_CAP_AUX 0x0040
 static void v2_port_put(uint8_t port, uint8_t byte);
 #define T_OSD 0x02
 
@@ -711,11 +715,33 @@ void link_printer_on_status_request(void (*cb)(void)) {
 
 // ---- RTC ----
 
+// v2: consecutive registers go in one SET (first register, values)
+static uint8_t rtc_buf[64];
+static uint8_t rtc_first = 0, rtc_n = 0;
+
+void link_rtc_flush(void) {
+  if (!V2 || rtc_n == 0) return;
+  static uint8_t p[3 + sizeof(rtc_buf)];
+  p[0] = T_RTC; p[1] = 0x01; p[2] = rtc_first;
+  memcpy(p + 3, rtc_buf, rtc_n);
+  v2_send(p, 3 + rtc_n);
+  rtc_n = 0;
+}
+
 void link_rtc_set(uint8_t reg, uint8_t value) {
+  if (V2) {
+    if (!(v2_caps & V2_CAP_RTC)) return;
+    if (rtc_n && (reg != (uint8_t) (rtc_first + rtc_n) || rtc_n == sizeof(rtc_buf))) link_rtc_flush();
+    if (rtc_n == 0) rtc_first = reg;
+    rtc_buf[rtc_n++] = value;
+    return;
+  }
   spi_send(CMD_RTC, reg, value);
 }
 
+static void (*rtc_write_cb)(uint8_t, uint8_t) = NULL;
 void link_rtc_on_write(void (*cb)(uint8_t reg, uint8_t value)) {
+  rtc_write_cb = cb;
   link_on(CMD_RTC, cb);
 }
 
@@ -729,8 +755,12 @@ static const uint8_t aux_cmd[LINK_AUX_COUNT] = {
   [LINK_AUX_PEAK_R] = CMD_AUDIO_PEAKS_R,
 };
 
+static void (*aux_cb[LINK_AUX_COUNT])(uint8_t, uint8_t);
+
 void link_aux_on(link_aux_kind_t kind, void (*cb)(uint8_t a, uint8_t b)) {
-  if (kind < LINK_AUX_COUNT) link_on(aux_cmd[kind], cb);
+  if (kind >= LINK_AUX_COUNT) return;
+  aux_cb[kind] = cb;
+  link_on(aux_cmd[kind], cb);
 }
 
 // ---- OSD ----
@@ -820,6 +850,42 @@ static void v2_port_service(void) {
   }
 }
 
+// RTC GET: the registers the CPU of the core wrote (up to 8 per read)
+static void v2_rtc_event(void) {
+  uint8_t ev[1 + 16];
+  v2_read(T_RTC, 0x02, ev, sizeof(ev));
+  for (uint8_t i = 0; i < ev[0] && i < 8; i++) {
+    if (rtc_write_cb) rtc_write_cb(ev[1 + 2 * i], ev[2 + 2 * i]);
+  }
+}
+
+// AUX: what changed (CHANGED), then the matrix, the peaks, the debug values as the frames of v1
+static void v2_aux_event(void) {
+  uint8_t ch;
+  v2_read(T_AUX, 0x04, &ch, 1);
+  if (ch & 0x01) {
+    uint8_t m[33];
+    v2_read(T_AUX, 0x01, m, sizeof(m));
+    uint8_t ctl = m[0] & 0xFC; // meter mode, brightness: clear / update are this read
+    if (!(ctl & 0x08) && aux_cb[LINK_AUX_MATRIX_BITPLAN]) {
+      for (uint8_t i = 0; i < 32; i++) aux_cb[LINK_AUX_MATRIX_BITPLAN](i, m[1 + i]);
+      ctl |= 0x02; // show it
+    }
+    if (aux_cb[LINK_AUX_MATRIX_CTL]) aux_cb[LINK_AUX_MATRIX_CTL](0, ctl);
+  }
+  if (ch & 0x02) {
+    uint8_t pk[4];
+    v2_read(T_AUX, 0x02, pk, sizeof(pk));
+    if (aux_cb[LINK_AUX_PEAK_L]) aux_cb[LINK_AUX_PEAK_L](pk[1], pk[0]);
+    if (aux_cb[LINK_AUX_PEAK_R]) aux_cb[LINK_AUX_PEAK_R](pk[3], pk[2]);
+  }
+  if (ch & 0x04) {
+    uint8_t dbg[4];
+    v2_read(T_AUX, 0x03, dbg, sizeof(dbg));
+    d_printf("Debug Address: %04x, Data: %04x", dbg[0] | (dbg[1] << 8), dbg[2] | (dbg[3] << 8)); d_println();
+  }
+}
+
 // IMG EVENT: kind, slot, arguments; one per read, the IRQ bit stays up while more wait
 static void v2_img_event(void) {
   uint8_t ev[7];
@@ -872,6 +938,8 @@ void link_v2_service(void) {
   }
   if (pending & 0x08) v2_img_event();
   if (pending & 0x20) v2_port_service();
+  if (pending & 0x40) v2_rtc_event();
+  if (pending & 0x80) v2_aux_event();
   if (pending & 0x02) {
     // HID EVENT: the count, then (command, argument) pairs; at most 8 (the fifo of the core)
     uint8_t ev[1 + 16];

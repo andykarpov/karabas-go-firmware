@@ -38,6 +38,9 @@ void i2c_bus_lock(void);
 void i2c_bus_unlock(void);
 
 void rtc_begin(rtc_send_t send, rtc_event_t event);
+// called after each set of registers sent (the time, all of them): a link that batches them sends
+// its packet then
+void rtc_set_flush(void (*flush)(void));
 bool rtc_started(void);
 bool rtc_has_clock(void);              // the DS3231 answered at rtc_begin()
 bool rtc_now(kg_datetime_t *dt);       // the last time read, false without a clock
