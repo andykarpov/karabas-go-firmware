@@ -109,6 +109,8 @@ static uint8_t page_cursor[256]; // the item + 1 the cursor was on when a page w
 #define VIS_ABOUT 0xF1
 #define VIS_APP 0xF2 // + the position among the setup apps
 #define is_virtual(i) ((i) >= VIS_SEP)
+// a setup app opened from the menu: back in the menu the cursor stays on its row
+static bool keep_cursor = false;
 
 static void build_vis(void) {
   vis_len = 0;
@@ -498,6 +500,7 @@ void app_core_on_keyboard() {
       if (key == KEY_RIGHT || key == KEY_ENTER) {
         osd_return_state = state_main;
         app_setup_opened_from_menu(true);
+        keep_cursor = true;
         osd_state = curr_osd_item == VIS_ABOUT ? state_about : app_setup_state(curr_osd_item - VIS_APP);
         return;
       }
@@ -763,6 +766,11 @@ static void app_core_menu2(void) {
 }
 
 static void app_core_overlay2(bool force) {
+  if (force && keep_cursor) {
+    force = false;
+    menu_sync();
+  }
+  keep_cursor = false;
   if (force) {
     cur_page = 0;
     memset(page_cursor, 0, sizeof(page_cursor));

@@ -333,7 +333,9 @@ static void configure(const char* filename, bool clear_sram) {
   link_core_hello();
   if (link_osd2()) {
     osd2_core_loaded(); // a new core has an empty bitmap
-    link_osd2_colors(0xFFFFFF, 0x102048, 2);
+    // white on a dark blue that hides three quarters of the picture: a light picture (VIC-20)
+    // made the half-transparent background grey and the text hard to read (Mini G, 2026-11-12)
+    link_osd2_colors(0xFFFFFF, 0x081028, 3);
   }
   hang_step(0xa1);
   link_sys_init(true);
