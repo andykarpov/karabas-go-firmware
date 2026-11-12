@@ -20,6 +20,10 @@
 #define V2_CAP_MIDI 0x0200
 static uint16_t v2_caps = 0;
 static uint8_t v2_osd_w8 = 0, v2_osd_h8 = 0; // the OSD size of STATUS, / 8
+static uint8_t v2_ports = 0;                  // the PORT mask of STATUS
+static uint8_t v2_free[4];                    // PORT: the room of the core as last asked
+#define T_PORT 0x05
+static void v2_port_put(uint8_t port, uint8_t byte);
 #define T_OSD 0x02
 
 static void v2_send(const uint8_t *p, size_t n) {
@@ -76,6 +80,8 @@ bool link_core_hello(void) {
       v2_caps = st[3] | (st[4] << 8);
       v2_osd_w8 = st[5];
       v2_osd_h8 = st[6];
+      v2_ports = st[7];
+      memset(v2_free, 0, sizeof(v2_free));
       uint8_t causes;
       v2_read(T_SYS, 0x02, &causes, 1); // clears the coldboot cause
       d_printf("Link v2: core answered in %lu ms, caps %04x, osd %ux%u, ports %02x", (unsigned long) ms_since(t),
@@ -85,6 +91,7 @@ bool link_core_hello(void) {
   } while (ms_since(t) < V2_HELLO_MS);
   v2_caps = 0;
   v2_osd_w8 = v2_osd_h8 = 0;
+  v2_ports = 0;
   d_printf("Link v2: no answer of the core (%02x %02x %02x)", st[0], st[1], st[2]); d_println();
   return false;
 }
@@ -212,7 +219,10 @@ static void v2_forward(const link_event_t *ev) {
       v2_send(p, 4);
       break;
     }
-    default: break; // MIDI: PORT 2 comes with Ф5
+    case LINK_EV_MIDI: // PORT 2: no counter, a byte the core has no room for is lost
+      v2_port_put(2, ev->val);
+      break;
+    default: break;
   }
 }
 
@@ -612,8 +622,38 @@ void link_img_on_fdd_chng(int (*cb)(uint8_t drive)) {
 }
 
 // ---- PORT ----
+//
+// v2: PORT n (0 USB serial, 1 ESP8266, 2 MIDI IN, 3 printer). A byte to the core waits for room
+// in its fifo (STATUS rx free, asked again only when the room seen is used up); the bytes of the
+// core come on IRQ bit 5 (v2_port_service).
+
+#define V2_PORT_WAIT_MS 10
+
+// PORT STATUS: rx free, tx available, config (4)
+static void v2_port_status(uint8_t port, uint8_t *st6) {
+  const uint8_t tx[4] = { T_PORT, 0x01, port, 0 };
+  link2_xfer(tx, sizeof(tx), st6, 6);
+}
+
+static void v2_port_put(uint8_t port, uint8_t byte) {
+  if (!(v2_ports & (1 << port))) return;
+  if (v2_free[port] == 0) {
+    uint32_t t = ms_now();
+    uint8_t st[6];
+    for (;;) {
+      v2_port_status(port, st);
+      if (st[0] > 0 || ms_since(t) >= V2_PORT_WAIT_MS) break;
+    }
+    v2_free[port] = st[0];
+    if (v2_free[port] == 0) return; // the core takes nothing: the byte is lost
+  }
+  const uint8_t p[4] = { T_PORT, 0x02, port, byte };
+  v2_send(p, 4);
+  v2_free[port]--;
+}
 
 void link_uart_put(uint8_t byte) {
+  if (V2) { v2_port_put(0, byte); return; }
   // addr changes with every byte, so the core can see a new one
   static uint8_t uart_idx = 0;
   uart_idx++;
@@ -621,14 +661,23 @@ void link_uart_put(uint8_t byte) {
 }
 
 void link_esp_put(uint8_t byte) {
+  if (V2) { v2_port_put(1, byte); return; }
   spi_send(CMD_ESP_UART, 0, byte);
 }
 
 void link_printer_status(uint8_t status) {
+  if (V2) {
+    if (!(v2_ports & 0x08)) return;
+    const uint8_t p[4] = { T_PORT, 0x04, 3, status };
+    v2_send(p, 4);
+    return;
+  }
   spi_send(CMD_PRINTER_STATUS, 0, status);
 }
 
+static void (*uart_cb)(uint8_t, uint8_t) = NULL;
 void link_uart_on_rx(void (*cb)(uint8_t kind, uint8_t byte)) {
+  uart_cb = cb;
   link_on(CMD_UART, cb);
 }
 
@@ -737,6 +786,40 @@ void link_osd2_popup(uint8_t x, uint8_t y, uint8_t w, uint8_t h, uint8_t place, 
 
 // ---- link v2: the events of the core ----
 
+// PORT: the bytes of the core, port by port; port 0 tells its divisor in the config (DLL, DLM:
+// 0 = 115200), port 3 asks for the printer status after its bytes
+static uint16_t v2_uart_div = 0;
+static void v2_port_service(void) {
+  for (uint8_t port = 0; port < 4; port++) {
+    if (!(v2_ports & (1 << port)) || port == 2) continue; // MIDI IN has no bytes back
+    uint8_t st[6];
+    v2_port_status(port, st);
+    v2_free[port] = st[0];
+    if (port == 0) {
+      uint16_t div = st[2] | (st[3] << 8);
+      if (div != v2_uart_div && uart_cb) {
+        v2_uart_div = div;
+        uart_cb(1, st[2]);
+        uart_cb(2, st[3]);
+      }
+    }
+    uint8_t n = st[1];
+    if (n == 0) continue;
+    static uint8_t rx[255];
+    const uint8_t tx[5] = { T_PORT, 0x03, port, n, 0 };
+    link2_xfer(tx, sizeof(tx), rx, n);
+    for (uint8_t i = 0; i < n; i++) {
+      switch (port) {
+        case 0: if (uart_cb) uart_cb(v2_uart_div ? 3 : 0, rx[i]); break;
+        case 1: if (esp_cb) esp_cb(rx[i]); break;
+        case 3: if (printer_data_cb) printer_data_cb(rx[i]); break;
+        default: break;
+      }
+    }
+    if (port == 3 && printer_req_cb) printer_req_cb();
+  }
+}
+
 // IMG EVENT: kind, slot, arguments; one per read, the IRQ bit stays up while more wait
 static void v2_img_event(void) {
   uint8_t ev[7];
@@ -788,6 +871,7 @@ void link_v2_service(void) {
     }
   }
   if (pending & 0x08) v2_img_event();
+  if (pending & 0x20) v2_port_service();
   if (pending & 0x02) {
     // HID EVENT: the count, then (command, argument) pairs; at most 8 (the fifo of the core)
     uint8_t ev[1 + 16];

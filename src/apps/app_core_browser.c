@@ -17,6 +17,8 @@
 #include <stdlib.h>
 #include "ui/ui_draw.h"
 #include "kg_list.h"
+#include "ui/ui2.h"
+#include "ui/osd2.h"
 
 core_list_item_t *cores = NULL; // on the heap, cores_len items
 uint8_t cores_len = 0;
@@ -52,7 +54,74 @@ static uint32_t autoload_left_s() {
   return ms < autoload_countdown * 1000 ? (autoload_countdown * 1000 - ms) / 1000 : 0;
 }
 
+// ---- the bitmap OSD (link v2) ----
+// The cores, then a separator, Setup and About (as the setup apps at the end of a core menu);
+// the build of a core small at the right, the autoload countdown in the header.
+static uint8_t v2_extra = 0; // the cursor below the cores: 1 Setup, 2 About
+static uint16_t v2_top = 0;  // the first list entry shown
+
+static void draw2(void) {
+  char note[24];
+  if (autoload_enabled) snprintf(note, sizeof(note), "Autoload %lu s", (unsigned long) autoload_left_s());
+  ui2_screen_note(NULL, autoload_enabled ? note : NULL, false);
+  uint8_t rows = UI2_ROWS;
+  uint16_t total = cores_len + 3; // the cores, the separator, Setup, About
+  uint16_t pos = v2_extra ? cores_len + v2_extra : core_sel;
+  if (pos < v2_top) v2_top = pos;
+  if (pos >= v2_top + rows) v2_top = pos - rows + 1;
+  if (v2_top + rows > total) v2_top = total > rows ? total - rows : 0;
+  for (uint8_t r = 0; r < rows; r++) {
+    uint16_t e = v2_top + r;
+    if (e >= total) break;
+    if (e < cores_len) {
+      char name[48];
+      snprintf(name, sizeof(name), "%2u %s", (unsigned) (e + 1), cores[e].name);
+      ui2_row(r, name, NULL, cores[e].build, e == pos ? UI2_SEL : 0);
+    } else if (e == cores_len) {
+      ui2_sep(r);
+    } else {
+      ui2_row(r, e == cores_len + 1 ? "Setup" : "About", NULL, NULL, (e == pos ? UI2_SEL : 0) | UI2_ARROW);
+    }
+  }
+  ui2_scrollbar(v2_top, total);
+  ui2_done();
+}
+
+static void open_setup();
+
+// the keys of the v2 list: false if not taken (the common keys go on)
+static bool keys2(uint8_t key) {
+  if (key == KEY_UP) {
+    if (v2_extra == 2) v2_extra = 1;
+    else if (v2_extra == 1) { v2_extra = 0; if (cores_len) core_sel = cores_len - 1; }
+    else if (core_sel > 0) core_sel--;
+  } else if (key == KEY_DOWN) {
+    if (v2_extra == 0 && core_sel + 1 < cores_len) core_sel++;
+    else if (v2_extra < 2) v2_extra++;
+  } else if ((key == KEY_LEFT || key == KEY_RIGHT) && cores_len) {
+    // a page of the cores
+    v2_extra = 0;
+    uint16_t sel = core_sel;
+    kg_list_move(&sel, cores_len, UI2_ROWS, key == KEY_LEFT ? KG_LIST_PAGE_UP : KG_LIST_PAGE_DOWN);
+    core_sel = sel;
+  } else if (key == KEY_ENTER && v2_extra == 1) {
+    open_setup();
+    return true;
+  } else if (key == KEY_ENTER && v2_extra == 2) {
+    autoload_enabled = false;
+    osd_return_state = state_core_browser;
+    osd_state = state_about;
+    return true;
+  } else {
+    return false;
+  }
+  autoload_enabled = false;
+  draw2();
+  return true;
+}
+
 void app_core_browser_overlay() {
+  if (osd2_active()) { draw2(); return; }
   osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
   osd_clear();
   osd_header(core.build, core.id, HW_ID);
@@ -69,6 +138,7 @@ void app_core_browser_overlay() {
 }
 
 void app_core_browser_menu(uint8_t vpos) {
+  if (osd2_active()) { draw2(); return; }
   core_pages = kg_list_pages(cores_len, core_page_size);
   core_page = kg_list_page(core_sel, core_page_size);
   uint8_t core_from = (core_page-1)*core_page_size;
@@ -379,6 +449,7 @@ void app_core_browser_on_keyboard() {
   if (has_ft) ft_mouse_hide(); // the keys move the selection
   if (!has_ft) setup_focus = false;
   if (setup_focus && setup_focus_key(key)) return;
+  if (osd2_active() && !has_ft && keys2(key)) return;
   if (cores_len > 0) {
     if (key == KEY_LEFT && has_ft && core_sel == 0) {
       // already on the first core: onto the Setup button (not by a held Left)
@@ -476,6 +547,8 @@ void app_core_browser_on_time() {
   if (autoload_enabled) {
     if (ms_since(autoload_timer) > autoload_countdown * 1000) {
       start_core(false);
+    } else if (osd2_active() && !has_ft && is_osd && osd_state == state_core_browser) {
+      draw2(); // the countdown in the header
     }
   }
 }

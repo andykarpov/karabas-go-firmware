@@ -236,10 +236,10 @@ Byte streams, port index = `P0` of every command.
 
 | C | Name | → | ← | Notes |
 |---|---|---|---|---|
-| `01` | `STATUS` | port | rx free, tx available, config (4) | config: port 0 the divisor DLL, DLM (0 = 115200), port 3 status request flag |
+| `01` | `STATUS` | port | rx free, tx available, config (4) | Z after the port; both counts at most 255. config: port 0 the divisor DLL, DLM (0 = 115200) |
 | `02` | `PUT` | port, bytes | | MCU → core; at most rx free |
-| `03` | `GET` | port, count | count bytes | core → MCU |
-| `04` | `PSTAT` | port, status | | Status into the core: port 3 printer (bit 7 BUSY) |
+| `03` | `GET` | port, count | count bytes | Z after the count; core → MCU (00 past what waits) |
+| `04` | `PSTAT` | port, status | | Status into the core: port 3 printer (bit 7 BUSY), sent after every GET of port 3 |
 
 IRQ bit 5 while any port has tx bytes.
 
