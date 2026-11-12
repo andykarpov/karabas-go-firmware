@@ -24,7 +24,8 @@ uint8_t ui2_rows(void);
 #define UI2_TITLE 0x04       // a title row of a sub-page (a line under it)
 #define UI2_ARROW 0x08       // a page entry: an arrow where the value is
 
-void ui2_screen(const char *title);           // cleared; the header with title (NULL: the core name)
+void ui2_screen(const char *title);           // cleared; the header: NULL the core name (the main
+                                               // page), else "back" triangle + title (a level under it)
 void ui2_clock(void);                          // the clock of the header again (every second)
 void ui2_row(uint8_t row, const char *label, const char *value, const char *hotkey, uint8_t flags);
 void ui2_text(uint8_t row, const char *text, uint8_t flags); // a row of plain text

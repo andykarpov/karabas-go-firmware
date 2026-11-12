@@ -51,7 +51,8 @@ static void begin_draw(void) {
   u8g2_SetBitmapMode(&osd2, 1);
 }
 
-// the header: the name from the left edge, the clock in the small font at the right
+// the header: the name from the left edge (a title: after a triangle "back"), the clock in the
+// small font at the right
 void ui2_screen(const char *title) {
   begin_draw();
   u8g2_ClearBuffer(&osd2);
@@ -61,7 +62,12 @@ void ui2_screen(const char *title) {
   int cw = u8g2_GetStrWidth(&osd2, c);
   text_to(OSD2_W - cw, 2, OSD2_W, c);
   u8g2_SetFont(&osd2, F_MAIN);
-  text_to(1, 0, OSD2_W - 6 - cw, title ? title : core.name);
+  int x = 1;
+  if (title) { // a level under the main page: a triangle "back" before the title
+    for (int i = 0; i < 6; i++) u8g2_DrawVLine(&osd2, 1 + i, 5 - i, 2 * i + 1); // 6 x 11, tip left
+    x = 10;
+  }
+  text_to(x, 0, OSD2_W - 6 - cw, title ? title : core.name);
   u8g2_DrawHLine(&osd2, 0, Y_HEAD_LINE, OSD2_W);
 }
 

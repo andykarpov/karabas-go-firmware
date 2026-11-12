@@ -185,7 +185,7 @@ static bool is_options(void) { return core.type == CORE_TYPE_FILELOADER; }
 static bool has_title(void) { return cur_page || is_options(); }
 // (the bitmap OSD of link v2: its 8 rows, the title takes one)
 static uint8_t menu_rows(void) {
-  if (osd2_active()) return has_title() ? UI2_ROWS - 1 : UI2_ROWS;
+  if (osd2_active()) return UI2_ROWS; // the title of a sub-page is in the header
   return has_title() ? MENU_ROWS - 2 : MENU_ROWS;
 }
 
@@ -713,7 +713,7 @@ static void page_title_text(char *text, size_t size) {
     uint8_t parent = core.osd[e].page;
     e = parent ? core_osd_page_entry(parent) : -1;
   }
-  size_t len = snprintf(text, size, "< %s", is_options() ? (n ? "Options > " : "Options") : "");
+  size_t len = snprintf(text, size, "%s", is_options() ? (n ? "Options > " : "Options") : "");
   while (n-- > 0 && len < size) {
     len += snprintf(text + len, size - len, "%s%s", core.osd[path[n]].name, n ? " > " : "");
   }
@@ -721,20 +721,13 @@ static void page_title_text(char *text, size_t size) {
 
 static void app_core_menu2(void) {
   menu_sync();
-  uint8_t row0 = 0;
-  if (has_title()) {
-    char t[64];
-    page_title_text(t, sizeof(t));
-    ui2_text(0, t, UI2_TITLE);
-    row0 = 1;
-  }
   uint8_t rows = menu_rows();
   menu_top = menu_window();
   for (uint8_t r = 0; r < rows; r++) {
     uint16_t p = menu_top + r;
     if (p >= vis_len) break;
     uint8_t i = vis[p];
-    uint8_t row = row0 + r;
+    uint8_t row = r;
     if (i == VIS_SEP) { ui2_sep(row); continue; }
     if (is_virtual(i)) {
       ui2_row(row, i == VIS_ABOUT ? "About" : app_setup_label(i - VIS_APP), NULL, NULL,
@@ -780,7 +773,9 @@ static void app_core_overlay2(bool force) {
     curr_osd_item = first_item();
     menu_top = 0;
   }
-  ui2_screen(NULL);
+  char t[64];
+  if (has_title()) page_title_text(t, sizeof(t));
+  ui2_screen(has_title() ? t : NULL); // a sub-page: its path after the triangle "back"
   app_core_menu2();
   bool has_mounter = false;
   for (uint8_t i = 0; i < core.osd_len; i++) if (core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER) has_mounter = true;
