@@ -99,9 +99,11 @@ void ui2_row(uint8_t row, const char *label, const char *value, const char *hotk
   bool dimmed = flags & UI2_DIM;
   u8g2_SetFont(&osd2, dimmed ? F_SMALL : F_MAIN);
   int ty = dimmed ? y + 2 : y;
-  text_to(2, ty, X_VALUE - 4, label);
+  // without a value the label goes up to the hotkey; a page entry has its arrow at the right
+  int arrow_x = hk_x - 10;
+  text_to(2, ty, value ? X_VALUE - 4 : ((flags & UI2_ARROW) ? arrow_x - 4 : hk_x - 4), label);
   if (flags & UI2_ARROW) {
-    u8g2_DrawStr(&osd2, X_VALUE, ty, ">");
+    u8g2_DrawStr(&osd2, arrow_x, ty, ">");
   } else if (value) {
     text_to(X_VALUE, ty, hk_x - 4, value);
   }
