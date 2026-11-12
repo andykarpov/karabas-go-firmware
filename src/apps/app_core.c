@@ -642,7 +642,9 @@ void app_core_filebrowser(uint8_t vpos) {
     kg_exts_text(cur_slot()->ext, b + k, sizeof(b) - k);
     char title[80]; // the item and the dir (no hint lines)
     snprintf(title, sizeof(title), "%s: %s", core.osd[curr_osd_item].name, cur_slot()->dir);
-    ui2_screen(title);
+    char ex[32]; // the browser shows only these: said in the header
+    kg_exts_text(cur_slot()->ext, ex, 20);
+    ui2_screen_note(title, ex, true);
     fb_draw_v2(cur_slot()->dir, b);
     return;
   }

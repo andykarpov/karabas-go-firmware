@@ -26,6 +26,9 @@ uint8_t ui2_rows(void);
 
 void ui2_screen(const char *title);           // cleared; the header: NULL the core name (the main
                                                // page), else "back" triangle + title (a level under it)
+// the header with a note (the extensions of a browser) in place of the clock (NULL: the clock),
+// back: the triangle "back"
+void ui2_screen_note(const char *title, const char *note, bool back);
 void ui2_clock(void);                          // the clock of the header again (every second)
 void ui2_row(uint8_t row, const char *label, const char *value, const char *hotkey, uint8_t flags);
 void ui2_text(uint8_t row, const char *text, uint8_t flags); // a row of plain text

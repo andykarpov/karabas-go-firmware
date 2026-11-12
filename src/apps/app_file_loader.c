@@ -200,11 +200,13 @@ void app_file_loader_menu(uint8_t vpos) {
 void app_file_loader_overlay(bool initSD) {
   if (osd2_active()) {
     char title[80]; // the core and the dir (no hint lines)
+    char ex[32]; // the browser shows only these: said in the header
+    kg_exts_text(core.file_extensions, ex, 20);
     snprintf(title, sizeof(title), "%s: %s", core.name, cur_dir);
-    ui2_screen(title);
+    ui2_screen_note(title, ex, false);
     if (initSD || !list_loaded) app_file_loader_read_list();
     snprintf(title, sizeof(title), "%s: %s", core.name, cur_dir);
-    ui2_screen(title); // the box of the scan gone
+    ui2_screen_note(title, ex, false); // the box of the scan gone
     app_file_loader_menu(APP_COREBROWSER_MENU_OFFSET);
     return;
   }
