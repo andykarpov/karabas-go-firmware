@@ -126,6 +126,7 @@ static void karabas_setup()
   oled_begin();
 
   rtc_begin(link_rtc_set, on_time);
+  rtc_set_flush(link_rtc_flush);
   osd_begin(link_osd_reg);
   ft_begin(link_sys_spi_control, PIN_MCU_FT_CS, board_ft_reset_pin());
 

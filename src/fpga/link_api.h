@@ -141,6 +141,7 @@ void link_printer_on_status_request(void (*cb)(void));
 // ---- RTC ----
 
 void link_rtc_set(uint8_t reg, uint8_t value);
+void link_rtc_flush(void); // v2: the registers set since the last flush, in packets of consecutive ones
 void link_rtc_on_write(void (*cb)(uint8_t reg, uint8_t value)); // the CPU of the core wrote one
 
 // ---- AUX: the LED matrix and the audio meters of the core ----
