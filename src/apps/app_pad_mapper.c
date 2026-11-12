@@ -31,6 +31,7 @@ static uint32_t list_timer = 0;
 static usb_pad_t pads[2];
 static uint8_t port;       // the port chosen in the list
 static uint8_t list_btn;   // 0: Assign, 1: Forget
+static bool on_btns;       // the focus: the buttons (else the ports)
 static const char *list_msg;
 static bool list_msg_ok;
 
@@ -91,8 +92,8 @@ static void draw_list() {
     }
     osd_print(buf);
   }
-  ui_button(0, 14, BTN_WIDTH, "Assign", list_btn == 0);
-  if (can_forget()) ui_button(BTN_WIDTH + 1, 14, BTN_WIDTH, "Forget", list_btn == 1);
+  ui_button(0, 14, BTN_WIDTH, "Assign", on_btns && list_btn == 0);
+  if (can_forget()) ui_button(BTN_WIDTH + 1, 14, BTN_WIDTH, "Forget", on_btns && list_btn == 1);
   if (list_msg) {
     osd_set_color(list_msg_ok ? OSD_COLOR_GREEN_I : OSD_COLOR_RED_I, OSD_COLOR_BLACK);
     osd_set_pos(0, 16); osd_print(list_msg);
@@ -103,7 +104,7 @@ static void draw_list() {
   osd_set_pos(0, 20); osd_print("port");
   osd_set_pos(0, 21); osd_print("Forget: the driver ini -> .bak,");
   osd_set_pos(0, 22); osd_print("the pad uses its default map");
-  ui_hint("Up/Down: port, Left/Right: btn", "Enter: OK, Esc: return");
+  ui_hint("Up/Down: port, then buttons", "Enter: OK, Esc: return");
 }
 
 // the bitmap OSD (link v2): the ports or the learning on its rows
@@ -117,14 +118,14 @@ static void draw2(void) {
       char src[18];
       if (p->source == USB_PAD_NONE && p->vid == 0) snprintf(buf, sizeof(buf), "%u     -", i + 1);
       else { pad_source(p, src, sizeof(src)); snprintf(buf, sizeof(buf), "%u     %04x:%04x  %s", i + 1, p->vid, p->pid, src); }
-      ui2_text(1 + i, buf, i == port ? UI2_SEL : 0);
+      ui2_text(1 + i, buf, i == port ? (on_btns ? UI2_MARK : UI2_SEL) : 0); // the port of the buttons: framed
     }
     static const char *const btn[] = { "Assign", "Forget" };
-    ui2_buttons(4, btn, can_forget() ? 2 : 1, list_btn);
+    ui2_buttons(4, btn, can_forget() ? 2 : 1, on_btns ? list_btn : -1);
     if (list_msg) ui2_text(5, list_msg, list_msg_ok ? 0 : UI2_SEL);
     ui2_text(6, "Assign: learns the pad you press a button on", UI2_DIM);
     ui2_text(7, "Forget: the driver ini -> .bak (default map)", UI2_DIM);
-    ui2_hint("Up / Down: port, Left / Right: button", "Enter: OK, Esc: back");
+    ui2_hint("Up / Down: port, then the buttons", "Enter: OK, Esc: back");
     ui2_done();
     return;
   }
@@ -201,6 +202,7 @@ static void show_list() {
   pl_stop();
   usb_pads_get(pads);
   list_btn = 0;
+  on_btns = false;
   view = V_LIST;
   list_timer = ms_now();
   ui_clear_body();
@@ -229,12 +231,23 @@ static void forget() {
   list_btn = 0;
 }
 
+// Up / Down: the ports, then the buttons under them; Left / Right / Tab or Enter on a port: to the
+// buttons; Enter on a button: it
 static void list_on_keyboard(uint8_t key) {
-  if (key == KEY_UP || key == KEY_DOWN) { port ^= 1; list_msg = NULL; }
-  else if (key == KEY_LEFT || key == KEY_RIGHT || key == KEY_TAB) list_btn = can_forget() ? list_btn ^ 1 : 0;
-  else if (key == KEY_ENTER && list_btn == 0) { list_msg = NULL; start(); draw(); return; }
-  else if (key == KEY_ENTER) forget();
-  else return;
+  if (!on_btns) {
+    if (key == KEY_UP) port = 0;
+    else if (key == KEY_DOWN && port == 1) on_btns = true;
+    else if (key == KEY_DOWN) port = 1;
+    else if (key == KEY_LEFT || key == KEY_RIGHT || key == KEY_TAB || key == KEY_ENTER) on_btns = true;
+    else return;
+    list_msg = NULL;
+  } else {
+    if (key == KEY_UP || key == KEY_TAB) on_btns = false;
+    else if (key == KEY_LEFT || key == KEY_RIGHT) list_btn = can_forget() ? list_btn ^ 1 : 0;
+    else if (key == KEY_ENTER && list_btn == 0) { list_msg = NULL; start(); draw(); return; }
+    else if (key == KEY_ENTER) forget();
+    else return;
+  }
   if (!can_forget()) list_btn = 0;
   draw();
 }

@@ -23,6 +23,10 @@ static uint8_t menu_top = 0;
 static bool is_filebrowser = false;
 static int filebrowser_slot = -1; // the slot of the file list read last, -1: read it again
 static bool prev_is_filebrowser = false;
+// v2: the list of the options of a switch (Enter on it), its cursor
+static bool is_optlist = false;
+static uint8_t opt_cur = 0;
+static bool has_optlist(uint8_t i);
 // the dir of the slot when the file browser was opened: browsing changes the dir of the slot,
 // esc puts it back, so it stays the dir of the mounted image
 static char filebrowser_dir[256];
@@ -443,7 +447,19 @@ static bool filebrowser_enter() {
 void app_core_on_keyboard() {
   uint8_t key = ui_nav_key();
 
-  if (is_filebrowser) {
+  if (is_optlist) {
+    // the list of the options: Up / Down, Enter takes one, Esc / Left back to the menu
+    uint8_t n = core.osd[curr_osd_item].options_len;
+    if (key == KEY_UP && opt_cur > 0) opt_cur--;
+    else if (key == KEY_DOWN && opt_cur + 1 < n) opt_cur++;
+    else if (key == KEY_ENTER || key == KEY_RIGHT) {
+      if (opt_cur != core.osd[curr_osd_item].val) core_osd_set(curr_osd_item, opt_cur);
+      is_optlist = false;
+    }
+    else if (key == KEY_ESC || key == KEY_LEFT) is_optlist = false;
+    else return;
+    need_redraw = true;
+  } else if (is_filebrowser) {
     // up / down, left / right a page
     if (fb_key(key)) need_redraw = true;
 
@@ -514,6 +530,9 @@ void app_core_on_keyboard() {
     } else if (key == KEY_RIGHT || key == KEY_ENTER || key == KEY_LEFT) {
       if (core_osd_is_file(curr_osd_item)) {
         filebrowser_open();
+      } else if (key == KEY_ENTER && has_optlist(curr_osd_item)) {
+        is_optlist = true;
+        opt_cur = core.osd[curr_osd_item].val;
       } else {
         core_osd_change(curr_osd_item, key == KEY_LEFT ? -1 : 1);
       }
@@ -721,6 +740,46 @@ static void page_title_text(char *text, size_t size) {
   }
 }
 
+// a switch of two options named as off / on (any order): 0 or 1 its state, else -1
+static int bool_state(uint8_t i) {
+  const core_osd_t *item = &core.osd[i];
+  if (item->type != CORE_OSD_TYPE_SWITCH || item->options_len != 2) return -1;
+  static const char *const offs[] = { "off", "no", "disabled", "disable" };
+  static const char *const ons[] = { "on", "yes", "enabled", "enable" };
+  int on_at = -1;
+  for (uint8_t k = 0; k < 4; k++) {
+    char a[16], b[16];
+    snprintf(a, sizeof(a), "%s", item->options[0].name); kg_trim(a);
+    snprintf(b, sizeof(b), "%s", item->options[1].name); kg_trim(b);
+    if (!strcasecmp(a, offs[k]) && !strcasecmp(b, ons[k])) on_at = 1;
+    if (!strcasecmp(a, ons[k]) && !strcasecmp(b, offs[k])) on_at = 0;
+  }
+  return on_at < 0 ? -1 : item->val == on_at;
+}
+
+// v2: Enter on a switch of more than two options opens the list of them
+static bool has_optlist(uint8_t i) {
+  const core_osd_t *item = &core.osd[i];
+  return osd2_active() && item->type == CORE_OSD_TYPE_SWITCH && item->options_len > 1 && bool_state(i) < 0;
+}
+
+// the list of the options: radio buttons, the cursor on opt_cur
+static void app_core_optlist2(void) {
+  const core_osd_t *item = &core.osd[curr_osd_item];
+  ui2_screen(item->name);
+  uint8_t rows = UI2_ROWS, n = item->options_len;
+  uint8_t top = opt_cur >= rows ? opt_cur - rows + 1 : 0;
+  for (uint8_t r = 0; r < rows && top + r < n; r++) {
+    uint8_t k = top + r;
+    char name[40];
+    snprintf(name, sizeof(name), "%s", item->options[k].name);
+    kg_trim(name);
+    ui2_row(r, name, NULL, NULL, UI2_RADIO | (k == item->val ? UI2_ON : 0) | (k == opt_cur ? UI2_SEL : 0));
+  }
+  ui2_scrollbar(top, n);
+  ui2_done();
+}
+
 static void app_core_menu2(void) {
   menu_sync();
   uint8_t rows = menu_rows();
@@ -753,6 +812,16 @@ static void app_core_menu2(void) {
       ui2_row(row, item->name, NULL, item->hotkey, flags | UI2_ARROW);
       continue;
     }
+    if (item->type == CORE_OSD_TYPE_RADIO) {
+      bool on = core.osd[item->radio_item].val == i - item->radio_item - 1;
+      ui2_row(row, item->name, NULL, item->hotkey, flags | UI2_RADIO | (on ? UI2_ON : 0));
+      continue;
+    }
+    int b = bool_state(i);
+    if (b >= 0) {
+      ui2_row(row, item->name, NULL, item->hotkey, flags | UI2_CHECK | (b ? UI2_ON : 0));
+      continue;
+    }
     char value[40];
     item_value(i, value, sizeof(value));
     kg_trim(value);
@@ -768,6 +837,8 @@ static void app_core_overlay2(bool force) {
     menu_sync();
   }
   keep_cursor = false;
+  if (force) is_optlist = false;
+  if (is_optlist) { app_core_optlist2(); return; }
   if (force) {
     cur_page = 0;
     memset(page_cursor, 0, sizeof(page_cursor));

@@ -93,8 +93,16 @@ void ui2_clock(void) {
 
 static int row_y(uint8_t row) { return Y_ROWS + row * ROW_H; }
 
-static void row_bar(uint8_t row, uint8_t flags) {
+// a row is cleared before it is drawn: a screen may draw one row again (a cursor moved)
+static void row_clear(uint8_t row) {
+  u8g2_SetDrawColor(&osd2, 0);
+  u8g2_DrawBox(&osd2, 0, row_y(row) - 1, X_SCROLL - 1, ROW_H);
   u8g2_SetDrawColor(&osd2, 1);
+}
+
+static void row_bar(uint8_t row, uint8_t flags) {
+  row_clear(row);
+  if (flags & UI2_MARK) u8g2_DrawFrame(&osd2, 0, row_y(row) - 1, X_SCROLL - 1, ROW_H);
   if (flags & UI2_SEL) {
     u8g2_DrawBox(&osd2, 0, row_y(row) - 1, X_SCROLL - 1, ROW_H);
     u8g2_SetDrawColor(&osd2, 0);
@@ -118,8 +126,22 @@ void ui2_row(uint8_t row, const char *label, const char *value, const char *hotk
   int ty = dimmed ? y + (ROW_H - 8) / 2 - 1 : y;
   // without a value the label goes up to the hotkey; a page entry has its arrow at the right
   int arrow_x = hk_x - 10;
-  text_to(2, ty, value ? x_value() - 4 : ((flags & UI2_ARROW) ? arrow_x - 4 : hk_x - 4), label);
-  if (flags & UI2_ARROW) {
+  int lx = 2;
+  if (flags & UI2_RADIO) { // a circle of 9 pixels, a dot in it when chosen
+    u8g2_DrawCircle(&osd2, 6, y + 4, 4, U8G2_DRAW_ALL);
+    if (flags & UI2_ON) u8g2_DrawDisc(&osd2, 6, y + 4, 2, U8G2_DRAW_ALL);
+    lx = 16;
+  }
+  bool check = flags & UI2_CHECK;
+  text_to(lx, ty, (value || check) ? x_value() - 4 : ((flags & UI2_ARROW) ? arrow_x - 4 : hk_x - 4), label);
+  if (check) { // a box of 9 pixels, a cross in it when checked
+    int bx = x_value(), by = y;
+    u8g2_DrawFrame(&osd2, bx, by, 9, 9);
+    if (flags & UI2_ON) {
+      u8g2_DrawLine(&osd2, bx + 2, by + 2, bx + 6, by + 6);
+      u8g2_DrawLine(&osd2, bx + 6, by + 2, bx + 2, by + 6);
+    }
+  } else if (flags & UI2_ARROW) {
     text_to(arrow_x, ty, hk_x, ">");
   } else if (value) {
     text_to(x_value(), ty, hk_x - 4, value);
@@ -140,6 +162,7 @@ void ui2_text(uint8_t row, const char *text, uint8_t flags) {
 
 void ui2_sep(uint8_t row) {
   if (row >= ui2_rows()) return;
+  row_clear(row);
   int y = row_y(row) + ROW_H / 2 - 1;
   for (int x = 2; x < X_SCROLL - 2; x += 2) u8g2_DrawPixel(&osd2, x, y);
 }
@@ -163,6 +186,7 @@ void ui2_hint(const char *line1, const char *line2) {
 
 void ui2_buttons(uint8_t row, const char *const *labels, uint8_t n, int focus) {
   if (row >= ui2_rows()) return;
+  row_clear(row);
   int y = row_y(row) - 1;
   u8g2_SetFont(&osd2, F_MAIN);
   for (uint8_t i = 0; i < n; i++) {
@@ -181,6 +205,7 @@ void ui2_buttons(uint8_t row, const char *const *labels, uint8_t n, int focus) {
 
 void ui2_field(uint8_t row, const char *label, const char *text, int cursor, bool focused, const char *note) {
   if (row >= ui2_rows()) return;
+  row_clear(row);
   int y = row_y(row);
   u8g2_SetFont(&osd2, F_MAIN);
   int cw = u8g2_GetMaxCharWidth(&osd2);

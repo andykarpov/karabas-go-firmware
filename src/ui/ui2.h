@@ -23,6 +23,10 @@ uint8_t ui2_rows(void);
 #define UI2_DIM 0x02         // disabled: dotted
 #define UI2_TITLE 0x04       // a title row of a sub-page (a line under it)
 #define UI2_ARROW 0x08       // a page entry: an arrow where the value is
+#define UI2_MARK 0x10        // chosen, the focus elsewhere: a frame
+#define UI2_RADIO 0x20       // a radio button before the label (UI2_ON: chosen)
+#define UI2_CHECK 0x40       // a check box where the value is (UI2_ON: checked)
+#define UI2_ON 0x80
 
 void ui2_screen(const char *title);           // cleared; the header: NULL the core name (the main
                                                // page), else "back" triangle + title (a level under it)
