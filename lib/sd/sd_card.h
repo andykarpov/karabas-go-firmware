@@ -57,8 +57,6 @@ bool sd_card_read(sd_card_t *card, uint32_t sector, uint8_t *dst, uint32_t count
 bool sd_card_write(sd_card_t *card, uint32_t sector, const uint8_t *src, uint32_t count);
 // ends an open multiple sector transfer and waits for the card
 bool sd_card_sync(sd_card_t *card);
-// a multiple sector transfer is open: the card is selected (CS low) until sd_card_sync()
-static inline bool sd_card_is_open(const sd_card_t *card) { return card->state != 0; }
 // the capacity in sectors, 0 on an error
 uint32_t sd_card_sectors(sd_card_t *card);
 bool sd_card_cid(sd_card_t *card, uint8_t cid[16]);
