@@ -14,6 +14,8 @@
 // frames received by other tasks are queued and handled by link_dispatch_pending().
 
 static uint8_t link_freq = 0; // core spi frequency in MHz, 0 or 255 = default
+static uint8_t link_ver = 1;  // the MCU link of the loaded core: 1 frames, 2 packets (docs/link_v2.md)
+static volatile uint32_t link_v1_dropped = 0; // v1 frames not sent to a v2 core
 static bool link_rx_enabled = true;
 static link_handler_t handlers[256] = { NULL };
 
@@ -96,6 +98,10 @@ static inline bool in_dispatch_context() {
 // iteration: if nothing at all was sent since the previous call, send a NOP so the fpga gets
 // a chance to deliver its commands (uart, rtc, matrix, flashboot, ...).
 void link_poll() {
+  if (link_ver == 2) {
+    link_v2_service(); // only when INT is up: no traffic otherwise
+    return;
+  }
   static uint32_t seen = 0;
   if (link_tx_frames == seen) {
     spi_send(CMD_NOP, 0, 0);
@@ -177,6 +183,12 @@ bool link_queue_pop(queue_spi_t *packet) {
 }
 
 void link_report_drops() {
+  static uint32_t prev_v1_dropped = 0, v1_drop_ms = 0;
+  if (link_v1_dropped != prev_v1_dropped && ms_since(v1_drop_ms) >= 5000) {
+    prev_v1_dropped = link_v1_dropped;
+    v1_drop_ms = ms_now();
+    d_printf("Link v2: %lu v1 frames not sent", (unsigned long) link_v1_dropped); d_println();
+  }
   static uint32_t prev_spi_queue_dropped = 0;
   if (spi_queue_dropped != prev_spi_queue_dropped) {
     prev_spi_queue_dropped = spi_queue_dropped;
@@ -208,6 +220,12 @@ static void spi_xfer(uint8_t cmd, uint8_t addr, uint8_t data, uint8_t rx[3]) {
 }
 
 void spi_send(uint8_t cmd, uint8_t addr, uint8_t data) {
+  if (link_ver == 2) {
+    // a core of link v2 takes no frames: the callers of link_api that have no v2 command yet
+    // (Ф3..Ф5) end up here
+    link_v1_dropped++;
+    return;
+  }
   {
     // The transfer AND publication of its reply are one ordered operation.
     // Unlocking between them lets another task receive and dispatch frame B
@@ -351,5 +369,41 @@ void link_write_data(uint8_t data_cmd, uint8_t bank_cmd, uint32_t addr, const ui
     if (j == done || a % 256 == 0) spi_send24(bank_cmd, a >> 8);
     spi_send(data_cmd, (uint8_t) a, buf[j]);
   }
+  spi_bus_unlock();
+}
+
+//--------------------------------------------------------------------------------------------
+// Link v2 (docs/link_v2.md): one packet per chip select, the answers after a turnaround byte,
+// INT (PIN_MCU_SPI_IO1, active high, pulled down) when the core has something to say.
+
+void link_select(uint8_t version) {
+  link_ver = version == 2 ? 2 : 1;
+  d_printf("MCU link v%u", link_ver); d_println();
+}
+
+uint8_t link_version(void) {
+  return link_ver;
+}
+
+bool link2_int(void) {
+  return gpio_get(PIN_MCU_SPI_IO1);
+}
+
+void link2_xfer(const uint8_t *tx, size_t txlen, uint8_t *rx, size_t rxlen) {
+  static const uint8_t zeros[64] = { 0 };
+  spi_bus_lock();
+  spi0_bus_clock(link_hz());
+  gpio_put(PIN_MCU_SPI_CS, 0);
+  spi0_bus_xfer(tx, NULL, txlen);
+  while (rxlen > 0) {
+    size_t n = rxlen < sizeof(zeros) ? rxlen : sizeof(zeros);
+    spi0_bus_xfer(zeros, rx, n);
+    rx += n;
+    rxlen -= n;
+  }
+  gpio_put(PIN_MCU_SPI_CS, 1);
+  link_tx_frames++;
+  // the core ends a packet when its chip select has been high for 8 of its clocks
+  busy_wait_us_32(1);
   spi_bus_unlock();
 }

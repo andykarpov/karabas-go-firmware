@@ -25,6 +25,7 @@ extern "C" {
 
 typedef struct {
   uint8_t format;           // CORE_FORMAT_*
+  uint8_t link;             // the MCU link of the core: 1, 2 (kgo2 BITSTREAM_LINK2)
   uint32_t bitstream_ofs, bitstream_len;
   uint32_t roms_ofs, roms_len;
   kg2_layout_t kg2;         // kgo2: the sections of this board

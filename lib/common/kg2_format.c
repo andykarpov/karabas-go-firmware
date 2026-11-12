@@ -40,7 +40,7 @@ bool kg2_layout_parse(const kg2_header_t *h, const uint8_t *table, size_t len, u
     s->present = true;
   }
   return out->sec[KG2_SEC_STRINGS].present && out->sec[KG2_SEC_CORE].present &&
-         out->sec[KG2_SEC_BITSTREAM].present;
+         (out->sec[KG2_SEC_BITSTREAM].present != out->sec[KG2_SEC_BITSTREAM_LINK2].present);
 }
 
 const char *kg2_str(const uint8_t *strings, size_t len, uint16_t ref) {
@@ -60,6 +60,7 @@ bool kg2_core_parse(const uint8_t *sec, size_t len, kg2_core_t *out) {
   out->eeprom_bank = sec[12];
   out->spi_freq = sec[13];
   out->drives = kg_le16(sec + 14);
+  out->link = (kg_le16(sec) > 16 && len > 16 && sec[16] == 2) ? 2 : 1;
   return true;
 }
 

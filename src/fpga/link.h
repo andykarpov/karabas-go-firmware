@@ -51,6 +51,14 @@ void link_event_push(uint8_t kind, uint8_t idx, uint8_t val);
 bool link_queue_pop(queue_spi_t *packet);
 void link_report_drops();
 
+// link v2 (docs/link_v2.md): the link of the core being loaded (fpga_send, from its core file)
+void link_select(uint8_t version);
+uint8_t link_version(void);
+bool link2_int(void);  // INT of the core is up
+// one packet: txlen bytes of tx (the turnaround byte included), then rxlen bytes read into rx
+void link2_xfer(const uint8_t *tx, size_t txlen, uint8_t *rx, size_t rxlen);
+void link_v2_service(void); // link_api.c: the events of the core while INT is up
+
 void spi_send(uint8_t cmd, uint8_t addr, uint8_t data);
 void spi_send16(uint8_t cmd, uint16_t data);
 void spi_send24(uint8_t cmd, uint32_t data);

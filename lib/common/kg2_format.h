@@ -17,7 +17,8 @@ extern "C" {
 #define KG2_HEADER_SIZE 32
 #define KG2_ENTRY_SIZE 16      // a section table entry
 #define KG2_MAX_SECTIONS 64    // more is a broken file
-#define KG2_CORE_SIZE 16       // the fields of the CORE record this parser knows
+#define KG2_CORE_SIZE 16       // the CORE record of the first format: the least a record has
+#define KG2_CORE_SIZE_LINK 18  // with the link field (offset 16)
 #define KG2_LOADER_SIZE 12
 #define KG2_OSD_HEAD_SIZE 8
 #define KG2_ITEM_SIZE 48       // the fields of an OSD item record this parser knows
@@ -36,6 +37,7 @@ enum {
   KG2_SEC_EEPROM_INIT,
   KG2_SEC_ROMS,
   KG2_SEC_BITSTREAM,
+  KG2_SEC_BITSTREAM_LINK2, // the bitstream of a core of MCU link v2 (docs/link_v2.md)
   KG2_SEC_COUNT // the types this parser knows are 1..KG2_SEC_COUNT-1
 };
 
@@ -72,7 +74,8 @@ typedef struct {
 // the first KG2_HEADER_SIZE bytes; false if not kgo2 or broken
 bool kg2_header_parse(const uint8_t *buf, size_t len, kg2_header_t *h);
 // the sections of the board (its KG2_BOARD_BIT) from the table (h->count entries); false if an
-// entry is out of the file, or STRINGS / CORE / BITSTREAM is missing for the board
+// entry is out of the file, or STRINGS / CORE / a bitstream (BITSTREAM or BITSTREAM_LINK2, not
+// both) is missing for the board
 bool kg2_layout_parse(const kg2_header_t *h, const uint8_t *table, size_t len, uint32_t file_size,
                       uint16_t board_bit, kg2_layout_t *out);
 
@@ -88,8 +91,10 @@ typedef struct {
   uint8_t eeprom_bank;
   uint8_t spi_freq;
   uint16_t drives;          // string: the names of the physical floppy drives ("A,B"), "" DF0 / DF1
+  uint8_t link;             // the MCU link: 1, 2 (a record of 16 bytes: 1)
 } kg2_core_t;
 
+// sec: the first len bytes of the section (KG2_CORE_SIZE_LINK or the whole of a shorter one)
 bool kg2_core_parse(const uint8_t *sec, size_t len, kg2_core_t *out);
 
 typedef struct {

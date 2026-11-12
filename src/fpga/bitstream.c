@@ -133,6 +133,7 @@ uint32_t fpga_send(const char* filename) {
   if (!core_file_open(&file1, filename, &cf)) {
     halt("Not a core file of this board");
   }
+  link_select(cf.link);
   uint32_t total = cf.bitstream_len;
   d_printf("Bitstream size: %lu", (unsigned long) total); d_println();
   file_seek(cf.bitstream_ofs);

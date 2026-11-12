@@ -16,7 +16,7 @@
   "buttons": {"btn1": "core", "btn2": {"press": "osd", "hold": "menu", "hold_ms": 2000}},
   "boards": {
     "go": {"bitstream": "go.bin", "drives": ["A", "B"]},
-    "minig": {"bitstream": "minig.bin", "spi_freq": 16}
+    "minig": {"bitstream": "minig.bin", "spi_freq": 16, "link": 2}
   },
   "osd": [
     {"type": "F", "key": "disk", "name": "Disk", "slot": 1, "exts": "dsk", "dir": "/test", "physical": 1, "boards": ["go"], "hotkey": "Menu+F3"},
