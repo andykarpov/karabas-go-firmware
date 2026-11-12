@@ -10,6 +10,7 @@
 #define V2 (link_version() == 2)
 #define T_SYS 0x00
 #define T_HID 0x01
+#define T_IMG 0x03
 #define T_LOAD 0x04
 
 // caps of STATUS (docs/link_v2.md 5.1)
@@ -424,7 +425,21 @@ void link_img_begin(void) {
   link_on(CMD_IMG_BUF_DATA, on_img_buf_data);
 }
 
+// IMG MOUNT of v2: slot, size (8, LE), flags (bit 0 write protected, bit 1 / 2 DS0 / DS1)
+static void v2_img_mount(uint8_t slot, uint64_t size, uint8_t flags) {
+  uint8_t p[12] = { T_IMG, 0x01, slot };
+  for (int i = 0; i < 8; i++) p[3 + i] = (uint8_t) (size >> (8 * i));
+  p[11] = flags;
+  v2_send(p, sizeof(p));
+}
+
 void link_img_mount(uint8_t slot, uint64_t size, bool wp) {
+  if (V2) {
+    // size 0 first: the core sees an eject before a new image
+    v2_img_mount(slot, 0, 0);
+    if (size > 0) v2_img_mount(slot, size, wp ? 1 : 0);
+    return;
+  }
   // size 0 first: the core sees an eject before a new image
   spi_bus_lock();
   spi_send(CMD_IMG_SLOT, 0, slot);
@@ -437,6 +452,7 @@ void link_img_mount(uint8_t slot, uint64_t size, bool wp) {
 }
 
 void link_img_mount_phys(uint8_t slot, uint8_t drive) {
+  if (V2) { v2_img_mount(slot, 0, drive ? 4 : 2); return; }
   spi_bus_lock();
   spi_send(CMD_IMG_SLOT, 0, slot);
   spi_send64(CMD_IMG_SIZE, 0);
@@ -451,10 +467,12 @@ void link_img_reset(void) {
 }
 
 bool link_img_waiting(void) {
+  if (V2) return req_pending || link2_int(); // an event of the core may be a request
   return req_pending || req_started;
 }
 
 bool link_img_take(link_img_req_t *req) {
+  if (V2 && !req_pending) link_v2_service(); // the event: a request is taken by its read
   // the fpga answers only in the reply bytes of a transfer: a started request is pulled at once,
   // not one frame per main loop iteration
   for (int i = 0; i < IMG_REQ_POLLS && req_started && !req_pending; i++) {
@@ -472,13 +490,47 @@ bool link_img_take(link_img_req_t *req) {
 }
 
 void link_img_expire(uint32_t timeout_us) {
+  if (V2) return; // a request is whole in its event; the core raises it again by itself
   // a request that started but never got its IMG_SEC: the core sends it again
   if (req_started && us_now() - req_start_us > timeout_us) {
     req_started = false;
   }
 }
 
+#define V2_IMG_TRIES 3
+
+// IMG RDATA: slot, 512 bytes, sum (2), Z, status (0 taken, 1 refused: sent again)
+static void v2_img_send_sector(const uint8_t *buf) {
+  static uint8_t p[2 + 1 + LINK_SECTOR_SIZE + 2 + 1];
+  uint16_t sum = sector_sum(buf);
+  p[0] = T_IMG; p[1] = 0x03; p[2] = req_slot;
+  memcpy(p + 3, buf, LINK_SECTOR_SIZE);
+  p[3 + LINK_SECTOR_SIZE] = sum & 0xFF;
+  p[4 + LINK_SECTOR_SIZE] = sum >> 8;
+  p[5 + LINK_SECTOR_SIZE] = 0;
+  for (int i = 0; i < V2_IMG_TRIES; i++) {
+    uint8_t st = 1;
+    link2_xfer(p, sizeof(p), &st, 1);
+    if (st == 0) return;
+    d_printf("Link v2: sector of slot %d refused (%d)", req_slot, st); d_println();
+  }
+}
+
+// IMG WDATA: slot, Z, then 512 bytes and their sum from the core
+static bool v2_img_receive_sector(uint8_t *buf) {
+  static uint8_t rx[LINK_SECTOR_SIZE + 2];
+  const uint8_t tx[4] = { T_IMG, 0x04, req_slot, 0 };
+  for (int i = 0; i < V2_IMG_TRIES; i++) {
+    link2_xfer(tx, sizeof(tx), rx, sizeof(rx));
+    uint16_t sum = rx[LINK_SECTOR_SIZE] | (rx[LINK_SECTOR_SIZE + 1] << 8);
+    memcpy(buf, rx, LINK_SECTOR_SIZE);
+    if (sum == sector_sum(buf)) return true;
+  }
+  return false;
+}
+
 void link_img_send_sector(const uint8_t *buf) {
+  if (V2) { v2_img_send_sector(buf); return; }
   // a burst if the core supports it (~0.2 ms a sector), classic bank + data frames for the rest
   // (~5 ms a sector, a real floppy ~18 ms). The core checks the sum either way.
   spi_bus_lock();
@@ -497,6 +549,7 @@ void link_img_send_sector(const uint8_t *buf) {
 }
 
 bool link_img_receive_sector(uint8_t *buf) {
+  if (V2) return v2_img_receive_sector(buf);
   // the core queues its write data and the sum behind the request: pull the rest with NOPs
   // (wr_reset() ran on the request, some of it may have come already)
   for (int i = 0; i < IMG_WRITE_POLLS && (wr_count < LINK_SECTOR_SIZE || wr_sum_seen != 3); i++) {
@@ -508,10 +561,12 @@ bool link_img_receive_sector(uint8_t *buf) {
 }
 
 void link_img_done(uint8_t slot, uint8_t res) {
+  if (V2) { const uint8_t p[4] = { T_IMG, 0x05, slot, res }; v2_send(p, 4); return; }
   spi_send(CMD_IMG_SEC, slot, res);
 }
 
 void link_img_flush(uint8_t slot) {
+  if (V2) { const uint8_t p[3] = { T_IMG, 0x06, slot }; v2_send(p, 3); return; }
   spi_send(CMD_IMG_FLUSH, slot, 0);
 }
 
@@ -682,6 +737,39 @@ void link_osd2_popup(uint8_t x, uint8_t y, uint8_t w, uint8_t h, uint8_t place, 
 
 // ---- link v2: the events of the core ----
 
+// IMG EVENT: kind, slot, arguments; one per read, the IRQ bit stays up while more wait
+static void v2_img_event(void) {
+  uint8_t ev[7];
+  v2_read(T_IMG, 0x02, ev, sizeof(ev));
+  uint8_t kind = ev[0], slot = ev[1];
+  uint32_t arg = ev[2] | (ev[3] << 8) | ((uint32_t) ev[4] << 16) | ((uint32_t) ev[5] << 24);
+  switch (kind) {
+    case 1: case 2: // a read / write request: whole in the event
+      req_slot = slot;
+      req_op = kind == 1 ? IMG_REQ_READ : IMG_REQ_WRITE;
+      req_lba = arg;
+      req_complete = true;
+      req_parts = 0x0F;
+      req_start_us = us_now();
+      req_pending = true;
+      break;
+    case 3: // a flush finished: 1 no dirty sectors left, 2 a write failed
+      if (flush_cb) flush_cb(slot, ev[2]);
+      break;
+    case 4: // backup RAM: size in sectors, the kind of file
+      if (bk_cb) bk_cb(arg, slot, ev[6]);
+      break;
+    case 5: { // DSKCHG of a drive (1 DS0, 2 DS1): the core holds it selected until the answer
+      uint8_t drive = ev[2];
+      int v = fdd_chng_cb ? fdd_chng_cb(drive) : -1;
+      const uint8_t p[4] = { T_IMG, 0x07, drive, v < 0 ? 2 : (uint8_t) v };
+      v2_send(p, 4);
+      break;
+    }
+    default: break;
+  }
+}
+
 void link_v2_service(void) {
   if (!V2 || !link2_int()) return;
   uint8_t pending;
@@ -699,6 +787,7 @@ void link_v2_service(void) {
       if (reload_cb) reload_cb(core_id);
     }
   }
+  if (pending & 0x08) v2_img_event();
   if (pending & 0x02) {
     // HID EVENT: the count, then (command, argument) pairs; at most 8 (the fifo of the core)
     uint8_t ev[1 + 16];
