@@ -143,17 +143,64 @@ void ui2_hint(const char *line1, const char *line2) {
   if (line2) text_to(1, Y_HINT + 8, OSD2_W - 1, line2);
 }
 
+#define BTN_W 60
+
+void ui2_buttons(uint8_t row, const char *const *labels, uint8_t n, int focus) {
+  if (row >= UI2_ROWS) return;
+  int y = row_y(row);
+  u8g2_SetFont(&osd2, F_MAIN);
+  for (uint8_t i = 0; i < n; i++) {
+    int x = 2 + i * (BTN_W + 4);
+    int w = u8g2_GetUTF8Width(&osd2, labels[i]);
+    if ((int) i == focus) {
+      u8g2_DrawBox(&osd2, x, y, BTN_W, ROW_H);
+      u8g2_SetDrawColor(&osd2, 0);
+    } else {
+      u8g2_DrawFrame(&osd2, x, y, BTN_W, ROW_H);
+    }
+    u8g2_DrawUTF8(&osd2, x + (BTN_W - w) / 2, y, labels[i]);
+    u8g2_SetDrawColor(&osd2, 1);
+  }
+}
+
+void ui2_field(uint8_t row, const char *label, const char *text, int cursor, bool focused, const char *note) {
+  if (row >= UI2_ROWS) return;
+  int y = row_y(row);
+  u8g2_SetFont(&osd2, F_MAIN);
+  text_to(2, y, X_VALUE - 4, label);
+  int x = X_VALUE;
+  if (focused) u8g2_DrawFrame(&osd2, x - 2, y, (int) strlen(text) * 6 + 4, ROW_H);
+  for (int i = 0; text[i]; i++) {
+    char c[2] = { text[i], 0 };
+    if (focused && i == cursor) {
+      u8g2_DrawBox(&osd2, x, y + 1, 6, ROW_H - 2);
+      u8g2_SetDrawColor(&osd2, 0);
+    }
+    u8g2_DrawStr(&osd2, x, y, c);
+    u8g2_SetDrawColor(&osd2, 1);
+    x += 6;
+  }
+  if (note) {
+    u8g2_SetFont(&osd2, F_SMALL);
+    text_to(x + 8, y + 2, X_SCROLL - 2, note);
+  }
+}
+
 void ui2_done(void) {
   osd2_flush();
 }
 
-// the box of the dialogs: 192 x 40 in the middle of the rows
+// the box of the dialogs: 192 x 40 in the middle of the rows, on tiles (x 4, y 5, 24 x 5), so a
+// popup window can show just the box
 #define BOX_X 32
-#define BOX_Y 38
+#define BOX_Y 40
 #define BOX_W 192
 #define BOX_H 40
 
 void ui2_box(const char *line1, const char *line2, bool inverse) {
+  osd2_begin();
+  u8g2_SetFontPosTop(&osd2);
+  u8g2_SetFontMode(&osd2, 1);
   u8g2_SetDrawColor(&osd2, 0);
   u8g2_DrawBox(&osd2, BOX_X, BOX_Y, BOX_W, BOX_H);
   u8g2_SetDrawColor(&osd2, 1);
@@ -174,4 +221,28 @@ void ui2_box_progress(const char *title, uint32_t val, uint32_t max) {
   u8g2_DrawFrame(&osd2, x, y, w, 12);
   int fill = max ? (int) ((uint64_t) (w - 4) * (val > max ? max : val) / max) : 0;
   u8g2_DrawBox(&osd2, x + 2, y + 2, fill, 8);
+}
+
+void ui2_box_popup(void) {
+  osd2_flush();
+  osd2_popup(BOX_X / 8, BOX_Y / 8, BOX_W / 8, BOX_H / 8, 0, false);
+}
+
+// the toast: a box of 2 lines at the top left of the bitmap, shown as a popup at the top, zoomed
+#define TOAST_W 128
+#define TOAST_H 32
+
+void ui2_toast(const char *line1, const char *line2) {
+  osd2_begin();
+  u8g2_SetFontPosTop(&osd2);
+  u8g2_SetFontMode(&osd2, 1);
+  u8g2_SetDrawColor(&osd2, 0);
+  u8g2_DrawBox(&osd2, 0, 0, TOAST_W, TOAST_H);
+  u8g2_SetDrawColor(&osd2, 1);
+  u8g2_DrawFrame(&osd2, 0, 0, TOAST_W, TOAST_H);
+  u8g2_SetFont(&osd2, F_MAIN);
+  text_to(4, 3, TOAST_W - 4, line1);
+  text_to(4, 17, TOAST_W - 4, line2);
+  osd2_flush();
+  osd2_popup(0, 0, TOAST_W / 8, TOAST_H / 8, 1, true);
 }

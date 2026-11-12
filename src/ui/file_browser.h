@@ -42,6 +42,9 @@ bool fb_key(uint8_t key);
 // a line, then "Dir <dir>" when show_dir (its end, if it is long), and the page number (from
 // column 8); returns its row
 uint8_t fb_draw(uint8_t top, const char *dir, bool show_dir);
+// the bitmap OSD (link v2): the page of the selection on the rows of ui2, exts_hint (the keys,
+// the extensions) on the first hint line, the page and the dir on the second; sends the screen
+void fb_draw_v2(const char *dir, const char *exts_hint);
 
 #ifdef __cplusplus
 }

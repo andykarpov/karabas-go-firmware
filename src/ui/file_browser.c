@@ -1,5 +1,7 @@
 #include "main.h"
 #include "ui/file_browser.h"
+#include "ui/osd2.h"
+#include "ui/ui2.h"
 #include "ui/sorts.h"
 #include "ui/ui_draw.h"
 #include "kg_list.h"
@@ -106,8 +108,11 @@ bool fb_is_root(uint16_t i) { return entry_is(i, '.', 0); }
 bool fb_is_parent(uint16_t i) { return entry_is(i, '.', '.'); }
 bool fb_is_dir(uint16_t i) { return i < len && files[i].file_id != 0 && files[i].hash[0] == SORT_DIR_MARK; }
 
+// a page of the screen: the 16 rows of the text OSD, the 8 of the bitmap OSD (link v2)
+static uint16_t page_rows(void) { return osd2_active() ? UI2_ROWS : PAGE; }
+
 bool fb_key(uint8_t key) {
-  return ui_list_key(&sel, len, PAGE, key);
+  return ui_list_key(&sel, len, page_rows(), key);
 }
 
 // the name of entry i as the browser shows it; root1 is the dir of the list
@@ -136,7 +141,39 @@ static void entry_name(uint16_t i, char *name, size_t size, size_t width) {
   }
 }
 
+// the browser on the bitmap OSD: the rows of the page, the dir and the page in the hints
+static void fb_draw2(const char *dir, const char *exts_hint) {
+  uint16_t rows = UI2_ROWS;
+  uint16_t page = kg_list_page(sel, rows);
+  uint16_t from = (page - 1) * rows;
+  bool cached = names_valid && names_from == from;
+  if (!cached) sd_opendir(&root1, dir);
+  for (uint16_t row = 0; row < rows; row++) {
+    uint16_t i = from + row;
+    if (!cached) {
+      names[row].name[0] = '\0';
+      if (i < len) entry_name(i, names[row].name, sizeof(names[row].name), UI2_COLS);
+    }
+    ui2_text(row, names[row].name, (i == sel && i < len) ? UI2_SEL : 0);
+  }
+  ui2_scrollbar(from, len);
+  names_from = from;
+  names_valid = true;
+  // the keys / extensions, then the page and the dir (its end when long)
+  char l2[72];
+  size_t n = strlen(dir);
+  int k = snprintf(l2, sizeof(l2), "%u/%u  ", page, kg_list_pages(len, rows));
+  snprintf(l2 + k, sizeof(l2) - k, n <= 38 ? "%s" : "...%s", n <= 38 ? dir : dir + n - 35);
+  ui2_hint(exts_hint, l2);
+  ui2_done();
+}
+
+void fb_draw_v2(const char *dir, const char *exts_hint) {
+  fb_draw2(dir, exts_hint);
+}
+
 uint8_t fb_draw(uint8_t top, const char *dir, bool show_dir) {
+  if (osd2_active()) { fb_draw2(dir, NULL); return 0; }
   uint16_t page = kg_list_page(sel, PAGE);
   uint16_t from = (page - 1) * PAGE;
   bool cached = names_valid && names_from == from;

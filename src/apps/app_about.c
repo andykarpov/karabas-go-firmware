@@ -8,6 +8,8 @@
 #include "apps/app_about.h"
 #include "apps/app_core.h"
 #include "ui/ui_draw.h"
+#include "ui/osd2.h"
+#include "ui/ui2.h"
 
 static const char *const thanks[] = {
   "solegstar", "nihirash", "dr_max", "tslabs", "tank-uk", "kalantaj", "caasper911", "xdemox", "dumpkin",
@@ -25,8 +27,32 @@ static bool can_reset(void) {
 }
 static bool confirm = false;
 
+// the bitmap OSD (link v2): the same text on its rows
+static void about2(void) {
+  ui2_screen("About");
+  ui2_text(0, "Karabas Go HW was designed by:", UI2_TITLE);
+  ui2_text(1, "  andy.karpov", 0);
+  ui2_text(2, "Special thanks to:", UI2_TITLE);
+  // the names, as many as fit on a row
+  char line[UI2_COLS + 1];
+  uint8_t row = 3;
+  line[0] = '\0';
+  for (uint8_t i = 0; i < sizeof(thanks) / sizeof(thanks[0]) && row < UI2_ROWS - 1; i++) {
+    if (strlen(line) + strlen(thanks[i]) + 4 > UI2_COLS) { ui2_text(row++, line, 0); line[0] = '\0'; }
+    strlcat(line, line[0] ? ", " : "  ", sizeof(line));
+    strlcat(line, thanks[i], sizeof(line));
+  }
+  if (line[0] && row < UI2_ROWS - 1) ui2_text(row, line, 0);
+  char b[UI2_COLS + 1];
+  snprintf(b, sizeof(b), "MCU %s  FPGA %s", STRINGIZE_VALUE_OF(BUILD_VER), core.build);
+  ui2_text(UI2_ROWS - 1, b, UI2_DIM);
+  ui2_hint(can_reset() ? "R: reset the core settings" : NULL, "Esc: back");
+  ui2_done();
+}
+
 void app_about_overlay() {
   confirm = false;
+  if (osd2_active()) { about2(); return; }
   ui_screen("About");
   heading(8, "Karabas Go HW was designed by:");
   osd_set_pos(1, 10); osd_print("- andy.karpov");

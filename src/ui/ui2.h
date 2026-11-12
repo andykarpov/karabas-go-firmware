@@ -31,12 +31,21 @@ void ui2_text(uint8_t row, const char *text, uint8_t flags); // a row of plain t
 void ui2_sep(uint8_t row);                     // a separator line
 void ui2_scrollbar(uint16_t top, uint16_t total); // the rows show items top..top+UI2_ROWS-1
 void ui2_hint(const char *line1, const char *line2);
+// buttons on a row, of equal width from the left; focus = the index of the focused one, -1 none
+void ui2_buttons(uint8_t row, const char *const *labels, uint8_t n, int focus);
+// a typed field: label, the text with the character at cursor inverted (focused), a note after it
+void ui2_field(uint8_t row, const char *label, const char *text, int cursor, bool focused, const char *note);
 void ui2_done(void);                           // the screen to the core
 
 // a box in the middle of the screen: two lines; inverse = a title bar
 void ui2_box(const char *line1, const char *line2, bool inverse);
 // a progress bar in the box: val of max
 void ui2_box_progress(const char *title, uint32_t val, uint32_t max);
+// the box alone as a popup window (the menu is hidden): call after drawing it
+void ui2_box_popup(void);
+// a toast of two lines as a popup at the top (zoomed); the bitmap of the menu is overdrawn, the
+// menu draws itself again when it opens
+void ui2_toast(const char *line1, const char *line2);
 
 #ifdef __cplusplus
 }

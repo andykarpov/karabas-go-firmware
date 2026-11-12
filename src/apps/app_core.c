@@ -4,12 +4,15 @@
 #include "input/usb_hid_keys.h"
 #include "input/sega.h"
 #include "apps/app_core.h"
+#include "apps/app_setup.h"
 #include "ui/dialog.h"
 #include "ui/sorts.h"
 #include "file_name.h"
 #include "at_args.h"
 #include "ui/ui_draw.h"
 #include "ui/file_browser.h"
+#include "ui/osd2.h"
+#include "ui/ui2.h"
 #include "kg_list.h"
 
 uint8_t curr_osd_item;
@@ -100,10 +103,22 @@ static uint8_t vis[MAX_OSD_ITEMS];
 static uint8_t vis_len = 0;
 static uint8_t page_cursor[256]; // the item + 1 the cursor was on when a page was left
 
+// the bitmap OSD (link v2): the main page ends with a separator, the setup apps and About, so
+// a pad reaches them (S / A stay the keys of the keyboard)
+#define VIS_SEP 0xF0
+#define VIS_ABOUT 0xF1
+#define VIS_APP 0xF2 // + the position among the setup apps
+#define is_virtual(i) ((i) >= VIS_SEP)
+
 static void build_vis(void) {
   vis_len = 0;
   for (uint8_t i = 0; i < core.osd_len; i++) {
     if (core.osd[i].page == cur_page && core_osd_shown(i) && !(core.osd[i].flags & CORE_OSD_FLAG_RADIO)) vis[vis_len++] = i;
+  }
+  if (osd2_active() && cur_page == 0 && vis_len + 2 + app_setup_count() <= MAX_OSD_ITEMS) {
+    if (vis_len) vis[vis_len++] = VIS_SEP;
+    for (uint8_t a = 0; a < app_setup_count(); a++) vis[vis_len++] = VIS_APP + a;
+    vis[vis_len++] = VIS_ABOUT;
   }
 }
 
@@ -111,7 +126,9 @@ static void build_vis(void) {
 // rows, the separators, the disabled items)
 static bool item_active(uint16_t pos, void *ctx) {
   (void) ctx;
-  return pos < vis_len && core_osd_selectable(vis[pos]) && core_osd_enabled(vis[pos]);
+  if (pos >= vis_len) return false;
+  if (is_virtual(vis[pos])) return vis[pos] != VIS_SEP;
+  return core_osd_selectable(vis[pos]) && core_osd_enabled(vis[pos]);
 }
 
 static int vis_pos(uint8_t item) {
@@ -164,7 +181,11 @@ static bool is_options(void) { return core.type == CORE_TYPE_FILELOADER; }
 // the rows of the menu: on a sub-page (and on the Options screen) the first two rows are its title
 // and a line under it
 static bool has_title(void) { return cur_page || is_options(); }
-static uint8_t menu_rows(void) { return has_title() ? MENU_ROWS - 2 : MENU_ROWS; }
+// (the bitmap OSD of link v2: its 8 rows, the title takes one)
+static uint8_t menu_rows(void) {
+  if (osd2_active()) return has_title() ? UI2_ROWS - 1 : UI2_ROWS;
+  return has_title() ? MENU_ROWS - 2 : MENU_ROWS;
+}
 
 // the window keeps the cursor in view; on the first (last) option it goes to the top (bottom), so
 // the text rows before (after) it are seen too
@@ -181,9 +202,12 @@ static uint8_t menu_window() {
   return (uint8_t) top;
 }
 
+static void app_core_overlay2(bool force);
+
 void app_core_overlay(bool force)
 {
   osd_state = state_main;
+  if (osd2_active()) { app_core_overlay2(force); return; }
 
   // disable popup in overlay mode
   dialog_hide();
@@ -327,6 +351,7 @@ void app_core_menu(uint8_t vpos) {
 
 void app_core_save(uint8_t pos)
 {
+    if (pos >= core.osd_len) { core.osd_need_save = false; return; } // a setup app row of the v2 menu
     if (core.format != CORE_FORMAT_KGO1) {
       core.osd_need_save = false; // kgo2: /config/<id>.ini, written a moment later (core_state)
       core_state_changed();
@@ -468,8 +493,15 @@ void app_core_on_keyboard() {
     }
 
     // right / enter, left: a page entry opens its page; the browser of a file item, else the next
-    // / previous option
-    if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_PAGE) {
+    // / previous option; a setup app row (v2) opens the app
+    if (is_virtual(curr_osd_item)) {
+      if (key == KEY_RIGHT || key == KEY_ENTER) {
+        osd_return_state = state_main;
+        app_setup_opened_from_menu(true);
+        osd_state = curr_osd_item == VIS_ABOUT ? state_about : app_setup_state(curr_osd_item - VIS_APP);
+        return;
+      }
+    } else if (core.osd[curr_osd_item].type == CORE_OSD_TYPE_PAGE) {
       if (key == KEY_RIGHT || key == KEY_ENTER) {
         menu_open_page(core.osd[curr_osd_item].open_page);
         need_redraw = true;
@@ -486,7 +518,7 @@ void app_core_on_keyboard() {
     }
 
     // delete, backspace: eject the image of a file mounter item
-    if ((key == KEY_DELETE || key == KEY_BACKSPACE) &&
+    if ((key == KEY_DELETE || key == KEY_BACKSPACE) && !is_virtual(curr_osd_item) &&
         core.osd[curr_osd_item].type == CORE_OSD_TYPE_FILEMOUNTER && cur_slot()->is_mounted) {
       app_core_eject(curr_osd_item);
       need_redraw = true;
@@ -494,6 +526,7 @@ void app_core_on_keyboard() {
 
     if (key == KEY_S || key == KEY_A) {
       osd_return_state = state_main;
+      app_setup_opened_from_menu(false);
       osd_state = key == KEY_S ? state_setup : state_about;
     }
   }
@@ -501,7 +534,7 @@ void app_core_on_keyboard() {
   if (need_redraw) {
     need_redraw = false;
     // cls screen while changing screen mode
-    if (prev_is_filebrowser != is_filebrowser) {
+    if (prev_is_filebrowser != is_filebrowser && !osd2_active()) {
       prev_is_filebrowser = is_filebrowser;
       osd_fill(0, APP_COREBROWSER_MENU_OFFSET, UI_COL_LAST, APP_COREBROWSER_MENU_OFFSET + 16, ' ');
     }
@@ -600,6 +633,14 @@ int app_core_init_filebrowser() {
 // the browser, and the extensions of the slot on the last hint row (the toggle hint is back
 // with the menu)
 void app_core_filebrowser(uint8_t vpos) {
+  if (osd2_active()) {
+    char b[64] = "Enter choose  Bksp up  Esc back   ";
+    size_t k = strlen(b);
+    kg_exts_text(cur_slot()->ext, b + k, sizeof(b) - k);
+    ui2_screen(core.osd[curr_osd_item].name);
+    fb_draw_v2(cur_slot()->dir, b);
+    return;
+  }
   char b[OSD_SIZE_X + 1] = "Files: ";
   kg_exts_text(cur_slot()->ext, b + 7, OSD_SIZE_X - 7);
   ui_row(0, UI_ROW_HINT + 1, b[7] ? b : "Files: all", false);
@@ -654,4 +695,87 @@ void app_core_eject_item(uint8_t pos) {
   app_core_leave_browser();
   app_core_eject(pos);
   app_core_save(pos);
+}
+
+// ---- the core menu on the bitmap OSD (link v2) ----
+
+// the title of a sub-page as text (the path of its page entries)
+static void page_title_text(char *text, size_t size) {
+  int path[8];
+  uint8_t n = 0;
+  for (int e = core_osd_page_entry(cur_page); e >= 0 && n < 8; ) {
+    path[n++] = e;
+    uint8_t parent = core.osd[e].page;
+    e = parent ? core_osd_page_entry(parent) : -1;
+  }
+  size_t len = snprintf(text, size, "< %s", is_options() ? (n ? "Options > " : "Options") : "");
+  while (n-- > 0 && len < size) {
+    len += snprintf(text + len, size - len, "%s%s", core.osd[path[n]].name, n ? " > " : "");
+  }
+}
+
+static void app_core_menu2(void) {
+  menu_sync();
+  uint8_t row0 = 0;
+  if (has_title()) {
+    char t[64];
+    page_title_text(t, sizeof(t));
+    ui2_text(0, t, UI2_TITLE);
+    row0 = 1;
+  }
+  uint8_t rows = menu_rows();
+  menu_top = menu_window();
+  for (uint8_t r = 0; r < rows; r++) {
+    uint16_t p = menu_top + r;
+    if (p >= vis_len) break;
+    uint8_t i = vis[p];
+    uint8_t row = row0 + r;
+    if (i == VIS_SEP) { ui2_sep(row); continue; }
+    if (is_virtual(i)) {
+      ui2_row(row, i == VIS_ABOUT ? "About" : app_setup_label(i - VIS_APP), NULL, i == VIS_ABOUT ? "A" : NULL,
+              (curr_osd_item == i ? UI2_SEL : 0) | UI2_ARROW);
+      continue;
+    }
+    const core_osd_t *item = &core.osd[i];
+    if (item->type == CORE_OSD_TYPE_TEXT) {
+      char text[64];
+      snprintf(text, sizeof(text), "%s%s", item->name, item->hotkey);
+      ui2_text(row, text, 0);
+      continue;
+    }
+    if (item->type == CORE_OSD_TYPE_SEPARATOR) { ui2_sep(row); continue; }
+    uint8_t flags = (curr_osd_item == i ? UI2_SEL : 0) | (core_osd_enabled(i) ? 0 : UI2_DIM);
+    if (!core_osd_selectable(i)) {
+      ui2_row(row, item->name, NULL, item->hotkey, flags & ~UI2_SEL); // a trigger: its hotkey
+      continue;
+    }
+    if (item->type == CORE_OSD_TYPE_PAGE) {
+      ui2_row(row, item->name, NULL, item->hotkey, flags | UI2_ARROW);
+      continue;
+    }
+    char value[40];
+    item_value(i, value, sizeof(value));
+    kg_trim(value);
+    ui2_row(row, item->name, value, item->hotkey, flags);
+  }
+  // the scrollbar over the item rows (a sub-page: under its title)
+  ui2_scrollbar(menu_top, vis_len > rows ? vis_len + (UI2_ROWS - rows) : vis_len);
+}
+
+static void app_core_overlay2(bool force) {
+  if (force) {
+    cur_page = 0;
+    memset(page_cursor, 0, sizeof(page_cursor));
+    build_vis();
+    curr_osd_item = first_item();
+    menu_top = 0;
+  }
+  ui2_screen(NULL);
+  app_core_menu2();
+  bool has_mounter = false;
+  for (uint8_t i = 0; i < core.osd_len; i++) if (core.osd[i].type == CORE_OSD_TYPE_FILEMOUNTER) has_mounter = true;
+  char l1[64];
+  snprintf(l1, sizeof(l1), "Enter / Right: choose%s  Esc %s", has_mounter ? "  Del eject" : "", has_title() ? "back" : "hide");
+  ui2_hint(l1, is_options() && !cur_page ? "Esc: back to the files" : "Menu+Esc: OSD on / off");
+  ui2_done();
 }

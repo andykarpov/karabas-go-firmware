@@ -1,6 +1,7 @@
 #include "config.h"
 #include "types.h"
 #include "main.h"
+#include "apps/app_setup.h"
 #include "osd.h"
 #include "input/usb_hid_keys.h"
 #include "input/sega.h"
@@ -8,6 +9,8 @@
 #include "time_zone.h"
 #include "apps/app_rtc.h"
 #include "ui/ui_draw.h"
+#include "ui/osd2.h"
+#include "ui/ui2.h"
 #include "apps/clock_edit.h"
 
 // Setup > Setup RTC: the date and the time are typed into masked fields. Up / Down / Tab move
@@ -77,7 +80,31 @@ static void draw_tz(bool focused) {
   osd_set_pos(FIELD_X + TZ_WIDTH + 2, ROW_TZ); osd_print("for NTP sync");
 }
 
+// the bitmap OSD (link v2)
+static void draw2(void) {
+  const kg_field_t *d = ce_field(CE_DATE), *t = ce_field(CE_TIME);
+  for (uint8_t r = 0; r < UI2_ROWS; r++) ui2_text(r, "", 0);
+  ui2_field(0, "Date", d->text, d->pos, focus == F_DATE, "DD.MM.YYYY");
+  ui2_field(1, "Time", t->text, t->pos, focus == F_TIME, "HH:MM");
+  uint8_t row = 2;
+  if (has_ntp()) {
+    char v[16], tz[10];
+    kg_tz_format(ce_tz(), tz, sizeof(tz));
+    snprintf(v, sizeof(v), "UTC%s", tz);
+    ui2_row(row++, "Zone", v, "for NTP", focus == F_TZ ? UI2_SEL : 0);
+  }
+  static const char *const btn[] = { "Save", "Cancel", "NTP sync" };
+  ui2_buttons(row + 1, btn, has_ntp() ? 3 : 2, focus >= F_SAVE ? focus - F_SAVE : -1);
+  uint8_t kind;
+  const char *status = ce_message(&kind);
+  if (status) ui2_text(row + 3, status, kind == CE_MSG_ERROR ? UI2_SEL : 0);
+  if (focus == F_TZ) ui2_text(row + 4, "UTC offset, no summer time", UI2_DIM);
+  else if (focus == F_SYNC) ui2_text(row + 4, "The time from NTP over Wi-Fi", UI2_DIM);
+  ui2_done();
+}
+
 static void draw() {
+  if (osd2_active()) { draw2(); return; }
   draw_field(ROW_DATE, "Date", "DD.MM.YYYY", ce_field(CE_DATE), focus == F_DATE);
   draw_field(ROW_TIME, "Time", "HH:MM", ce_field(CE_TIME), focus == F_TIME);
   if (has_ntp()) draw_tz(focus == F_TZ);
@@ -99,18 +126,22 @@ static void draw() {
 }
 
 void app_rtc_overlay() {
-  ui_screen("Setup RTC");
-
   ce_open();
   focus = F_DATE;
-
+  if (osd2_active()) {
+    ui2_screen("Setup RTC");
+    ui2_hint("Digits: edit, Up / Down: next", "Enter: OK, Esc: cancel");
+    draw();
+    return;
+  }
+  ui_screen("Setup RTC");
   ui_hint("Digits: edit, Up/Down: next", "Enter: OK, Esc: cancel");
   draw();
 }
 
 static void leave() {
   ce_close();
-  osd_state = state_setup;
+  osd_state = app_setup_back();
 }
 
 void app_rtc_on_keyboard() {

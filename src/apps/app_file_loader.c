@@ -11,6 +11,8 @@
 #include "file_name.h"
 #include "ui/ui_draw.h"
 #include "ui/file_browser.h"
+#include "ui/osd2.h"
+#include "ui/ui2.h"
 
 // The dirs: core.dir (make_core "dir") is where the browser starts, the user can go anywhere on
 // the card from it ("/", "../", the subdirs; Backspace up, H back to core.dir). The dir of the
@@ -176,6 +178,13 @@ void app_file_loader_read_list(void) {
 }
 
 void app_file_loader_menu(uint8_t vpos) {
+  if (osd2_active()) {
+    char b[64];
+    int k = snprintf(b, sizeof(b), "Enter load  Bksp up  H home%s  ", core.osd_len > 0 ? "  O options" : "");
+    kg_exts_text(core.file_extensions, b + k, sizeof(b) - k);
+    fb_draw_v2(cur_dir, b);
+    return;
+  }
   uint8_t y = fb_draw(vpos, cur_dir, true);
   // the core's own menu (Tab or O) left of the page number, Esc right of it
   if (core.osd_len > 0) {
@@ -189,6 +198,13 @@ void app_file_loader_menu(uint8_t vpos) {
 
 // initSD: read the list again (R); else only when it is not in the file browser
 void app_file_loader_overlay(bool initSD) {
+  if (osd2_active()) {
+    ui2_screen(NULL);
+    if (initSD || !list_loaded) app_file_loader_read_list();
+    ui2_screen(NULL); // the box of the scan gone
+    app_file_loader_menu(APP_COREBROWSER_MENU_OFFSET);
+    return;
+  }
   osd_set_color(OSD_COLOR_WHITE, OSD_COLOR_BLACK);
   osd_clear();
   osd_header(core.build, core.id, HW_ID);

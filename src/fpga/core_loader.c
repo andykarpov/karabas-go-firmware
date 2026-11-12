@@ -1,4 +1,5 @@
 #include "main.h"
+#include "ui/osd2.h"
 #include "ui/dialog.h"
 #include "diag/hang_diag.h"
 #include "ui/osd_font.h"
@@ -330,6 +331,10 @@ static void configure(const char* filename, bool clear_sram) {
   // still in reset are lost: a Kickstart sent then never arrived); burst transfers for the roms /
   // files below, if the core supports them
   link_core_hello();
+  if (link_osd2()) {
+    osd2_core_loaded(); // a new core has an empty bitmap
+    link_osd2_colors(0xFFFFFF, 0x102048, 2);
+  }
   hang_step(0xa1);
   link_sys_init(true);
   link_sys_hw_setup(LINK_HW_BOARD, HW_ID);

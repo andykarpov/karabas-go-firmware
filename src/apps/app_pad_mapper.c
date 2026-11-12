@@ -1,6 +1,7 @@
 #include "config.h"
 #include "types.h"
 #include "main.h"
+#include "apps/app_setup.h"
 #include "osd.h"
 #include "input/usb_hid_keys.h"
 #include "usb/hid_driver.h"
@@ -8,6 +9,8 @@
 #include "apps/pad_learn.h"
 #include "apps/app_pad_mapper.h"
 #include "ui/ui_draw.h"
+#include "ui/osd2.h"
+#include "ui/ui2.h"
 
 // First the two joystick ports: the pad on each and what maps it (a driver ini, the default
 // map, XInput); Forget renames the driver ini of a pad to .bak. Assign learns a pad through
@@ -103,7 +106,59 @@ static void draw_list() {
   ui_hint("Up/Down: port, Left/Right: btn", "Enter: OK, Esc: return");
 }
 
+// the bitmap OSD (link v2): the ports or the learning on its rows
+static void draw2(void) {
+  char buf[48];
+  for (uint8_t r = 0; r < UI2_ROWS; r++) ui2_text(r, "", 0);
+  if (view == V_LIST) {
+    ui2_text(0, "Port  Pad        Mapped by", UI2_TITLE);
+    for (uint8_t i = 0; i < 2; i++) {
+      const usb_pad_t *p = &pads[i];
+      char src[18];
+      if (p->source == USB_PAD_NONE && p->vid == 0) snprintf(buf, sizeof(buf), "%u     -", i + 1);
+      else { pad_source(p, src, sizeof(src)); snprintf(buf, sizeof(buf), "%u     %04x:%04x  %s", i + 1, p->vid, p->pid, src); }
+      ui2_text(1 + i, buf, i == port ? UI2_SEL : 0);
+    }
+    static const char *const btn[] = { "Assign", "Forget" };
+    ui2_buttons(4, btn, can_forget() ? 2 : 1, list_btn);
+    if (list_msg) ui2_text(5, list_msg, list_msg_ok ? 0 : UI2_SEL);
+    ui2_text(6, "Assign: learns the pad you press a button on", UI2_DIM);
+    ui2_text(7, "Forget: the driver ini -> .bak (default map)", UI2_DIM);
+    ui2_hint("Up / Down: port, Left / Right: button", "Enter: OK, Esc: back");
+    ui2_done();
+    return;
+  }
+  const char *l1 = "", *l2 = "";
+  switch (pl_state()) {
+    case PL_SELECT: l1 = "Press a button on the USB pad"; break;
+    case PL_SETTLE:
+    case PL_REST: snprintf(buf, sizeof(buf), "Pad %04x:%04x", pl_vid(), pl_pid()); l1 = buf; l2 = "Release all, don't touch it"; break;
+    case PL_PRESS: snprintf(buf, sizeof(buf), "Press %s", pl_btn_names[pl_btn()]); l1 = buf; l2 = "Enter: skip, Backspace: back"; break;
+    case PL_RELEASE: snprintf(buf, sizeof(buf), "Release %s", pl_btn_names[pl_btn()]); l1 = buf; break;
+    case PL_DONE: l1 = "Done. Enter: save the driver"; l2 = "Backspace: redo the last one"; break;
+    case PL_SAVED: l1 = "Saved"; l2 = pl_saved_path(); break;
+    case PL_FAILED: l1 = "Could not write the SD card"; break;
+  }
+  ui2_text(0, l1, UI2_TITLE);
+  // the buttons: a window of 7 rows around the one being learned
+  uint8_t st = pl_state();
+  int cur = (st == PL_PRESS || st == PL_RELEASE) ? pl_btn() : 0;
+  int top = cur - 3;
+  if (top > HID_JOY_BUTTONS - 7) top = HID_JOY_BUTTONS - 7;
+  if (top < 0) top = 0;
+  for (int r = 0; r < 7 && top + r < HID_JOY_BUTTONS; r++) {
+    int i = top + r;
+    char rule[24] = "";
+    if (pl_mapped(i)) hid_learn_format_rule(pl_rule(i), rule, sizeof(rule));
+    else if (i < pl_btn() || st >= PL_DONE) strcpy(rule, "-");
+    ui2_row(1 + r, pl_btn_names[i], rule, NULL, ((st == PL_PRESS || st == PL_RELEASE) && i == cur) ? UI2_SEL : 0);
+  }
+  ui2_hint(l2[0] ? l2 : (st >= PL_SAVED ? "Enter: back to the ports" : ""), "Esc: back to the ports");
+  ui2_done();
+}
+
 static void draw() {
+  if (osd2_active()) { draw2(); return; }
   char buf[33];
   if (view == V_LIST) {
     draw_list();
@@ -159,7 +214,8 @@ static void start() {
 }
 
 void app_pad_mapper_overlay() {
-  ui_screen("Map USB gamepad");
+  if (osd2_active()) ui2_screen("Map USB gamepad");
+  else ui_screen("Map USB gamepad");
   port = 0;
   list_msg = NULL;
   show_list();
@@ -193,7 +249,7 @@ void app_pad_mapper_on_keyboard() {
   if (key == KEY_KPENTER) key = KEY_ENTER;
   if (key == KEY_ESC && view == V_LIST) {
     view = V_IDLE;
-    osd_state = state_setup;
+    osd_state = app_setup_back();
     return;
   }
   if (key == KEY_ESC || (key == KEY_ENTER && pl_state() >= PL_SAVED)) {

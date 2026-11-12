@@ -632,7 +632,13 @@ void link_aux_on(link_aux_kind_t kind, void (*cb)(uint8_t a, uint8_t b)) {
 // ---- OSD ----
 
 void link_osd_reg(uint8_t reg, uint8_t value) {
-  if (V2) return; // the text OSD is not a command of v2
+  if (V2) {
+    // the text OSD is not a command of v2; its show / hide (lib/osd osd_show_menu / hide, from
+    // everywhere in the UI) switch the bitmap OSD, a popup off ends the popup window
+    if (reg == 0x01) link_osd2_enable(value & 1);
+    else if (reg == 0x02 && !(value & 1)) link_osd2_popup(0, 0, 0, 0, 0, false);
+    return;
+  }
   spi_send(CMD_OSD, reg, value);
 }
 
