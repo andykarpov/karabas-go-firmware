@@ -6,6 +6,8 @@
 // SD card on a dedicated PIO SPI
 
 #define SD1_HZ 16000000
+// an open transfer is ended after this long without a disk_read / disk_write
+#define SD1_IDLE_MS 50
 
 static sd_spi_bus_t sd1_bus;
 static sd_card_t sd1;
@@ -13,6 +15,7 @@ static FATFS sd1_fs;
 FIL file1, file2;
 DIR root1;
 bool has_sd = false;
+static uint32_t sd1_last_ms = 0;
 
 sd_card_t *sd1_card() {
   return &sd1;
@@ -26,6 +29,19 @@ void sd1_sync_before_reboot() {
   if (!sd_card_sync(&sd1)) { d_print("SD1: the transfer did not end before the reboot"); d_println(); }
 }
 
+// sd_card keeps a CMD18 / CMD25 open after the last read / write (the next sector goes on
+// without a command), so the card stayed selected for good: the SD LED of the Mini / Mini G
+// (on ~SD1_CS) was always on, the card never idle. A pause of SD1_IDLE_MS ends it (CMD12 / the
+// stop token, CS high); sequential reads (a core, an image, MSC) come faster and keep it open.
+void sd1_idle_tick() {
+  if (!has_sd || msc_active() || !sd_card_is_open(&sd1)) return;
+  if (ms_since(sd1_last_ms) < SD1_IDLE_MS) return;
+  if (!sd_card_sync(&sd1)) {
+    d_printf("SD1: idle sync failed (card error %u, data %02X)", sd_card_error(&sd1), sd_card_error_data(&sd1));
+    d_println();
+  }
+}
+
 // FatFs disk I/O (ff.h): drive 0 is SD1
 DSTATUS disk_status(BYTE pdrv) {
   return pdrv == 0 && sd1.type ? 0 : STA_NOINIT;
@@ -37,11 +53,13 @@ DSTATUS disk_initialize(BYTE pdrv) {
 
 DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count) {
   if (pdrv != 0 || !sd1.type) return RES_NOTRDY;
+  sd1_last_ms = ms_now();
   return sd_card_read(&sd1, sector, buff, count) ? RES_OK : RES_ERROR;
 }
 
 DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count) {
   if (pdrv != 0 || !sd1.type) return RES_NOTRDY;
+  sd1_last_ms = ms_now();
   return sd_card_write(&sd1, sector, buff, count) ? RES_OK : RES_ERROR;
 }
 
