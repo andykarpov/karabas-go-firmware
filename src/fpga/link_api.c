@@ -5,9 +5,42 @@
 // link_api.h on link v1: the frames of docs/protocol.md through the transport of link.c. The frame
 // sequences are the ones the services used to send themselves, in the same order.
 
+// ---- link v2 (docs/link_v2.md): packets ----
+
+#define V2 (link_version() == 2)
+#define T_SYS 0x00
+#define T_HID 0x01
+#define T_LOAD 0x04
+
+// caps of STATUS (docs/link_v2.md 5.1)
+#define V2_CAP_BK 0x0002
+#define V2_CAP_IMG_WP 0x0004
+#define V2_CAP_LOAD_READY 0x0010
+#define V2_CAP_MIDI 0x0200
+static uint16_t v2_caps = 0;
+
+static void v2_send(const uint8_t *p, size_t n) {
+  link2_xfer(p, n, NULL, 0);
+}
+
+// a command without parameters that answers: T C Z, then n bytes
+static void v2_read(uint8_t t, uint8_t c, uint8_t *rx, size_t n) {
+  const uint8_t tx[3] = { t, c, 0 };
+  link2_xfer(tx, sizeof(tx), rx, n);
+}
+
 // ---- capabilities ----
 
 bool link_has(link_cap_t cap) {
+  if (V2) {
+    switch (cap) {
+      case LINK_CAP_BK: return (v2_caps & V2_CAP_BK) != 0;
+      case LINK_CAP_MIDI: return (v2_caps & V2_CAP_MIDI) != 0;
+      case LINK_CAP_IMG_WP: return (v2_caps & V2_CAP_IMG_WP) != 0;
+      case LINK_CAP_BURST: return true; // every packet is one
+    }
+    return false;
+  }
   switch (cap) {
     case LINK_CAP_BK: return (link_core_caps() & CAPS_BK) != 0;
     case LINK_CAP_MIDI: return (link_core_caps() & CAPS_MIDI) != 0;
@@ -18,6 +51,7 @@ bool link_has(link_cap_t cap) {
 }
 
 const char *link_mode_name(void) {
+  if (V2) return "v2";
   return link_burst_available() ? "burst" : "classic";
 }
 
@@ -26,12 +60,31 @@ void link_core_unload(void) {
   link_burst_reset(); // the new core may not support bursts
 }
 
+#define V2_HELLO_MS 100
+
 bool link_core_hello(void) {
-  return link_caps_query();
+  if (!V2) return link_caps_query();
+  // STATUS until the core answers 'K' 'G' 2 (its link may still be in reset after CONF_DONE)
+  uint8_t st[8];
+  uint32_t t = ms_now();
+  do {
+    v2_read(T_SYS, 0x00, st, sizeof(st));
+    if (st[0] == 'K' && st[1] == 'G' && st[2] == 2) {
+      v2_caps = st[3] | (st[4] << 8);
+      uint8_t causes;
+      v2_read(T_SYS, 0x02, &causes, 1); // clears the coldboot cause
+      d_printf("Link v2: core answered in %lu ms, caps %04x, osd %ux%u, ports %02x", (unsigned long) ms_since(t),
+        v2_caps, st[5] * 8, st[6] * 8, st[7]); d_println();
+      return true;
+    }
+  } while (ms_since(t) < V2_HELLO_MS);
+  v2_caps = 0;
+  d_printf("Link v2: no answer of the core (%02x %02x %02x)", st[0], st[1], st[2]); d_println();
+  return false;
 }
 
 void link_core_ready(void) {
-  link_set_rx_enabled(true);
+  link_set_rx_enabled(true); // v1: frames of the core again (v2: events come on INT)
 }
 
 void link_core_freq(uint8_t mhz) {
@@ -39,21 +92,36 @@ void link_core_freq(uint8_t mhz) {
 }
 
 void link_poll_once(void) {
+  if (V2) { link_v2_service(); return; }
   spi_send(CMD_NOP, 0, 0);
 }
 
 // ---- SYS ----
 
 void link_sys_init(bool start) {
+  if (V2) { const uint8_t p[3] = { T_SYS, 0x05, start ? 1 : 0 }; v2_send(p, 3); return; }
   spi_send(start ? CMD_INIT_START : CMD_INIT_DONE, 0, 0);
 }
 
 void link_sys_hw_setup(uint8_t key, uint8_t value) {
+  if (V2) { const uint8_t p[4] = { T_SYS, 0x04, key, value }; v2_send(p, 4); return; }
   spi_send(CMD_HW_SETUP, key, value);
 }
 
 void link_sys_build_ids(const char *core_build, const char *fw_build) {
   bool end_core = false, end_fw = false;
+  if (V2) {
+    // one packet: key 10, the 8 characters of the core, the 8 of the firmware
+    uint8_t p[3 + 16] = { T_SYS, 0x04, 0x10 };
+    for (uint8_t i=0; i<8; i++) {
+      if (!core_build[i]) end_core = true;
+      if (!fw_build[i]) end_fw = true;
+      p[3 + i] = end_core ? 0 : (uint8_t) core_build[i];
+      p[11 + i] = end_fw ? 0 : (uint8_t) fw_build[i];
+    }
+    v2_send(p, sizeof(p));
+    return;
+  }
   for (uint8_t i=0; i<8; i++) {
     if (!core_build[i]) end_core = true;
     if (!fw_build[i]) end_fw = true;
@@ -63,14 +131,17 @@ void link_sys_build_ids(const char *core_build, const char *fw_build) {
 }
 
 void link_sys_setval(uint8_t index, uint8_t value) {
+  if (V2) { const uint8_t p[4] = { T_SYS, 0x03, index, value }; v2_send(p, 4); return; }
   spi_send(CMD_SWITCHES, index, value);
 }
 
 void link_sys_btn(uint8_t button, bool pressed) {
+  if (V2) { const uint8_t p[4] = { T_SYS, 0x07, button, pressed }; v2_send(p, 4); return; }
   spi_send(CMD_BTN, button, pressed);
 }
 
 void link_sys_spi_control(uint8_t bits) {
+  if (V2) { const uint8_t p[3] = { T_SYS, 0x06, bits }; v2_send(p, 3); return; }
   spi_send(CMD_SPI_CONTROL, 0, bits);
 }
 
@@ -106,26 +177,72 @@ bool link_hid_queue_pop(link_event_t *ev) {
   return true;
 }
 
+// v2: a whole report per packet, from the events of the queue (KBD 0..6, MOUSE 0..3)
+static uint8_t v2_kbd[8], v2_mouse[4];
+
+static void v2_forward(const link_event_t *ev) {
+  switch (ev->kind) {
+    case LINK_EV_KBD:
+      if (ev->idx > 6) return;
+      v2_kbd[ev->idx ? ev->idx + 1 : 0] = ev->val; // byte 1 of the report is reserved
+      if (ev->idx == 6) {
+        uint8_t p[2 + 8] = { T_HID, 0x01 };
+        memcpy(p + 2, v2_kbd, 8);
+        v2_send(p, sizeof(p));
+      }
+      break;
+    case LINK_EV_MOUSE:
+      if (ev->idx > 3) return;
+      v2_mouse[ev->idx] = ev->val;
+      // the buttons end a report; a lone wheel 0 after a report (hid_app) needs no packet
+      if (ev->idx == 3) {
+        uint8_t p[2 + 4] = { T_HID, 0x03 };
+        memcpy(p + 2, v2_mouse, 4);
+        v2_send(p, sizeof(p));
+      }
+      break;
+    case LINK_EV_PS2: {
+      const uint8_t p[4] = { T_HID, 0x02, ev->idx, ev->val };
+      v2_send(p, 4);
+      break;
+    }
+    default: break; // MIDI: PORT 2 comes with Ф5
+  }
+}
+
 void link_hid_forward(const link_event_t *ev) {
+  if (V2) { v2_forward(ev); return; }
   if (ev->kind < sizeof(event_cmd)) spi_send(event_cmd[ev->kind], ev->idx, ev->val);
 }
 
 void link_hid_joy(uint8_t port, uint16_t bits) {
+  if (V2) { const uint8_t p[5] = { T_HID, 0x04, port, (uint8_t) bits, (uint8_t) (bits >> 8) }; v2_send(p, 5); return; }
   spi_send(CMD_JOYSTICK, 2 * port, (uint8_t) bits);
   spi_send(CMD_JOYSTICK, 2 * port + 1, (uint8_t) (bits >> 8));
 }
 
 void link_hid_matrix_btn(uint8_t button, bool pressed) {
+  if (V2) { link_sys_btn(2 + button, pressed); return; }
   spi_send(CMD_MATRIX_BTN, button, pressed);
 }
 
+static void (*ps2_cmd_cb)(uint8_t, uint8_t) = NULL;
 void link_hid_on_ps2_cmd(void (*cb)(uint8_t cmd, uint8_t val)) {
+  ps2_cmd_cb = cb;
   link_on(CMD_PS2_SCANCODE, cb);
 }
 
 // ---- LOAD ----
 
 void link_load_start(link_load_kind_t kind, uint8_t slot, uint64_t size, const char *ext) {
+  if (V2) {
+    uint8_t p[2 + 10 + 8] = { T_LOAD, 0x01, (uint8_t) kind, slot };
+    for (int i = 0; i < 8; i++) p[4 + i] = (uint8_t) (size >> (8 * i));
+    size_t n = 12;
+    for (uint8_t i = 0; ext && ext[i] && i < 8; i++) p[n++] = (uint8_t) ext[i];
+    v2_send(p, n);
+    return;
+  }
   switch (kind) {
     case LINK_LOAD_ROM:
       spi_send(CMD_ROMLOADER, 0, 1);
@@ -148,7 +265,41 @@ void link_load_start(link_load_kind_t kind, uint8_t slot, uint64_t size, const c
   }
 }
 
+#define V2_LOAD_CHUNK 512
+#define V2_READY_MS 100
+
+// LOAD STATUS until the core can take a packet (caps bit 4); false after V2_READY_MS
+static bool v2_load_ready(void) {
+  if (!(v2_caps & V2_CAP_LOAD_READY)) return true;
+  uint32_t t = ms_now();
+  do {
+    uint8_t r;
+    v2_read(T_LOAD, 0x04, &r, 1);
+    if (r) return true;
+    ms_delay(1);
+  } while (ms_since(t) < V2_READY_MS);
+  d_println("Link v2: the core is not ready for load data");
+  return false;
+}
+
+static void v2_load_data(link_load_kind_t kind, uint32_t addr, const uint8_t *buf, size_t len) {
+  static uint8_t p[2 + 5 + V2_LOAD_CHUNK];
+  spi_bus_lock();
+  for (size_t done = 0; done < len; ) {
+    size_t n = len - done < V2_LOAD_CHUNK ? len - done : V2_LOAD_CHUNK;
+    if (!v2_load_ready()) break;
+    uint32_t a = addr + done;
+    p[0] = T_LOAD; p[1] = 0x02; p[2] = (uint8_t) kind;
+    p[3] = (uint8_t) a; p[4] = (uint8_t) (a >> 8); p[5] = (uint8_t) (a >> 16); p[6] = (uint8_t) (a >> 24);
+    memcpy(p + 7, buf + done, n);
+    v2_send(p, 7 + n);
+    done += n;
+  }
+  spi_bus_unlock();
+}
+
 void link_load_data(link_load_kind_t kind, uint32_t addr, const uint8_t *buf, size_t len) {
+  if (V2) { v2_load_data(kind, addr, buf, len); return; }
   switch (kind) {
     case LINK_LOAD_ROM: link_write_data(CMD_ROMDATA, CMD_ROMBANK, addr, buf, len); break;
     case LINK_LOAD_FILE: link_write_data(CMD_FILEDATA, CMD_FILEBANK, addr, buf, len); break;
@@ -157,6 +308,7 @@ void link_load_data(link_load_kind_t kind, uint32_t addr, const uint8_t *buf, si
 }
 
 void link_load_end(link_load_kind_t kind) {
+  if (V2) { const uint8_t p[3] = { T_LOAD, 0x03, (uint8_t) kind }; v2_send(p, 3); return; }
   switch (kind) {
     case LINK_LOAD_ROM: spi_send(CMD_ROMLOADER, 0, 0); break;
     case LINK_LOAD_FILE: spi_send(CMD_FILELOADER, 0, 0); break; // active = 0, reset = 0
@@ -476,4 +628,33 @@ void link_aux_on(link_aux_kind_t kind, void (*cb)(uint8_t a, uint8_t b)) {
 
 void link_osd_reg(uint8_t reg, uint8_t value) {
   spi_send(CMD_OSD, reg, value);
+}
+
+// ---- link v2: the events of the core ----
+
+void link_v2_service(void) {
+  if (!V2 || !link2_int()) return;
+  uint8_t pending;
+  {
+    const uint8_t tx[4] = { T_SYS, 0x01, 0x00, 0x00 }; // IRQ: no ack, Z, pending
+    link2_xfer(tx, sizeof(tx), &pending, 1);
+  }
+  if (pending & 0x01) {
+    uint8_t causes;
+    v2_read(T_SYS, 0x02, &causes, 1);
+    if (causes & 0x01) { d_println("Link v2: the link of the core restarted"); }
+    if (causes & 0x02) {
+      uint8_t core_id;
+      v2_read(T_SYS, 0x08, &core_id, 1);
+      if (reload_cb) reload_cb(core_id);
+    }
+  }
+  if (pending & 0x02) {
+    // HID EVENT: the count, then (command, argument) pairs; at most 8 (the fifo of the core)
+    uint8_t ev[1 + 16];
+    v2_read(T_HID, 0x06, ev, sizeof(ev));
+    for (uint8_t i = 0; i < ev[0] && i < 8; i++) {
+      if (ps2_cmd_cb) ps2_cmd_cb(ev[1 + 2 * i], ev[2 + 2 * i]);
+    }
+  }
 }

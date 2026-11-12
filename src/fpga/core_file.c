@@ -25,8 +25,10 @@ bool core_file_open(FIL *f, const char *name, core_file_t *cf) {
     if (table_len > sizeof(table) || !read_at(f, h.header_size, table, table_len)) return false;
     if (!kg2_layout_parse(&h, table, table_len, size, KG2_BOARD_BIT(HW_ID), &cf->kg2)) return false;
     cf->format = CORE_FORMAT_KGO2;
-    cf->bitstream_ofs = cf->kg2.sec[KG2_SEC_BITSTREAM].offset;
-    cf->bitstream_len = cf->kg2.sec[KG2_SEC_BITSTREAM].length;
+    int bs = cf->kg2.sec[KG2_SEC_BITSTREAM_LINK2].present ? KG2_SEC_BITSTREAM_LINK2 : KG2_SEC_BITSTREAM;
+    cf->link = bs == KG2_SEC_BITSTREAM_LINK2 ? 2 : 1;
+    cf->bitstream_ofs = cf->kg2.sec[bs].offset;
+    cf->bitstream_len = cf->kg2.sec[bs].length;
     cf->roms_ofs = cf->kg2.sec[KG2_SEC_ROMS].offset;
     cf->roms_len = cf->kg2.sec[KG2_SEC_ROMS].length;
     return true;
@@ -36,6 +38,7 @@ bool core_file_open(FIL *f, const char *name, core_file_t *cf) {
   uint8_t len[8];
   if (!read_at(f, FILE_POS_BITSTREAM_LEN, len, sizeof(len))) return false;
   cf->format = CORE_FORMAT_KGO1;
+  cf->link = 1;
   cf->bitstream_ofs = FILE_POS_BITSTREAM_START;
   cf->bitstream_len = kg_be32(len);
   cf->roms_ofs = FILE_POS_BITSTREAM_START + cf->bitstream_len;
