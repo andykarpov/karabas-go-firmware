@@ -189,9 +189,9 @@ Dialog kinds of the UI layer (section 8), the same for v1 (text cells) and v2 (b
 | C | Name | → | ← | Notes |
 |---|---|---|---|---|
 | `01` | `MOUNT` | slot, size (8 bytes), flags | | size 0 = eject. Flags: bit 0 write protected, bit 1 / 2 physical drive DS0 / DS1 (Go) |
-| `02` | `EVENT` | | kind, slot, arguments | One event per read, IRQ bit 3 while more wait. Kinds below |
-| `03` | `RDATA` | slot, 512 bytes, sum (2) | status | Sector of a read request; status 0 taken, 1 bad sum (the core asks again) |
-| `04` | `WDATA` | slot | 512 bytes, sum (2) | Sector of a write request, from the buffer of the core |
+| `02` | `EVENT` | | kind, slot, arguments (5) | Z first; one event per read (the read of `kind` takes it), IRQ bit 3 while more wait. Kinds below |
+| `03` | `RDATA` | slot, 512 bytes, sum (2) | status | Z before the status. Sector of a read request; status 0 taken, 1 refused (bad sum, no read waiting): the mcu sends it again |
+| `04` | `WDATA` | slot | 512 bytes, sum (2) | Z after the slot. Sector of a write request, from the buffer of the core |
 | `05` | `DONE` | slot, status | | 1 done, 2 error, 3 write protected (data dropped) |
 | `06` | `FLUSH` | slot | | Backup RAM: write the dirty sectors now; the answer comes as an event |
 | `07` | `FDD_CHNG` | drive, value | | Answer to the DSKCHG event: 1 changed / no disk, 0 disk in, 2 no line |
@@ -201,8 +201,8 @@ Events (`EVENT` kind):
 | kind | Meaning | Arguments |
 |---|---|---|
 | 0 | none | |
-| 1 | read request | LBA (4) |
-| 2 | write request (the sector waits in the core: `WDATA`) | LBA (4) |
+| 1 | read request | LBA (4, LE) |
+| 2 | write request (the sector waits in the core: `WDATA`) | LBA (4, LE) |
 | 3 | flush finished | 1 no dirty sectors left / 2 a write failed |
 | 4 | backup RAM mount | size in sectors (4), file kind (0 `.sav`) |
 | 5 | DSKCHG request (the core selects the drive until `FDD_CHNG`) | drive (1 DS0, 2 DS1) |
