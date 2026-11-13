@@ -55,9 +55,11 @@ static uint32_t autoload_left_s() {
 }
 
 // ---- the bitmap OSD (link v2) ----
-// The cores, then a separator, Setup and About (as the setup apps at the end of a core menu);
-// the build of a core small at the right, the autoload countdown in the header.
-static uint8_t v2_extra = 0; // the cursor below the cores: 1 Setup, 2 About
+// The cores, then a separator, Setup, Graphic menu (the FT812 one, as the G key) and About (as the
+// setup apps at the end of a core menu); the build of a core small at the right, the autoload
+// countdown in the header.
+#define V2_EXTRAS 3          // the entries below the separator
+static uint8_t v2_extra = 0; // the cursor below the cores: 1 Setup, 2 Graphic menu, 3 About
 static uint16_t v2_top = 0;  // the first list entry shown
 
 static void draw2(void) {
@@ -65,7 +67,7 @@ static void draw2(void) {
   if (autoload_enabled) snprintf(note, sizeof(note), "Autoload %lu s", (unsigned long) autoload_left_s());
   ui2_screen_note(NULL, autoload_enabled ? note : NULL, false);
   uint8_t rows = UI2_ROWS;
-  uint16_t total = cores_len + 3; // the cores, the separator, Setup, About
+  uint16_t total = cores_len + 1 + V2_EXTRAS; // the cores, the separator, the extras
   uint16_t pos = v2_extra ? cores_len + v2_extra : core_sel;
   if (pos < v2_top) v2_top = pos;
   if (pos >= v2_top + rows) v2_top = pos - rows + 1;
@@ -80,7 +82,8 @@ static void draw2(void) {
     } else if (e == cores_len) {
       ui2_sep(r);
     } else {
-      ui2_row(r, e == cores_len + 1 ? "Setup" : "About", NULL, NULL, (e == pos ? UI2_SEL : 0) | UI2_ARROW);
+      static const char *const extras[V2_EXTRAS] = { "Setup", "Graphic menu", "About" };
+      ui2_row(r, extras[e - cores_len - 1], NULL, NULL, (e == pos ? UI2_SEL : 0) | UI2_ARROW);
     }
   }
   ui2_scrollbar(v2_top, total);
@@ -88,16 +91,17 @@ static void draw2(void) {
 }
 
 static void open_setup();
+static void open_ft_menu();
 
 // the keys of the v2 list: false if not taken (the common keys go on)
 static bool keys2(uint8_t key) {
   if (key == KEY_UP) {
-    if (v2_extra == 2) v2_extra = 1;
+    if (v2_extra > 1) v2_extra--;
     else if (v2_extra == 1) { v2_extra = 0; if (cores_len) core_sel = cores_len - 1; }
     else if (core_sel > 0) core_sel--;
   } else if (key == KEY_DOWN) {
     if (v2_extra == 0 && core_sel + 1 < cores_len) core_sel++;
-    else if (v2_extra < 2) v2_extra++;
+    else if (v2_extra < V2_EXTRAS) v2_extra++;
   } else if ((key == KEY_LEFT || key == KEY_RIGHT) && cores_len) {
     // a page of the cores
     v2_extra = 0;
@@ -108,6 +112,9 @@ static bool keys2(uint8_t key) {
     open_setup();
     return true;
   } else if (key == KEY_ENTER && v2_extra == 2) {
+    open_ft_menu();
+    return true;
+  } else if (key == KEY_ENTER && v2_extra == 3) {
     autoload_enabled = false;
     osd_return_state = state_core_browser;
     osd_state = state_about;
@@ -490,18 +497,23 @@ void app_core_browser_on_keyboard() {
   }
 
   // the graphic menu, also when it is off in karabas.ini (until the next start)
-  if (key == KEY_G && !has_ft) {
-    autoload_enabled = false;
-    ft_spi(true);
-    has_ft = ft_init(hw_setup.ft_video_mode);
-    if (has_ft) {
-      d_printf("FT81x started (system clock %lu kHz), switching to FT OSD", (unsigned long) (ft_init_clock_hz() / 1000)); d_println();
-      ft_vga(true);
-      app_core_browser_ft_overlay();
-    } else {
-      d_println("FT81x did not come up");
-      ft_spi(false);
-    }
+  if (key == KEY_G && !has_ft) open_ft_menu();
+}
+
+// from the text menu to the graphic one on the FT812 (the G key, the Graphic menu entry of the v2
+// list), also when it is off in karabas.ini (until the next start)
+static void open_ft_menu() {
+  if (has_ft) return;
+  autoload_enabled = false;
+  ft_spi(true);
+  has_ft = ft_init(hw_setup.ft_video_mode);
+  if (has_ft) {
+    d_printf("FT81x started (system clock %lu kHz), switching to FT OSD", (unsigned long) (ft_init_clock_hz() / 1000)); d_println();
+    ft_vga(true);
+    app_core_browser_ft_overlay();
+  } else {
+    d_println("FT81x did not come up");
+    ft_spi(false);
   }
 }
 
