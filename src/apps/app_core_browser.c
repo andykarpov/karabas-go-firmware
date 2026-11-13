@@ -65,7 +65,8 @@ static uint16_t v2_top = 0;  // the first list entry shown
 static void draw2(void) {
   char note[24];
   if (autoload_enabled) snprintf(note, sizeof(note), "Autoload %lu s", (unsigned long) autoload_left_s());
-  ui2_screen_note(NULL, autoload_enabled ? note : NULL, false);
+  // the header: the board, not the name of the boot core (the FT812 menu keeps its logo)
+  ui2_screen_note(BOARD_NAME, autoload_enabled ? note : NULL, false);
   uint8_t rows = UI2_ROWS;
   uint16_t total = cores_len + 1 + V2_EXTRAS; // the cores, the separator, the extras
   uint16_t pos = v2_extra ? cores_len + v2_extra : core_sel;

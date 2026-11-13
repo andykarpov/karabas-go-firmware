@@ -311,14 +311,17 @@
 #define FILENAME_BOOT "boot.kg1"
 #define FILENAME_FBOOT "/boot.kg1"
 #define CORE_EXT ".kg1"
+#define BOARD_NAME "Karabas GO" // the header of the text boot menu (link v2)
 #elif HW_ID==HW_ID_MINI
 #define FILENAME_BOOT "boot.kg2"
 #define FILENAME_FBOOT "/boot.kg2"
 #define CORE_EXT ".kg2"
+#define BOARD_NAME "Karabas miniGO" // the header of the text boot menu (link v2)
 #elif HW_ID==HW_ID_MINIG
 #define FILENAME_BOOT "boot.kg3"
 #define FILENAME_FBOOT "/boot.kg3"
 #define CORE_EXT ".kg3"
+#define BOARD_NAME "Karabas miniGO rev.G" // the header of the text boot menu (link v2)
 #endif
 
 #define APP_COREBROWSER_MENU_OFFSET 5
