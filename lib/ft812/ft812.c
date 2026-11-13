@@ -104,8 +104,6 @@ void ft812_bus_unlock(void);
 
 // Commands
 
-#define CMD_SPI_CONTROL 0x09
-#define ADDR_CONTROL_REGISTER 0x00
 
 // the clock the FT812 gets, f_mul multiplies it (6 -> 48 MHz)
 #define FT81x_REF_CLOCK_HZ 8000000UL
@@ -187,12 +185,12 @@ void ft_begin(ft_send_t send, uint8_t cs, uint8_t reset) {
 
 void ft_spi(bool on) {
   ctrl_reg = (ctrl_reg & ~(1u << 0)) | ((on) ? 1u << 0 : 0);
-  send_cb(CMD_SPI_CONTROL, ADDR_CONTROL_REGISTER, ctrl_reg);
+  send_cb(ctrl_reg);
 }
 
 void ft_vga(bool on) {
   ctrl_reg = (ctrl_reg & ~(1u << 1)) | ((on) ? 1u << 1 : 0);
-  send_cb(CMD_SPI_CONTROL, ADDR_CONTROL_REGISTER, ctrl_reg);
+  send_cb(ctrl_reg);
 }
 
 void ft_reset(void) {
@@ -206,10 +204,10 @@ void ft_reset(void) {
     } else {
         // hard reset by FPGA side
         ctrl_reg |= 1u << 4;
-        send_cb(CMD_SPI_CONTROL, ADDR_CONTROL_REGISTER, ctrl_reg);
+        send_cb(ctrl_reg);
         ms_delay(10);
         ctrl_reg &= ~(1u << 4);
-        send_cb(CMD_SPI_CONTROL, ADDR_CONTROL_REGISTER, ctrl_reg);
+        send_cb(ctrl_reg);
     }
     // disable mcu-ft spi
     ft_spi(false);
@@ -227,10 +225,10 @@ static void ft_power_cycle(void) {
     } else {
         // PD_N driven by the FPGA (ctrl register bit 4)
         ctrl_reg |= 1u << 4;
-        send_cb(CMD_SPI_CONTROL, ADDR_CONTROL_REGISTER, ctrl_reg);
+        send_cb(ctrl_reg);
         ms_delay(20);
         ctrl_reg &= ~(1u << 4);
-        send_cb(CMD_SPI_CONTROL, ADDR_CONTROL_REGISTER, ctrl_reg);
+        send_cb(ctrl_reg);
     }
     ms_delay(50); // internal regulator and oscillator start-up
 }

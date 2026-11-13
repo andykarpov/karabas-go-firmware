@@ -45,7 +45,7 @@ set(BUILD_VER "" CACHE STRING "firmware version")
 # lib/: our libraries; third_party/: upstream code (with our changes marked `karabas`)
 set(KG_LIB_DIRS
   lib/common lib/ft812 lib/i2c lib/ms_time lib/osd lib/rtc lib/sd lib/spi0
-  third_party/fatfs third_party/tusb_xinput)
+  third_party/fatfs third_party/tusb_xinput third_party/u8g2)
 
 file(GLOB_RECURSE KG_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_LIST_DIR}/src/*.c)
 set(KG_INCLUDES ${CMAKE_CURRENT_LIST_DIR}/src)

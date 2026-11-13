@@ -30,6 +30,7 @@
 #include "board/pin.h"
 #include "board/chip.h"
 #include "fpga/link.h"
+#include "fpga/link_api.h"
 #include "fpga/bitstream.h"
 #include "fpga/core_loader.h"
 #include "fpga/core_file.h"

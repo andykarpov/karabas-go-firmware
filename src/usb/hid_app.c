@@ -378,9 +378,9 @@ static void process_kbd_report(uint8_t dev_addr, uint8_t instance, hid_keyboard_
     uint32_t save = spin_lock_blocking(usb_host_lock());
     kbd_report_shared = *report;
     spin_unlock(usb_host_lock(), save);
-    spi_queue(CMD_USB_KBD, 0, report->modifier);
+    link_hid_queue(LINK_EV_KBD, 0, report->modifier);
     for(uint8_t i=0; i<6; i++) {
-      spi_queue(CMD_USB_KBD, i+1, report->keycode[i]);
+      link_hid_queue(LINK_EV_KBD, i+1, report->keycode[i]);
     }
     // the PS/2 stream without the key of a Menu+key hotkey, until it is released (as input_route for
     // the USB report): no make code, so no typematic repeat either
@@ -446,10 +446,10 @@ static void process_mouse_report(uint8_t dev_addr, uint8_t instance, hid_mouse_r
   if (change) {
     //d_print("Mouse protocol len="); d_println(len);
     usb_mouse_report = *report;
-    spi_queue(CMD_USB_MOUSE, 0, report->x);
-    spi_queue(CMD_USB_MOUSE, 1, report->y);
-    spi_queue(CMD_USB_MOUSE, 2, report->wheel);
-    spi_queue(CMD_USB_MOUSE, 3, report->buttons);
+    link_hid_queue(LINK_EV_MOUSE, 0, report->x);
+    link_hid_queue(LINK_EV_MOUSE, 1, report->y);
+    link_hid_queue(LINK_EV_MOUSE, 2, report->wheel);
+    link_hid_queue(LINK_EV_MOUSE, 3, report->buttons);
     d_printf("HID Mouse XYZB: %02x %02x %02x %02x", report->x, report->y, report->wheel, report->buttons);
     d_println();
     prev_report = *report;
@@ -468,16 +468,16 @@ static void process_mouse_report_ext(uint8_t dev_addr, uint8_t instance, hid_mou
   if (change) {
     //d_print("Mouse protocol len="); d_println(len);
     //usb_mouse_report = *report;
-    spi_queue(CMD_USB_MOUSE, 0, report->x);
-    spi_queue(CMD_USB_MOUSE, 1, report->y);
-    spi_queue(CMD_USB_MOUSE, 2, report->wheel);
-    spi_queue(CMD_USB_MOUSE, 3, report->buttons);
+    link_hid_queue(LINK_EV_MOUSE, 0, report->x);
+    link_hid_queue(LINK_EV_MOUSE, 1, report->y);
+    link_hid_queue(LINK_EV_MOUSE, 2, report->wheel);
+    link_hid_queue(LINK_EV_MOUSE, 3, report->buttons);
     // to avoid stuck on previous wheel position - let's send a wheel to 0 after an event
     d_printf("HID Mouse XYZBP: %04x %04x %02x %02x %02x", report->x, report->y, report->wheel, report->buttons, report->pan);
     d_println();
 
     if (report->wheel != 0) {
-      spi_queue(CMD_USB_MOUSE, 2, 0);
+      link_hid_queue(LINK_EV_MOUSE, 2, 0);
       d_printf("HID Mouse XYZBP: %04x %04x %02x %02x %02x", report->x, report->y, 0, report->buttons, report->pan);
       d_println();
     }

@@ -1,4 +1,6 @@
 #include "main.h"
+#include "ui/osd2.h"
+#include "ui/ui2.h"
 #include "input/ps2kbd.h"
 #include "input/usb_hid_keys.h"
 #include "apps/app_core.h"
@@ -170,8 +172,12 @@ void print_time() {
 }
 
 void on_time() {
-  print_time();
-  osd_update();
+  if (osd2_active()) {
+    if (is_osd && !has_ft) ui2_clock(); // the header of the v2 screens
+  } else {
+    print_time();
+    osd_update();
+  }
 
   if (osd_state == state_msc) {
     if (has_ft) app_msc_ft_draw();

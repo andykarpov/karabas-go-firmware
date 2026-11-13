@@ -7,7 +7,7 @@
 #include <string.h>
 #include "config.h"
 #include "usb_midi.h"
-#include "fpga/link.h"
+#include "fpga/link_api.h"
 #include "diag/debug_out.h"
 #include "storage/settings.h"
 
@@ -114,10 +114,10 @@ static void midi_close(uint8_t address) {
 
 static void midi_send(const uint8_t *bytes, uint8_t n) {
   // only cores that take MIDI get it (caps bit 4); others would see unknown frames
-  const bool take = (link_core_caps() & CAPS_MIDI) != 0;
+  const bool take = link_has(LINK_CAP_MIDI);
   for (uint8_t i = 0; i < n; i++) {
     if (take) {
-      spi_queue(CMD_MIDI, seq++, bytes[i]);
+      link_hid_queue(LINK_EV_MIDI, seq++, bytes[i]);
       sent_bytes++;
     } else {
       skipped_bytes++;

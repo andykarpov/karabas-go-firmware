@@ -64,7 +64,10 @@ static void test_layout_boards() {
   TEST_ASSERT_NOT_EQUAL(go.sec[KG2_SEC_CORE].offset, minig.sec[KG2_SEC_CORE].offset);
   TEST_ASSERT_EQUAL(11, go.sec[KG2_SEC_BITSTREAM].length);
   TEST_ASSERT_EQUAL_MEMORY("GOBITSTREAM", sec(&go, KG2_SEC_BITSTREAM), 11);
-  TEST_ASSERT_EQUAL_MEMORY("MINIGBITSTREAM!", sec(&minig, KG2_SEC_BITSTREAM), 15);
+  // minig is a core of link v2: its bitstream in BITSTREAM_LINK2 only
+  TEST_ASSERT_FALSE(minig.sec[KG2_SEC_BITSTREAM].present);
+  TEST_ASSERT_FALSE(go.sec[KG2_SEC_BITSTREAM_LINK2].present);
+  TEST_ASSERT_EQUAL_MEMORY("MINIGBITSTREAM!", sec(&minig, KG2_SEC_BITSTREAM_LINK2), 15);
   TEST_ASSERT_FALSE(go.sec[KG2_SEC_MATRIX].present);
   // a board without a bitstream
   kg2_layout_t l;
@@ -89,8 +92,10 @@ static void test_core() {
   TEST_ASSERT_EQUAL(4, c.eeprom_bank);
   TEST_ASSERT_EQUAL(0, c.spi_freq);
   TEST_ASSERT_EQUAL_STRING("A,B", str(&go, c.drives));
+  TEST_ASSERT_EQUAL(1, c.link);
   TEST_ASSERT_TRUE(kg2_core_parse(sec(&minig, KG2_SEC_CORE), sec_len(&minig, KG2_SEC_CORE), &c));
   TEST_ASSERT_EQUAL(16, c.spi_freq);
+  TEST_ASSERT_EQUAL(2, c.link);
   TEST_ASSERT_EQUAL_STRING("", str(&minig, c.drives));
 }
 

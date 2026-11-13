@@ -54,26 +54,18 @@ static uint32_t led_timer = 0;
 // main() reserves the state machines of pio1, so nothing but the usb host can load a program
 // there; usb_host_setup() releases them right before PIO-USB init.
 
-// fpga commands handled here (link_on)
-// a handler runs inside any spi_send of APP (a file transfer, an osd redraw): the core reload
+// fpga commands handled here (link_api)
+// a handler runs inside any transfer of APP (a file transfer, an osd redraw): the core reload
 // waits for the main loop, so the sequence it interrupted does not go on into the new core
 static bool flashboot_pending = false;
 static uint8_t flashboot_data;
-static void on_flashboot(uint8_t addr, uint8_t data) {
-  flashboot_data = data;
+static void on_flashboot(uint8_t core_id) {
+  flashboot_data = core_id;
   flashboot_pending = true;
 }
 
-static void on_esp_uart(uint8_t addr, uint8_t data) {
-  esp_serial_rx_push(data);
-}
-
 static void esp_send(uint8_t c) {
-  spi_send(CMD_ESP_UART, 0, c);
-}
-
-static void on_rtc(uint8_t addr, uint8_t data) {
-  rtc_set_data(addr, data);
+  link_esp_put(c);
 }
 
 // firmware init, runs on core0
@@ -91,11 +83,11 @@ static void karabas_setup()
 
   // SPI0 to FPGA, incoming fpga commands
   link_begin();
-  link_on(CMD_FLASHBOOT, on_flashboot);
-  link_on(CMD_UART, serial_data);
-  link_on(CMD_ESP_UART, on_esp_uart);
-  link_on(CMD_RTC, on_rtc);
-  link_on(CMD_PS2_SCANCODE, ps2_command_receive);
+  link_sys_on_reload(on_flashboot);
+  link_uart_on_rx(serial_data);
+  link_esp_on_rx(esp_serial_rx_push);
+  link_rtc_on_write(rtc_set_data);
+  link_hid_on_ps2_cmd(ps2_command_receive);
   matrix_register_handlers();
   img_register_handlers();
   bk_register_handlers();
@@ -133,9 +125,10 @@ static void karabas_setup()
   matrix_begin();
   oled_begin();
 
-  rtc_begin(spi_send, on_time);
-  osd_begin(spi_send);
-  ft_begin(spi_send, PIN_MCU_FT_CS, board_ft_reset_pin());
+  rtc_begin(link_rtc_set, on_time);
+  rtc_set_flush(link_rtc_flush);
+  osd_begin(link_osd_reg);
+  ft_begin(link_sys_spi_control, PIN_MCU_FT_CS, board_ft_reset_pin());
 
   storage_begin();
 

@@ -242,7 +242,7 @@ extern "C" {
 
 #define FT_NO_RESET 0xFF // ft_begin(): PD_N is driven by the FPGA (ctrl register bit 4)
 
-typedef void (*ft_send_t)(uint8_t cmd, uint8_t addr, uint8_t data);
+typedef void (*ft_send_t)(uint8_t ctrl); // the SPI control register of the core (FT812 SPI / video / reset bits)
 
 // the chip select and PD_N pins, the callback that sends the control register to the FPGA
 void ft_begin(ft_send_t send, uint8_t cs, uint8_t reset);

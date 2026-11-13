@@ -24,7 +24,7 @@ void link_set_rx_enabled(bool enabled);   // ignore incoming commands while the 
 void spi_bus_lock();
 void spi_bus_unlock();
 void link_set_dispatch_task(void *task);  // task that runs the incoming command handlers (APP)
-void link_set_event_task(void *task);     // task woken by spi_queue (INPUT)
+void link_set_event_task(void *task);     // task woken by link_event_push (INPUT)
 void link_dispatch_pending();             // handle frames received by other tasks
 void link_poll();                         // once per main loop: NOP to the fpga if the link was idle
 
@@ -45,9 +45,19 @@ size_t link_burst_write(uint8_t type, uint32_t addr, const uint8_t *data, size_t
 // 8..31 (before the first byte and at every 256), data_cmd with the low byte of the address
 void link_write_data(uint8_t data_cmd, uint8_t bank_cmd, uint32_t addr, const uint8_t *buf, size_t len);
 
-void spi_queue(uint8_t cmd, uint8_t addr, uint8_t data); // enqueue from any core / irq, sent by the input handler
+// the HID event queue of link_api (link_hid_queue / link_hid_queue_pop): from any core / irq,
+// forwarded by the INPUT task
+void link_event_push(uint8_t kind, uint8_t idx, uint8_t val);
 bool link_queue_pop(queue_spi_t *packet);
 void link_report_drops();
+
+// link v2 (docs/link_v2.md): the link of the core being loaded (fpga_send, from its core file)
+void link_select(uint8_t version);
+uint8_t link_version(void);
+bool link2_int(void);  // INT of the core is up
+// one packet: txlen bytes of tx (the turnaround byte included), then rxlen bytes read into rx
+void link2_xfer(const uint8_t *tx, size_t txlen, uint8_t *rx, size_t rxlen);
+void link_v2_service(void); // link_api.c: the events of the core while INT is up
 
 void spi_send(uint8_t cmd, uint8_t addr, uint8_t data);
 void spi_send16(uint8_t cmd, uint16_t data);

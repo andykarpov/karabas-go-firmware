@@ -1,10 +1,14 @@
-# MCU ↔ FPGA link v2 (draft)
+# MCU ↔ FPGA link v2 (preview)
 
 [Русская версия](link_v2.ru.md) · Link v1: [protocol.md](protocol.md), [burst_protocol.md](burst_protocol.md)
 
-Status: **draft, nothing implemented**. Link v2 is a second protocol on the same wires. It lives
-next to v1: the core file says which link a core speaks, and the firmware keeps v1 for every core
-that does not say v2.
+Status: **preview**. Link v2 is implemented: the firmware on the branch `link-v2` (not released yet),
+the core side in karabas-go-modules (`kg_mcu2`, `kg_l2_*`, guide `docs/link_v2_migration.md`), the
+core file key `"link": 2` in karabas-go-tools `make_core`. Cores on it: vic20, boot menu, macplus,
+profi, tsconf, baseconf (Mini G). New cores can be written on it, but the protocol may still change
+until the release of the firmware (the Go / Mini boards are not moved yet): follow the changes of
+this file. Link v2 is a second protocol on the same wires. It lives next to v1: the core file says
+which link a core speaks, and the firmware keeps v1 for every core that does not say v2.
 
 ## 1. Why
 
@@ -111,17 +115,17 @@ logged with `debug=1`.
 |---|---|---|---|---|
 | `00` | `STATUS` | | `'K' 'G'`, version (2), caps (2 bytes), OSD width / 8, OSD height / 8, ports mask | The first packet after configuration; the magic says the core runs and speaks v2 |
 | `01` | `IRQ` | ack mask | pending | `pending` as it was before the ack. Ack clears only the SYS causes (bit 0) |
-| `02` | `IRQ_SRC` | | SYS causes | bit 0 coldboot, bit 1 reload request, bit 2 button read requested; reading clears bits 0 and 2 |
-| `03` | `SETVAL` | (index, value) × n | | The OSD switches; index = the switch index of v1 (`sw` of kgo2), so pinned `index` values keep working. Triggers: 1, then 0 after 100 ms |
-| `04` | `HW_SETUP` | key, value bytes | | key 0 board (`HW_ID`), 1 DVI only, `10` core build (8 chars), `18` firmware build (8 chars) |
+| `02` | `IRQ_SRC` | | SYS causes | bit 0 coldboot, bit 1 reload request; reading clears bit 0 |
+| `03` | `SETVAL` | (index, value) × n | | The OSD switches, all of them in one packet at the start; index = the switch index of v1 (`sw` of kgo2), so pinned `index` values keep working. Triggers: 1, then 0 after 100 ms |
+| `04` | `HW_SETUP` | key, value bytes | | value byte k is key + k: 0 board (`HW_ID`), 1 DVI only, `10`..`17` core build, `18`..`1F` firmware build: board + DVI in one packet, the 16 build characters in another |
 | `05` | `INIT` | 1 = start (busy) / 0 = done | | As `CMD_INIT_START` / `CMD_INIT_DONE` |
 | `06` | `SPI_CONTROL` | bits | | As `CMD_SPI_CONTROL`: bit 0 FT812 SPI, 1 FT812 video, 2 SD2, 3 ESP8266, 4 FT812 reset |
-| `07` | `BTN` | button, state | | On-board buttons with the action `core` |
+| `07` | `BTN` | button, state | | 0, 1 the on-board buttons with the action `core`; 2..5 the buttons of the LED matrix add-on (v1 `CMD_MATRIX_BTN`) |
 | `08` | `RELOAD` | | core id | Read after `IRQ_SRC` bit 1 (v1 `CMD_FLASHBOOT`) |
 
 Caps (`STATUS` bytes 3..4): bit 0 IMG, 1 backup RAM, 2 write-protected images, 3 floppy drives
-(DSKCHG), 4 LOAD flow control, 5 RTC writes, 6 AUX, 7 FT812 video, 8 reload. The ports mask says
-which PORT indexes the core has (bit n = port n).
+(DSKCHG), 4 LOAD flow control (`LD_READY`), 5 RTC, 6 AUX, 7 FT812 video, 8 reload, 9 MIDI IN.
+The ports mask says which PORT indexes the core has (bit n = port n).
 
 Coldboot: the SYS cause bit 0 is set when the link of the core leaves reset. The firmware sees it
 after its own configuration (and clears it), and also when a core resets its link while it runs
@@ -132,12 +136,11 @@ without loading the bitstream.
 
 | C | Name | → | ← | Notes |
 |---|---|---|---|---|
-| `01` | `KBD` | 8 bytes: modifiers, 0, 6 key codes | | The USB boot report; one strobe per report for the core. Not sent while the OSD is open |
-| `02` | `PS2` | (kind, code) × n | | kind 0 set 2, 1 XT; bit 7 of kind = release |
-| `03` | `MOUSE` | dx, dy, wheel, buttons | | Signed deltas, as v1 |
-| `04` | `JOY` | index, bits 7..0, bits 15..8 [, x, y] | | v1 bits; analog axes optional (0x80 centre) |
-| `05` | `MATRIX_BTN` | button, state | | LED matrix add-on buttons |
-| `06` | `EVENT` | | count n, then (command, argument) × n | PS/2 commands of the core (`ED` LEDs, `F0` set); IRQ bit 1 |
+| `01` | `KBD` | 8 bytes: modifiers, 0, 6 key codes | | The USB boot report; one strobe per report for the core (`KBD_WR`). Not sent while the OSD is open |
+| `02` | `PS2` | (kind, code) × n | | kind 0 a set 2 byte, 1 an XT byte (bit 7 of the code = release): a strobe per byte (`PS2_WR`), all bytes of a key (E0 / F0 prefixes, typematic) in one packet |
+| `03` | `MOUSE` | dx, dy, wheel, buttons | | Signed deltas; one strobe per report (`MS_WR`) |
+| `04` | `JOY` | (port, bits 7..0, bits 15..8) × n | | v1 bits; both ports in one packet when both changed (`JOY_WR`) |
+| `06` | `EVENT` | | count n, then (command, argument) × n | PS/2 commands of the core to the keyboard (`ED` LEDs, `F0` set); IRQ bit 1 |
 
 ### 5.3 OSD (`02`)
 
@@ -149,7 +152,7 @@ top. The size comes from `STATUS` (bytes 5..6), so a core with less block RAM ma
 |---|---|---|---|
 | `01` | `ENABLE` | bit 0 show | |
 | `02` | `WRITE` | tile (2 bytes, LE), data bytes | tile = page × (width / 8) + column / 8; bytes go on from `tile × 8`, wrapping at the end. u8g2 sends a tile row at a time |
-| `03` | `COLORS` | fg R G B, bg R G B, bg alpha (0..3) | Defaults: white on dark blue, alpha 2 |
+| `03` | `COLORS` | fg R G B, bg R G B, bg alpha: 0 none, 1 a half, 2 three quarters, 3 opaque | Defaults: white on dark blue, alpha 2 (the firmware sets 3) |
 | `04` | `POPUP` | x, y, w, h (in tiles), place, zoom | Show only this part of the bitmap, as a popup; w = 0 ends the popup (the whole bitmap again). place: 0 centre, 1 top, 2 bottom of the screen. zoom: 0 the scale of the OSD, 1 twice that (as the large cells of the v1 popup) |
 
 The core scales the bitmap by an integer factor that fits its video mode (×2 for 640 / 800 wide,
@@ -190,9 +193,9 @@ Dialog kinds of the UI layer (section 8), the same for v1 (text cells) and v2 (b
 | C | Name | → | ← | Notes |
 |---|---|---|---|---|
 | `01` | `MOUNT` | slot, size (8 bytes), flags | | size 0 = eject. Flags: bit 0 write protected, bit 1 / 2 physical drive DS0 / DS1 (Go) |
-| `02` | `EVENT` | | kind, slot, arguments | One event per read, IRQ bit 3 while more wait. Kinds below |
-| `03` | `RDATA` | slot, 512 bytes, sum (2) | status | Sector of a read request; status 0 taken, 1 bad sum (the core asks again) |
-| `04` | `WDATA` | slot | 512 bytes, sum (2) | Sector of a write request, from the buffer of the core |
+| `02` | `EVENT` | | kind, slot, arguments (5) | Z first; one event per read (the read of `kind` takes it), IRQ bit 3 while more wait. Kinds below |
+| `03` | `RDATA` | slot, 512 bytes, sum (2) | status | Z before the status. Sector of a read request; status 0 taken, 1 refused (bad sum, no read waiting): the mcu sends it again |
+| `04` | `WDATA` | slot | 512 bytes, sum (2) | Z after the slot. Sector of a write request, from the buffer of the core |
 | `05` | `DONE` | slot, status | | 1 done, 2 error, 3 write protected (data dropped) |
 | `06` | `FLUSH` | slot | | Backup RAM: write the dirty sectors now; the answer comes as an event |
 | `07` | `FDD_CHNG` | drive, value | | Answer to the DSKCHG event: 1 changed / no disk, 0 disk in, 2 no line |
@@ -202,26 +205,27 @@ Events (`EVENT` kind):
 | kind | Meaning | Arguments |
 |---|---|---|
 | 0 | none | |
-| 1 | read request | LBA (4) |
-| 2 | write request (the sector waits in the core: `WDATA`) | LBA (4) |
+| 1 | read request | LBA (4, LE) |
+| 2 | write request (the sector waits in the core: `WDATA`) | LBA (4, LE) |
 | 3 | flush finished | 1 no dirty sectors left / 2 a write failed |
 | 4 | backup RAM mount | size in sectors (4), file kind (0 `.sav`) |
 | 5 | DSKCHG request (the core selects the drive until `FDD_CHNG`) | drive (1 DS0, 2 DS1) |
 
 One request per slot at a time, as in v1; the core repeats a request after 200 ms without `DONE`.
-`img_sdc`, `hdf_ata`, `kg_bk_ram` keep their core-side ports.
+The sector interface of `img_sdc` (`sdc_*`) stays for the drives of the cores; its link side is
+new (`kg_l2_img`), and `kg_bk_ram`, `hdf_ata` sit on it as now (section 11).
 
 ### 5.5 LOAD (`04`)
 
 | C | Name | → | ← | Notes |
 |---|---|---|---|---|
-| `01` | `START` | kind, slot, size (8), extension (ASCII, up to 8) | | kind 0 ROM (the core holds its CPU in reset), 1 file loader (reset + active), 2 ioctl (`FL` item) |
-| `02` | `DATA` | address (4), 1..512 bytes | | Byte k to address + k |
-| `03` | `END` | kind | | |
-| `04` | `STATUS` | | free (512-byte blocks), 0 = wait | Only with caps bit 4; without it the core takes `DATA` at any rate |
+| `01` | `START` | kind, slot, size (8), extension (ASCII, up to 8) | | kind 0 ROM (the core holds its CPU in reset), 1 file loader, 2 `FL` item; `LD_START` one clock after the size (a new file: the core resets what it loads into), `LD_ACTIVE` until `END` |
+| `02` | `DATA` | kind, address (4), 1..512 bytes | | Byte k to address + k (`LD_WR` per byte); a packet of another kind than the open `START` is dropped |
+| `03` | `END` | kind | | `LD_ACTIVE` off, `LD_END` one clock |
+| `04` | `STATUS` | | 1 = a `DATA` packet of 512 bytes may come (`LD_READY`), 0 = wait | Only with caps bit 4; without it the core takes `DATA` at any rate (a byte per 250 ns at 32 MHz) |
 
-With caps bit 4 the MCU reads `STATUS` before a `DATA` packet when its last answer is used up, and
-waits on IRQ bit 4 (set when space comes back) or polls every 1 ms, 100 ms at most.
+With caps bit 4 the MCU reads `STATUS` before each `DATA` packet and polls it every 1 ms while it
+is 0, 100 ms at most.
 
 ### 5.6 PORT (`05`)
 
@@ -231,15 +235,15 @@ Byte streams, port index = `P0` of every command.
 |---|---|
 | 0 | USB serial port / USB-UART adapter (v1 `CMD_UART`: ZiFi, EVO RS232) |
 | 1 | ESP8266 module behind the FPGA (v1 `CMD_ESP_UART`) |
-| 2 | MIDI IN from a USB MIDI keyboard (MCU → FPGA only, v1 `CMD_MIDI`) |
+| 2 | MIDI IN from a USB MIDI keyboard (MCU → FPGA only, v1 `CMD_MIDI`; no byte counter: the MCU sends only what fits, a lost byte is its own count) |
 | 3 | USB printer (FPGA → MCU only) |
 
 | C | Name | → | ← | Notes |
 |---|---|---|---|---|
-| `01` | `STATUS` | port | rx free, tx available, config (4) | config: port 0 the divisor DLL, DLM (0 = 115200), port 3 status request flag |
+| `01` | `STATUS` | port | rx free, tx available, config (4) | Z after the port; both counts at most 255. config: port 0 the divisor DLL, DLM (0 = 115200) |
 | `02` | `PUT` | port, bytes | | MCU → core; at most rx free |
-| `03` | `GET` | port, count | count bytes | core → MCU |
-| `04` | `PSTAT` | port, status | | Status into the core: port 3 printer (bit 7 BUSY) |
+| `03` | `GET` | port, count | count bytes | Z after the count; core → MCU (00 past what waits) |
+| `04` | `PSTAT` | port, status | | Status into the core: port 3 printer (bit 7 BUSY), sent after every GET of port 3 |
 
 IRQ bit 5 while any port has tx bytes.
 
@@ -247,14 +251,19 @@ IRQ bit 5 while any port has tx bytes.
 
 | C | Name | → | ← | Notes |
 |---|---|---|---|---|
-| `01` | `SET` | first register, values | | All registers at start, the time registers every 500 ms (formats of v1 `rtc_mode`) |
-| `02` | `GET` | | count n, (register, value) × n | Registers the CPU of the core wrote; IRQ bit 6 |
+| `01` | `SET` | first register, values | | Register first + k = value k. All registers at start, the time registers every 500 ms (formats of v1 `rtc_mode`); the firmware sends each run of consecutive registers as one packet |
+| `02` | `GET` | | count n, (register, value) × n | Z first. Registers the CPU of the core wrote (a fifo of 8, not while busy, not C, nor D with SKIP_0D); IRQ bit 6 |
 
 ### 5.8 AUX (`07`)
 
 | C | Name | → | ← | Notes |
 |---|---|---|---|---|
-| `01` | `EVENT` | | count n, (cmd, addr, data) × n | The v1 frames of the core as they are: `60`..`62` matrix, `70` / `71` peaks, `30` / `31` debug; IRQ bit 7 |
+| `01` | `MATRIX` | | control, 32 bitplane bytes | Z first. The picture of the core for the LED matrix (bytes 0..7 the red rows of the left matrix, 8..15 its green, 16..31 the right one; control: bit 2 brightness in bits 7..4, bit 3 meter mode). The core draws into its own bitplanes (pixels or rows), the MCU reads them whole when they changed |
+| `02` | `PEAKS` | | left (2), right (2) | Z first, LE. The highest audio peaks since the last read (it clears them), for the matrix meters |
+| `03` | `DEBUG` | | addr (2), data (2) | Z first, LE. Debug values of the core for the log, when they changed |
+| `04` | `CHANGED` | | bits | Z first. Bit 0 the matrix (an update, a new mode or brightness), 1 new peaks, 2 the debug values; the read of `MATRIX` / `PEAKS` / `DEBUG` clears its bit |
+
+IRQ bit 7 while one of them changed since it was read. The core keeps the frames of v1 (`MATRIX_CMD`: CTL, PIXEL, BITPLAN, the peaks of `audio_peaks.v`): `kg_l2_aux` keeps the bitplanes for the MCU.
 
 ## 6. Core start
 
@@ -288,22 +297,35 @@ There is no font download (the font is in the MCU) and no caps query apart from 
   u8g2 backend of v2 share the menu, the file browser and the dialogs (toast, progress, busy,
   message / confirm, section 5.3): the callers (`hotkey_popup()`, the loaders, `bk_save`,
   `uknc_sav`) ask for a dialog, not for cells. The OLED of the backlog can reuse the u8g2 backend.
-- The header with the logo, the build ids and the footer become graphics (a small bitmap logo,
-  not font characters).
-- New fonts with Cyrillic, from u8g2: `u8g2_font_6x12_t_cyrillic` for the menu (42 columns, 10
-  lines), `u8g2_font_5x8_t_cyrillic` for long lists and the status line (51 × 16),
-  `u8g2_font_haxrcorp4089_t_cyrillic` as a proportional option. Titles and icons are drawn as
-  graphics. The CP866 font of the text OSD and its logo characters are not used in v2.
-
+- The screens (`ui/ui2`, `ui/osd2`; agreed on the board 2026-11-12):
+  - Font `u8g2_font_6x12_t_cyrillic` only (bold fonts were tried and dropped: letters merge),
+    `u8g2_font_5x8_t_cyrillic` for hotkeys, notes, the clock, disabled rows.
+  - Header (y 0..11, a line at 12): the core name from the left edge on the main page; on every
+    level under it a triangle "back" and the title (the page path "Options > Video", the app,
+    "Disk 8: /dir" of a browser). At the right the clock, in a browser its extensions instead.
+  - 9 rows of 12 pixels, no hint lines; a scrollbar at the right.
+  - The setup apps (Setup RTC, Map USB gamepad; the boot core also Wi-Fi, Settings) and About are
+    the last items of the main page, after a separator.
+  - Switches: Left / Right and the hotkey step the options; Enter opens a screen of the options
+    (radio buttons, Up / Down, Enter takes one, Esc back). Off / On, No / Yes, Disabled / Enabled
+    pairs are a check box; radio groups are circles.
+  - Focus: a filled bar / button has the focus, a frame marks the chosen one while the focus is
+    elsewhere (the port of Map USB gamepad).
+  - Boxes in the middle with a clear margin, the toast in the middle (zoomed popup), About with
+    the logo of the OLED (no "mini" on a Go). The background opaque (COLORS alpha 3).
+  - Later (backlog): marquee of long names, activity icons.
 ## 9. FPGA side (karabas-go-modules)
 
-- `kg_l2_spi`: the byte shifter on `MCU_SCK` (mode 0, the chip-select deglitch of `kg_mcu_link`),
-  a toggle into the core clock, the next MISO byte requested a few bits ahead.
-- `kg_l2_bus`: target / command decode, `strobe`, `start`, `dout` to the targets, `din` back.
-- Targets `kg_l2_sys`, `_hid`, `_osd`, `_img`, `_load`, `_port`, `_rtc`, `_aux`, each behind an
-  `ENABLE_*` parameter.
-- `kg_mcu2`: the wrapper with **the same core-side ports as `kg_mcu`** plus `INT`, so a core moves
-  to v2 by swapping the module, the INT pin in the ucf and `"link": 2`.
+- `kg_l2_link`: the transport: the byte shifter on `MCU_SCK` (`kg_spi_slave`, 8 bits, mode 0,
+  the chip-select deglitch of `kg_mcu_link`), the packet position, the byte bus of the targets
+  (`stb`, `tgt`, `cmd`, `n`, `d`) and their answers (`rq`, `rq_m` -> `q`, one turnaround byte),
+  `INT` = the or of their pending bits.
+- Targets `kg_l2_sys`, `_hid`, `_load` (Ф2), `_osd`, `_img`, `_port`, `_rtc`, `_aux` (later), each
+  behind an `ENABLE_*` parameter.
+- `kg_mcu2`: the module of a v2 core. **Nothing of link v1 in it** (no frames, no bursts, no
+  reply queue) and **its own core-side ports** (section 11): a core moves to v2 by an edit of its
+  top (the new ports), the INT pin (the IO1 line, already the burst ready of burst cores) and
+  `"link": 2`.
 - Clock: 32 MHz SCK with a core clock of about 28 MHz must work (the bursts of v1 do); the exact
   bound comes from the simulation of `kg_l2_spi` and goes here.
 - Expected saving per core: the reply queue (512 × 24) and `kg_burst_rx` go, the OSD font RAM goes;
@@ -317,10 +339,53 @@ One branch and one PR per phase and repository.
 |---|---|
 | Ф0 | This specification |
 | Ф1 | Firmware refactor without a change of behaviour: the services (input, OSD, img, loaders, RTC, ports, matrix) call a link interface instead of building frames, and the popups go through the dialog API (section 5.3) on the text backend; v1 byte for byte, checked on the board |
-| Ф2 | Transport + SYS / HID / LOAD: `kg_l2_spi`, `kg_l2_bus`, `kg_mcu2` with a verilator testbench and an MCU model; firmware `link2` (DMA for long packets, the INT task); make_core `link` + section 10. Pilot cores on Mini G: the **boot core** and **vic20** |
+| Ф2 | Transport + SYS / HID / LOAD: `kg_l2_link`, `kg_l2_sys` / `_hid` / `_load`, `kg_mcu2` with a testbench and an MCU model; firmware `link2` (DMA for long packets, the INT task); make_core `link` + section 10. Pilot core on Mini G: **vic20** (done: Mini G hw ok); the boot core moves in Ф3 / Ф5 (it needs the OSD, the ESP and MIDI ports). Moving a core: karabas-go-modules `docs/link_v2_migration.md` |
 | Ф3 | OSD: `kg_l2_osd` (bitmap, `POPUP` windows with zoom), u8g2 and the display layer, the Cyrillic fonts, the menu and the dialogs in graphics |
 | Ф4 | IMG: mounter, `.sav`, write protection, physical floppy drives |
 | Ф5 | PORT, RTC, AUX, `SPI_CONTROL` / FT812 |
 | Ф6 | The other cores one by one (each its own PR), the ports of MiSTle cores first (atarist, macplus, atari2600) |
 
 The firmware keeps link v1 for every core that is not moved.
+
+## 11. The schemes of v1 in v2
+
+A v2 core does not keep the v1 way of a feature: each one is redone as packets that carry a whole
+message (a report, a register set, a sector) in one chip select, and as core-side ports of
+`kg_mcu2` that give the core the whole message with one strobe. The cores are edited for it.
+
+| Scheme | v1 | v2 packets | `kg_mcu2` core side | Edit of a core |
+|---|---|---|---|---|
+| Core start | `CMD_CAPS` polled with NOPs, `INIT_START`, `HW_SETUP` one frame per byte (18 frames for the ids), font download | `SYS STATUS` (magic, caps, OSD size), `INIT 1`, `HW_SETUP` board + DVI in one packet and the 16 build characters in another, `INIT 0`; no font | `HW_ID`, `DVI_ONLY`, `CORE_BUILD`, `FW_BUILD`, `BUSY` | none (the same signals) |
+| Firmware polling | a NOP frame every main loop pass, replies in the bytes of any frame | `INT` (IO1, active high), `SYS IRQ` / per-target events read only when INT is high | `MCU_INT` | the IO1 pin: the burst ready of the burst cores, an output of `kg_mcu2` |
+| OSD switches | `CMD_SWITCHES` one frame per switch, `kg_soft_switches` keeps a 16-bit command | `SYS SETVAL` (index, value) × n: all switches in one packet at the start, one pair at a change | `SW_WR`, `SW_INDEX`, `SW_VALUE` | the switch registers of the core take `SW_WR` (a helper that keeps them as a vector replaces `kg_soft_switches`) |
+| Buttons | `CMD_BTN`, `CMD_MATRIX_BTN` | `SYS BTN` 0..1 board, 2..5 matrix | `BTNS` | none / the matrix buttons if used |
+| Reload of the core | `CMD_FLASHBOOT` in the reply queue | `SYS IRQ_SRC` bit 1, `SYS RELOAD` | `RELOAD_REQ`, `RELOAD_CORE` | none |
+| FT812, SD2 | `CMD_SPI_CONTROL`, chip selects passed through | `SYS SPI_CONTROL` | `FT_*`, `SD2_*` as in `kg_mcu` | none |
+| Keyboard | 7 frames per report, `KB_DAT0..5` / `KB_STATUS` change byte by byte | `HID KBD` 8 bytes | `KBD` (56 bits) with `KBD_WR` | the keyboard of the core takes the report on `KBD_WR` (no half-new report) |
+| PS/2, XT | one frame per byte, `KB_SCANCODE_UPD` / `XT_SCANCODE_UPD` toggle | `HID PS2` (kind, code) × n: all bytes of a key in one packet | `PS2_CODE`, `PS2_KIND`, `PS2_WR` strobe | toggle detectors -> the strobe |
+| Keyboard commands of the core | `CMD_PS2_SCANCODE` in the reply queue | `HID EVENT` (count, (cmd, arg) × n), IRQ bit 1 | `PS2_CMD`, `PS2_CMD_WR` | none |
+| Mouse | 4 frames, `MS_UPD` toggles on the buttons byte, `MS_Z` 4 bits | `HID MOUSE` 4 bytes | `MS_X`, `MS_Y`, `MS_Z` (8 bits), `MS_B`, `MS_WR` | toggle -> strobe; the wheel is 8 bits |
+| Joysticks | 2 frames per port, 13 bits | `HID JOY` (port, lo, hi) × n | `JOY_L`, `JOY_R` (16 bits), `JOY_WR` | the width (bits 13..15 free for more buttons) |
+| ROMs | `ROMLOADER`, `ROMBANK` + `ROMDATA` per byte or bursts (second chip select, `BURST_READY`) | `LOAD START 0`, `DATA` (kind, address, up to 512 bytes), `END 0` | the `LD_*` bus, `LD_KIND` 0 | `ROMLOAD_*` -> `LD_*` |
+| File loader (`fileloader` cores) | `FILELOADER` 3 / 2 / 0 levels, `FILEBANK` + `FILEDATA` or bursts | `LOAD START 1` / `DATA` / `END 1` | `LD_*`, `LD_KIND` 1, `LD_START` = the reset of a new file | `FILELOAD_*` -> `LD_*` |
+| FL items (ioctl) | `IOCTL_STATE`, `SLOT`, `SIZE` × 8 twice, `EXT`, `BANK` + `DATA` or bursts | `LOAD START 2` (slot, size, extension in one packet) / `DATA` / `END 2` | `LD_*`, `LD_KIND` 2, `LD_SLOT`, `LD_SIZE` | as above; `FILE_TO_ROM` / `FILE_WR_EACH` choices go into the core |
+| Flow control of loads | `BURST_READY` line | `LOAD STATUS` before a packet (caps bit 4) | `LD_READY` | a core with a slow memory drives it |
+| File mounter: mount | `IMG_SLOT`, `IMG_SIZE` × 8 twice, `IMG_FLAGS`, `IMG_PHYS` | `IMG MOUNT` (slot, size, flags: write protected, physical drive) in one packet | the mount signals of `img_sdc` | none for the drives (`sdc_*` stays) |
+| File mounter: requests | `IMG_LBA` × 4 + `IMG_SEC` in the reply queue, NOP pulls, a lost frame = an incomplete request | `IMG EVENT` (kind, slot, LBA) on IRQ bit 3 | `img_sdc` sector interface | none |
+| File mounter: read | 512 × (`BUF_DATA`) + banks or a burst, then the sum in `IMG_LBA` 0/1, then `IMG_SEC` | `IMG RDATA` (slot, 512 bytes, sum) one packet, the core answers taken / bad sum in the same packet; `IMG DONE` | as now | none |
+| File mounter: write | the request, then 512 data frames + the sum queued behind it (the queue had to hold them), pulled with up to 4000 NOPs | `IMG WDATA` (slot) one packet reads the 512 bytes and the sum from the sector buffer of the core | as now | none |
+| Backup RAM (`.sav`) | `CMD_BK_MOUNT` frames, `CMD_IMG_FLUSH` both ways | `IMG EVENT` kind 4 (size, kind), `IMG FLUSH`, its answer `IMG EVENT` kind 3 | `kg_bk_ram` on the new img side | none |
+| DSKCHG (Go floppy) | `CMD_FDD_CHNG` 49 d 00 / 49 d v | `IMG EVENT` kind 5, `IMG FDD_CHNG` | as now | none |
+| RTC | `CMD_RTC` one frame per register: all at the start, the time every 500 ms; a write of the CPU one frame per register | `RTC SET` (first register, N values): the whole set at the start, the time registers (one packet of about 10 bytes) every 500 ms; `RTC GET` (count, (register, value) × n) on IRQ bit 6 | the register RAM of `kg_mcu_rtc` (`RTC_A`, `RTC_DI`, `RTC_DO`, `RTC_CS`, `RTC_WR_N`) in `kg_l2_rtc` | none |
+| USB serial (ZiFi, RS232) | `CMD_UART` one frame per byte both ways, `idx` counter, DLL / DLM frames | `PORT 0`: `PUT` / `GET` many bytes per packet, `STATUS` (free, available, the divisor) | rx / tx fifos with valid / ready, `UART_DLL` / `UART_DLM` | byte + counter -> fifo handshake |
+| ESP8266 | `CMD_ESP_UART` per byte, the byte held until ack | `PORT 1` as port 0 | fifos | as above |
+| MIDI IN | `CMD_MIDI` per byte with a counter, `MIDI_LOST` | `PORT 2 PUT` many bytes | `MIDI_DATA`, `MIDI_WR` | `MIDI_LOST` goes |
+| Printer | `PRINTER_DATA` per byte + status request, `PRINTER_STATUS` | `PORT 3 GET` many bytes, `PSTAT` the status | a tx fifo, `PRN_BUSY` | none |
+| LED matrix, meters, debug | `CMD_MATRIX_CTL` / `PIXEL` / `BITPLAN`, `AUDIO_PEAKS_L/R`, `DEBUG_*` frames in the queue | `AUX MATRIX` (control + 32 bytes), `AUX PEAKS`, `AUX DEBUG`, IRQ bit 7 | a bitplane buffer the core draws into (pixels or rows), the peaks, the debug words | `MATRIX_CMD` -> the buffer |
+| OSD | 32 × 26 cells with 16 colours, font in the FPGA, popup mode, popup numbers for the core's own overlay | `OSD WRITE` tiles of a 256 × 128 bitmap, `POPUP` windows with zoom, `COLORS` | `kg_l2_osd` over the video (replaces `kg_osd_overlay`) | the video path takes the new overlay |
+| Bursts | a second chip select, header, `BURST_READY`, caps bits 0..2 | none: every packet is a burst | — | the burst pins go |
+| Integrity | the chip select filter, sums on sectors, the core asks again | the chip select filter, sums on sectors (read and write), a request repeated after 200 ms | — | — |
+
+What stays in the firmware as now: the formats of the RTC (`rtc_mode`), the hotkeys, the menu
+from the core file, the files and the images; what stays in the core as now: the drives behind
+the sector interface, the CPU reset during a load.
