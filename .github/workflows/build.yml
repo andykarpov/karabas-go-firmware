@@ -87,6 +87,9 @@ jobs:
     if: github.ref == 'refs/heads/master' && needs.version.outputs.release == 'true'
     needs: [version, test, firmware]
     runs-on: ubuntu-latest
+    # SIBLING_REPOS_TOKEN lives in the "release" environment, which only the
+    # master branch may use: a workflow pushed to another branch cannot read it.
+    environment: release
     permissions:
       contents: write
     concurrency: release
