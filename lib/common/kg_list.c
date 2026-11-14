@@ -35,6 +35,14 @@ uint16_t kg_list_window(uint16_t top, uint16_t sel, uint16_t visible, uint16_t t
   return top > total - visible ? total - visible : top;
 }
 
+uint16_t kg_list_window_ends(uint16_t top, uint16_t sel, uint16_t first, uint16_t last, uint16_t visible, uint16_t total) {
+  top = kg_list_window(top, sel, visible, total);
+  if (visible == 0 || total <= visible) return top;
+  if (sel == first && sel < visible) return 0;
+  if (sel == last && sel >= total - visible) return total - visible;
+  return top;
+}
+
 bool kg_list_thumb(uint16_t height, uint16_t top, uint16_t visible, uint16_t total, uint16_t *pos, uint16_t *len) {
   if (total <= visible || height < 2) return false;
   uint32_t n = ((uint32_t) height * visible + total / 2) / total;

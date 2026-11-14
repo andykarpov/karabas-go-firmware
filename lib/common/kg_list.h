@@ -37,6 +37,10 @@ uint16_t kg_list_page(uint16_t sel, uint16_t page);
 // the first item of a window of visible rows that keeps sel in view, moved as little as possible
 // from top, and within 0..total - visible
 uint16_t kg_list_window(uint16_t top, uint16_t sel, uint16_t visible, uint16_t total);
+// kg_list_window, and on the first (last) item that takes the cursor the window goes to the top
+// (bottom) of the list, so the rows before (after) it are seen too: only while sel stays in view
+// (a menu whose first item to choose comes after many text rows keeps it in the window)
+uint16_t kg_list_window_ends(uint16_t top, uint16_t sel, uint16_t first, uint16_t last, uint16_t visible, uint16_t total);
 
 // the thumb of a scrollbar of height cells for total items, visible of them shown from item top
 // (a window, or the first item of a page): its first cell and its length, proportional to

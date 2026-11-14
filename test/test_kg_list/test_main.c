@@ -69,6 +69,20 @@ static void test_window() {
   TEST_ASSERT_EQUAL_UINT16(24, kg_list_window(30, 30, 16, 40)); // past the end: clamped
 }
 
+static void test_window_ends() {
+  // 20 rows, 8 shown; the items to choose are 2..17
+  TEST_ASSERT_EQUAL_UINT16(0, kg_list_window_ends(2, 2, 2, 17, 8, 20));   // first: the top
+  TEST_ASSERT_EQUAL_UINT16(12, kg_list_window_ends(5, 17, 2, 17, 8, 20)); // last: the bottom
+  TEST_ASSERT_EQUAL_UINT16(5, kg_list_window_ends(5, 9, 2, 17, 8, 20));   // between: as kg_list_window
+  // the zx next menu: 10 text rows, the first item to choose at 11 (Setup RTC), 13 rows, 9 shown
+  TEST_ASSERT_EQUAL_UINT16(4, kg_list_window_ends(4, 11, 11, 13, 9, 13)); // stays in view, not 0
+  TEST_ASSERT_EQUAL_UINT16(3, kg_list_window_ends(0, 11, 11, 13, 9, 13)); // from the top: down to it
+  TEST_ASSERT_EQUAL_UINT16(4, kg_list_window_ends(0, 13 - 1, 11, 12, 9, 13)); // last: the bottom
+  // the last item far above the end: the window keeps it in view
+  TEST_ASSERT_EQUAL_UINT16(1, kg_list_window_ends(1, 3, 0, 3, 4, 20));
+  TEST_ASSERT_EQUAL_UINT16(0, kg_list_window_ends(0, 3, 3, 3, 8, 6));      // fits: 0
+}
+
 static void thumb(uint16_t h, uint16_t top, uint16_t vis, uint16_t total, uint16_t pos, uint16_t len) {
   uint16_t p = 99, l = 99;
   TEST_ASSERT_TRUE(kg_list_thumb(h, top, vis, total, &p, &l));
@@ -143,6 +157,7 @@ int main() {
   RUN_TEST(test_moved_flag);
   RUN_TEST(test_pages);
   RUN_TEST(test_window);
+  RUN_TEST(test_window_ends);
   RUN_TEST(test_thumb);
   RUN_TEST(test_page_thumb);
   RUN_TEST(test_active);
