@@ -27,20 +27,21 @@ static bool can_reset(void) {
 }
 static bool confirm = false;
 
-// the bitmap OSD (link v2): the logo, the author, the thanks in the small font, the builds
+// the bitmap OSD (link v2): the logo, the author, the thanks and the links in the small font, the
+// builds; the author line with 9 empty pixel rows above and below it (agreed with the user)
 static void about2(void) {
   ui2_screen("About");
-  ui2_logo((OSD2_W - 56) / 2, 18);
+  ui2_logo((OSD2_W - 56) / 2, 16);
   u8g2_SetFontPosTop(&osd2);
   u8g2_SetFont(&osd2, u8g2_font_6x12_t_cyrillic);
-  const char *by = "Hardware: andy.karpov";
+  const char *by = "Hardware: andykarpov";
   u8g2_DrawUTF8(&osd2, (OSD2_W - u8g2_GetUTF8Width(&osd2, by)) / 2, 40, by);
   u8g2_SetFont(&osd2, u8g2_font_5x8_t_cyrillic);
   const char *th = "Special thanks to";
   u8g2_DrawUTF8(&osd2, (OSD2_W - u8g2_GetUTF8Width(&osd2, th)) / 2, 58, th);
   // the names, centred lines of at most 46 characters
   char line[64];
-  int y = 70;
+  int y = 68;
   line[0] = '\0';
   for (uint8_t i = 0; i <= sizeof(thanks) / sizeof(thanks[0]); i++) {
     bool last = i == sizeof(thanks) / sizeof(thanks[0]);
@@ -53,6 +54,8 @@ static void about2(void) {
     if (line[0]) strlcat(line, ", ", sizeof(line));
     strlcat(line, thanks[i], sizeof(line));
   }
+  const char *links = "https://karabas.uk   gopher://karabas.uk";
+  u8g2_DrawUTF8(&osd2, (OSD2_W - u8g2_GetUTF8Width(&osd2, links)) / 2, 94, links);
   char b[48];
   snprintf(b, sizeof(b), "MCU %s   FPGA %s%s", STRINGIZE_VALUE_OF(BUILD_VER), core.build, can_reset() ? "   R: reset" : "");
   u8g2_DrawUTF8(&osd2, (OSD2_W - u8g2_GetUTF8Width(&osd2, b)) / 2, 118, b);
@@ -64,7 +67,7 @@ void app_about_overlay() {
   if (osd2_active()) { about2(); return; }
   ui_screen("About");
   heading(8, "Karabas Go HW was designed by:");
-  osd_set_pos(1, 10); osd_print("- andy.karpov");
+  osd_set_pos(1, 10); osd_print("- andykarpov");
   heading(12, "Special thanks to:");
   for (uint8_t i = 0; i < sizeof(thanks) / sizeof(thanks[0]); i++) {
     osd_set_pos(1, 14 + i); osd_print("- "); osd_print(thanks[i]);
