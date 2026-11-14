@@ -27,6 +27,7 @@ static bool prev_is_filebrowser = false;
 static bool is_optlist = false;
 static uint8_t opt_cur = 0;
 static bool has_optlist(uint8_t i);
+static int bool_state(uint8_t i);
 // the dir of the slot when the file browser was opened: browsing changes the dir of the slot,
 // esc puts it back, so it stays the dir of the mounted image
 static char filebrowser_dir[256];
@@ -494,6 +495,8 @@ void app_core_on_keyboard() {
     }
   } else {
     menu_sync();
+    // Space toggles a checkbox (an off / on switch) as Enter does; elsewhere it does nothing
+    if (key == KEY_SPACE && !is_virtual(curr_osd_item) && bool_state(curr_osd_item) >= 0) key = KEY_ENTER;
     if (key == KEY_DOWN || key == KEY_UP) {
       int p = vis_pos(curr_osd_item);
       if (p >= 0) {
