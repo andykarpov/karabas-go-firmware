@@ -1,14 +1,12 @@
-# MCU ↔ FPGA link v2 (preview)
+# MCU ↔ FPGA link v2
 
 [Русская версия](link_v2.ru.md) · Link v1: [protocol.md](protocol.md), [burst_protocol.md](burst_protocol.md)
 
-Status: **preview**. Link v2 is implemented: the firmware on the branch `link-v2` (not released yet),
-the core side in karabas-go-modules (`kg_mcu2`, `kg_l2_*`, guide `docs/link_v2_migration.md`), the
-core file key `"link": 2` in karabas-go-tools `make_core`. Cores on it: vic20, boot menu, macplus,
-profi, tsconf, baseconf (Mini G). New cores can be written on it, but the protocol may still change
-until the release of the firmware (the Go / Mini boards are not moved yet): follow the changes of
-this file. Link v2 is a second protocol on the same wires. It lives next to v1: the core file says
-which link a core speaks, and the firmware keeps v1 for every core that does not say v2.
+Status: **released** (firmware v26111315, 2026-11-13; all cores of the release on it on Go, Mini
+and Mini G since 2026-11-14). The core side is in karabas-go-modules (`kg_mcu2`, `kg_l2_*`, guide
+`docs/link_v2_migration.md`), the core file key `"link": 2` in karabas-go-tools `make_core`. Link v2
+is a second protocol on the same wires. It lives next to v1: the core file says which link a core
+speaks, and the firmware keeps v1 for every core that does not say v2.
 
 ## 1. Why
 
@@ -313,7 +311,8 @@ There is no font download (the font is in the MCU) and no caps query apart from 
     elsewhere (the port of Map USB gamepad).
   - Boxes in the middle with a clear margin, the toast in the middle (zoomed popup), About with
     the logo of the OLED (no "mini" on a Go). The background opaque (COLORS alpha 3).
-  - Later (backlog): marquee of long names, activity icons.
+  - Activity icons: drawn by the core (`kg_l2_osd_overlay` `ICONS_N` ..., see the migration guide),
+    not by the firmware. Later (backlog): marquee of long names.
 ## 9. FPGA side (karabas-go-modules)
 
 - `kg_l2_link`: the transport: the byte shifter on `MCU_SCK` (`kg_spi_slave`, 8 bits, mode 0,
@@ -326,8 +325,10 @@ There is no font download (the font is in the MCU) and no caps query apart from 
   reply queue) and **its own core-side ports** (section 11): a core moves to v2 by an edit of its
   top (the new ports), the INT pin (the IO1 line, already the burst ready of burst cores) and
   `"link": 2`.
-- Clock: 32 MHz SCK with a core clock of about 28 MHz must work (the bursts of v1 do); the exact
-  bound comes from the simulation of `kg_l2_spi` and goes here.
+- Clock: `sim/mcu/run_kg_mcu2_sim.sh` of the modules runs the link with a 28 MHz core clock at
+  16 and 32 MHz SCK, 12.5 MHz at 32 MHz SCK, and fast cores at a slow SCK (65 MHz at 16 and 8 MHz,
+  125 MHz at 16 MHz). Before modules #41 a core clock above about 4 x SCK
+  answered reads one byte early (bk at 65 MHz with 16 MHz SCK).
 - Expected saving per core: the reply queue (512 × 24) and `kg_burst_rx` go, the OSD font RAM goes;
   the OSD bitmap needs 4 KB (2 RAMB16). Measured on the first cores.
 
