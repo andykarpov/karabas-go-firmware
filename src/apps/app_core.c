@@ -128,13 +128,19 @@ static void build_vis(void) {
   }
 }
 
-// the rows of the page that take the cursor (options, file items, page entries; not the text
-// rows, the separators, the disabled items)
+// a trigger row (its hotkey drawn where a value would be): it takes the cursor too, Enter / Right
+// fires it as its hotkey does (zx next: a main page of triggers only)
+static bool is_trigger(uint8_t i) {
+  return i < core.osd_len && core.osd[i].type == CORE_OSD_TYPE_TRIGGER;
+}
+
+// the rows of the page that take the cursor (options, file items, page entries, triggers; not the
+// text rows, the separators, the disabled items)
 static bool item_active(uint16_t pos, void *ctx) {
   (void) ctx;
   if (pos >= vis_len) return false;
   if (is_virtual(vis[pos])) return vis[pos] != VIS_SEP;
-  return core_osd_selectable(vis[pos]) && core_osd_enabled(vis[pos]);
+  return (core_osd_selectable(vis[pos]) || is_trigger(vis[pos])) && core_osd_enabled(vis[pos]);
 }
 
 static int vis_pos(uint8_t item) {
@@ -194,18 +200,16 @@ static uint8_t menu_rows(void) {
 }
 
 // the window keeps the cursor in view; on the first (last) option it goes to the top (bottom), so
-// the text rows before (after) it are seen too
+// the text rows before (after) it are seen too, while the cursor stays in it (zx next: its main page
+// is text rows of triggers, the first row to choose, Setup RTC, comes after them)
 static uint8_t menu_window() {
   uint8_t rows = menu_rows();
   int sel = vis_pos(curr_osd_item);
-  uint16_t top = kg_list_window(menu_top, sel < 0 ? 0 : sel, rows, vis_len);
-  if (vis_len > rows && sel >= 0) {
-    uint16_t last = vis_len;
-    for (uint16_t p = vis_len; p-- > 0;) if (item_active(p, NULL)) { last = p; break; }
-    if (curr_osd_item == first_item()) top = 0;
-    else if (sel == last) top = vis_len - rows;
-  }
-  return (uint8_t) top;
+  if (sel < 0) return (uint8_t) kg_list_window(menu_top, 0, rows, vis_len);
+  uint16_t first = kg_list_first_active(vis_len, item_active, NULL);
+  uint16_t last = vis_len;
+  for (uint16_t p = vis_len; p-- > 0;) if (item_active(p, NULL)) { last = p; break; }
+  return (uint8_t) kg_list_window_ends(menu_top, sel, first, last, rows, vis_len);
 }
 
 static void app_core_overlay2(bool force);
@@ -344,8 +348,10 @@ void app_core_menu(uint8_t vpos) {
       snprintf(text, hotkey_w + 1, "%s", item->hotkey);
       osd_set_pos(22, y); osd_print(text);
     } else {
-      // a trigger: the hotkey where the value would be
-      osd_set_color(enabled ? OSD_COLOR_CYAN_I : OSD_COLOR_GREY, OSD_COLOR_BLACK);
+      // a trigger: the hotkey where the value would be (inverted under the cursor)
+      uint8_t ink = enabled ? OSD_COLOR_CYAN_I : OSD_COLOR_GREY;
+      bool sel = curr_osd_item == i;
+      osd_set_color(sel ? OSD_COLOR_BLACK : ink, sel ? ink : OSD_COLOR_BLACK);
       snprintf(text, x_end - 11 + 2, "%s", item->hotkey);
       osd_set_pos(11, y); osd_print(text);
     }
@@ -527,6 +533,11 @@ void app_core_on_keyboard() {
       }
     } else if (!core_osd_enabled(curr_osd_item)) {
       // a page with no item to change
+    } else if (is_trigger(curr_osd_item)) {
+      if (key == KEY_RIGHT || key == KEY_ENTER) {
+        core_trigger(curr_osd_item);
+        need_redraw = true;
+      }
     } else if (key == KEY_RIGHT || key == KEY_ENTER || key == KEY_LEFT) {
       if (core_osd_is_file(curr_osd_item)) {
         filebrowser_open();
@@ -805,7 +816,7 @@ static void app_core_menu2(void) {
     if (item->type == CORE_OSD_TYPE_SEPARATOR) { ui2_sep(row); continue; }
     uint8_t flags = (curr_osd_item == i ? UI2_SEL : 0) | (core_osd_enabled(i) ? 0 : UI2_DIM);
     if (!core_osd_selectable(i)) {
-      ui2_row(row, item->name, NULL, item->hotkey, flags & ~UI2_SEL); // a trigger: its hotkey
+      ui2_row(row, item->name, NULL, item->hotkey, is_trigger(i) ? flags : flags & ~UI2_SEL); // a trigger: its hotkey
       continue;
     }
     if (item->type == CORE_OSD_TYPE_PAGE) {
