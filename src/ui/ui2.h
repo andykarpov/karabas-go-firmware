@@ -39,7 +39,8 @@ void ui2_center(uint8_t n, int width);
 void ui2_clock(void);                          // the clock of the header again (every second)
 void ui2_row(uint8_t row, const char *label, const char *value, const char *hotkey, uint8_t flags);
 void ui2_text(uint8_t row, const char *text, uint8_t flags); // a row of plain text
-void ui2_sep(uint8_t row);                     // a separator line
+void ui2_text_center(uint8_t row, const char *text); // a row of plain text in the middle of it
+void ui2_sep(uint8_t row);                    // a separator line
 void ui2_scrollbar(uint16_t top, uint16_t total); // the rows show items top..top+UI2_ROWS-1
 void ui2_hint(const char *line1, const char *line2); // nothing: no hint lines (kept for the callers)
 // buttons on a row, of equal width from the left; focus = the index of the focused one, -1 none

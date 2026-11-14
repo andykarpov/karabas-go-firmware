@@ -203,6 +203,15 @@ void ui2_text(uint8_t row, const char *text, uint8_t flags) {
   if (flags & UI2_TITLE) u8g2_DrawHLine(&osd2, 0, y + ROW_H - 2, X_SCROLL - 1);
 }
 
+void ui2_text_center(uint8_t row, const char *text) {
+  if (row >= ui2_rows()) return;
+  row_bar(row, 0);
+  u8g2_SetFont(&osd2, F_MAIN);
+  int w = u8g2_GetUTF8Width(&osd2, text ? text : "");
+  int x = w < X_SCROLL - 4 ? (X_SCROLL - w) / 2 : 2;
+  text_to(x, row_y(row), X_SCROLL - 2, text);
+}
+
 void ui2_sep(uint8_t row) {
   if (row >= ui2_rows()) return;
   row_clear(row);
