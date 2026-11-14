@@ -57,7 +57,9 @@ uint8_t app_setup_back(void) { return from_menu ? state_main : state_setup; }
 static void setup_menu_draw() {
   uint8_t n = setup_count();
   if (osd2_active()) {
-    for (uint8_t pos = 0; pos < n && pos < UI2_ROWS; pos++) ui2_text(pos, setup_item(pos)->label, pos == setup_sel ? UI2_SEL : 0);
+    // each opens a screen: the arrow, as the same entries at the end of a core menu
+    for (uint8_t pos = 0; pos < n && pos < UI2_ROWS; pos++)
+      ui2_row(pos, setup_item(pos)->label, NULL, NULL, (pos == setup_sel ? UI2_SEL : 0) | UI2_ARROW);
     ui2_done();
     return;
   }

@@ -154,7 +154,9 @@ static void draw2(void) {
     else if (i < pl_btn() || st >= PL_DONE) strcpy(rule, "-");
     ui2_row(1 + r, pl_btn_names[i], rule, NULL, ((st == PL_PRESS || st == PL_RELEASE) && i == cur) ? UI2_SEL : 0);
   }
-  ui2_hint(l2[0] ? l2 : (st >= PL_SAVED ? "Enter: back to the ports" : ""), "Esc: back to the ports");
+  // what to do now (release the pad, the keys of a step, the file saved): the last row, under the
+  // buttons (the v2 screens have no hint lines, this one is the step, not a key hint)
+  ui2_text(UI2_ROWS - 1, l2[0] ? l2 : (st >= PL_SAVED ? "Enter: back to the ports" : ""), 0);
   ui2_done();
 }
 

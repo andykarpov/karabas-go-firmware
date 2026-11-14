@@ -27,22 +27,39 @@ static const uint8_t logo_full[112] = { // 56x16, rows MSB first
 
 uint8_t ui2_rows(void) { return (Y_END - Y_ROWS + 1) / ROW_H; }
 static int col_shift_of(void);
-static int x_value(void) { return col_shift_of() + 2 + 14 * 6; }
+// the value column: labels of up to 14 characters ("FM (MSX-MUSIC)", "RTC controller") and a gap
+static int x_value(void) { return col_shift_of() + 2 + 16 * 6; }
 
 static void clock_text(char *out, size_t size) {
   snprintf(out, size, "%02u:%02u:%02u", rtc_get_hour(), rtc_get_minute(), rtc_get_second());
 }
 
-// a string drawn from x, cut at x_end (whole UTF-8 characters)
+// an ellipsis after a cut text: three dots on the baseline, ELLIPSIS_W pixels (the fonts have no "…")
+#define ELLIPSIS_W 6
+
+// a string drawn from x, cut at x_end (whole UTF-8 characters); a cut one ends with an ellipsis
 static void text_to(int x, int y, int x_end, const char *s) {
-  char t[64];
+  char t[128];
   snprintf(t, sizeof(t), "%s", s ? s : "");
-  while (t[0] && x + u8g2_GetUTF8Width(&osd2, t) > x_end) {
+  bool cut = s && strlen(s) >= sizeof(t);
+  int room = x_end - x;
+  if (t[0] && u8g2_GetUTF8Width(&osd2, t) > room) cut = true;
+  if (cut) room -= ELLIPSIS_W;
+  while (t[0] && u8g2_GetUTF8Width(&osd2, t) > room) {
     size_t n = strlen(t);
     do { n--; } while (n > 0 && (t[n] & 0xC0) == 0x80);
     t[n] = '\0';
   }
+  if (cut) { // no space before the dots
+    size_t n = strlen(t);
+    while (n > 0 && t[n - 1] == ' ') t[--n] = '\0';
+  }
   u8g2_DrawUTF8(&osd2, x, y, t);
+  if (cut && room >= 0) {
+    int dx = x + u8g2_GetUTF8Width(&osd2, t) + 1;
+    int dy = y + u8g2_GetAscent(&osd2); // the baseline (the fonts are drawn from the top)
+    for (int i = 0; i < 3; i++) u8g2_DrawPixel(&osd2, dx + 2 * i, dy);
+  }
 }
 
 static void begin_draw(void) {
@@ -137,10 +154,11 @@ void ui2_row(uint8_t row, const char *label, const char *value, const char *hotk
     hk_x = X_SCROLL - 3 - w;
     u8g2_DrawUTF8(&osd2, hk_x, y + (ROW_H - 8) / 2 - 1, hotkey);
   }
-  // a disabled row in the small font: readable, but plainly not the others
+  // a disabled row: the same font, every other pixel off afterwards (a checkerboard, the "grey" of
+  // a one-bit screen; chosen by the user)
   bool dimmed = flags & UI2_DIM;
-  u8g2_SetFont(&osd2, dimmed ? F_SMALL : F_MAIN);
-  int ty = dimmed ? y + (ROW_H - 8) / 2 - 1 : y;
+  u8g2_SetFont(&osd2, F_MAIN);
+  int ty = y;
   // without a value the label goes up to the hotkey; a page entry has its arrow at the right
   int arrow_x = hk_x - 10;
   int lx = 2 + col_shift;
@@ -162,6 +180,11 @@ void ui2_row(uint8_t row, const char *label, const char *value, const char *hotk
     text_to(arrow_x, ty, hk_x, ">");
   } else if (value) {
     text_to(x_value(), ty, hk_x - 4, value);
+  }
+  if (dimmed) { // clear the checkerboard over the row: a lit pixel goes dark, a dark one stays
+    u8g2_SetDrawColor(&osd2, (flags & UI2_SEL) ? 1 : 0); // on the cursor bar the text is dark: light it
+    for (int py = y - 1; py < y - 1 + ROW_H; py++)
+      for (int px = (py & 1); px < X_SCROLL - 1; px += 2) u8g2_DrawPixel(&osd2, px, py);
   }
   u8g2_SetDrawColor(&osd2, 1);
 }
@@ -236,9 +259,13 @@ void ui2_field(uint8_t row, const char *label, const char *text, int cursor, boo
   int y = row_y(row);
   u8g2_SetFont(&osd2, F_MAIN);
   int cw = u8g2_GetMaxCharWidth(&osd2);
-  text_to(2 + col_shift, y, x_value() - 4, label);
-  int x = x_value();
-  if (focused) u8g2_DrawFrame(&osd2, x - 2, y - 1, (int) strlen(text) * cw + 4, ROW_H);
+  // with a label: a short field of its text (a date, a time) in the value column; without one: a
+  // text input from the left edge, its frame the whole row whatever the text is (UI2_FIELD_COLS)
+  bool input = !label || !label[0];
+  if (!input) text_to(2 + col_shift, y, x_value() - 4, label);
+  int x = input ? 4 + col_shift : x_value();
+  int fw = input ? UI2_FIELD_COLS * cw : (int) strlen(text) * cw;
+  if (focused || input) u8g2_DrawFrame(&osd2, x - 2, y - 1, fw + 4, ROW_H);
   for (int i = 0; text[i]; i++) {
     char c[2] = { text[i], 0 };
     if (focused && i == cursor) {

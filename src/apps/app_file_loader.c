@@ -99,7 +99,7 @@ void app_file_loader_core_loaded(void) {
 
 // a message box shown for a second: no SD card, a dir that can't be opened
 static void read_error(const char *line2) {
-  dialog_box(DIALOG_ERROR, "Error occured", line2);
+  dialog_box(DIALOG_ERROR, "Error occurred", line2);
   ms_delay(1000);
 }
 

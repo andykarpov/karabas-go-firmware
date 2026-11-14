@@ -44,7 +44,9 @@ void ui2_scrollbar(uint16_t top, uint16_t total); // the rows show items top..to
 void ui2_hint(const char *line1, const char *line2); // nothing: no hint lines (kept for the callers)
 // buttons on a row, of equal width from the left; focus = the index of the focused one, -1 none
 void ui2_buttons(uint8_t row, const char *const *labels, uint8_t n, int focus);
-// a typed field: label, the text with the character at cursor inverted (focused), a note after it
+// a typed field: label, the text with the character at cursor inverted (focused), a note after it;
+// an empty label: a text input of UI2_FIELD_COLS characters from the left edge, a fixed frame
+#define UI2_FIELD_COLS 40
 void ui2_field(uint8_t row, const char *label, const char *text, int cursor, bool focused, const char *note);
 void ui2_done(void);                           // the screen to the core
 void ui2_logo(int x, int y);                   // the whole logo, 56 x 16

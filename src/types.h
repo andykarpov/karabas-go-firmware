@@ -120,8 +120,10 @@ typedef struct {
 	char file_extensions[256];
 } core_item_t;
 
+// a name of the file browser page: longer than a row of the bitmap OSD (41 chars), so a cut one
+// gets its ellipsis there (the text OSD cuts it at its own width)
 typedef struct {
-	char name[32+1];
+	char name[64+1];
 } file_list_item_t;
 
 typedef struct {
