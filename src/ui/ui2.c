@@ -1,6 +1,7 @@
 #include "main.h"
 #include "ui/ui2.h"
 #include "ui/osd2.h"
+#include "kg_list.h"
 
 // the logo of About: the OLED logo of bitmaps.h at its own size
 static const uint8_t logo_full[112] = { // 56x16, rows MSB first
@@ -185,13 +186,23 @@ void ui2_sep(uint8_t row) {
 
 void ui2_scrollbar(uint16_t top, uint16_t total) {
   uint8_t rows = ui2_rows();
-  if (total <= rows) return;
   int y0 = Y_ROWS - 1, h = rows * ROW_H;
+  // its column cleared first: a redraw of the rows only (the file loader on a key) clears them up
+  // to X_SCROLL - 1, and the thumbs of the pages before stayed on the track
+  u8g2_SetDrawColor(&osd2, 0);
+  u8g2_DrawBox(&osd2, X_SCROLL, y0, OSD2_W - X_SCROLL, h);
+  u8g2_SetDrawColor(&osd2, 1);
+  if (total <= rows) return;
   for (int y = y0; y < y0 + h; y += 2) u8g2_DrawPixel(&osd2, X_SCROLL + 1, y); // the track, dotted
-  int th = h * rows / total;
-  if (th < 4) th = 4;
-  int ty = y0 + (h - th) * top / (total - rows);
-  u8g2_DrawBox(&osd2, X_SCROLL, ty, 3, th);
+  // the thumb as the text OSD has it (kg_list_thumb, tested): a paged list (the file browser)
+  // gives top past total - rows on its last page, which put the thumb under the track
+  uint16_t pos, len;
+  if (!kg_list_thumb((uint16_t) h, top, rows, total, &pos, &len)) return;
+  if (len < 4) {
+    len = 4;
+    if (pos > h - len) pos = (uint16_t) (h - len);
+  }
+  u8g2_DrawBox(&osd2, X_SCROLL, y0 + pos, 3, len);
 }
 
 void ui2_hint(const char *line1, const char *line2) {
