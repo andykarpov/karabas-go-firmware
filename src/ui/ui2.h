@@ -48,7 +48,10 @@ void ui2_buttons(uint8_t row, const char *const *labels, uint8_t n, int focus);
 // an empty label: a text input of UI2_FIELD_COLS characters from the left edge, a fixed frame
 #define UI2_FIELD_COLS 40
 void ui2_field(uint8_t row, const char *label, const char *text, int cursor, bool focused, const char *note);
-void ui2_done(void);                           // the screen to the core
+// a note of the row in the small font, in the column of the notes of ui2_field (after a field of
+// 10 chars): call after drawing the row; flags UI2_SEL when the row has the cursor
+void ui2_note(uint8_t row, const char *note, uint8_t flags);
+void ui2_done(void);                         // the screen to the core
 void ui2_logo(int x, int y);                   // the whole logo, 56 x 16
 
 // a box in the middle of the screen: two lines; inverse = a title bar

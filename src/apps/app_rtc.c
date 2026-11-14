@@ -86,7 +86,7 @@ static void draw2(void) {
   ui2_center(0, 0);
   for (uint8_t r = 0; r < UI2_ROWS; r++) ui2_text(r, "", 0);
   // the fields and the buttons in the middle (the message rows under them fit below)
-  ui2_center(has_ntp() ? 6 : 5, 204);
+  ui2_center(has_ntp() ? 6 : 5, 214); // the labels, the fields, the notes in one column
   ui2_field(0, "Date", d->text, d->pos, focus == F_DATE, "DD.MM.YYYY");
   ui2_field(1, "Time", t->text, t->pos, focus == F_TIME, "HH:MM");
   uint8_t row = 2;
@@ -94,7 +94,10 @@ static void draw2(void) {
     char v[16], tz[10];
     kg_tz_format(ce_tz(), tz, sizeof(tz));
     snprintf(v, sizeof(v), "UTC%s", tz);
-    ui2_row(row++, "Zone", v, "for NTP", focus == F_TZ ? UI2_SEL : 0);
+    uint8_t fl = focus == F_TZ ? UI2_SEL : 0;
+    ui2_row(row, "Zone", v, NULL, fl);
+    ui2_note(row++, "for NTP", fl); // under the notes of the date and the time
+
   }
   static const char *const btn[] = { "Save", "Cancel", "NTP sync" };
   ui2_buttons(row + 1, btn, has_ntp() ? 3 : 2, focus >= F_SAVE ? focus - F_SAVE : -1);

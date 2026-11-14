@@ -29,6 +29,9 @@ uint8_t ui2_rows(void) { return (Y_END - Y_ROWS + 1) / ROW_H; }
 static int col_shift_of(void);
 // the value column: labels of up to 14 characters ("FM (MSX-MUSIC)", "RTC controller") and a gap
 static int x_value(void) { return col_shift_of() + 2 + 16 * 6; }
+// the notes of the values in one column (Setup RTC): after the longest field, a date of 10 chars
+#define NOTE_COLS 10
+static int x_note(void) { return x_value() + NOTE_COLS * 6 + 8; }
 
 static void clock_text(char *out, size_t size) {
   snprintf(out, size, "%02u:%02u:%02u", rtc_get_hour(), rtc_get_minute(), rtc_get_second());
@@ -278,8 +281,17 @@ void ui2_field(uint8_t row, const char *label, const char *text, int cursor, boo
   }
   if (note) {
     u8g2_SetFont(&osd2, F_SMALL);
-    text_to(x + 8, y + (ROW_H - 8) / 2 - 1, X_SCROLL - 2, note);
+    int nx = x + 8 > x_note() ? x + 8 : x_note();
+    text_to(nx, y + (ROW_H - 8) / 2 - 1, X_SCROLL - 2, note);
   }
+}
+
+void ui2_note(uint8_t row, const char *note, uint8_t flags) {
+  if (row >= ui2_rows() || !note) return;
+  u8g2_SetFont(&osd2, F_SMALL);
+  u8g2_SetDrawColor(&osd2, (flags & UI2_SEL) ? 0 : 1); // on the cursor bar: dark
+  text_to(x_note(), row_y(row) + (ROW_H - 8) / 2 - 1, X_SCROLL - 2, note);
+  u8g2_SetDrawColor(&osd2, 1);
 }
 
 void ui2_logo(int x, int y) {
