@@ -116,10 +116,10 @@ static void b2(const char *a, const char *b, int focus) {
   const char *l[2] = { a, b };
   ui2_buttons(r2++, l, b ? 2 : 1, focus);
 }
-// a text field: the tail that fits and a block cursor after it
+// a text field: the tail that fits (the cursor takes the last column) and a block cursor after it
 static void f2(const char *text, bool hidden) {
-  char t[32];
-  size_t len = strlen(text), from = len > 25 ? len - 25 : 0, k = 0;
+  char t[UI2_FIELD_COLS + 2];
+  size_t len = strlen(text), from = len > UI2_FIELD_COLS - 1 ? len - (UI2_FIELD_COLS - 1) : 0, k = 0;
   for (size_t i = from; i < len && k < sizeof(t) - 2; i++) t[k++] = hidden ? '*' : text[i];
   t[k] = ' ';
   t[k + 1] = '\0';
@@ -142,13 +142,26 @@ static void draw2() {
     case WS_INIT: ui2_center(1, 0); t2("Talking to ESP8266...", 0); break;
     case WS_NO_ESP: ui2_center(3, 0); t2("ESP8266 is not responding", 0); r2++; b2("Retry", NULL, 0); break;
     case WS_STATUS: {
-      i2("Module", w->version[0] ? w->version : "?");
-      i2("CTS", w->cts == WS_CTS_ON ? "on" : w->cts == WS_CTS_OFF ? "could not turn on" : "unknown");
-      i2("Network", w->cur_ssid[0] ? w->cur_ssid : "not connected");
-      i2("IP", w->ip[0] && strcmp(w->ip, "0.0.0.0") != 0 ? w->ip : "-");
-      ui2_sep(r2++);
+      // the status, a separator, the menu: one page scrolled with the cursor (a joined module
+      // has 5 items, 10 rows of the 9)
+      char ip[20];
+      snprintf(ip, sizeof(ip), "%s", w->ip[0] && strcmp(w->ip, "0.0.0.0") != 0 ? w->ip : "-");
+      const char *info[4][2] = {
+        { "Module", w->version[0] ? w->version : "?" },
+        { "CTS", w->cts == WS_CTS_ON ? "on" : w->cts == WS_CTS_OFF ? "could not turn on" : "unknown" },
+        { "Network", w->cur_ssid[0] ? w->cur_ssid : "not connected" },
+        { "IP", ip },
+      };
       uint8_t ids[WS_M_COUNT], n = ws_menu_items(ids);
-      for (uint8_t i = 0; i < n; i++) ui2_row(r2++, ws_menu_names[ids[i]], NULL, NULL, (w->sel == i ? UI2_SEL : 0) | UI2_ARROW);
+      uint8_t total = 5 + n, cur = 5 + w->sel;
+      uint8_t top = cur >= UI2_ROWS ? cur - UI2_ROWS + 1 : 0;
+      for (uint8_t v = top; v < total && v - top < UI2_ROWS; v++) {
+        uint8_t row = v - top;
+        if (v < 4) ui2_row(row, info[v][0], info[v][1], NULL, 0);
+        else if (v == 4) ui2_sep(row);
+        else ui2_row(row, ws_menu_names[ids[v - 5]], NULL, NULL, (w->sel == v - 5 ? UI2_SEL : 0) | UI2_ARROW);
+      }
+      ui2_scrollbar(top, total);
       break;
     }
     case WS_SCAN: ui2_center(1, 0); t2("Scanning...", 0); break;

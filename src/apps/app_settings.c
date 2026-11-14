@@ -199,6 +199,11 @@ static void mx_on_keyboard(bool up, bool down, bool left, bool right, bool enter
 
 void app_settings_on_keyboard() {
   uint8_t key = ui_nav_key();
+  if (key == KEY_SPACE) { // Space toggles a checkbox as Enter does; elsewhere it does nothing
+    uint8_t id = mx_page ? settings_mx_ids[mx_focus] : (focus < ITEMS ? ids[focus] : SET_COUNT);
+    if (id >= SET_COUNT || settings[id].kind != SET_KIND_BOOL) return;
+    key = KEY_ENTER;
+  }
   bool up = key == KEY_UP;
   bool down = key == KEY_DOWN || key == KEY_TAB;
   bool left = key == KEY_LEFT;

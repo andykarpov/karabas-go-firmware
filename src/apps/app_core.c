@@ -27,6 +27,7 @@ static bool prev_is_filebrowser = false;
 static bool is_optlist = false;
 static uint8_t opt_cur = 0;
 static bool has_optlist(uint8_t i);
+static int bool_state(uint8_t i);
 // the dir of the slot when the file browser was opened: browsing changes the dir of the slot,
 // esc puts it back, so it stays the dir of the mounted image
 static char filebrowser_dir[256];
@@ -273,7 +274,7 @@ static void item_value(uint8_t i, char *out, size_t size) {
       snprintf(out, size, strlen(label) <= 5 ? "Phys %s" : "%s", label);
     }
     else if (fs->is_mounted) kg_short_name(fs->filename, out, size - 1); // long names: "Princ~.trd"
-    else snprintf(out, size, "-NO IMAGE-");
+    else snprintf(out, size, "-"); // an empty slot (the user's choice over "-NO IMAGE-")
   } else if (item->type == CORE_OSD_TYPE_RADIO) {
     snprintf(out, size, "%-10s", core.osd[item->radio_item].val == i - item->radio_item - 1 ? "(*)" : "( )");
   } else {
@@ -494,6 +495,8 @@ void app_core_on_keyboard() {
     }
   } else {
     menu_sync();
+    // Space toggles a checkbox (an off / on switch) as Enter does; elsewhere it does nothing
+    if (key == KEY_SPACE && !is_virtual(curr_osd_item) && bool_state(curr_osd_item) >= 0) key = KEY_ENTER;
     if (key == KEY_DOWN || key == KEY_UP) {
       int p = vis_pos(curr_osd_item);
       if (p >= 0) {
@@ -751,14 +754,15 @@ static void page_title_text(char *text, size_t size) {
   }
 }
 
-// a switch of two options named as off / on (any order): 0 or 1 its state, else -1
+// a switch (an NSWITCH too: Pause of the Spectrum cores) of two options named as off / on, any
+// case, any order: 0 or 1 its state, else -1
 static int bool_state(uint8_t i) {
   const core_osd_t *item = &core.osd[i];
-  if (item->type != CORE_OSD_TYPE_SWITCH || item->options_len != 2) return -1;
-  static const char *const offs[] = { "off", "no", "disabled", "disable" };
-  static const char *const ons[] = { "on", "yes", "enabled", "enable" };
+  if ((item->type != CORE_OSD_TYPE_SWITCH && item->type != CORE_OSD_TYPE_NSWITCH) || item->options_len != 2) return -1;
+  static const char *const offs[] = { "off", "no", "disabled", "disable", "false" };
+  static const char *const ons[] = { "on", "yes", "enabled", "enable", "true" };
   int on_at = -1;
-  for (uint8_t k = 0; k < 4; k++) {
+  for (uint8_t k = 0; k < sizeof(offs) / sizeof(offs[0]); k++) {
     char a[16], b[16];
     snprintf(a, sizeof(a), "%s", item->options[0].name); kg_trim(a);
     snprintf(b, sizeof(b), "%s", item->options[1].name); kg_trim(b);

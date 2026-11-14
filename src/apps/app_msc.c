@@ -11,7 +11,7 @@
 // the screen of the USB mass storage mode: the boot core shows it while the PC has the SD card
 // (msc_check_boot), nothing else runs until the card is ejected
 
-#define MSC_LINES 5
+#define MSC_LINES 6 // of up to 32 chars (the text OSD), each line centered on the bitmap OSD
 
 static const char *const lines[MSC_LINES] = {
   "The SD card is connected to the",
@@ -19,11 +19,13 @@ static const char *const lines[MSC_LINES] = {
   "",
   "Eject it on the PC to return",
   "to the menu.",
+  "",
 };
 static const char *const lines2[MSC_LINES] = {
   "The second SD card (FPGA slot)",
-  "is connected to the PC as a USB",
-  "drive.",
+  "is connected to the PC as a",
+  "USB drive.",
+  "",
   "Eject it on the PC to return",
   "to the menu.",
 };
@@ -32,6 +34,7 @@ static const char *const lines_failed[MSC_LINES] = {
   "is not found.",
   "",
   "Back to the menu...",
+  "",
   "",
 };
 
@@ -65,7 +68,7 @@ void app_msc_overlay() {
     ui2_screen_note("USB mass storage", NULL, false);
     ui2_center(MSC_LINES, 0);
     const char *const *l = msc_lines();
-    for (uint8_t i = 0; i < MSC_LINES; i++) ui2_text(i, l[i], 0);
+    for (uint8_t i = 0; i < MSC_LINES; i++) ui2_text_center(i, l[i]); // each line in the middle
     ui2_done();
     return;
   }
