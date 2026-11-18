@@ -112,6 +112,7 @@ uint32_t core_send_file(FIL *f, uint32_t len, link_load_kind_t kind, uint32_t ad
     if (crc) *crc = kg_crc32_update(*crc, buf, n);
     link_load_data(kind, addr + sent, buf, n);
     sent += n;
+    hang_step(0xf1); // a big file (a WAD of 15 MB: ~25 s) is progress, not a hang of APP
     if (progress && sent - shown >= SEND_PROGRESS_STEP) {
       progress(sent, ctx);
       shown = sent;
