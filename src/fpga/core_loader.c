@@ -141,6 +141,13 @@ bool core_ioctl_send(uint8_t slot, const char *popup, uint32_t popup_min)
 {
   if (slot >= MAX_FILE_SLOTS) return false;
 
+  // the save of the file before (backup RAM of the core, bk_save.c): written and closed; the file
+  // loaded now names the next one (<its dir>/saves/<name>.sav), if the core asks for a save after
+  // the load (the Doom core: its savegames next to the WAD)
+  bk_flush();
+  bk_close();
+  bk_set_game(file_slots[slot].dir, file_slots[slot].filename);
+
   // send ioctl slot id, file data for file loader type
   spi_bus_lock(); // keep the whole ioctl transfer together on the fpga link
   char fname[KG_PATH_MAX];
