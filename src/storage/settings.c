@@ -39,6 +39,7 @@ void load_setup() {
   
   // defaults
   hw_setup.debug_enabled = false;
+  hw_setup.watchdog_enabled = true;
   hw_setup.ft_enabled = true;
   hw_setup.ft_video_mode = 1; // 800x600@60
   hw_setup.ft_sound = 1;
@@ -92,6 +93,7 @@ void load_setup() {
     ini_len = len;
 
     ini_bool("setup", "debug", &hw_setup.debug_enabled);
+    ini_bool("setup", "watchdog", &hw_setup.watchdog_enabled);
     ini_bool("setup", "dvi_only", &hw_setup.dvi_only);
     int tz;
     if (ini_get("setup", "tz", buffer, bufferLen) && kg_tz_parse(buffer, &tz)) hw_setup.tz = tz;
@@ -185,7 +187,7 @@ static void write_line(void *ctx, const char *line) {
   if (sd_write(w->file, "\n", 1) != 1) w->ok = false;
 }
 
-#define SETUP_ITEMS (30 + KG_MX_OPT_COUNT + 1)
+#define SETUP_ITEMS (31 + KG_MX_OPT_COUNT + 1)
 static char item_values[SETUP_ITEMS][KG_INI_VALUE_MAX + 1]; // the values of save_setup() (APP only)
 
 static void add_item(kg_ini_item_t *items, uint8_t *count, const char *section, const char *key, const char *value) {
@@ -273,6 +275,7 @@ bool save_setup(const setup_t *s) {
   uint8_t count = 0;
   const setup_t *o = &hw_setup;
   add_bool(items, &count, "setup", "debug", s->debug_enabled, o->debug_enabled);
+  add_bool(items, &count, "setup", "watchdog", s->watchdog_enabled, o->watchdog_enabled);
   add_bool(items, &count, "setup", "dvi_only", s->dvi_only, o->dvi_only);
   if (s->tz != o->tz) {
     char buf[8];

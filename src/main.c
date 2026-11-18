@@ -153,7 +153,7 @@ static void karabas_setup()
     msc_start();
   } else {
     osd_state = state_main;
-    if (hw_setup.debug_enabled) hang_diag_start();
+    if (hw_setup.debug_enabled && hw_setup.watchdog_enabled) hang_diag_start();
 
     // load boot from SD or flashfs
     if (has_sd && sd_exists(core_file_boot())) {

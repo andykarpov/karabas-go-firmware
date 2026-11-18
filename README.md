@@ -123,6 +123,7 @@ characters long, or the whole file is ignored.
 | Section | Key | Default | Meaning |
 | --- | --- | --- | --- |
 | `[setup]` | `debug` | `0` | `1`: debug log on the USB serial port |
+| | `watchdog` | `1` | with `debug=1`: `0` turns off the hang watchdog (a reset after 8 s without progress of the main task, the cause in the next boot log) |
 | | `dvi_only` | `0` | `1`: the cores drop the HDMI frames (audio, info) and output plain DVI |
 | | `core_sort` | `name` | the order of the core list: `name` (the core name), `file` (the file name), `order` (the `order` of the core, then the name); the boot core is always first |
 | | `tz` | `+00:00` | UTC offset for NTP sync, set in Setup RTC / the Clock page, e.g. `+03:00`, `-04:30`; no daylight saving |

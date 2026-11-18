@@ -133,6 +133,7 @@ typedef struct {
 
 typedef struct {
 	bool debug_enabled;
+	bool watchdog_enabled; // with debug_enabled: the hang watchdog (hang_diag)
 	bool ft_enabled;
 	uint8_t ft_video_mode;
 	uint8_t ft_sound;
