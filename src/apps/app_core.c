@@ -692,7 +692,7 @@ static void send_file(uint8_t pos, bool popup) {
 
     uint8_t slot = core.osd[pos].slot_id;
     if (uknc_sav_slot(slot)) uknc_sav_run(slot);
-    else core_ioctl_send(slot, popup);
+    else core_ioctl_send(slot, popup ? "Loading..." : NULL, 0);
 
   } else if (core.osd[pos].type == CORE_OSD_TYPE_FILEMOUNTER) {
     // open the image and send its size (eject first)

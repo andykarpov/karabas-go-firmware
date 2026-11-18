@@ -125,10 +125,20 @@ void core_loading_popup(uint32_t sent, void *ctx) {
   dialog_loading(sent, *(const uint32_t *) ctx);
 }
 
-void core_ioctl_send(uint8_t slot, bool popup)
+// the progress popup of an ioctl file: its title over the bar
+typedef struct {
+  const char *title;
+  uint32_t total;
+} ioctl_popup_t;
+
+static void ioctl_popup(uint32_t sent, void *ctx) {
+  const ioctl_popup_t *p = (const ioctl_popup_t *) ctx;
+  dialog_progress(p->title, sent, p->total);
+}
+
+bool core_ioctl_send(uint8_t slot, const char *popup, uint32_t popup_min)
 {
-  if (slot >= MAX_FILE_SLOTS) return;
-  if (popup) dialog_loading(0, 100);
+  if (slot >= MAX_FILE_SLOTS) return false;
 
   // send ioctl slot id, file data for file loader type
   spi_bus_lock(); // keep the whole ioctl transfer together on the fpga link
@@ -141,21 +151,24 @@ void core_ioctl_send(uint8_t slot, bool popup)
     d_printf("Ioctl slot %d: unable to open %s", slot, fname); d_println();
   }
   uint64_t fsize = open ? f_size(file) : 0;
+  ioctl_popup_t pp = { popup, (uint32_t) fsize };
+  if (popup && fsize < popup_min) pp.title = NULL; // a small file: no popup that only flashes
+  if (pp.title) dialog_progress(pp.title, 0, 100);
   const char *dot = strrchr(fname, '.');
   const char *ext = dot ? dot + 1 : fname;
   link_load_start(LINK_LOAD_IOCTL, slot, fsize, ext); // the size 0, then the real one
 
   uint32_t send_timer = ms_now();
-  uint32_t total = (uint32_t) fsize;
-  uint32_t i = open ? core_send_file(file, total, LINK_LOAD_IOCTL, 0, popup ? core_loading_popup : NULL, &total, NULL) : 0;
+  uint32_t i = open ? core_send_file(file, pp.total, LINK_LOAD_IOCTL, 0, pp.title ? ioctl_popup : NULL, &pp, NULL) : 0;
   sd_tmp_close();
   link_load_end(LINK_LOAD_IOCTL);
   d_printf("Ioctl slot %d: %s, %lu bytes in %lu ms (%s)", slot, fname, (unsigned long) i,
     (unsigned long) ms_since(send_timer), link_mode_name());
   d_println();
 
-  if (popup) dialog_loading(fsize, fsize);
+  if (pp.title) dialog_progress(pp.title, pp.total, pp.total);
   spi_bus_unlock();
+  return pp.title != NULL;
 }
 
 void core_send_all() 
@@ -299,7 +312,7 @@ static void send_build_ids(void) {
 // (BaseConf keeps the found partitions in RAM and did not see an HDD image mounted later)
 #define SRAM_CLEAR_MS 250
 
-static void send_autoload_files(void);
+static bool send_autoload_files(void);
 
 static void configure(const char* filename, bool clear_sram) {
   hang_step(0x81);
@@ -355,11 +368,13 @@ static void configure(const char* filename, bool clear_sram) {
   if (!is_osd) dialog_load_screen();
   hang_step(0xa5);
   read_roms(filename);
-  send_autoload_files(); // after the ROMs: a file over a ROM of the core file wins
+  bool popup = send_autoload_files(); // after the ROMs: a file over a ROM of the core file wins
   hang_step(0xa6);
   if (!is_osd) {
     dialog_hide();
     osd_handle(true); // reinit osd
+  } else if (popup) {
+    osd_handle(true); // the menu under the progress popup
   }
   for (uint8_t i=0; i<7; i++) { // cleanup kbd: modifier + 6 keycodes
     link_hid_queue(LINK_EV_KBD, i, 0);
@@ -936,16 +951,22 @@ static void rom_progress(uint32_t sent, void *ctx) {
 // FL items with autoload: the file goes to the core before it starts (a Kickstart rom, the BIOS file
 // of the MSX core). After read_roms(): a file over the address of a ROM of the core file (the MSX
 // BIOS over the C-BIOS of its roms) must win, the ROMs used to overwrite it.
-static void send_autoload_files(void) {
+#define AUTOLOAD_POPUP_MIN (64 * 1024) // a smaller file loads without the popup
+
+// true if a progress popup was shown
+static bool send_autoload_files(void) {
+  bool popup = false;
   for (uint8_t i = 0; i < core.osd_len; i++) {
     if (core.osd[i].type != CORE_OSD_TYPE_FILELOADER || !file_slots[core.osd[i].slot_id].is_autoload) continue;
     if (file_slots[core.osd[i].slot_id].is_mounted) {
-      core_ioctl_send(core.osd[i].slot_id, false);
+      // the popup of a file chosen in the menu, titled with the item (tsconf "OPL4 ROM", 2 MB)
+      if (core_ioctl_send(core.osd[i].slot_id, core.osd[i].name, AUTOLOAD_POPUP_MIN)) popup = true;
     } else {
       d_printf("Ioctl slot %d: no file to autoload (%s/%s)", core.osd[i].slot_id,
         file_slots[core.osd[i].slot_id].dir, file_slots[core.osd[i].slot_id].filename); d_println();
     }
   }
+  return popup;
 }
 
 void read_roms(const char* filename) {

@@ -31,7 +31,9 @@ void dialog_progress(const char *title, uint32_t val, uint32_t max) {
     if (is_osd) osd2_flush(); else ui2_box_popup();
     return;
   }
-  osd_progress_popup(title, val, max);
+  char t[15]; // the popup has 14 columns inside its frame (the name of an item has up to 16)
+  snprintf(t, sizeof(t), "%s", title);
+  osd_progress_popup(t, val, max);
   osd_update();
 }
 
