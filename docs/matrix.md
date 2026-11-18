@@ -44,12 +44,14 @@ The core can draw on the matrix (the registers below, `CMD_MATRIX_*`) only in th
 
 ## ZX Spectrum Support
 
-On the ZX Spectrum side (implemented for TS-Conf and ZX Spectrum Next cores yet) the matrix is accessible via ZX UNO control / data ports #FC3B (64571) / #FD3B (64827) and their free registers F0, F1, F2.
+On the ZX Spectrum side (the TS-Conf, Profi, ZX Spectrum Next and ZX-Uno cores) the matrix is accessible via ZX UNO control / data ports #FC3B (64571) / #FD3B (64827) and their free registers E0, E1, E2.
+
+Until November 2026 the registers were F0, F1, F2; they moved because F0..F3 are the PZX player of ZX-Uno. Programs written for F0..F2 need the new numbers.
 
 In the `core` mode the dot matrix display starts with the Audio Volume Meter.
 On first data write to the control or data registers, the matrix will be switched to the custom draw mode.
 
-### Control register 0xF0
+### Control register 0xE0
 
 Write to this register will execute some action as described below.
 
@@ -60,16 +62,16 @@ Bit description for the control register:
 - bit 3: value=1 will switch the matrix mode to the audio volume meter, value=0 will switch the matrix to the custom draw mode
 - bit 7-4: will set the matrix brightness when bit2 = 1
 
-### Pixel XY register 0xF1
+### Pixel XY register 0xE1
 
 Write to this register will set the next x-y position on the matrix to draw the pixel.
 The lower bits 3-0 are to set the X position (from 0 to 15)
 The higher bits 7-4 are to set the Y position (from 0 to 7) 
 
-### Pixel Data register 0xF2
+### Pixel Data register 0xE2
 
-Write to this register will set the color to the pixel at position x-y (from the 0xF1 register) to the virtual framebuffer: 0 off, 1 red, 2 yellow, 3 green. 
-Do display the pixel or set of pixels - please call the "update" action to the control register 0xF0.
+Write to this register will set the color to the pixel at position x-y (from the 0xE1 register) to the virtual framebuffer: 0 off, 1 red, 2 yellow, 3 green. 
+Do display the pixel or set of pixels - please call the "update" action to the control register 0xE0.
 
 ## Example program for the Boriel ZX Basic Compiler
 
@@ -90,9 +92,9 @@ CONST COLOR_GREEN as uByte = 3
 CONST PORT_CTL as uLong = 64571
 CONST PORT_DATA as uLong = 64827
 
-CONST REG_CTL as uByte = 240
-CONST REG_XY as uByte = 241
-CONST REG_PIX as uByte = 242
+CONST REG_CTL as uByte = 224
+CONST REG_XY as uByte = 225
+CONST REG_PIX as uByte = 226
 
 CONST CTL_CLEAR as uByte = 1
 CONST CTL_UPDATE as uByte = 2
