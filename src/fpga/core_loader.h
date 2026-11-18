@@ -52,8 +52,8 @@ bool core_osd_can_phys(uint8_t pos);
 // filename is a physical drive (":phys0" / ":phys1") that the F osd item pos can be
 bool core_osd_phys(uint8_t pos, const char *filename);
 // send the file of an ioctl slot (FL osd item: dir + filename) to the fpga; with a progress popup
-// when it was chosen in the osd
-void core_ioctl_send(uint8_t slot, bool popup);
+// titled popup (NULL: none) if the file has popup_min bytes or more. true if the popup was shown
+bool core_ioctl_send(uint8_t slot, const char *popup, uint32_t popup_min);
 // len bytes of f from its position (UINT32_MAX: to its end) to the core at addr through
 // link_load_data() of kind (the ROMs, the file loader, ioctl), read into the bitstream buffer; progress
 // (if any) every 32 KB and at the end, crc (if any) updated with the bytes. The bytes sent.
