@@ -778,7 +778,7 @@ static void kg2_read(const core_file_t *cf) {
         r->cond_item = o->cond_item;
         r->cond = o->cond;
         cond_value[q] = it.cond_value;
-        snprintf(r->name, sizeof(r->name), "%s", o->options[j].name);
+        strlcpy(r->name, o->options[j].name, sizeof(r->name)); // r is another item than o (snprintf warned -Wrestrict)
         uint8_t h[KG2_OPTION_HOTKEY_SIZE];
         kg2_option_hotkey_t hk;
         if (it.option_hotkeys_ofs &&

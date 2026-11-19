@@ -1,8 +1,8 @@
 #pragma once
 
 // The popups and message boxes of the firmware, by kind (docs/link_v2.md 5.3): the callers ask for
-// a dialog, the OSD backend draws it. Now the text OSD of link v1 (lib/osd cells, its popup mode);
-// the bitmap OSD of link v2 will draw the same kinds.
+// a dialog, the OSD backend draws it: the text OSD of link v1 (lib/osd cells, its popup mode) or
+// the bitmap OSD of link v2 (ui2).
 
 #include <stdbool.h>
 #include <stdint.h>

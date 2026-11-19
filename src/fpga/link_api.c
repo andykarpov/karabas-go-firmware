@@ -2,8 +2,9 @@
 #include "fpga/link_api.h"
 #include "storage/img_mount.h"
 
-// link_api.h on link v1: the frames of docs/protocol.md through the transport of link.c. The frame
-// sequences are the ones the services used to send themselves, in the same order.
+// link_api.h on both links, through the transport of link.c: v1, the frames of docs/protocol.md (the
+// sequences the services used to send themselves, in the same order), and v2, the packets of
+// docs/link_v2.md (V2 below picks the link of the loaded core).
 
 // ---- link v2 (docs/link_v2.md): packets ----
 

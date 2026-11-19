@@ -52,6 +52,7 @@ void load_setup() {
 
   hw_setup.autoload_enabled = false;
   hw_setup.autoload_timeout = 15;
+  hw_setup.autoload_core[0] = '\0';
 
   hw_setup.color_bg = 0x00010101;
   hw_setup.color_gradient = 0x000000c8;
@@ -111,7 +112,9 @@ void load_setup() {
       // 0 640x480@60, 1 800x600@60; the other modes of older firmware are gone
       if (hw_setup.ft_video_mode >= ft_mode_count()) hw_setup.ft_video_mode = 0;
     }
-    hw_setup.ft_sound = (ini_get("ft812", "sound", buffer, bufferLen)) ? strtoul(buffer, 0, 10) : 0;
+    // a key the file does not have keeps its default (it was 0 here: an ini without the key had
+    // no start sound and an autoload timeout of 0)
+    if (ini_get("ft812", "sound", buffer, bufferLen)) hw_setup.ft_sound = strtoul(buffer, 0, 10);
     if (hw_setup.ft_sound > 4) hw_setup.ft_sound = 1;
     ini_bool("ft812", "click", &hw_setup.ft_click);
     ini_bool("ft812", "time", &hw_setup.ft_time);
@@ -139,7 +142,7 @@ void load_setup() {
     ini_bool("matrix", "meter_peak", &hw_setup.matrix_style.meter_peak);
 
     ini_bool("autoload", "enabled", &hw_setup.autoload_enabled);
-    hw_setup.autoload_timeout = (ini_get("autoload", "timeout", buffer, bufferLen)) ? strtoul(buffer, 0, 10) : 0;
+    if (ini_get("autoload", "timeout", buffer, bufferLen)) hw_setup.autoload_timeout = strtoul(buffer, 0, 10);
     if (ini_get("autoload", "core", buffer, bufferLen)) {
           strlcpy(hw_setup.autoload_core, buffer, sizeof(hw_setup.autoload_core));
     }

@@ -1,7 +1,7 @@
 #pragma once
 
 // Board abstraction: everything that differs between Karabas Go / Mini / Mini G
-// lives in src/board/board_*.cpp. The rest of the firmware must not use #if HW_ID.
+// lives in src/board/board_*.c. The rest of the firmware must not use #if HW_ID.
 
 #include <stdbool.h>
 #include <stddef.h>

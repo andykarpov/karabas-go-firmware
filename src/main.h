@@ -60,7 +60,7 @@
 extern "C" {
 #endif
 
-// main.cpp
+// main.c
 extern volatile bool usb_host_ready; // set by core1 once PIO-USB has claimed its PIO/DMA resources
 void halt(const char* msg);
 
