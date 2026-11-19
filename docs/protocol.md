@@ -119,7 +119,7 @@ Commands that the core does not know must be ignored.
 | `F8` | `CMD_ESP_UART` | 0 | byte | Byte to the ESP8266 module behind the FPGA. |
 | `F9` | `CMD_HW_SETUP` | 0 = board, 1 = DVI only, `10`..`17` core build, `18`..`1F` firmware build | 0: `HW_ID` (1 Go, 2 Mini, 3 Mini G); 1: 0 / 1; `10`..`1F`: ASCII character | The build ids: 8 characters each, first character at the lowest address, 0 after a shorter id (`DEVBUILD` for a local firmware build). |
 | `FA` | `CMD_RTC` | register | value | RTC register; the register set depends on `rtc_mode` (MC146818A, DS1307, ZX Evolution, MSM6242B). |
-| `FC` | `CMD_UART` | running index | byte | Byte from the clean USB serial port (CDC 1), or from a USB-UART adapter on the USB host while one is plugged; also from CDC 0 without its `AT+KARABAS=` lines. v1 has no flow control, so the bytes are paced at the DLL / DLM speed (115200 otherwise): one per 10 bit times from CDC 1 or the adapter, one per 3 byte times from CDC 0. `ADDR` changes with every byte, so the core can see a new one. |
+| `FC` | `CMD_UART` | running index | byte | Byte from the core serial port (CDC 1), or from a USB-UART adapter on the USB host while one is plugged. v1 has no flow control, so the bytes are paced at one per 10 bit times of the DLL / DLM speed (115200 otherwise). `ADDR` changes with every byte, so the core can see a new one. |
 | `FD` | `CMD_INIT_START` | 0 | 0 | Core configuration starts (BUSY = 1). |
 | `FE` | `CMD_INIT_DONE` | 0 | 0 | Core configuration done (BUSY = 0). |
 | `FF` | `CMD_NOP` | 0 | 0 | Poll: lets the FPGA send its next frame. |
@@ -152,7 +152,7 @@ These are sent in the reply bytes of any transfer.
 | `F8` | `CMD_ESP_UART` | 0 | byte | Byte from the ESP8266 module. |
 | `FA` | `CMD_RTC` | register | value | The core's CPU wrote an RTC register; the firmware updates the RTC chip. |
 | `FB` | `CMD_FLASHBOOT` | 0 | core id | Reload a core. Now it always reloads the current core (ZX Next hard reset), through the boot core, which clears the SRAM. |
-| `FC` | `CMD_UART` | 0 = byte at 115200 (ZiFi), 1 = DLL, 2 = DLM, 3 = byte at the DLL/DLM speed (EVO RS232) | byte / divisor | Bytes to a USB-UART adapter on the USB host while one is plugged (its speed from DLL / DLM, 115200 otherwise), else to the clean USB serial port CDC 1 (when a terminal has it open) and to CDC 0. |
+| `FC` | `CMD_UART` | 0 = byte at 115200 (ZiFi), 1 = DLL, 2 = DLM, 3 = byte at the DLL/DLM speed (EVO RS232) | byte / divisor | Bytes to a USB-UART adapter on the USB host while one is plugged (its speed from DLL / DLM, 115200 otherwise), else to the core serial port CDC 1 (when a terminal has it open). |
 | `FF` | `CMD_NOP` | | | Nothing to say. |
 
 ## 6. Sequences

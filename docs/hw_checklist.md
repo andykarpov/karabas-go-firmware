@@ -79,8 +79,8 @@ Set `debug=1` in `karabas.ini` and keep a terminal on the USB serial port: most 
 
 ## Serial bridge
 
-- [ ] The host's bytes reach the core UART and back.
-- [ ] CDC 1 (`-if02`): the core UART byte for byte, no AT, no log.
+- [ ] CDC 1 (`-if02`): the host's bytes reach the core UART and back, byte for byte, no AT, no log.
+- [ ] CDC 0 (`-if00`): `AT+KARABAS=` lines answered, other bytes do not reach the core.
 - [ ] `AT+KARABAS=list`, `version`, `boot` (BOOTSEL), `msc`, `msc2`, `esp` / `uart` (BOOT core: the ESP AT console and back).
 - [ ] `AT+KARABAS=key:menu+esc` opens the OSD, `key:esc` closes it; `type:dir` + `key:enter` in a core; `hold:alt` / `release`. (Mini G 2026-10-31: boot menu, PC XT OSD and file browser, Ctrl+Alt+Del driven this way.)
 - [ ] `AT+KARABAS=state` in the boot core and in a core; `load:<id>` from the boot core and from a running core, `load:boot`; `reset`.
