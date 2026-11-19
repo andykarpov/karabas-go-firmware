@@ -13,7 +13,7 @@ This document describes link v1: the 3-byte frames of `src/fpga/link.c` / `link_
 
 | Signal | Direction | Notes |
 |---|---|---|
-| `MCU_SCK` | MCU → FPGA | SPI clock. 16 MHz by default; a core can set another clock with `spi_freq` in its `core.json`. |
+| `MCU_SCK` | MCU → FPGA | SPI clock. 16 MHz requested by default; a core can ask for another clock with `spi_freq` in its `core.json`. SPI0 divides 48 MHz, so a 16 MHz request runs at 12 MHz on the wire (24 MHz at most). |
 | `MCU_MOSI` | MCU → FPGA | |
 | `MCU_MISO` | FPGA → MCU | Driven by the FPGA only while `MCU_SS` is low. |
 | `MCU_SS` (`MCU_CS_N`) | MCU → FPGA | Frame select, active low. |
@@ -64,7 +64,7 @@ Commands that the core does not know must be ignored.
 
 ## 3. Core start sequence
 
-`configure()` in `src/fpga/core_loader.c` (called by `do_configure()`), for every load of a v1 core (v2: [link_v2.md](link_v2.md) section 4):
+`configure()` in `src/fpga/core_loader.c` (called by `do_configure()`), for every load of a v1 core (v2: [link_v2.md](link_v2.md) section 6):
 
 1. The bitstream is sent through the FPGA configuration pins (not this link).
 2. `CMD_CAPS` query, answered only by cores with any of the caps of section 7. It is repeated until the core answers (up to 100 ms), so nothing else goes to a core whose link is still in reset after CONF_DONE. See section 7.
@@ -119,7 +119,7 @@ Commands that the core does not know must be ignored.
 | `F8` | `CMD_ESP_UART` | 0 | byte | Byte to the ESP8266 module behind the FPGA. |
 | `F9` | `CMD_HW_SETUP` | 0 = board, 1 = DVI only, `10`..`17` core build, `18`..`1F` firmware build | 0: `HW_ID` (1 Go, 2 Mini, 3 Mini G); 1: 0 / 1; `10`..`1F`: ASCII character | The build ids: 8 characters each, first character at the lowest address, 0 after a shorter id (`DEVBUILD` for a local firmware build). |
 | `FA` | `CMD_RTC` | register | value | RTC register; the register set depends on `rtc_mode` (MC146818A, DS1307, ZX Evolution, MSM6242B). |
-| `FC` | `CMD_UART` | running index | byte | Byte from the clean USB serial port (CDC 1), or from a USB-UART adapter on the USB host while one is plugged; also from CDC 0 without its `AT+KARABAS=` lines. One byte per line time (10 bits at the DLL / DLM speed, 115200 otherwise): v1 has no flow control. `ADDR` changes with every byte, so the core can see a new one. |
+| `FC` | `CMD_UART` | running index | byte | Byte from the clean USB serial port (CDC 1), or from a USB-UART adapter on the USB host while one is plugged; also from CDC 0 without its `AT+KARABAS=` lines. v1 has no flow control, so the bytes are paced at the DLL / DLM speed (115200 otherwise): one per 10 bit times from CDC 1 or the adapter, one per 3 byte times from CDC 0. `ADDR` changes with every byte, so the core can see a new one. |
 | `FD` | `CMD_INIT_START` | 0 | 0 | Core configuration starts (BUSY = 1). |
 | `FE` | `CMD_INIT_DONE` | 0 | 0 | Core configuration done (BUSY = 0). |
 | `FF` | `CMD_NOP` | 0 | 0 | Poll: lets the FPGA send its next frame. |
