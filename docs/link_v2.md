@@ -31,7 +31,7 @@ What it fixes in v1:
 
 | Signal | Direction | v2 use |
 |---|---|---|
-| `MCU_SCK` | MCU → FPGA | SPI clock: 16 MHz by default, up to 32 MHz (section 9) |
+| `MCU_SCK` | MCU → FPGA | SPI clock: the core's `spi_freq`, 16 MHz requested by default. SPI0 divides 48 MHz, so the wire runs at 12 MHz by default and at 24 MHz at most (a 32 MHz request); the cores are simulated up to 32 MHz (section 9) |
 | `MCU_MOSI` | MCU → FPGA | |
 | `MCU_MISO` | FPGA → MCU | Driven by the FPGA only while `MCU_SS` is low |
 | `MCU_SS` | MCU → FPGA | Packet select, active low. The only chip select of the link |
@@ -73,8 +73,9 @@ MISO       x    x    x    x   ...  x      x    D0  ...  Dm-1
 - Unknown targets and commands are ignored until `MCU_SS` rises.
 - A target never needs a gap between bytes. The MCU may leave gaps (byte-wise transfers); the
   FPGA must not depend on them.
-- Commands with "repeated" parameters (`SETVAL`, `PS2`, `PUT`) take any number of entries in one
-  packet.
+- Commands with "repeated" parameters (`SETVAL`, `PS2`, `JOY`, `PUT`) take any number of entries
+  in one packet. The firmware now sends one entry per packet; only the build ids (`HW_SETUP`) and
+  the runs of `RTC SET` are batched.
 
 Flow control is in band: a target that cannot take data reports it in a status command
 (`LOAD STATUS`, `PORT STATUS`), and the MCU asks before it sends. There is no READY line.
@@ -98,10 +99,10 @@ Flow control is in band: a target that cannot take data reports it in a status c
 something for the MCU (an event in its queue, data to read) and clears it itself when the MCU has
 read it all. The MCU acknowledges only the edge-like causes of SYS (section 5.1).
 
-Firmware: a GPIO level interrupt on INT (high) wakes the link task and is disabled; the task reads
-`SYS IRQ`, serves each target whose bit is set, then enables the GPIO interrupt again. No NOP
-polling. A slow safety read of `SYS IRQ` (about 100 ms) stays while v2 is new, and its finds are
-logged with `debug=1`.
+Firmware: the `APP` main loop reads the INT pin on every pass (`link_poll()`; no GPIO interrupt,
+no task of its own). While it is high, `link_v2_service()` reads `SYS IRQ` and serves each target
+whose bit is set (SYS, IMG one event per pass, PORT, RTC, AUX, HID). No NOP polling; nothing is
+read while INT is low.
 
 ## 5. Commands
 
@@ -114,8 +115,8 @@ logged with `debug=1`.
 | `00` | `STATUS` | | `'K' 'G'`, version (2), caps (2 bytes), OSD width / 8, OSD height / 8, ports mask | The first packet after configuration; the magic says the core runs and speaks v2 |
 | `01` | `IRQ` | ack mask | pending | `pending` as it was before the ack. Ack clears only the SYS causes (bit 0) |
 | `02` | `IRQ_SRC` | | SYS causes | bit 0 coldboot, bit 1 reload request; reading clears bit 0 |
-| `03` | `SETVAL` | (index, value) × n | | The OSD switches, all of them in one packet at the start; index = the switch index of v1 (`sw` of kgo2), so pinned `index` values keep working. Triggers: 1, then 0 after 100 ms |
-| `04` | `HW_SETUP` | key, value bytes | | value byte k is key + k: 0 board (`HW_ID`), 1 DVI only, `10`..`17` core build, `18`..`1F` firmware build: board + DVI in one packet, the 16 build characters in another |
+| `03` | `SETVAL` | (index, value) × n | | The OSD switches (the firmware sends one pair per packet); index = the switch index of v1 (`sw` of kgo2), so pinned `index` values keep working. Triggers: 1, then 0 after 100 ms |
+| `04` | `HW_SETUP` | key, value bytes | | value byte k is key + k: 0 board (`HW_ID`), 1 DVI only, `10`..`17` core build, `18`..`1F` firmware build. The firmware sends board and DVI as two packets and the 16 build characters in one |
 | `05` | `INIT` | 1 = start (busy) / 0 = done | | As `CMD_INIT_START` / `CMD_INIT_DONE` |
 | `06` | `SPI_CONTROL` | bits | | As `CMD_SPI_CONTROL`: bit 0 FT812 SPI, 1 FT812 video, 2 SD2, 3 ESP8266, 4 FT812 reset |
 | `07` | `BTN` | button, state | | 0, 1 the on-board buttons with the action `core`; 2..5 the buttons of the LED matrix add-on (v1 `CMD_MATRIX_BTN`) |
@@ -123,28 +124,31 @@ logged with `debug=1`.
 
 Caps (`STATUS` bytes 3..4): bit 0 IMG, 1 backup RAM, 2 write-protected images, 3 floppy drives
 (DSKCHG), 4 LOAD flow control (`LD_READY`), 5 RTC, 6 AUX, 7 FT812 video, 8 reload, 9 MIDI IN.
-The ports mask says which PORT indexes the core has (bit n = port n).
+The firmware uses bits 1, 2, 4, 5 (`RTC SET` is sent only with it) and 9; the others are
+informational (AUX is served on IRQ bit 7 whatever the caps say). The ports mask says which PORT
+indexes the core has (bit n = port n); the firmware sends nothing to a port the core does not have.
 
 Coldboot: the SYS cause bit 0 is set when the link of the core leaves reset. The firmware sees it
 after its own configuration (and clears it), and also when a core resets its link while it runs
-(it reloaded itself, or crashed): the firmware then sends the start sequence again (section 6)
-without loading the bitstream.
+(it reloaded itself, or crashed): the firmware then only logs it (`debug=1`), it does not send the
+start sequence again.
 
 ### 5.2 HID (`01`)
 
 | C | Name | → | ← | Notes |
 |---|---|---|---|---|
 | `01` | `KBD` | 8 bytes: modifiers, 0, 6 key codes | | The USB boot report; one strobe per report for the core (`KBD_WR`). Not sent while the OSD is open |
-| `02` | `PS2` | (kind, code) × n | | kind 0 a set 2 byte, 1 an XT byte (bit 7 of the code = release): a strobe per byte (`PS2_WR`), all bytes of a key (E0 / F0 prefixes, typematic) in one packet |
+| `02` | `PS2` | (kind, code) × n | | kind 0 a set 2 byte, 1 an XT byte (bit 7 of the code = release): a strobe per byte (`PS2_WR`), the firmware sends one byte per packet |
 | `03` | `MOUSE` | dx, dy, wheel, buttons | | Signed deltas; one strobe per report (`MS_WR`) |
-| `04` | `JOY` | (port, bits 7..0, bits 15..8) × n | | v1 bits; both ports in one packet when both changed (`JOY_WR`) |
+| `04` | `JOY` | (port, bits 7..0, bits 15..8) × n | | v1 bits; a strobe per entry (`JOY_WR`); the firmware sends one port per packet |
 | `06` | `EVENT` | | count n, then (command, argument) × n | PS/2 commands of the core to the keyboard (`ED` LEDs, `F0` set); IRQ bit 1 |
 
 ### 5.3 OSD (`02`)
 
 The OSD is a monochrome bitmap of **256 × 128 pixels** (4096 bytes), in the page layout of u8g2
 and small OLEDs: 16 pages of 8 lines; in a page, byte x holds the pixels of column x, bit 0 at the
-top. The size comes from `STATUS` (bytes 5..6), so a core with less block RAM may offer 128 × 64.
+top. The size comes from `STATUS` (bytes 5..6). The firmware supports only 256 × 128: a core that
+reports another size gets no OSD (no `ENABLE`, `WRITE` or `POPUP`).
 
 | C | Name | → | Notes |
 |---|---|---|---|
@@ -159,7 +163,7 @@ A popup gets the same border and shadow around its window. `ENABLE` and `POPUP` 
 as in v1 (show and popup): the OSD is visible while either is on; with both on, the window is shown.
 
 Monochrome by design: one colour pair for the whole OSD (v1 had 16 ink / paper colours per cell).
-Emphasis is drawn (inverse bars, frames, icons, fonts). No colour planes are planned.
+Emphasis is drawn (inverse bars, frames, icons, fonts). No colour planes.
 
 #### Popups and dialogs
 
@@ -167,24 +171,24 @@ What v1 does with the OSD and how it maps onto v2:
 
 | v1 | Where | v2 |
 |---|---|---|
-| Popup mode: the cells twice as large while the menu is hidden; the hotkey toast (logo, item name and value, 500 ms) | `hotkey_popup()`, `ui_popup_start()`, `osd_show_popup()` | The MCU draws the toast into a region of the bitmap and shows it with `POPUP` (zoom 1, place top or centre); it hides it with `POPUP w = 0` and `ENABLE 0` after 500 ms. Keys keep going to the core |
+| Popup mode: the cells twice as large while the menu is hidden; the hotkey toast (logo, item name and value, 500 ms) | `hotkey_popup()`, `ui_popup_start()`, `osd_show_popup()` | The MCU draws the toast into a region of the bitmap and shows it with `POPUP` (zoom 1, centre); it hides it with `POPUP w = 0` and `ENABLE 0` after 500 ms. Keys keep going to the core |
 | Progress popup over the hidden menu: "Loading..." of the file loaders, "Saving..." of the backup RAM, "Run SAV" | `osd_progress_popup()`, `osd_loading_popup()` | A progress dialog (below) shown with `POPUP` (zoom 0, centre) |
 | Progress over the open menu | the same functions, drawn into the menu cells | The same dialog drawn over the menu in the MCU frame buffer; no `POPUP` |
 | Popup number for the core's own overlay (`ADDR_POPUP` bits 7..4) | cores with their own popup graphics | Dropped: every popup is drawn by the MCU |
 
-The firmware keeps the menu screen in its own frame buffer and draws popups and dialogs in a second
-layer; after a dialog it sends the tiles it covered again. Progress updates send only the tile row
-of the bar (one 8-line page, at most 256 bytes: under 0.1 ms at 32 MHz), so a bar can move at
-every 512-byte sector without slowing the transfer.
+The firmware keeps one frame buffer (`ui/osd2`) and a copy of what the core has; each flush sends
+only the runs of changed 8-byte tiles, so a progress update is a few tiles of the bar (a whole
+8-line page is 256 bytes, about 0.1 ms at 24 MHz) and a bar can move at every 512-byte sector
+without slowing the transfer. Dialogs draw into the same buffer; the screen under them is redrawn
+afterwards.
 
-Dialog kinds of the UI layer (section 8), the same for v1 (text cells) and v2 (bitmap):
+Dialog kinds of the UI layer (`ui/dialog`, section 8), the same for v1 (text cells) and v2 (bitmap):
 
-- **toast**: one or two lines, a timeout, takes no keys (hotkey switch values, "Disk A: game.adf");
-- **progress**: title, a line of text, a bar with a percentage, optional bytes / time left; takes
-  no keys, except Esc where the operation can stop (file loading);
-- **busy**: title and a running indicator when the length is unknown (waiting for a core, Wi-Fi);
-- **message / confirm**: a text and OK, or Yes / No (reset settings, overwrite, errors), modal:
-  the keys go to the dialog.
+- **toast** (`dialog_toast()`): two lines, 500 ms, takes no keys (hotkey switch values);
+- **progress** (`dialog_progress()`, `dialog_loading()`): a title and a bar; takes no keys;
+- **box** (`dialog_box()`): a title and a line in a frame, kinds ERROR, BUSY (waiting for a core,
+  Wi-Fi) and ASK; no buttons: for ASK the caller reads Enter / Esc;
+- **load screen** (`dialog_load_screen()`, `dialog_load_rom*()`): the ROM loading of a core.
 
 ### 5.4 IMG (`03`)
 
@@ -220,7 +224,7 @@ new (`kg_l2_img`), and `kg_bk_ram`, `hdf_ata` sit on it as now (section 11).
 | `01` | `START` | kind, slot, size (8), extension (ASCII, up to 8) | | kind 0 ROM (the core holds its CPU in reset), 1 file loader, 2 `FL` item; `LD_START` one clock after the size (a new file: the core resets what it loads into), `LD_ACTIVE` until `END` |
 | `02` | `DATA` | kind, address (4), 1..512 bytes | | Byte k to address + k (`LD_WR` per byte); a packet of another kind than the open `START` is dropped |
 | `03` | `END` | kind | | `LD_ACTIVE` off, `LD_END` one clock |
-| `04` | `STATUS` | | 1 = a `DATA` packet of 512 bytes may come (`LD_READY`), 0 = wait | Only with caps bit 4; without it the core takes `DATA` at any rate (a byte per 250 ns at 32 MHz) |
+| `04` | `STATUS` | | 1 = a `DATA` packet of 512 bytes may come (`LD_READY`), 0 = wait | Only with caps bit 4; without it the core takes `DATA` at any rate (a byte per 333 ns at 24 MHz) |
 
 With caps bit 4 the MCU reads `STATUS` before each `DATA` packet and polls it every 1 ms while it
 is 0, 100 ms at most.
@@ -231,15 +235,15 @@ Byte streams, port index = `P0` of every command.
 
 | Port | Stream |
 |---|---|
-| 0 | USB serial port / USB-UART adapter (v1 `CMD_UART`: ZiFi, EVO RS232) |
+| 0 | the core UART: the clean USB serial port CDC 1, or a USB-UART adapter on the USB host; else the CDC 0 bridge without its `AT+KARABAS=` lines (v1 `CMD_UART`: ZiFi, EVO RS232) |
 | 1 | ESP8266 module behind the FPGA (v1 `CMD_ESP_UART`) |
-| 2 | MIDI IN from a USB MIDI keyboard (MCU → FPGA only, v1 `CMD_MIDI`; no byte counter: the MCU sends only what fits, a lost byte is its own count) |
+| 2 | MIDI IN from a USB MIDI keyboard (MCU → FPGA only, v1 `CMD_MIDI`; no byte counter: a byte the core has no room for within 10 ms is dropped, not counted) |
 | 3 | USB printer (FPGA → MCU only) |
 
 | C | Name | → | ← | Notes |
 |---|---|---|---|---|
 | `01` | `STATUS` | port | rx free, tx available, config (4) | Z after the port; both counts at most 255. config: port 0 the divisor DLL, DLM (0 = 115200) |
-| `02` | `PUT` | port, bytes | | MCU → core; at most rx free |
+| `02` | `PUT` | port, bytes | | MCU → core; at most rx free (the firmware sends one byte per packet) |
 | `03` | `GET` | port, count | count bytes | Z after the count; core → MCU (00 past what waits) |
 | `04` | `PSTAT` | port, status | | Status into the core: port 3 printer (bit 7 BUSY), sent after every GET of port 3 |
 
@@ -265,15 +269,23 @@ IRQ bit 7 while one of them changed since it was read. The core keeps the frames
 
 ## 6. Core start
 
+`configure()` in `src/fpga/core_loader.c`:
+
 1. Bitstream through the configuration pins.
 2. `SYS STATUS` until it answers `'K' 'G' 2` (100 ms at most; INT may already be high from the
-   coldboot cause). No answer: the core is reported as not running.
-3. `SYS IRQ_SRC` (clears coldboot), `SYS INIT 1`.
-4. `SYS HW_SETUP`: board, DVI only, the two build ids.
-5. ROMs: `LOAD START 0`, `DATA`…, `END 0`.
-6. `SYS SETVAL` with all switches in one packet, `RTC SET` with all registers.
-7. `HID KBD` with an empty report, `IMG MOUNT` of the saved images, `FL` autoload.
-8. `SYS INIT 0`. The GPIO interrupt on INT is enabled.
+   coldboot cause), then `SYS IRQ_SRC` (clears coldboot). No answer: the core is reported as not
+   running.
+3. `OSD COLORS` (white on `081028`, alpha 3) if the core has the 256 × 128 OSD.
+4. `SYS INIT 1`.
+5. `SYS HW_SETUP`: board, then DVI only.
+6. `RTC SET` with all registers, `SYS SETVAL` per switch, `RTC SET` again; `IMG MOUNT` of the
+   saved images.
+7. `SYS HW_SETUP`: the two build ids.
+8. ROMs: `LOAD START 0`, `DATA`…, `END 0`.
+9. `FL` autoload (after the ROMs: a file over a ROM of the core file wins).
+10. `HID KBD` with an empty report (through the `INPUT` task, only while the menu of the core is
+    hidden).
+11. `SYS INIT 0`.
 
 There is no font download (the font is in the MCU) and no caps query apart from `STATUS`.
 
@@ -281,7 +293,7 @@ There is no font download (the font is in the MCU) and no caps query apart from 
 
 - `core.json`: `"link": 2` at the top level or per board (`boards.minig.link`), default 1.
 - kgo2: the CORE record gets the field `link` (offset 16, 1 byte; the record grows, older readers
-  skip it). A v2 bitstream goes into a new section type **10 `BITSTREAM_LINK2`**, not into 9.
+  skip it; the firmware only parses it, it decides by the section type). A v2 bitstream goes into a new section type **10 `BITSTREAM_LINK2`**, not into 9.
   An older firmware then finds no bitstream for its board and treats the file as no core for this
   board, instead of loading it and talking v1 to it. make_core writes type 10 for a board with
   link 2 and refuses `link` 2 for a `.kg1/.kg2/.kg3` output.
@@ -289,12 +301,12 @@ There is no font download (the font is in the MCU) and no caps query apart from 
 
 ## 8. OSD drawing in the firmware
 
-- u8g2 (BSD 2-clause) in `third_party/u8g2`, a full-buffer display of 256 × 128 (or the size of
-  `STATUS`) in MCU RAM (4 KB). The firmware sends only the tile rows that changed.
+- u8g2 (BSD 2-clause) in `third_party/u8g2`, a full-buffer display of 256 × 128 in MCU RAM (4 KB).
+  The firmware sends only the runs of tiles that changed.
 - A display layer under the menu code: the text grid backend of v1 (`lib/osd`, `osd_ui`) and the
   u8g2 backend of v2 share the menu, the file browser and the dialogs (toast, progress, busy,
   message / confirm, section 5.3): the callers (`hotkey_popup()`, the loaders, `bk_save`,
-  `uknc_sav`) ask for a dialog, not for cells. The OLED of the backlog can reuse the u8g2 backend.
+  `uknc_sav`) ask for a dialog, not for cells. The OLED (backlog) can reuse the u8g2 backend.
 - The screens (`ui/ui2`, `ui/osd2`; agreed on the board 2026-11-12):
   - Font `u8g2_font_6x12_t_cyrillic` only (bold fonts were tried and dropped: letters merge),
     `u8g2_font_5x8_t_cyrillic` for hotkeys, notes, the clock, disabled rows.
@@ -319,8 +331,8 @@ There is no font download (the font is in the MCU) and no caps query apart from 
   the chip-select deglitch of `kg_mcu_link`), the packet position, the byte bus of the targets
   (`stb`, `tgt`, `cmd`, `n`, `d`) and their answers (`rq`, `rq_m` -> `q`, one turnaround byte),
   `INT` = the or of their pending bits.
-- Targets `kg_l2_sys`, `_hid`, `_load` (Ф2), `_osd`, `_img`, `_port`, `_rtc`, `_aux` (later), each
-  behind an `ENABLE_*` parameter.
+- Targets `kg_l2_sys`, `_hid`, `_load`, `_osd`, `_img`, `_port`, `_rtc`, `_aux`, each behind an
+  `ENABLE_*` parameter.
 - `kg_mcu2`: the module of a v2 core. **Nothing of link v1 in it** (no frames, no bursts, no
   reply queue) and **its own core-side ports** (section 11): a core moves to v2 by an edit of its
   top (the new ports), the INT pin (the IO1 line, already the burst ready of burst cores) and
@@ -329,18 +341,19 @@ There is no font download (the font is in the MCU) and no caps query apart from 
   16 and 32 MHz SCK, 12.5 MHz at 32 MHz SCK, and fast cores at a slow SCK (65 MHz at 16 and 8 MHz,
   125 MHz at 16 MHz). Before modules #41 a core clock above about 4 x SCK
   answered reads one byte early (bk at 65 MHz with 16 MHz SCK).
-- Expected saving per core: the reply queue (512 × 24) and `kg_burst_rx` go, the OSD font RAM goes;
-  the OSD bitmap needs 4 KB (2 RAMB16). Measured on the first cores.
+- Saving per core: the reply queue (512 × 24) and `kg_burst_rx` go, the OSD font RAM goes; the OSD
+  bitmap needs 4 KB (2 RAMB16).
 
-## 10. Plan
+## 10. History (done)
 
-One branch and one PR per phase and repository.
+One branch and one PR per phase and repository; all phases are done (firmware #129-#136, merged
+into master by #145, released 26111315).
 
 | Phase | Work |
 |---|---|
 | Ф0 | This specification |
 | Ф1 | Firmware refactor without a change of behaviour: the services (input, OSD, img, loaders, RTC, ports, matrix) call a link interface instead of building frames, and the popups go through the dialog API (section 5.3) on the text backend; v1 byte for byte, checked on the board |
-| Ф2 | Transport + SYS / HID / LOAD: `kg_l2_link`, `kg_l2_sys` / `_hid` / `_load`, `kg_mcu2` with a testbench and an MCU model; firmware `link2` (DMA for long packets, the INT task); make_core `link` + section 10. Pilot core on Mini G: **vic20** (done: Mini G hw ok); the boot core moves in Ф3 / Ф5 (it needs the OSD, the ESP and MIDI ports). Moving a core: karabas-go-modules `docs/link_v2_migration.md` |
+| Ф2 | Transport + SYS / HID / LOAD: `kg_l2_link`, `kg_l2_sys` / `_hid` / `_load`, `kg_mcu2` with a testbench and an MCU model; firmware `link2` (blocking SPI transfers in `APP`, INT read in the main loop; no DMA, no task of its own); make_core `link` + section 10. Pilot core on Mini G: **vic20** (done: Mini G hw ok); the boot core moves in Ф3 / Ф5 (it needs the OSD, the ESP and MIDI ports). Moving a core: karabas-go-modules `docs/link_v2_migration.md` |
 | Ф3 | OSD: `kg_l2_osd` (bitmap, `POPUP` windows with zoom), u8g2 and the display layer, the Cyrillic fonts, the menu and the dialogs in graphics |
 | Ф4 | IMG: mounter, `.sav`, write protection, physical floppy drives |
 | Ф5 | PORT, RTC, AUX, `SPI_CONTROL` / FT812 |
@@ -356,14 +369,14 @@ message (a report, a register set, a sector) in one chip select, and as core-sid
 
 | Scheme | v1 | v2 packets | `kg_mcu2` core side | Edit of a core |
 |---|---|---|---|---|
-| Core start | `CMD_CAPS` polled with NOPs, `INIT_START`, `HW_SETUP` one frame per byte (18 frames for the ids), font download | `SYS STATUS` (magic, caps, OSD size), `INIT 1`, `HW_SETUP` board + DVI in one packet and the 16 build characters in another, `INIT 0`; no font | `HW_ID`, `DVI_ONLY`, `CORE_BUILD`, `FW_BUILD`, `BUSY` | none (the same signals) |
+| Core start | `CMD_CAPS` polled with NOPs, `INIT_START`, `HW_SETUP` one frame per byte (18 frames for the ids), font download | `SYS STATUS` (magic, caps, OSD size), `INIT 1`, `HW_SETUP` board, DVI, then the 16 build characters in one packet, `INIT 0`; no font | `HW_ID`, `DVI_ONLY`, `CORE_BUILD`, `FW_BUILD`, `BUSY` | none (the same signals) |
 | Firmware polling | a NOP frame every main loop pass, replies in the bytes of any frame | `INT` (IO1, active high), `SYS IRQ` / per-target events read only when INT is high | `MCU_INT` | the IO1 pin: the burst ready of the burst cores, an output of `kg_mcu2` |
-| OSD switches | `CMD_SWITCHES` one frame per switch, `kg_soft_switches` keeps a 16-bit command | `SYS SETVAL` (index, value) × n: all switches in one packet at the start, one pair at a change | `SW_WR`, `SW_INDEX`, `SW_VALUE` | the switch registers of the core take `SW_WR` (a helper that keeps them as a vector replaces `kg_soft_switches`) |
+| OSD switches | `CMD_SWITCHES` one frame per switch, `kg_soft_switches` keeps a 16-bit command | `SYS SETVAL` (index, value) × n (the firmware sends one pair per packet) | `SW_WR`, `SW_INDEX`, `SW_VALUE` | the switch registers of the core take `SW_WR` (a helper that keeps them as a vector replaces `kg_soft_switches`) |
 | Buttons | `CMD_BTN`, `CMD_MATRIX_BTN` | `SYS BTN` 0..1 board, 2..5 matrix | `BTNS` | none / the matrix buttons if used |
 | Reload of the core | `CMD_FLASHBOOT` in the reply queue | `SYS IRQ_SRC` bit 1, `SYS RELOAD` | `RELOAD_REQ`, `RELOAD_CORE` | none |
 | FT812, SD2 | `CMD_SPI_CONTROL`, chip selects passed through | `SYS SPI_CONTROL` | `FT_*`, `SD2_*` as in `kg_mcu` | none |
 | Keyboard | 7 frames per report, `KB_DAT0..5` / `KB_STATUS` change byte by byte | `HID KBD` 8 bytes | `KBD` (56 bits) with `KBD_WR` | the keyboard of the core takes the report on `KBD_WR` (no half-new report) |
-| PS/2, XT | one frame per byte, `KB_SCANCODE_UPD` / `XT_SCANCODE_UPD` toggle | `HID PS2` (kind, code) × n: all bytes of a key in one packet | `PS2_CODE`, `PS2_KIND`, `PS2_WR` strobe | toggle detectors -> the strobe |
+| PS/2, XT | one frame per byte, `KB_SCANCODE_UPD` / `XT_SCANCODE_UPD` toggle | `HID PS2` (kind, code) × n (the firmware sends one byte per packet) | `PS2_CODE`, `PS2_KIND`, `PS2_WR` strobe | toggle detectors -> the strobe |
 | Keyboard commands of the core | `CMD_PS2_SCANCODE` in the reply queue | `HID EVENT` (count, (cmd, arg) × n), IRQ bit 1 | `PS2_CMD`, `PS2_CMD_WR` | none |
 | Mouse | 4 frames, `MS_UPD` toggles on the buttons byte, `MS_Z` 4 bits | `HID MOUSE` 4 bytes | `MS_X`, `MS_Y`, `MS_Z` (8 bits), `MS_B`, `MS_WR` | toggle -> strobe; the wheel is 8 bits |
 | Joysticks | 2 frames per port, 13 bits | `HID JOY` (port, lo, hi) × n | `JOY_L`, `JOY_R` (16 bits), `JOY_WR` | the width (bits 13..15 free for more buttons) |
@@ -378,9 +391,9 @@ message (a report, a register set, a sector) in one chip select, and as core-sid
 | Backup RAM (`.sav`) | `CMD_BK_MOUNT` frames, `CMD_IMG_FLUSH` both ways | `IMG EVENT` kind 4 (size, kind), `IMG FLUSH`, its answer `IMG EVENT` kind 3 | `kg_bk_ram` on the new img side | none |
 | DSKCHG (Go floppy) | `CMD_FDD_CHNG` 49 d 00 / 49 d v | `IMG EVENT` kind 5, `IMG FDD_CHNG` | as now | none |
 | RTC | `CMD_RTC` one frame per register: all at the start, the time every 500 ms; a write of the CPU one frame per register | `RTC SET` (first register, N values): the whole set at the start, the time registers (one packet of about 10 bytes) every 500 ms; `RTC GET` (count, (register, value) × n) on IRQ bit 6 | the register RAM of `kg_mcu_rtc` (`RTC_A`, `RTC_DI`, `RTC_DO`, `RTC_CS`, `RTC_WR_N`) in `kg_l2_rtc` | none |
-| USB serial (ZiFi, RS232) | `CMD_UART` one frame per byte both ways, `idx` counter, DLL / DLM frames | `PORT 0`: `PUT` / `GET` many bytes per packet, `STATUS` (free, available, the divisor) | rx / tx fifos with valid / ready, `UART_DLL` / `UART_DLM` | byte + counter -> fifo handshake |
+| USB serial (ZiFi, RS232) | `CMD_UART` one frame per byte both ways, `idx` counter, DLL / DLM frames | `PORT 0`: `GET` many bytes per packet, `PUT` (one byte per packet now), `STATUS` (free, available, the divisor) | rx / tx fifos with valid / ready, `UART_DLL` / `UART_DLM` | byte + counter -> fifo handshake |
 | ESP8266 | `CMD_ESP_UART` per byte, the byte held until ack | `PORT 1` as port 0 | fifos | as above |
-| MIDI IN | `CMD_MIDI` per byte with a counter, `MIDI_LOST` | `PORT 2 PUT` many bytes | `MIDI_DATA`, `MIDI_WR` | `MIDI_LOST` goes |
+| MIDI IN | `CMD_MIDI` per byte with a counter, `MIDI_LOST` | `PORT 2 PUT` | `MIDI_DATA`, `MIDI_WR` | `MIDI_LOST` goes |
 | Printer | `PRINTER_DATA` per byte + status request, `PRINTER_STATUS` | `PORT 3 GET` many bytes, `PSTAT` the status | a tx fifo, `PRN_BUSY` | none |
 | LED matrix, meters, debug | `CMD_MATRIX_CTL` / `PIXEL` / `BITPLAN`, `AUDIO_PEAKS_L/R`, `DEBUG_*` frames in the queue | `AUX MATRIX` (control + 32 bytes), `AUX PEAKS`, `AUX DEBUG`, IRQ bit 7 | a bitplane buffer the core draws into (pixels or rows), the peaks, the debug words | `MATRIX_CMD` -> the buffer |
 | OSD | 32 × 26 cells with 16 colours, font in the FPGA, popup mode, popup numbers for the core's own overlay | `OSD WRITE` tiles of a 256 × 128 bitmap, `POPUP` windows with zoom, `COLORS` | `kg_l2_osd` over the video (replaces `kg_osd_overlay`) | the video path takes the new overlay |
