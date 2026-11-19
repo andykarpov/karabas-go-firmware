@@ -41,8 +41,8 @@ bool usb_device_bootsel_requested() {
 }
 
 void tud_cdc_line_coding_cb(uint8_t itf, const cdc_line_coding_t *coding) {
-  (void) itf;
-  if (coding->bit_rate != 1200) return;
+  // the control port only: the clean core port (CDC 1) may run any speed, 1200 too
+  if (itf != 0 || coding->bit_rate != 1200) return;
   bootsel_request = true;
   uint32_t start = ms_now();
   while (ms_since(start) < BOOTSEL_REQUEST_TIMEOUT_MS) vTaskDelay(pdMS_TO_TICKS(10));

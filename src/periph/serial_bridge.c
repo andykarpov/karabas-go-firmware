@@ -6,9 +6,13 @@
 #include "file_name.h"
 #include "kg_keys.h"
 
-// USB CDC serial <-> core UART bridge (TS ZiFi and ZX Evo RS232). While a USB-UART adapter
-// is plugged into the USB host (periph/usb_uart), the core UART goes to it instead, at the
-// speed of the core, and the CDC port takes only the AT+KARABAS lines (the log stays there).
+// USB CDC serial <-> core UART bridge (TS ZiFi and ZX Evo RS232).
+// The clean port of the core UART: CDC 1 (Linux ...-if02, "Karabas core serial"), or a USB-UART
+// adapter plugged into the USB host (periph/usb_uart) instead of it: bytes 1:1 both ways, no AT
+// parser, no log, no pacing (link v2: as many as the core takes, link_uart_room(); the rest waits
+// in the USB fifo). CDC 0, the control port, stays as it was: the log, the AT+KARABAS lines, and,
+// without an adapter, the old bridge to the core UART (paced, AT lines taken out); with an adapter
+// it takes only the AT+KARABAS lines.
 // AT+KARABAS=<cmd> lines from the host are not forwarded, the firmware answers them:
 //   list - the installed cores: "+KARABAS:<file>;<id>;<name>;<build>" lines, then OK
 //   boot - reboot into the RP2040 USB bootloader (BOOTSEL, firmware update)
@@ -99,10 +103,31 @@ void serial_set_speed(uint8_t dll, uint8_t dlm) {
   }
 }
 
-// a byte of the core: to the adapter if one is plugged, else to the CDC port
+// a byte of the core: to the adapter if one is plugged, else to the clean CDC 1 (if a terminal has
+// it open; dropped when its fifo is full: the core is never held) and to CDC 0 as before
 static void core_out(uint8_t data) {
-  if (usb_uart_active()) usb_uart_write(data);
-  else host_write(&data, 1);
+  if (usb_uart_active()) { usb_uart_write(data); return; }
+  if (tud_cdc_n_connected(1)) tud_cdc_n_write(1, &data, 1);
+  host_write(&data, 1);
+}
+
+// the clean port -> the core: link v2 as many as the core takes, link v1 one byte per line time
+static unsigned long clean_last = 0;
+static void clean_tick(bool adapter) {
+  int room = link_uart_room();
+  if (room < 0) {
+    if (us_now() - clean_last < 10 * 1e6 / serial_speed) return;
+    room = 1;
+  }
+  if (room > 64) room = 64;
+  for (int i = 0; i < room; i++) {
+    int c;
+    if (adapter) c = usb_uart_read();
+    else c = tud_cdc_n_available(1) > 0 ? tud_cdc_n_read_char(1) : -1;
+    if (c < 0) break;
+    link_uart_put((uint8_t) c);
+    clean_last = us_now();
+  }
 }
 
 void serial_data(uint8_t kind, uint8_t data) {
@@ -297,29 +322,26 @@ void serial_bridge_tick() {
   // TinyUSB sends only full 64-byte packets by itself: the tail of what the core, the ESP or
   // at_command() wrote would wait for the next 64 bytes
   host_flush();
+  tud_cdc_n_write_flush(1);
   at_control_tick();
   if (esp_mode && core.type != CORE_TYPE_BOOT) esp_mode = false;
   if (esp_mode) { esp_tick(); return; }
 
   const bool adapter = usb_uart_active();
+  clean_tick(adapter);
   if (adapter) {
     if (ms_since(speed_changed) >= SPEED_SETTLE_MS) usb_uart_set_baud(serial_speed);
     host_commands();
+    return;
   }
 
-  // the pace of the bytes to the core: 3 byte times on the CDC (the host sends as fast as it
-  // can), the line rate from the adapter (its bytes come at that rate and would pile up)
-  unsigned long uart_rx_delay = (adapter ? 10 : 30) * 1e6 / serial_speed;
+  // CDC 0 (the old bridge): 3 byte times a byte (the host sends as fast as it can)
+  unsigned long uart_rx_delay = 30 * 1e6 / serial_speed;
   if (us_now() - uart_rx_last < uart_rx_delay) return;
 
   if (tx_pos >= tx_len) {
     tx_pos = tx_len = 0;
-    if (adapter) {
-      int c = usb_uart_read();
-      if (c < 0) return;
-      tx_buf[0] = (char) c;
-      tx_len = 1;
-    } else {
+    {
       if (tud_cdc_available() > 0) {
         int uart_rx = tud_cdc_read_char();
         if (uart_rx == -1) return;

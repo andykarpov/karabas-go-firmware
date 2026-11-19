@@ -16,7 +16,7 @@
 #define CFG_TUD_ENABLED             1
 #define CFG_TUD_ENDPOINT0_SIZE      64
 
-#define CFG_TUD_CDC                 1
+#define CFG_TUD_CDC                 2   // 0: control (AT, log), 1: the clean core UART
 #define CFG_TUD_CDC_RX_BUFSIZE      256
 #define CFG_TUD_CDC_TX_BUFSIZE      1024
 #define CFG_TUD_CDC_EP_BUFSIZE      64
