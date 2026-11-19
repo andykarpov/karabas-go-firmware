@@ -104,10 +104,16 @@ void serial_set_speed(uint8_t dll, uint8_t dlm) {
 }
 
 // a byte of the core: to the adapter if one is plugged, else to the clean CDC 1 (if a terminal has
-// it open; dropped when its fifo is full: the core is never held) and to CDC 0 as before
+// it open; dropped when its fifo is full: the core is never held) and to CDC 0. CDC 0 waits for room
+// as before (host_write) only while CDC 1 is closed: a port left with DTR up and nobody reading
+// (kg_board.py clears no HUPCL) held every byte 50 ms and the clean port with it (~40 bytes/s)
 static void core_out(uint8_t data) {
   if (usb_uart_active()) { usb_uart_write(data); return; }
-  if (tud_cdc_n_connected(1)) tud_cdc_n_write(1, &data, 1);
+  if (tud_cdc_n_connected(1)) {
+    tud_cdc_n_write(1, &data, 1);
+    if (tud_cdc_connected() && tud_cdc_write_available() > 0) tud_cdc_write(&data, 1);
+    return;
+  }
   host_write(&data, 1);
 }
 
