@@ -656,6 +656,17 @@ static void v2_port_put(uint8_t port, uint8_t byte) {
   v2_free[port]--;
 }
 
+int link_uart_room(void) {
+  if (!V2) return -1;
+  if (!(v2_ports & 1)) return 0;
+  if (v2_free[0] == 0) {
+    uint8_t st[6];
+    v2_port_status(0, st);
+    v2_free[0] = st[0];
+  }
+  return v2_free[0];
+}
+
 void link_uart_put(uint8_t byte) {
   if (V2) { v2_port_put(0, byte); return; }
   // addr changes with every byte, so the core can see a new one

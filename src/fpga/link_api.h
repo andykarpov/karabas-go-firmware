@@ -129,6 +129,9 @@ void link_img_on_fdd_chng(int (*cb)(uint8_t drive));
 // ---- PORT: byte streams ----
 
 void link_uart_put(uint8_t byte);                // USB serial -> the core UART
+// link v2: the bytes the core UART (PORT 0) takes now (asks STATUS once when the room seen is used
+// up, no wait; 0 = none now); -1 on link v1 (no flow control: pace by the line rate)
+int link_uart_room(void);
 void link_esp_put(uint8_t byte);                 // the ESP8266 behind the fpga
 void link_printer_status(uint8_t status);        // bit 7 BUSY
 

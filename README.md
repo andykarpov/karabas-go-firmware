@@ -57,9 +57,10 @@ firmware also reads the older per-board files `.kg1` / `.kg2` / `.kg3`.
   module keeps the network and joins it on start; its CTS flow control is turned on.
 - **SD card as a USB drive.** The PC sees the SD card as a USB mass storage device, so the card
   can stay in the board.
-- **USB serial bridge.** The USB serial port of the board is wired to the UART of the core, and a
-  few `AT+KARABAS=` commands control the firmware itself. A USB-UART adapter plugged into the
-  USB host takes the UART of the core instead.
+- **USB serial bridge.** Two USB serial ports: the control port (the log and a few `AT+KARABAS=`
+  commands that control the firmware, plus the old bridge to the UART of the core) and the core
+  serial port, the UART of the core byte for byte. A USB-UART adapter plugged into the USB host
+  takes the place of the core serial port.
 - **Optional peripherals**, detected at boot: FT812, OLED display, LED matrix, I2C extender (Go),
   ESP8266, MIDI (Mini G).
 - **Fast transfers.** Cores that support it receive ROMs and files in bursts of up to 512 bytes
@@ -200,7 +201,29 @@ slower (about 300 KB/s). Without a card in the slot the board goes back to the m
 
 ## USB serial bridge
 
-Bytes from the PC go to the UART of the running core. Lines starting with `AT+KARABAS=` are
+### Two serial ports
+
+The board shows two USB serial ports:
+
+| Port | Linux (stable name) | What it is |
+| --- | --- | --- |
+| control (interface 0) | `/dev/serial/by-id/usb-Karabas_Go_<serial>-if00` | the debug log, the `AT+KARABAS=` commands below, and the bridge to the UART of the core as before (paced, `AT+KARABAS=` lines taken out) |
+| core serial (interface 2, "Karabas core serial") | `/dev/serial/by-id/usb-Karabas_Go_<serial>-if02` | the UART of the core only, byte for byte: no commands, no log, no pause between bytes (a getty, a file transfer, a binary protocol) |
+
+The `ttyACM` numbers follow the order the ports appear in (and other ACM devices), so use the
+`by-id` names (or `by-path`, tied to the USB socket). A udev rule can give shorter names:
+
+```
+# /etc/udev/rules.d/60-karabas.rules
+SUBSYSTEM=="tty", ATTRS{idVendor}=="2e8a", ATTRS{idProduct}=="000a", ENV{ID_USB_INTERFACE_NUM}=="00", SYMLINK+="karabas-ctl"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="2e8a", ATTRS{idProduct}=="000a", ENV{ID_USB_INTERFACE_NUM}=="02", SYMLINK+="karabas-serial"
+```
+
+On macOS the ports are `/dev/cu.usbmodem<serial>1` and `...3`, on Windows two COM ports (the second
+one named "Karabas core serial" in the Device Manager). The 1200 baud open that restarts the board
+into BOOTSEL works on the control port only.
+
+Bytes from the PC on the control port go to the UART of the running core. Lines starting with `AT+KARABAS=` are
 answered by the firmware:
 
 | Command | Action |
@@ -229,12 +252,11 @@ answered by the firmware:
 
 ### USB-UART adapter
 
-A USB-UART adapter (CDC ACM, FTDI, CP210x or CH34x) plugged into the USB host of the board takes
-the UART of the core while it is plugged: the bytes of the core go to the adapter and the bytes
-from it to the core. The adapter runs 8N1 at the speed of the core: 115200, or the speed the core
-sets (the DLL / DLM divisor of ZX Evo RS232). Only the first adapter is used. The USB serial port
-of the board keeps the debug log and the `AT+KARABAS=` commands; other bytes sent to it are
-dropped meanwhile.
+A USB-UART adapter (CDC ACM, FTDI, CP210x or CH34x) plugged into the USB host of the board takes the
+place of the core serial port while it is plugged: the bytes of the core go to it and its bytes to
+the core, byte for byte. It runs 8N1 at the speed of the core: 115200 or the speed the core sets
+(the DLL / DLM divisor of ZX Evo RS232). Only the first adapter is used. The control port keeps the
+debug log and the `AT+KARABAS=` commands; its other bytes are dropped meanwhile.
 
 ## Building from source
 

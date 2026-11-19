@@ -1,5 +1,8 @@
-// The device descriptors: CDC + MSC under the ids and names of the arduino-pico firmware before
+// The device descriptors: CDC + CDC + MSC under the ids and names of the arduino-pico firmware before
 // (2e8a:000a, "Karabas" / "Go", the flash id as the serial), so the host sees the same device.
+// CDC 0 (interface 0, Linux .../by-id/...-if00): the control port as before (AT+KARABAS, the log, DIAG,
+// the old bridge to the core UART). CDC 1 (interface 2, ...-if02, "Karabas core serial"): the clean
+// stream of the core UART (periph/serial_bridge: no AT parser, no log, no pacing).
 
 #include <string.h>
 #include "tusb.h"
@@ -29,19 +32,23 @@ const uint8_t *tud_descriptor_device_cb(void) {
   return (const uint8_t *) &desc_device;
 }
 
-enum { ITF_NUM_CDC = 0, ITF_NUM_CDC_DATA, ITF_NUM_MSC, ITF_NUM_TOTAL };
+enum { ITF_NUM_CDC = 0, ITF_NUM_CDC_DATA, ITF_NUM_CDC1, ITF_NUM_CDC1_DATA, ITF_NUM_MSC, ITF_NUM_TOTAL };
 
-#define EPNUM_CDC_NOTIF 0x81
-#define EPNUM_CDC_OUT   0x02
-#define EPNUM_CDC_IN    0x82
-#define EPNUM_MSC_OUT   0x03
-#define EPNUM_MSC_IN    0x83
+#define EPNUM_CDC_NOTIF  0x81
+#define EPNUM_CDC_OUT    0x02
+#define EPNUM_CDC_IN     0x82
+#define EPNUM_MSC_OUT    0x03
+#define EPNUM_MSC_IN     0x83
+#define EPNUM_CDC1_NOTIF 0x84
+#define EPNUM_CDC1_OUT   0x05
+#define EPNUM_CDC1_IN    0x85
 
-#define CONFIG_TOTAL_LEN (TUD_CONFIG_DESC_LEN + TUD_CDC_DESC_LEN + TUD_MSC_DESC_LEN)
+#define CONFIG_TOTAL_LEN (TUD_CONFIG_DESC_LEN + 2 * TUD_CDC_DESC_LEN + TUD_MSC_DESC_LEN)
 
 static const uint8_t desc_configuration[] = {
   TUD_CONFIG_DESCRIPTOR(1, ITF_NUM_TOTAL, 0, CONFIG_TOTAL_LEN, 0x00, 500),
   TUD_CDC_DESCRIPTOR(ITF_NUM_CDC, 0, EPNUM_CDC_NOTIF, 8, EPNUM_CDC_OUT, EPNUM_CDC_IN, 64),
+  TUD_CDC_DESCRIPTOR(ITF_NUM_CDC1, 4, EPNUM_CDC1_NOTIF, 8, EPNUM_CDC1_OUT, EPNUM_CDC1_IN, 64),
   TUD_MSC_DESCRIPTOR(ITF_NUM_MSC, 0, EPNUM_MSC_OUT, EPNUM_MSC_IN, 64),
 };
 
@@ -50,7 +57,7 @@ const uint8_t *tud_descriptor_configuration_cb(uint8_t index) {
   return desc_configuration;
 }
 
-static const char *const strings[] = { NULL, "Karabas", "Go" };
+static const char *const strings[] = { NULL, "Karabas", "Go", NULL, "Karabas core serial" };
 
 static uint16_t desc_str[33];
 
@@ -66,7 +73,7 @@ const uint16_t *tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
     if (index == 3) {
       pico_get_unique_board_id_string(serial, sizeof(serial));
       str = serial;
-    } else if (index < sizeof(strings) / sizeof(strings[0])) {
+    } else if (index < sizeof(strings) / sizeof(strings[0]) && strings[index]) {
       str = strings[index];
     } else {
       return NULL;
