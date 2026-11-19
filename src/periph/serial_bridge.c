@@ -7,12 +7,12 @@
 #include "kg_keys.h"
 
 // USB CDC serial <-> core UART bridge (TS ZiFi and ZX Evo RS232).
-// The clean port of the core UART: CDC 1 (Linux ...-if02, "Karabas core serial"), or a USB-UART
-// adapter plugged into the USB host (periph/usb_uart) instead of it: bytes 1:1 both ways, no AT
-// parser, no log, no pacing (link v2: as many as the core takes, link_uart_room(); the rest waits
-// in the USB fifo). CDC 0, the control port, stays as it was: the log, the AT+KARABAS lines, and,
-// without an adapter, the old bridge to the core UART (paced, AT lines taken out); with an adapter
-// it takes only the AT+KARABAS lines.
+// The port of the core UART: CDC 1 (Linux ...-if02, "Karabas core serial"), or a USB-UART adapter
+// plugged into the USB host (periph/usb_uart) instead of it: bytes 1:1 both ways, no AT parser, no
+// log, no pacing (link v2: as many as the core takes, link_uart_room(); the rest waits in the USB
+// fifo; link v1: one byte per line time). CDC 0, the control port, has the log, DIAG and the
+// AT+KARABAS lines only: its other bytes are dropped, and the core UART does not reach it (the old
+// bridge to the core UART there is gone since 2026-11-19).
 // AT+KARABAS=<cmd> lines from the host are not forwarded, the firmware answers them:
 //   list - the installed cores: "+KARABAS:<file>;<id>;<name>;<build>" lines, then OK
 //   boot - reboot into the RP2040 USB bootloader (BOOTSEL, firmware update)
@@ -33,20 +33,17 @@
 static uint8_t evo_rs232_dll = 0;
 static uint8_t evo_rs232_dlm = 0;
 static uint32_t serial_speed = 115200;
-static unsigned long uart_rx_last = 0;
 static uint32_t speed_changed = 0;         // ms_now() of the last speed change
 // the speed goes to the adapter once it is still this long: EVO RS232 sends DLL and DLM apart
 #define SPEED_SETTLE_MS 20
 
 static kg_at_parser_t at_parser;
-static char tx_buf[sizeof(at_parser.out)]; // bytes to forward to the core, one per rx period
-static uint8_t tx_len = 0, tx_pos = 0;
-static uint32_t at_hold_timer = 0;         // held bytes go to the core when the host goes quiet
+static uint32_t at_hold_timer = 0;         // a held start of a line is dropped when the host goes quiet
 #define AT_HOLD_TIMEOUT_MS 500
 static bool esp_mode = false;
 static kg_crlf_t esp_crlf;                 // the ESP8266 runs a command only after CR LF
 
-// The host side is the CDC port (also the debug log, both from APP only). A write waits while
+// The host side of the AT answers and the ESP console is CDC 0 (also the debug log, all from APP). A write waits while
 // the fifo is full, at most HOST_WRITE_WAIT_MS without progress (no terminal reading): USBD,
 // above APP, sends meanwhile. Arduino's Serial.write waited for the whole write too.
 #define HOST_WRITE_WAIT_MS 50
@@ -103,21 +100,14 @@ void serial_set_speed(uint8_t dll, uint8_t dlm) {
   }
 }
 
-// a byte of the core: to the adapter if one is plugged, else to the clean CDC 1 (if a terminal has
-// it open; dropped when its fifo is full: the core is never held) and to CDC 0. CDC 0 waits for room
-// as before (host_write) only while CDC 1 is closed: a port left with DTR up and nobody reading
-// (kg_board.py clears no HUPCL) held every byte 50 ms and the clean port with it (~40 bytes/s)
+// a byte of the core: to the adapter if one is plugged, else to CDC 1 if a terminal has it open
+// (dropped when its fifo is full, or with nobody on the port: the core is never held)
 static void core_out(uint8_t data) {
   if (usb_uart_active()) { usb_uart_write(data); return; }
-  if (tud_cdc_n_connected(1)) {
-    tud_cdc_n_write(1, &data, 1);
-    if (tud_cdc_connected() && tud_cdc_write_available() > 0) tud_cdc_write(&data, 1);
-    return;
-  }
-  host_write(&data, 1);
+  if (tud_cdc_n_connected(1)) tud_cdc_n_write(1, &data, 1);
 }
 
-// the clean port -> the core: link v2 as many as the core takes, link v1 one byte per line time
+// CDC 1 or the adapter -> the core: link v2 as many as the core takes, link v1 one byte per line time
 static unsigned long clean_last = 0;
 static void clean_tick(bool adapter) {
   int room = link_uart_room();
@@ -311,7 +301,7 @@ static void esp_tick() {
   }
 }
 
-// with an adapter the CDC port takes only AT+KARABAS lines, the other bytes are dropped
+// CDC 0 takes only AT+KARABAS lines, the other bytes are dropped
 static void host_commands() {
   while (tud_cdc_available() > 0) {
     int c = tud_cdc_read_char();
@@ -322,7 +312,7 @@ static void host_commands() {
   if (at_parser.len > 0 && ms_since(at_hold_timer) >= AT_HOLD_TIMEOUT_MS) kg_at_flush(&at_parser);
 }
 
-// forward bytes received from the host (or the adapter) to the core
+// the core UART (CDC 1 or the adapter) and the AT lines of CDC 0
 void serial_bridge_tick() {
   if (usb_device_bootsel_requested()) reboot_bootsel(false); // the 1200 baud touch
   // TinyUSB sends only full 64-byte packets by itself: the tail of what the core, the ESP or
@@ -335,36 +325,6 @@ void serial_bridge_tick() {
 
   const bool adapter = usb_uart_active();
   clean_tick(adapter);
-  if (adapter) {
-    if (ms_since(speed_changed) >= SPEED_SETTLE_MS) usb_uart_set_baud(serial_speed);
-    host_commands();
-    return;
-  }
-
-  // CDC 0 (the old bridge): 3 byte times a byte (the host sends as fast as it can)
-  unsigned long uart_rx_delay = 30 * 1e6 / serial_speed;
-  if (us_now() - uart_rx_last < uart_rx_delay) return;
-
-  if (tx_pos >= tx_len) {
-    tx_pos = tx_len = 0;
-    {
-      if (tud_cdc_available() > 0) {
-        int uart_rx = tud_cdc_read_char();
-        if (uart_rx == -1) return;
-        at_hold_timer = ms_now();
-        switch (kg_at_feed(&at_parser, (char) uart_rx)) {
-          case KG_AT_PASS: break;
-          case KG_AT_COMMAND: at_command(kg_at_arg(&at_parser)); return;
-          default: return;
-        }
-      } else if (!(at_parser.len > 0 && ms_since(at_hold_timer) >= AT_HOLD_TIMEOUT_MS && kg_at_flush(&at_parser) > 0)) {
-        return;
-      }
-      memcpy(tx_buf, at_parser.out, at_parser.out_len);
-      tx_len = at_parser.out_len;
-    }
-  }
-
-  uart_rx_last = us_now();
-  link_uart_put((uint8_t) tx_buf[tx_pos++]);
+  if (adapter && ms_since(speed_changed) >= SPEED_SETTLE_MS) usb_uart_set_baud(serial_speed);
+  host_commands();
 }

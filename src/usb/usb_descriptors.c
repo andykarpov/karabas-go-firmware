@@ -1,8 +1,8 @@
 // The device descriptors: CDC + CDC + MSC under the ids and names of the arduino-pico firmware before
 // (2e8a:000a, "Karabas" / "Go", the flash id as the serial), so the host sees the same device.
-// CDC 0 (interface 0, Linux .../by-id/...-if00): the control port as before (AT+KARABAS, the log, DIAG,
-// the old bridge to the core UART). CDC 1 (interface 2, ...-if02, "Karabas core serial"): the clean
-// stream of the core UART (periph/serial_bridge: no AT parser, no log, no pacing).
+// CDC 0 (interface 0, Linux .../by-id/...-if00): the control port (AT+KARABAS, the log, DIAG; no core
+// UART). CDC 1 (interface 2, ...-if02, "Karabas core serial"): the stream of the core UART
+// (periph/serial_bridge: no AT parser, no log).
 
 #include <string.h>
 #include "tusb.h"

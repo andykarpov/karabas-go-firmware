@@ -235,7 +235,7 @@ Byte streams, port index = `P0` of every command.
 
 | Port | Stream |
 |---|---|
-| 0 | the core UART: the clean USB serial port CDC 1, or a USB-UART adapter on the USB host; else the CDC 0 bridge without its `AT+KARABAS=` lines (v1 `CMD_UART`: ZiFi, EVO RS232) |
+| 0 | the core UART: the core serial port CDC 1, or a USB-UART adapter on the USB host (v1 `CMD_UART`: ZiFi, EVO RS232) |
 | 1 | ESP8266 module behind the FPGA (v1 `CMD_ESP_UART`) |
 | 2 | MIDI IN from a USB MIDI keyboard (MCU → FPGA only, v1 `CMD_MIDI`; no byte counter: a byte the core has no room for within 10 ms is dropped, not counted) |
 | 3 | USB printer (FPGA → MCU only) |

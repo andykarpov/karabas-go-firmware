@@ -79,8 +79,8 @@
 
 ## Последовательный мост
 
-- [ ] Байты хоста доходят до UART ядра и обратно.
-- [ ] CDC 1 (`-if02`): UART ядра байт в байт, без AT и без лога.
+- [ ] CDC 1 (`-if02`): байты хоста доходят до UART ядра и обратно, байт в байт, без AT и без лога.
+- [ ] CDC 0 (`-if00`): на строки `AT+KARABAS=` есть ответ, остальные байты до ядра не доходят.
 - [ ] `AT+KARABAS=list`, `version`, `boot` (BOOTSEL), `msc`, `msc2`, `esp` / `uart` (BOOT-ядро: консоль AT модуля ESP и обратно).
 - [ ] `AT+KARABAS=key:menu+esc` открывает OSD, `key:esc` закрывает; `type:dir` + `key:enter` в ядре; `hold:alt` / `release`. (Mini G 2026-10-31: так управлялись меню ядер, OSD и выбор файла PC XT, Ctrl+Alt+Del.)
 - [ ] `AT+KARABAS=state` в boot-ядре и в ядре; `load:<id>` из boot-ядра и из работающего ядра, `load:boot`; `reset`.
