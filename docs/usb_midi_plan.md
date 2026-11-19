@@ -12,7 +12,8 @@ A USB MIDI keyboard on the USB host of the MCU, its events passed to the FPGA co
 
 ```
 USB keyboard -> [USB task, core 1] midi_host: IN endpoint, 4-byte packets
-   -> raw MIDI bytes -> spi_queue(CMD_MIDI, ...) -> INPUT -> FPGA
+   -> raw MIDI bytes -> link_hid_queue(LINK_EV_MIDI, ...) -> INPUT -> FPGA
+      (link v1: CMD_MIDI frames; link v2: PORT 2 PUT)
    -> core: its own MIDI IN (a UART) and / or thru to the SAM2695
 ```
 
@@ -31,7 +32,8 @@ Steps 1-4 are one firmware PR, steps 5-6 are in the modules / core repos. MIDI O
 
 - `usb/midi_host.c`: the class driver, registered third in `usbh_app_driver_get_cb()`. It takes the MS interface offered alone, or inside an IAD that starts with the Audio Control one. The IN transfer is re-armed from its callback, so the idle USB loop gains nothing; a stall stops it (PIO-USB cannot clear one).
 - `lib/common/usb_midi` (`kg_usb_midi_packet()`, test `test_usb_midi`): a 4-byte packet into 0..3 MIDI bytes.
-- `CMD_MIDI = 0x16`, `CAPS_MIDI = 0x10` (`fpga/link.h`); bytes go through `spi_queue()` to `INPUT`, also while the OSD is open.
+- `CMD_MIDI = 0x16` (`config.h`), `CAPS_MIDI = 0x10` (`fpga/link.h`); bytes go through `link_hid_queue(LINK_EV_MIDI, ...)` to `INPUT`, also while the OSD is open.
+- Link v2 (since #145): the bytes go to PORT 2 (`PORT PUT`) of cores with the `STATUS` cap bit 9 (MIDI IN); a byte the core has no room for within 10 ms is dropped ([link_v2.md](link_v2.md) section 5.6).
 - `debug=1`: `USB MIDI mounted VID:PID ...` / `disconnected`, failed endpoint opens (a full pool); the `DIAG` line gets `midi on rx N sent N skipped N` once a keyboard was seen (skipped: the core has no caps bit 4).
 
 ## Risks

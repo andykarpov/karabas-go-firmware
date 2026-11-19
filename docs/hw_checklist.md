@@ -17,9 +17,11 @@ Set `debug=1` in `karabas.ini` and keep a terminal on the USB serial port: most 
 
 - [ ] BOOT core: the core list, long names, the selection kept over a reboot.
 - [ ] An OSD core (tsconf): loads, its ROMs arrive (`ROM ... ms` with the link mode in the log), Win+Esc opens and closes the OSD.
-- [ ] A FILELOADER core (NES): the file list, a game loads, the last file is remembered (the id is written into the core file).
-- [x] A FILELOADER core with menu items (Mini G, NES, 2026-11-01): `Options` in the hint line, Tab / O open the core menu, Esc on its main page goes back to the files (the cursor on the same file, the game is not loaded again), an F item hotkey opens the menu, Menu+Esc opens the files again.
-- [ ] A burst core (`FPGA caps` with burst in the log) and a classic one (old core, no caps answer).
+- [ ] A FILELOADER core (NES): the file list, a game loads, the last file is remembered (the id is written into the core file (kgo1) / `/config/<id>.ini` (kgo2)).
+- [x] A FILELOADER core with menu items (Mini G, NES, 2026-11-01): `Options` in the hint line (text OSD), Tab / O open the core menu, Esc on its main page goes back to the files (the cursor on the same file, the game is not loaded again), an F item hotkey opens the menu, Menu+Esc opens the files again.
+- [ ] A link v2 core (`Link v2: core answered in ...` in the log, no `Link v2: N v1 frames not sent`).
+- [ ] The bitmap OSD of a link v2 core: the boot list with Setup / Graphic menu / About after the cores and the board name in the header; a core menu (check boxes, an option list, sub-pages), the dialogs (toast, progress, boxes) and About.
+- [ ] Link v1: a burst core (`FPGA caps` with burst in the log) and a classic one (old core, no caps answer).
 - [ ] A core with its own `spi_freq`.
 - [ ] The heaviest core (nanomig): loads, Kickstart autoload (`FL` item with `autoload`), runs.
 - [ ] Autoload (`[autoload]`): the countdown, a key stops it.
@@ -28,12 +30,12 @@ Set `debug=1` in `karabas.ini` and keep a terminal on the USB serial port: most 
 
 ## OSD
 
-- [ ] Switches change the core at once, are saved into the core file and come back after a reload.
+- [ ] Switches change the core at once, are saved into the core file (kgo1) / `/config/<id>.ini` (kgo2) and come back after a reload.
 - [ ] Hotkeys of OSD items (Ctrl+Alt+Del of tsconf).
 - [x] The key of a `Menu+key` hotkey does not reach the machine (Mini G, RK core, Specialist, 2026-11-08: `Menu+M` shows no `M` in the Monitor, also when Menu is released first; the switch still changes; F12 still resets). Ctrl+Alt+Del: same path as F12, not tried.
 - [ ] A tree menu (nanomig): Enter / Right open a `►` page, Esc goes back, the cursor is kept per page, the path in the title row; a `show_if` item appears and an `enable_if` item turns grey with its switch; a hotkey of an item on another page opens that page. A flat core (tsconf) looks as before.
 - [ ] Long lists: the scrollbar in the last column of the core browser and the file browser (a slot per page), the core menu and the Wi-Fi list (a thumb at most half the track); no scrollbar and no empty column when the list fits; the core menu scrolls with the cursor.
-- [ ] `F` / `FL` browsers list the dirs (cyan, ending with `/`) and only the files with the item's extensions ("Files: ..." on the hint row).
+- [ ] `F` / `FL` browsers list the dirs (cyan, ending with `/`) and only the files with the item's extensions ("Files: ..." on the hint row of the text OSD).
 - [ ] `F` slots: mount, eject, the browser starts in the dir of the last image (disk 2 after disk 1), Esc to the slot's own dir.
 - [ ] The file mounter reads and writes (a disk image written by the core keeps its data after a reload).
 - [ ] `.sav` (NES with `CAPS_BK`): created in `saves/`, kept after another game, another core, the reboot hotkey.
@@ -43,7 +45,7 @@ Set `debug=1` in `karabas.ini` and keep a terminal on the USB serial port: most 
 ## Storage
 
 - [ ] SD card FAT32 and exFAT: the lists, long names, opening by id.
-- [ ] `karabas.ini` missing: defaults, the first save from Settings creates it. An invalid line (> 79 chars): `karabas.ini is invalid`, defaults.
+- [ ] `karabas.ini` missing: defaults, the first save from Settings creates it. An invalid line (79 chars or more): `karabas.ini is invalid`, defaults.
 - [ ] Settings save only writes the changed keys (`karabas.new` then rename), the comments stay.
 - [ ] MSC (`msc` button action or `AT+KARABAS=msc`): the msc screen, the card on the PC, read / write speed, eject reboots (Linux eject, Windows "Safely Remove").
 - [ ] MSC with the second card (`msc2`, BTN2 held 2 s in BOOT): "SD Card 2" on the PC, eject; no card: the screen says so, reboot after 5 s.
@@ -78,12 +80,13 @@ Set `debug=1` in `karabas.ini` and keep a terminal on the USB serial port: most 
 ## Serial bridge
 
 - [ ] The host's bytes reach the core UART and back.
+- [ ] CDC 1 (`-if02`): the core UART byte for byte, no AT, no log.
 - [ ] `AT+KARABAS=list`, `version`, `boot` (BOOTSEL), `msc`, `msc2`, `esp` / `uart` (BOOT core: the ESP AT console and back).
 - [ ] `AT+KARABAS=key:menu+esc` opens the OSD, `key:esc` closes it; `type:dir` + `key:enter` in a core; `hold:alt` / `release`. (Mini G 2026-10-31: boot menu, PC XT OSD and file browser, Ctrl+Alt+Del driven this way.)
 - [ ] `AT+KARABAS=state` in the boot core and in a core; `load:<id>` from the boot core and from a running core, `load:boot`; `reset`.
 - [ ] `AT+KARABAS=osd`, `osd:<item>=<value>` (the value stays after a reload), a trigger; `mount:<item>:<path>` / `eject:<item>` (the OSD shows the image).
 - [ ] `AT+KARABAS=mouse:`, `click` in a core and in the graphic menu; `pad:0:up` in a core; `sync` answers after the input ended; `debug:1` / `debug:0`.
-- [ ] A USB-UART adapter (FTDI, CP210x, CH34x, CDC ACM) on the USB host: `USB UART mounted` in the log, the core UART goes to it both ways at 115200 (tsconf ZiFi) and at the EVO RS232 speed; the CDC port keeps the log and `AT+KARABAS=`; unplugged, the bridge goes back to the CDC port; a second adapter is ignored.
+- [ ] A USB-UART adapter (FTDI, CP210x, CH34x, CDC ACM) on the USB host: `USB UART mounted` in the log, the core UART goes to it both ways at 115200 (tsconf ZiFi) and at the EVO RS232 speed; CDC 0 keeps the log and `AT+KARABAS=`; unplugged, the core UART goes back to CDC 1; a second adapter is ignored.
 
 ## Displays
 
@@ -95,10 +98,10 @@ Set `debug=1` in `karabas.ini` and keep a terminal on the USB serial port: most 
 
 ## Diagnostics
 
-- [ ] The text OSD header shows the FPGA build and the firmware build in turn (3 s); `AT+KARABAS=version`.
+- [ ] The text OSD header shows the FPGA build and the firmware build in turn (3 s; bitmap OSD: About); `AT+KARABAS=version`.
 - [ ] `debug=0`: no log, nothing slower. `debug=1`: the boot log is kept until a terminal opens the port.
 - [ ] A CDC flood (a heavy log) with keys typed: no hang, no reset of the port.
-- [ ] The watchdog: a hang reboots and the next boot logs `Last boot hung: ...`.
+- [ ] The watchdog (`debug=1`, `[setup] watchdog=1`): a hang reboots and the next boot logs `Last boot hung: ...`.
 
 ## Baseline
 

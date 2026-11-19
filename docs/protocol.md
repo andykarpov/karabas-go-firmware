@@ -1,19 +1,19 @@
 # MCU ↔ FPGA protocol
 
-[Русская версия](protocol.ru.md) · Burst transfers: [burst_protocol.md](burst_protocol.md) · Core files and `core.json`: [karabas-go-tools/make_core](https://github.com/andykarpov/karabas-go-tools/tree/master/make_core) · Link v2 (draft): [link_v2.md](link_v2.md)
+[Русская версия](protocol.ru.md) · Burst transfers: [burst_protocol.md](burst_protocol.md) · Core files and `core.json`: [karabas-go-tools/make_core](https://github.com/andykarpov/karabas-go-tools/tree/master/make_core) · Link v2 (released, used by all current cores): [link_v2.md](link_v2.md)
 
 The RP2040 (MCU) and the FPGA core talk over one SPI link. Over it the MCU:
 
 - sends input events, OSD drawing, ROMs and files, RTC registers and settings;
 - receives what the core wants from it: RTC writes, UART bytes, LED matrix drawing, debug values.
 
-This document describes the link as the firmware implements it (`src/fpga/link.cpp`, the `CMD_*` codes in `src/config.h`). On the FPGA side every core has its own copy of `mcu.vhd`. TS-Conf (`karabas-go-core-tsconf/src/rtl/mcu/mcu.vhd`) is the reference implementation.
+This document describes link v1: the 3-byte frames of `src/fpga/link.c` / `link_api.c`, the `CMD_*` codes in `src/config.h`. The firmware speaks v1 to every core whose core file does not declare `"link": 2` (kgo1 files and kgo2 sections without it). The released cores use link v2 ([link_v2.md](link_v2.md)); a v2 core never gets v1 frames. On the FPGA side every core has its own copy of `mcu.vhd`. TS-Conf (`karabas-go-core-tsconf/src/rtl/mcu/mcu.vhd`) is the reference implementation.
 
 ## 1. Physical layer
 
 | Signal | Direction | Notes |
 |---|---|---|
-| `MCU_SCK` | MCU → FPGA | SPI clock. 16 MHz by default; a core can set another clock with `spi_freq` in its `core.json`. |
+| `MCU_SCK` | MCU → FPGA | SPI clock. 16 MHz requested by default; a core can ask for another clock with `spi_freq` in its `core.json`. SPI0 divides 48 MHz, so a 16 MHz request runs at 12 MHz on the wire (24 MHz at most). |
 | `MCU_MOSI` | MCU → FPGA | |
 | `MCU_MISO` | FPGA → MCU | Driven by the FPGA only while `MCU_SS` is low. |
 | `MCU_SS` (`MCU_CS_N`) | MCU → FPGA | Frame select, active low. |
@@ -64,18 +64,19 @@ Commands that the core does not know must be ignored.
 
 ## 3. Core start sequence
 
-`do_configure()` in `src/fpga/core_loader.cpp`, for every core load:
+`configure()` in `src/fpga/core_loader.c` (called by `do_configure()`), for every load of a v1 core (v2: [link_v2.md](link_v2.md) section 6):
 
 1. The bitstream is sent through the FPGA configuration pins (not this link).
-2. `CMD_CAPS` query, answered only by cores that support bursts, backup RAM or MIDI IN. It is repeated until the core answers (up to 100 ms), so nothing else goes to a core whose link is still in reset after CONF_DONE. See section 7.
+2. `CMD_CAPS` query, answered only by cores with any of the caps of section 7. It is repeated until the core answers (up to 100 ms), so nothing else goes to a core whose link is still in reset after CONF_DONE. See section 7.
 3. `CMD_INIT_START` — the core shows itself busy.
 4. `CMD_HW_SETUP` `(0, HW_ID)` and `(1, dvi_only)`.
 5. OSD font: `CMD_OSD` font reset and the font data.
-6. The build ids of the core (its `.kg` header) and of the firmware: `CMD_HW_SETUP` `10`..`1F`.
-7. ROMs: `CMD_ROMLOADER` on, the ROM data, `CMD_ROMLOADER` off.
-8. OSD switch values (`CMD_SWITCHES`) and the RTC registers (`CMD_RTC`).
-9. Keyboard cleared: `CMD_USB_KBD` 0..6 = 0.
-10. `CMD_INIT_DONE` — the core may start.
+6. The RTC registers (`CMD_RTC`), the OSD switch values (`CMD_SWITCHES`), the RTC registers again; then every `F` item with a file is mounted (section 6).
+7. The build ids of the core (its `.kg` header) and of the firmware: `CMD_HW_SETUP` `10`..`1F`.
+8. ROMs: `CMD_ROMLOADER` on, the ROM data, `CMD_ROMLOADER` off.
+9. The files of `FL` items with `autoload` (section 6), after the ROMs: a file over a ROM of the core file wins.
+10. Keyboard cleared: `CMD_USB_KBD` 0..6 = 0.
+11. `CMD_INIT_DONE` — the core may start.
 
 ## 4. Commands MCU → FPGA
 
@@ -94,6 +95,7 @@ Commands that the core does not know must be ignored.
 | `0C` | `CMD_FILEBANK` | 0 / 1 / 2 | file address bits 15..8 / 23..16 / 31..24 | File loader (`fileloader` cores). |
 | `0D` | `CMD_FILEDATA` | address bits 7..0 | file byte | |
 | `0E` | `CMD_FILELOADER` | 0 | bit 0 reset, bit 1 active | `3` then `2` before the file, `0` after it. |
+| `14` | `CMD_PRINTER_STATUS` | 0 | printer status | USB printer, see section 6. |
 | `16` | `CMD_MIDI` | byte counter (+1 per byte, wraps) | MIDI byte | From a USB MIDI keyboard, only to cores with caps bit 4. A plain MIDI stream without running status; SysEx, `F8` (clock) and `FE` (active sensing) are dropped. A gap in the counter means lost bytes. Sent while the OSD is open too. |
 | `20` | `CMD_OSD` | register | value | OSD overlay, see section 6. |
 | `40` | `CMD_IMG_SLOT` | 0 | slot | File mounter (`F` OSD items), see section 6. |
@@ -110,14 +112,14 @@ Commands that the core does not know must be ignored.
 | `51` | `CMD_IOCTL_SIZE` | byte index 0..7 | file size (LE) | |
 | `52` | `CMD_IOCTL_BANK` | byte index 0..2 | file address bits 15..8 / 23..16 / 31..24 | |
 | `53` | `CMD_IOCTL_DATA` | address bits 7..0 | file byte | |
-| `54` | `CMD_IOCTL_EXT` | character index | extension character | Lowercase, without the dot. |
+| `54` | `CMD_IOCTL_EXT` | character index | extension character | As in the file name (the case is not changed), without the dot; the whole name if it has none. |
 | `55` | `CMD_IOCTL_STATE` | 0 | 1 = start, 0 = end | |
 | `63` | `CMD_MATRIX_BTN` | button 0..3 | 1 / 0 | LED matrix add-on buttons ([matrix.md](matrix.md)). |
 | `F7` | `CMD_CAPS` | 0 = query | protocol version (1) | Capability query, section 7. |
 | `F8` | `CMD_ESP_UART` | 0 | byte | Byte to the ESP8266 module behind the FPGA. |
 | `F9` | `CMD_HW_SETUP` | 0 = board, 1 = DVI only, `10`..`17` core build, `18`..`1F` firmware build | 0: `HW_ID` (1 Go, 2 Mini, 3 Mini G); 1: 0 / 1; `10`..`1F`: ASCII character | The build ids: 8 characters each, first character at the lowest address, 0 after a shorter id (`DEVBUILD` for a local firmware build). |
 | `FA` | `CMD_RTC` | register | value | RTC register; the register set depends on `rtc_mode` (MC146818A, DS1307, ZX Evolution, MSM6242B). |
-| `FC` | `CMD_UART` | running index | byte | Byte from the USB serial port (or a USB-UART adapter on the USB host); `ADDR` changes with every byte, so the core can see a new one. |
+| `FC` | `CMD_UART` | running index | byte | Byte from the clean USB serial port (CDC 1), or from a USB-UART adapter on the USB host while one is plugged; also from CDC 0 without its `AT+KARABAS=` lines. v1 has no flow control, so the bytes are paced at the DLL / DLM speed (115200 otherwise): one per 10 bit times from CDC 1 or the adapter, one per 3 byte times from CDC 0. `ADDR` changes with every byte, so the core can see a new one. |
 | `FD` | `CMD_INIT_START` | 0 | 0 | Core configuration starts (BUSY = 1). |
 | `FE` | `CMD_INIT_DONE` | 0 | 0 | Core configuration done (BUSY = 0). |
 | `FF` | `CMD_NOP` | 0 | 0 | Poll: lets the FPGA send its next frame. |
@@ -131,6 +133,8 @@ These are sent in the reply bytes of any transfer.
 | Code | Name | ADDR | DATA | Firmware action |
 |---|---|---|---|---|
 | `0B` | `CMD_PS2_SCANCODE` | PS/2 command | argument | Keyboard commands from the core: `ED` = LEDs, `F0` = scancode set. |
+| `13` | `CMD_PRINTER_DATA` | 0 | byte | USB printer: one raw byte, section 6. |
+| `14` | `CMD_PRINTER_STATUS` | 0 | 0 | USB printer: status request, section 6. |
 | `30` | `CMD_DEBUG_ADDRESS` | high byte | low byte | 16-bit value printed to the debug log. |
 | `31` | `CMD_DEBUG_DATA` | high byte | low byte | Same. |
 | `42` | `CMD_IMG_LBA` | byte index 0..3 | sector number (LE) | File mounter sector request, before `CMD_IMG_SEC`. |
@@ -148,7 +152,7 @@ These are sent in the reply bytes of any transfer.
 | `F8` | `CMD_ESP_UART` | 0 | byte | Byte from the ESP8266 module. |
 | `FA` | `CMD_RTC` | register | value | The core's CPU wrote an RTC register; the firmware updates the RTC chip. |
 | `FB` | `CMD_FLASHBOOT` | 0 | core id | Reload a core. Now it always reloads the current core (ZX Next hard reset), through the boot core, which clears the SRAM. |
-| `FC` | `CMD_UART` | 0 = byte at 115200 (ZiFi), 1 = DLL, 2 = DLM, 3 = byte at the DLL/DLM speed (EVO RS232) | byte / divisor | Bytes to the USB serial port, or to a USB-UART adapter on the USB host while one is plugged (its speed from DLL / DLM, 115200 otherwise). |
+| `FC` | `CMD_UART` | 0 = byte at 115200 (ZiFi), 1 = DLL, 2 = DLM, 3 = byte at the DLL/DLM speed (EVO RS232) | byte / divisor | Bytes to a USB-UART adapter on the USB host while one is plugged (its speed from DLL / DLM, 115200 otherwise), else to the clean USB serial port CDC 1 (when a terminal has it open) and to CDC 0. |
 | `FF` | `CMD_NOP` | | | Nothing to say. |
 
 ## 6. Sequences
@@ -284,16 +288,18 @@ MCU:  opens or creates <save dir>/<game name without its extension>.sav with at 
       41 i file_size_i. Without a file (no game name, no sd card, read only): the size 0 frames only.
 ```
 
-The save dir is `save_dir` of the core header (`FILE_POS_SAVE_DIR`, 32 bytes), or `<fileloader dir>/saves` when it is empty. The core reads its sectors with ordinary read requests before its CPU starts, and writes the sectors its CPU changed with ordinary write requests, a second after the last write (or a few seconds after the first one, for games that write all the time). A core that gets no mount in about a second goes on without a save (a firmware without this command).
+The save dir is `save_dir` of the core header (`FILE_POS_SAVE_DIR`, 32 bytes), or else `<dir of the game>/saves`: the game is the file of the file loader, or the file last sent by an `FL` item (the Doom core: `<WAD dir>/saves/<WAD>.sav`); `<core dir>/saves` without a game. Kind n > 0 names `<game>.ss<n>`. The core reads its sectors with ordinary read requests before its CPU starts, and writes the sectors its CPU changed with ordinary write requests, a second after the last write (or a few seconds after the first one, for games that write all the time). A core that gets no mount in about a second goes on without a save (a firmware without this command).
 
-Flush, before the firmware loads another game, another core, reboots (the hotkey, `AT+KARABAS=boot`) or enters USB mass storage:
+Flush, before the firmware loads another game (the file loader, an `FL` item), another core, reboots (the hotkey, `AT+KARABAS=boot`) or enters USB mass storage:
 
 ```
 MCU:  47 slot 00
 FPGA: write requests of the dirty sectors (the firmware serves them while it waits)
 FPGA: 47 slot 01 (no dirty sectors left) or 47 slot 02 (a write failed)
-MCU:  waits up to 3 s for the answer, then syncs and closes the file (size 0 frames to the core)
+MCU:  waits up to 3 s for the answer, then syncs the file
 ```
+
+With the first sector written the firmware shows a "Saving..." progress popup (it opens the OSD if it is hidden). Before another game the save is also closed: size 0 frames to the core.
 
 ### OSD overlay (`CMD_OSD`)
 
@@ -359,7 +365,7 @@ from crossing a disconnect/reset race. Already delivered bytes cannot be retract
 Historical debugging extension: removed from the GO FPGA after the SPI fix
 passed repeated hardware printing tests. Current GO HDL ignores `15` and does
 not contain the printer counters or CRC logic. The format below documents the
-older diagnostic builds; RP2040 diagnostic support remains available for those.
+older diagnostic builds; The firmware no longer sends or handles `15` either (`CMD_PRINTER_DIAG` is only defined in `config.h`); the format is kept for reference.
 
 MCU requests `15 00 tag`. Matching GO HDL replies with `15 80 tag`, then
 28 frames `15 index byte` (index `00..1B`), then `15 81 tag`.
@@ -375,7 +381,7 @@ See [hardware diagnostics](usb_printer.md#fpga--spi-loss-localisation).
 
 ## 7. Capabilities and burst transfers
 
-`CMD_CAPS` (`F7 00 01`) asks the core what it supports. The firmware then polls with up to 16 NOP frames, and sends the query and the polls again until the core answers or 100 ms have passed. A core that supports bursts, backup RAM or MIDI IN answers `F7 caps max_mhz` in a reply frame:
+`CMD_CAPS` (`F7 00 01`) asks the core what it supports. The firmware then polls with up to 16 NOP frames, and sends the query and the polls again until the core answers or 100 ms have passed. A core with any of the caps below answers `F7 caps max_mhz` in a reply frame:
 
 - caps bit 0: burst write;
 - caps bit 1: the core drives `BURST_READY`;

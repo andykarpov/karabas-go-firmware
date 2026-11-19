@@ -42,12 +42,20 @@ firmware also reads the older per-board files `.kg1` / `.kg2` / `.kg3`.
   file list by Tab or O (Options), Esc goes back to the files. The file lists hide hidden and
   system entries and the names starting with `.`, and show the dirs first. On Karabas Go, physical floppy drives can be selected
   instead of an image.
+- **Bitmap OSD.** Cores on link v2 ([docs/link_v2.md](docs/link_v2.md), all current cores) get a
+  256x128 monochrome OSD drawn by the MCU (u8g2) with UTF-8 (Cyrillic) names: Off / On switches are
+  check boxes (Space or Enter toggles them), Enter on a switch with more options opens the list of
+  them, and Setup (clock, USB gamepad mapper; in the boot core also Wi-Fi and Settings) and About
+  are the last entries of the main menu. The boot menu on this OSD lists Setup, Graphic menu (the FT812
+  menu, also when it is off in `karabas.ini`) and About after the cores, with the board name in
+  its header. Older cores keep the text OSD of link v1.
 - **Input.**
   - USB keyboards (including NKRO) and mice.
   - USB HID gamepads: mapped by default from their HID descriptor, or with a driver ini
     learned in the OSD (or from the [browser mapper](https://andykarpov.github.io/karabas-go-firmware/hidmapper/)).
   - XInput pads (the Xbox 360 wired protocol, e.g. 8BitDo M30 2.4G).
   - PS/2 keyboards.
+  - USB MIDI keyboards, to the cores that take MIDI.
   - Sega joysticks on the joystick ports (Karabas Go).
   - Every joystick reaches the core as a Sega Mega Drive 6-button pad.
 - **USB host.** Runs on the second RP2040 core over PIO-USB, hubs included. A USB printer
@@ -63,8 +71,10 @@ firmware also reads the older per-board files `.kg1` / `.kg2` / `.kg3`.
   takes the place of the core serial port.
 - **Optional peripherals**, detected at boot: FT812, OLED display, LED matrix, I2C extender (Go),
   ESP8266, MIDI (Mini G).
-- **Fast transfers.** Cores that support it receive ROMs and files in bursts of up to 512 bytes
-  over a second chip select.
+- **Fast transfers.** Link v2 cores take every message as one packet (a sector, a ROM block of up
+  to 512 bytes) and raise an interrupt line when they have something for the MCU; older link v1
+  cores that support it receive ROMs and files in bursts of up to 512 bytes over a second chip
+  select.
 
 ## Getting the firmware
 
@@ -108,6 +118,7 @@ artifacts for 90 days.
 | `/config/<core id>.ini`, `.eep` | the settings of a `.kg` core: the options that differ from the core's defaults, the images, the last file of a file loader; its EEPROM. Made by the firmware; About (`A` in the core menu) > `R` deletes them |
 | `/karabas.ini` | settings, optional, see below |
 | `/drivers/*.ini` | USB gamepad drivers, optional ([format](docs/usb_gamepads.md#driver-ini)) |
+| `<save_dir>/` or `<dir of the game>/saves/<game>.sav` | the backup RAM of the cores that have it (NES...), made by the firmware; the game is the file of a file loader or of an `FL` item (Doom: the WAD) |
 
 The card can be FAT16, FAT32 or exFAT. The cores are built with
 [make_core](https://github.com/andykarpov/karabas-go-tools/tree/master/make_core) from
@@ -115,11 +126,11 @@ The card can be FAT16, FAT32 or exFAT. The cores are built with
 
 ### karabas.ini
 
-The file is optional: without it the firmware uses the defaults below. Every key but `[fileloader]` can be changed
-in the menus: Setup > Settings of the text core browser (`[setup]`, `[autoload]`, `[matrix]`,
+The file is optional: without it the firmware uses the defaults below. Every key but `[fileloader]` and `[setup] watchdog`
+can be changed in the menus: Setup > Settings of the text core browser (`[setup]`, `[autoload]`, `[matrix]`,
 `enabled` / `video_mode` of `[ft812]`) and the graphic setup (all of them). A save creates the
-file, or writes only the changed keys and keeps the rest of it. Lines must be at most 79
-characters long, or the whole file is ignored.
+file, or writes only the changed keys and keeps the rest of it. Lines must be at most 78
+characters long (without the line end), or the whole file is ignored.
 
 | Section | Key | Default | Meaning |
 | --- | --- | --- | --- |
@@ -130,13 +141,14 @@ characters long, or the whole file is ignored.
 | | `tz` | `+00:00` | UTC offset for NTP sync, set in Setup RTC / the Clock page, e.g. `+03:00`, `-04:30`; no daylight saving |
 | `[ft812]` | `enabled` | `1` | `1`: graphical core browser on the FT812 |
 | | `video_mode` | `1` | FT812 video mode: `0` 640x480@60, `1` 800x600@60 |
-| | `sound`, `click` | `1`, `1` | menu sounds |
+| | `sound` | `1` | the start sound of the graphic menu: `0` off, `1` Klyuchik, `2` Ta-dan, `3` Run, `4` Sound 4 |
+| | `click` | `1` | `1`: a click on a key press |
 | | `time`, `date`, `char` | `1`, `1`, `1` | show the clock, the date and the Karabas picture in the graphical browser |
 | | `color_bg`, `color_gradient`, `color_button`, `color_active`, `color_text`, `color_text_active`, `color_copyright` | `010101`, `0000c8`, `202026`, `0000c8`, `ffffff`, `ffffff`, `787878` | colors (hex RGB) |
 | | `3d_buttons` | `0` | `1`: buttons with a shadow and a light edge (not in 800x600: too heavy for the FT812 there) |
 | | `mouse_speed` | `3` | mouse pointer speed in the graphic menu, 1..5 |
 | `[matrix]` | `enabled`, `brightness`, `clock_*`, `meter_*` | `1`, `0`, ... | the LED matrix, see [docs/matrix.md](docs/matrix.md) |
-| `[autoload]` | `enabled`, `timeout`, `core` | `0`, `15`, none | start `core` after `timeout` seconds |
+| `[autoload]` | `enabled`, `timeout`, `core` | `0`, `15`, none | start the core with this id (`core.json` `id`, e.g. `tsconf`) after `timeout` seconds |
 | `[fileloader]` | `<core id>` | none | the dir of the last file loaded by a file loader core in the older `.kgN` format (written by the firmware; empty or none: the dir of the core); a `.kg` core keeps it in `/config/<core id>.ini` |
 
 Example:
@@ -166,15 +178,17 @@ core=tsconf
 | digits | Up / Down | the digit under the cursor of a date / time field |
 | typing | Up / Down, Right, Left | a Wi-Fi text field: change the last char, add one, delete one |
 | `S` | Start (core browser) | Setup: clock, Wi-Fi and Settings (core browser), USB gamepad mapper; in the graphic browser, the graphic setup (settings, video mode, color themes) |
-| `A` (core OSD) | | About |
+| `S`, `A` (core OSD) | | Setup (clock, USB gamepad mapper), About |
+| Space (core OSD, bitmap OSD) | | toggle a check box (an Off / On switch) |
 | Enter, Right (core OSD) | A / B, Right | open the sub-menu of a `►` item |
 | Esc (core OSD) | C or Select | back from a sub-menu to the menu above it; on the main menu (or the file list of a file loader core) it closes the OSD |
 | Delete / Backspace (core OSD) | | eject the disk image of the selected drive |
 | Backspace (file list) | | the parent dir |
 | `H` (file list of a file loader core) | | back to the dir of the core |
+| `R` (file list of a file loader core) | | read the list again |
 | Space (graphical browser) | | switch to the text browser |
 | mouse (graphical browser, Setup) | | hover, click, wheel; right button = Esc |
-| `G` (text browser) | | switch to the graphical browser, also when it is off in `karabas.ini` |
+| `G` (text browser) | | switch to the graphical browser, also when it is off in `karabas.ini` (or the Graphic menu entry of the bitmap boot menu) |
 
 Cores can define their own OSD hotkeys.
 
@@ -287,9 +301,11 @@ and the conventions of the code.
 - [USB XInput controllers / 8BitDo M30 2.4G](docs/xinput.md).
 - [USB printer host / Epson LX-300+II](docs/usb_printer.md) (driver and 2048-byte queue; FPGA
   integration pending).
-- [MCU ↔ FPGA protocol](docs/protocol.md) ([по-русски](docs/protocol.ru.md)): SPI frames, all
-  commands, load sequences.
-- [Burst transfers](docs/burst_protocol.md): the fast ROM / file transfer mode.
+- [MCU ↔ FPGA link v2](docs/link_v2.md) ([по-русски](docs/link_v2.ru.md)): packets, targets,
+  the INT line, the bitmap OSD; the link of all current cores.
+- [MCU ↔ FPGA protocol, link v1](docs/protocol.md) ([по-русски](docs/protocol.ru.md)): SPI frames,
+  all commands, load sequences; the link of older cores.
+- [Burst transfers](docs/burst_protocol.md): the fast ROM / file transfer mode of link v1.
 - [LED matrix add-on](docs/matrix.md).
 - [Hardware checklist](docs/hw_checklist.md): what to check on a board before a risky change, with the baseline measurements.
 - Core files (`.kg`, kgo2: [docs/kgo2.md](https://github.com/andykarpov/karabas-go-tools/blob/master/docs/kgo2.md); the older `.kg1` / `.kg2` / `.kg3`) and `core.json`:

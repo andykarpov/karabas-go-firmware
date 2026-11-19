@@ -11,13 +11,13 @@ Device ID, port status and printing `Hello from Karabas Go!` via Bulk OUT:
   `ESCP9,PRPII9,BDC,D4` (the physical model is LX-300+II).
 - Port status `0x18`: paper present, selected, no error.
 
-The cross-task queue added in step 3 has host simulation coverage; its hardware
-stress/error tests remain pending.
+The hardware stress/error tests of the cross-task queue added in step 3 remain
+pending (its host simulation is gone, see the end of this file).
 
 ## Implemented (plan step 2)
 
 `src/usb/printer_host.*` adds an application class driver to the pinned TinyUSB
-stack. `src/usb/host_drivers.cpp` registers both Printer and the existing XInput
+stack. `src/usb/host_drivers.c` registers both Printer and the existing XInput
 driver. The host runs in the existing USB task; no extra task or PIO program is
 allocated. There is no VID/PID allowlist.
 
@@ -45,7 +45,7 @@ automatic test string has been removed; this firmware does not print on boot.
 
 ## Printing service (plan step 3)
 
-`src/periph/printer.h` exposes the task-safe API. `printer.cpp` owns a fixed
+`src/periph/printer.h` exposes the task-safe API. `printer.c` owns a fixed
 **2048-byte queue**, including bytes awaiting USB completion. Copying to the USB
 driver does not free queue space. There is no heap allocation or additional task.
 Short spinlock sections protect queue/state access; USB and logging calls occur
@@ -84,14 +84,15 @@ disconnect and reset request, for future producer/protocol integration.
 All writes/reset operations must go through the service once integrated. Direct
 `printer_host_write()` calls bypass its completion accounting. Raw driver access
 remains for tests and USB-task internals. Bulk IN is not consumed by the service.
-The MCU SPI adapter (`src/periph/printer_link.cpp`) accepts raw bytes with command
-`0x13` and reports BUSY in bit 7 using command `0x14`. It includes a core-switch
+The MCU SPI adapter (`src/periph/printer_link.c`) accepts raw bytes with command
+`0x13` and reports BUSY in bit 7 using command `0x14` (link v1; on link v2 the
+printer is PORT 3: `GET` and `PSTAT`, [link_v2.md](link_v2.md) section 5.6). It includes a core-switch
 hook and an atomic session-checked enqueue. See the USB printer sequence in
 [protocol.md](protocol.md) / [protocol.ru.md](protocol.ru.md) for frame fields,
 status-only flow control. There are no per-byte acknowledgements or SPI reset
 commands. OSD controls remain to be added.
 
-Once the core has used a printer command, the MCU repeats `14 00 ss` every
+Once a link v1 core has used a printer command, the MCU repeats `14 00 ss` every
 100 ms, including unchanged READY/BUSY. This repairs a lost status update;
 it does not acknowledge individual bytes or change the 1 s USB status poll.
 The GO PROFI MCU HDL also retries an unanswered status query after 2,800,000
@@ -126,7 +127,7 @@ error count. STALL or a third consecutive error still stops the transfer and
 latches the service fault. This packet-level policy applies to bulk OUT endpoints
 on the PIO host; it does not replay an application buffer or reset the printer.
 
-SPI replies from all tasks are enqueued under the SPI bus mutex, then dispatched
+Link v1: SPI replies from all tasks are enqueued under the SPI bus mutex, then dispatched
 by APP in wire order. Releasing that mutex before publishing a reply previously
 allowed a later DATA/status frame to overtake it during a task switch.
 

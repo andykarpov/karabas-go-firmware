@@ -1,5 +1,11 @@
 # Rewrite in C11 on the pico-sdk
 
+Status: **done**, merged into master by #83 (2026-10-28, v26102802); phase 4 by #75-#82. This file is
+the plan as it was carried out, kept as history: some names in it changed later (the SD driver is
+`lib/sd` `sd_card` on `sd_pio` / `spi0_bus`, the list cursor `kg_list` with `ui_list_key()`, the USB
+device is two CDC ports + MSC since #157, the timer task priority assert stayed), see CLAUDE.md for
+the current state.
+
 The firmware moves from the Arduino framework (arduino-pico 5.5.1, PlatformIO, Adafruit libraries) to plain C11 on the pico-sdk, built with CMake, with FreeRTOS SMP, TinyUSB and Pico-PIO-USB used directly.
 
 ## Decisions
