@@ -2,7 +2,7 @@
 
 [Русская версия](usb_gamepads.ru.md)
 
-USB gamepads and joysticks reach the cores as a Sega MD2 pad (`CMD_JOYSTICK`): directions,
+USB gamepads and joysticks reach the cores as a Sega MD2 pad (`CMD_JOYSTICK`; link v2: `HID JOY`): directions,
 A B C X Y Z, Start and Mode. HID pads and [XInput pads](xinput.md) share the two USB ports.
 A pad takes the first free port when it is plugged in and keeps it until it is unplugged.
 
@@ -27,7 +27,7 @@ the **Gamepad** tab. A keyboard (or, in the graphic setup, a mouse) drives the s
 The screen opens on the two joystick ports: the pad on each (VID:PID) and what maps it, its
 driver ini, `default map` or `XInput`. **Forget** renames the driver ini of the chosen pad (all
 of them for its VID/PID) to `*.ini.bak` and reloads the drivers: the pad goes on with its
-default map at once. **Map** learns a pad:
+default map at once. **Assign** learns a pad:
 
 1. Press a button on the pad. The first pad whose report changes is the one being mapped.
 2. Release everything and leave the pad alone for a moment: the mapper learns the idle report
@@ -45,7 +45,7 @@ The result is an ordinary driver ini that can be edited by hand.
 ## Driver ini
 
 A driver is `/drivers/<anything>.ini` on the SD card; the OSD mapper names it `<vid>_<pid>.ini`.
-Lines start with `;` for a comment and must fit in 79 characters.
+Lines start with `;` for a comment and must fit in 78 characters (without the line end).
 
 ```ini
 [info]
