@@ -178,7 +178,7 @@
 #define CMD_DEBUG_ADDRESS 0x30
 #define CMD_DEBUG_DATA 0x31
 
-// file mounter (F OSD items), see docs/protocol.md section 6 and storage/img_mount.cpp:
+// file mounter (F OSD items), see docs/protocol.md section 6 and storage/img_mount.c:
 // mount: SLOT, SIZE 0 (eject), SIZE (the image, 8 bytes LE)
 // sector request from the fpga: LBA (4 bytes LE), SEC (addr = slot, data = 1 read / 2 write);
 // sector data: BUF_BANK + BUF_DATA (or a burst of type BUF_DATA); result to the fpga: SEC

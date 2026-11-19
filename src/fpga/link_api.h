@@ -1,9 +1,9 @@
 #pragma once
 
 // What the firmware says to the running core and hears from it, by meaning, not by frame.
-// The services (input, loaders, image mounter, ports, RTC, matrix) use only this; the frames of
-// link v1 (docs/protocol.md) are made in link_api.c on top of the transport of link.c. Link v2
-// (docs/link_v2.md) will be a second implementation of the same calls.
+// The services (input, loaders, image mounter, ports, RTC, matrix) use only this; link_api.c makes
+// it on the link of the loaded core: the frames of v1 (docs/protocol.md) or the packets of v2
+// (docs/link_v2.md), on top of the transport of link.c.
 //
 // Context rules are the ones of the link: calls may come from any task (they take the bus lock),
 // the link_hid_queue_*() calls also from core1 and from interrupts (they only queue).

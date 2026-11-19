@@ -11,7 +11,7 @@ extern "C" {
 // APP uses the file system; in MSC mode the PC gets the card (sd1_card()) past FatFs.
 // Paths are full ("/dir/name", or "name" in the root): FatFs has no current dir here.
 
-extern FIL file1, file2; // file1: the core file (file.cpp), file2: an external ROM
+extern FIL file1, file2; // file1: the core file (file.c), file2: an external ROM
 extern DIR root1;        // the dir of the file list on the screen
 extern bool has_sd;
 

@@ -39,7 +39,7 @@ static bool fdd_chng_detect() {
 void board_init_pins() {
   // unused MCU-FPGA pins (yet)
   pin_input(PIN_MCU_SPI_IO0);
-  pin_input_pulldown(PIN_MCU_SPI_IO1); // burst READY from the fpga (undriven reads as not ready)
+  pin_input_pulldown(PIN_MCU_SPI_IO1); // v1 burst READY / v2 INT from the fpga (undriven reads as not ready / no interrupt)
   has_fdd_chng = fdd_chng_detect();
 }
 

@@ -222,8 +222,8 @@ static void spi_xfer(uint8_t cmd, uint8_t addr, uint8_t data, uint8_t rx[3]) {
 
 void spi_send(uint8_t cmd, uint8_t addr, uint8_t data) {
   if (link_ver == 2) {
-    // a core of link v2 takes no frames: the callers of link_api that have no v2 command yet
-    // (Ф3..Ф5) end up here
+    // a core of link v2 takes no frames: a caller of link_api that has no v2 command ends up here
+    // (counted, logged as "v1 frames not sent")
     link_v1_dropped++;
     return;
   }
