@@ -2,7 +2,7 @@
 
 [Русская версия](burst_protocol.ru.md)
 
-Status: draft v1. The firmware side is implemented. Cores that do not implement it keep working unchanged.
+Status: in use with link v1 cores (burst write; burst read is planned). Cores that do not implement it keep working unchanged. Link v2 cores take no bursts: every v2 packet is one, IO1 is their INT line and IO0 is unused ([link_v2.md](link_v2.md) section 2).
 
 ## Why
 
@@ -41,7 +41,7 @@ During every core load the MCU asks the core what it supports, using the classic
    - `caps` bit 0: burst write supported.
    - `caps` bit 1: `BURST_READY` is driven by the core. If 0, the MCU does not look at it.
    - `caps` bit 2: burst read supported (see "Burst read" below; requires bit 1).
-   - `caps` bit 3: backup RAM, bit 4: MIDI IN ([protocol.md](protocol.md) section 7); bits 7..5: reserved, 0.
+   - `caps` bit 3: backup RAM, bit 4: MIDI IN, bit 5: write protected images ([protocol.md](protocol.md) section 7); bits 7..6: reserved, 0.
    - `max_mhz`: the highest SCK frequency during bursts, in MHz. 0 means the normal link clock (16 MHz, or the core's `spi_freq`). Boards before Mini Rev.G do not have MCU_SCK on a global clock pin, so a core there that samples SCK with its system clock must report a frequency it can oversample safely.
 3. Without an answer the MCU sends the query and polls again, until the core answers or 100 ms have passed. The answers to the repeated queries that come later are ignored.
 4. No answer means classic transfers only. Old cores ignore the unknown command 0xF7.
@@ -69,6 +69,7 @@ MOSI           TYPE  A31..24  A23..16  A15..8  A7..0  D0  D1 ... Dn-1
 | `0x07` (`CMD_ROMDATA`) | `CMD_ROMBANK` + `CMD_ROMDATA` | ROM loader: `ROMLOAD_ADDR` / `ROMLOAD_DATA` / `ROMLOAD_WR` |
 | `0x0D` (`CMD_FILEDATA`) | `CMD_FILEBANK` + `CMD_FILEDATA` | File loader data |
 | `0x53` (`CMD_IOCTL_DATA`) | `CMD_IOCTL_BANK` + `CMD_IOCTL_DATA` | Ioctl (OSD file loader) data |
+| `0x45` (`CMD_IMG_BUF_DATA`) | `CMD_IMG_BUF_BANK` + `CMD_IMG_BUF_DATA` | File mounter: the sector data of a read request, address = offset 0..511 |
 
 `TYPE` bit 7 = 1 marks a read request (see "Burst read" below). A core must ignore a burst with an unknown `TYPE`, discarding bytes until `BURST_CS_N` goes high.
 
@@ -97,6 +98,6 @@ The FPGA usually needs time to fetch the data (from SDRAM, a sector buffer, ...)
 
 ## Firmware side
 
-- `link_caps_query()` runs in `do_configure()`. `link_burst_available()` / `link_burst_write()` are in `src/fpga/link.cpp`.
-- The users are `rom_send()` (ROMs), the file loader and the ioctl loader. They fall back to classic frames from the first byte a burst could not send.
-- The `debug=1` log prints the answer: `FPGA caps: ...` or `FPGA caps: none (classic link)`.
+- `link_caps_query()` runs through `link_core_hello()` in `configure()` (`src/fpga/core_loader.c`). `link_burst_available()` / `link_burst_write()` are in `src/fpga/link.c`.
+- The users are `core_send_file()` -> `link_load_data()` -> `link_write_data()` (ROMs, the file loader, the ioctl loader) and `link_img_send_sector()` (file mounter reads). They fall back to classic frames from the first byte a burst could not send.
+- The `debug=1` log prints the answer: `FPGA caps: <caps>, burst max <n> MHz, core answered after ...` or `FPGA caps: no answer in <n> ms (classic link)`.
