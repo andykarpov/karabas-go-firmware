@@ -138,23 +138,23 @@ static bool core_find(const char *what, char *file, size_t size, uint8_t *type) 
   return found;
 }
 
-static void reboot_with_ok() {
+// the boot core loaded again in place, no MCU reboot (the USB devices stay); answered once it runs
+static void boot_core_with_ok() {
+  app_core_browser_return();
   reply(true);
-  serial_host_flush();
-  flush_and_reboot();
 }
 
 static void at_load(const char *what) {
   char file[sizeof(core.filename)];
   uint8_t type;
   if (!core_find(what, file, sizeof(file), &type)) { reply(false); return; }
-  if (type == CORE_TYPE_BOOT) { reboot_with_ok(); return; }
+  if (type == CORE_TYPE_BOOT) { boot_core_with_ok(); return; }
   app_core_browser_start_file(file);
   reply(true);
 }
 
 static void at_reset() {
-  if (core.type == CORE_TYPE_BOOT) { reboot_with_ok(); return; }
+  if (core.type == CORE_TYPE_BOOT) { boot_core_with_ok(); return; }
   app_core_leave_browser();
   do_reload();
   reply(true);

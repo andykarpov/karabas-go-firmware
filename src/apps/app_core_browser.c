@@ -431,7 +431,8 @@ void app_core_browser_start_file(const char *filename) {
 
 // back to the boot core from a running core without an MCU reboot (back_to_menu() of input.c): the
 // USB host and its devices stay as they are. The boot core clears the SRAM itself when it starts.
-// The list is read again as at the start (a reboot did the same), with the autoload of karabas.ini.
+// The list is read again as at the start, without the autoload of karabas.ini: the user (or an AT line) asked
+// for the menu. Also from the boot core itself (AT+KARABAS=reset, load:boot).
 void app_core_browser_return(void) {
   if (!has_sd || !sd_exists(core_file_boot())) {
     flush_and_reboot(); // no boot core to load: the reboot says so
@@ -446,6 +447,7 @@ void app_core_browser_return(void) {
   ui_osd_reset_timers();
   osd_state = state_core_browser;
   app_core_browser_read_list();
+  autoload_enabled = false;
   osd_handle(true);
 }
 
