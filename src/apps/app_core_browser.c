@@ -443,6 +443,7 @@ void app_core_browser_return(void) {
   hover = FT_HIT_NONE;
   app_core_leave_browser();
   do_configure(core_file_boot());
+  ui_osd_reset_timers();
   osd_state = state_core_browser;
   app_core_browser_read_list();
   osd_handle(true);
