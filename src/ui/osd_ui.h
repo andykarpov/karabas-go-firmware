@@ -29,6 +29,7 @@ void ui_popup_start(uint8_t i);
 void ui_tick();
 // hide the OSD of a core; is_osd goes off 200 ms later (the Esc of the menu does not reach the core)
 void ui_osd_hide();
+void ui_osd_reset_timers(); // no pending hide / popup timer (a core loaded in place)
 // the OSD was opened (Menu+Esc, Start+C, the osd button): the Esc held from it does not close it
 void ui_osd_opened();
 // key is a new Esc press (no repeat, not the one that opened the OSD) on the root of a core's

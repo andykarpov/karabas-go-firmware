@@ -429,6 +429,28 @@ void app_core_browser_start_file(const char *filename) {
   set_core_screen();
 }
 
+// back to the boot core from a running core without an MCU reboot (back_to_menu() of input.c): the
+// USB host and its devices stay as they are. The boot core clears the SRAM itself when it starts.
+// The list is read again as at the start, without the autoload of karabas.ini: the user (or an AT line) asked
+// for the menu. Also from the boot core itself (AT+KARABAS=reset, load:boot).
+void app_core_browser_return(void) {
+  if (!has_sd || !sd_exists(core_file_boot())) {
+    flush_and_reboot(); // no boot core to load: the reboot says so
+    return;
+  }
+  d_println("Back to the boot core");
+  has_ft = false;
+  setup_focus = false;
+  hover = FT_HIT_NONE;
+  app_core_leave_browser();
+  do_configure(core_file_boot());
+  ui_osd_reset_timers();
+  osd_state = state_core_browser;
+  app_core_browser_read_list();
+  autoload_enabled = false;
+  osd_handle(true);
+}
+
 // the graphic setup on the FT812, else the classic one
 static void open_setup() {
   autoload_enabled = false;

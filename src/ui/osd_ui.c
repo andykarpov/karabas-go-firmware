@@ -115,6 +115,13 @@ void ui_osd_hide() {
   osd_hide_menu();
 }
 
+// another core is loaded in place (app_core_browser_return()): a hide or a popup timer of the core
+// before does not go off on the screen of the new one
+void ui_osd_reset_timers() {
+  is_osd_hiding = false;
+  is_popup_hiding = false;
+}
+
 void ui_tick() {
   if (esc_held && ui_nav_key() != KEY_ESC) esc_held = false;
 

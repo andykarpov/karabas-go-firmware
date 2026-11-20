@@ -172,7 +172,7 @@ core=tsconf
 | Keys | Joystick | Action |
 | --- | --- | --- |
 | Menu (Win) + Esc | Start + C, Start + Select | open / close the OSD of the running core |
-| Ctrl + Alt + Backspace | Start + X | restart the MCU and go back to the core browser |
+| Ctrl + Alt + Backspace | Start + X | back to the core browser (the boot core is loaded, the MCU and its USB devices keep running); in the core browser: restart the MCU |
 | arrows, Enter, Esc | D-pad, A / B, C or Select | navigate the menus (a held direction repeats); not in the gamepad mapping itself |
 | Left | Left | back, where Left has nothing else to do: Setup menu, About, Wi-Fi status and network list, the tabs of the graphic setup; on the first core of the graphic browser, onto the Setup button (Enter opens it, Right goes back) |
 | digits | Up / Down | the digit under the cursor of a date / time field |
@@ -258,8 +258,8 @@ bytes are dropped (they no longer go to the UART of the core):
 | `AT+KARABAS=click[:left\|right\|middle]` | a mouse click (left by default) |
 | `AT+KARABAS=pad:<port>:<buttons> ...` / `padhold:<port>:<buttons>` | press and release pad buttons on USB joystick port 0 or 1, e.g. `pad:0:up up+a` / keep them down until `release` or the next `pad`. Buttons: up down left right start a b c x y z mode |
 | `AT+KARABAS=state` | `+KARABAS:core;<file>;<id>;<name>;<build>;<boot, osd, fileloader or hidden>`, `+KARABAS:osd;<open>;<screen>;<file browser open>`, then an `item` line per file item |
-| `AT+KARABAS=load:<file or id>` | start a core from any core, `OK` when it has started; the boot core: a reboot |
-| `AT+KARABAS=reset` | start the running core again with clean memory; in the boot core: a reboot |
+| `AT+KARABAS=load:<file or id>` | start a core from any core, `OK` when it has started; the boot core: loaded again, no MCU reboot |
+| `AT+KARABAS=reset` | start the running core again with clean memory; in the boot core: the boot core loaded again, no MCU reboot |
 | `AT+KARABAS=osd` / `osd:<item>` / `osd:<item>=<value>` | the menu items of the core: `+KARABAS:item;<pos>;<key>;<name>;<kind>;<enabled>;<value number>;<value>;<options or extensions>`; set by the number or the name of the option, a trigger with `=1` |
 | `AT+KARABAS=mount:<item>:<path>` / `eject:<item>` | the image of a file item, saved like one chosen in the OSD. An item is its key or name (any case) or `#<pos>`; the argument of a line is at most 80 characters |
 | `AT+KARABAS=debug:0` / `debug:1` | the debug log off / on until the next reboot; `karabas.ini` does not change |
