@@ -293,7 +293,33 @@ void core_eeprom_tick(void) {
   core_eeprom_flush();
 }
 
+// a load fault (core id CORE_LOAD_FAULT_ID, or load data dropped by the link): the core is loaded again,
+// LOAD_FAULT_RELOADS times in a row at most; a load for any other reason counts from 0 again
+#define LOAD_FAULT_RELOADS 2
+static uint8_t load_fault_reloads = 0;
+static bool load_fault_reload = false; // the configure() running is such a reload
+static bool load_fault_seen = false;   // the last configure() dropped load data
+
+static void reload_after_fault(const char *why) {
+  if (load_fault_reloads >= LOAD_FAULT_RELOADS) {
+    d_printf("Load fault (%s): %d reloads done, giving up", why, load_fault_reloads); d_println();
+    return;
+  }
+  load_fault_reloads++;
+  d_printf("Load fault (%s): reload %d of %d", why, load_fault_reloads, LOAD_FAULT_RELOADS); d_println();
+  d_flush();
+  load_fault_reload = true;
+  do_reload();
+}
+
+void core_load_fault_poll(void) {
+  if (!load_fault_seen) return;
+  load_fault_seen = false;
+  reload_after_fault("load data dropped");
+}
+
 void flashboot (uint8_t data) {
+  if (data == CORE_LOAD_FAULT_ID) { reload_after_fault("reported by the core"); return; }
   if (is_flashboot) return; // skip already in flashboot mode
   d_printf("Flashboot core id: %02x", data); d_println();
   d_flush(); ms_delay(100);
@@ -333,6 +359,9 @@ static void configure(const char* filename, bool clear_sram) {
   bk_flush(); // the save of the game of the core before (it is still running)
   core_eeprom_flush(); // and its eeprom (bank 4..254), before core is read again
   hang_step(0x84);
+  if (!load_fault_reload) load_fault_reloads = 0;
+  load_fault_reload = false;
+  (void) link_load_lost(); // only the drops of this load count
   link_core_unload();
   hang_step(0x85);
   ft_vga(false); // FT off
@@ -390,6 +419,7 @@ static void configure(const char* filename, bool clear_sram) {
   hang_step(0xa7);
   link_sys_init(false);
   is_flashboot = false;
+  load_fault_seen = link_load_lost();
   link_core_ready();
 
   // reinit matrix

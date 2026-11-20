@@ -92,6 +92,8 @@ typedef enum {
 void link_load_start(link_load_kind_t kind, uint8_t slot, uint64_t size, const char *ext);
 void link_load_data(link_load_kind_t kind, uint32_t addr, const uint8_t *buf, size_t len);
 void link_load_end(link_load_kind_t kind);
+// true once after load data was dropped (v2: the core not ready for a packet within 100 ms)
+bool link_load_lost(void);
 
 // ---- IMG: the file mounter, backup RAM, physical floppy drives ----
 

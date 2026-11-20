@@ -245,6 +245,7 @@ static void karabas_loop()
     flashboot_pending = false;
     flashboot(flashboot_data);
   }
+  core_load_fault_poll();
   hang_mark(0x0b00);
   printer_link_tick();
 

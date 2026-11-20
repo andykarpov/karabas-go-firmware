@@ -24,8 +24,12 @@ void core_reset_settings(void);
 void read_core(const char* filename);
 void read_roms(const char* filename);
 
-// CMD_FLASHBOOT handler: reload the current core (zx next hard reset)
+// CMD_FLASHBOOT handler: reload the current core (zx next hard reset); core id CORE_LOAD_FAULT_ID
+// from any core: a part of its ROMs was lost (BaseConf: its queue of ROM bytes overflowed), reload
+#define CORE_LOAD_FAULT_ID 0xFE
 void flashboot(uint8_t data);
+// main loop: reload the core when the last load dropped data (link_load_lost)
+void core_load_fault_poll(void);
 
 void core_send(uint8_t pos);
 // the byte sent to the core for the value of the osd item pos (its option value, kgo2)
