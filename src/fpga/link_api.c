@@ -289,6 +289,14 @@ void link_load_start(link_load_kind_t kind, uint8_t slot, uint64_t size, const c
 #define V2_LOAD_CHUNK 512
 #define V2_READY_MS 100
 
+static bool v2_load_lost = false; // a packet dropped after V2_READY_MS (link_load_lost)
+
+bool link_load_lost(void) {
+  bool lost = v2_load_lost;
+  v2_load_lost = false;
+  return lost;
+}
+
 // LOAD STATUS until the core can take a packet (caps bit 4); false after V2_READY_MS
 static bool v2_load_ready(void) {
   if (!(v2_caps & V2_CAP_LOAD_READY)) return true;
@@ -300,6 +308,7 @@ static bool v2_load_ready(void) {
     ms_delay(1);
   } while (ms_since(t) < V2_READY_MS);
   d_println("Link v2: the core is not ready for load data");
+  v2_load_lost = true;
   return false;
 }
 

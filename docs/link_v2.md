@@ -120,7 +120,7 @@ read while INT is low.
 | `05` | `INIT` | 1 = start (busy) / 0 = done | | As `CMD_INIT_START` / `CMD_INIT_DONE` |
 | `06` | `SPI_CONTROL` | bits | | As `CMD_SPI_CONTROL`: bit 0 FT812 SPI, 1 FT812 video, 2 SD2, 3 ESP8266, 4 FT812 reset |
 | `07` | `BTN` | button, state | | 0, 1 the on-board buttons with the action `core`; 2..5 the buttons of the LED matrix add-on (v1 `CMD_MATRIX_BTN`) |
-| `08` | `RELOAD` | | core id | Read after `IRQ_SRC` bit 1 (v1 `CMD_FLASHBOOT`) |
+| `08` | `RELOAD` | | core id | Read after `IRQ_SRC` bit 1 (v1 `CMD_FLASHBOOT`); `FE` from any core = a load fault (a part of the ROMs lost): the firmware loads the core again, 2 times in a row at most |
 
 Caps (`STATUS` bytes 3..4): bit 0 IMG, 1 backup RAM, 2 write-protected images, 3 floppy drives
 (DSKCHG), 4 LOAD flow control (`LD_READY`), 5 RTC, 6 AUX, 7 FT812 video, 8 reload, 9 MIDI IN.
