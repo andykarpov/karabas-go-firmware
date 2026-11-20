@@ -34,6 +34,7 @@ bool app_core_browser_get_item(const char *filename, core_list_item_t *core);
 void app_core_browser_read_list();
 // AT+KARABAS=load: the core file starts on its screen, from the boot core or any other core
 void app_core_browser_start_file(const char *filename);
+void app_core_browser_return(void); // from a core back to the boot core, without an MCU reboot
 // sorts the core list again by hw_setup.core_sort, the cursor stays on its core
 void app_core_browser_sort();
 

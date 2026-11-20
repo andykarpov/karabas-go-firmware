@@ -172,7 +172,7 @@ core=tsconf
 | Keys | Joystick | Action |
 | --- | --- | --- |
 | Menu (Win) + Esc | Start + C, Start + Select | open / close the OSD of the running core |
-| Ctrl + Alt + Backspace | Start + X | restart the MCU and go back to the core browser |
+| Ctrl + Alt + Backspace | Start + X | back to the core browser (the boot core is loaded, the MCU and its USB devices keep running); in the core browser: restart the MCU |
 | arrows, Enter, Esc | D-pad, A / B, C or Select | navigate the menus (a held direction repeats); not in the gamepad mapping itself |
 | Left | Left | back, where Left has nothing else to do: Setup menu, About, Wi-Fi status and network list, the tabs of the graphic setup; on the first core of the graphic browser, onto the Setup button (Enter opens it, Right goes back) |
 | digits | Up / Down | the digit under the cursor of a date / time field |

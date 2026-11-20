@@ -4,6 +4,7 @@
 #include "input/ps2kbd.h"
 #include "input/usb_hid_keys.h"
 #include "apps/app_core.h"
+#include "apps/app_core_browser.h"
 #include "apps/app_file_loader.h"
 #include "diag/hang_diag.h"
 
@@ -41,7 +42,7 @@ static int hotkey_find(const hid_keyboard_report_t *kbd, uint16_t jl, uint16_t j
     return HOTKEY_OSD_TOGGLE;
   }
 
-  // ctrl+alt+backspace (joy start+x) to global reset rp2040
+  // ctrl+alt+backspace (joy start+x): back to the boot core (back_to_menu())
   if (
       (((kbd->modifier & KEY_MOD_LCTRL) || (kbd->modifier & KEY_MOD_RCTRL)) &&
       ((kbd->modifier & KEY_MOD_LALT) || (kbd->modifier & KEY_MOD_RALT)) &&
@@ -74,6 +75,20 @@ void flush_and_reboot() {
   chip_reboot();
 }
 
+// the menu hotkey went off and its keys are still down: a held combo does not go off again in the
+// boot core (the key repeat, a pad event); cleared by input_tick_ui() when the keys are let go
+static bool menu_held = false;
+
+// back to the boot core (Ctrl+Alt+Backspace, joy Start+X, the menu button action). From a core the
+// boot core is loaded in place, without an MCU reboot: the USB host keeps running and the devices
+// behind a hub are not reset (some did not come back after the reboot). In the boot core the MCU
+// reboots as before, the way out of a stuck state.
+static void back_to_menu(void) {
+  menu_held = true;
+  if (core.type == CORE_TYPE_BOOT) flush_and_reboot();
+  else app_core_browser_return();
+}
+
 // the osd of a core with one (Menu+Esc, the osd button action)
 static void osd_toggle() {
   if (core.type == CORE_TYPE_BOOT || core.type == CORE_TYPE_HIDDEN) return;
@@ -95,7 +110,7 @@ static void btn_run(uint8_t i, uint8_t action) {
       osd_toggle();
       break;
     case BTN_ACTION_MENU:
-      flush_and_reboot();
+      back_to_menu();
       break;
     case BTN_ACTION_RELOAD:
       do_reload();
@@ -339,6 +354,7 @@ void input_tick_ui() {
 
   static bool prev_kbd_led = false;
   hid_kbd_report_sync();
+  if (menu_held && hotkey_find(&usb_keyboard_report, joyL, joyR) != HOTKEY_REBOOT) menu_held = false;
   bool kbd_led = usb_keyboard_report.modifier != 0 || usb_keyboard_report.keycode[0] != 0;
   if (kbd_led != prev_kbd_led) {
     prev_kbd_led = kbd_led;
@@ -352,6 +368,9 @@ static void hotkey_popup(uint8_t i) {
   dialog_toast(core.osd[i].name, core.osd[i].options[core.osd[i].val].name, i);
 }
 
+// the event was the menu hotkey: the screen it opened does not get its keys
+static bool menu_event = false;
+
 bool on_global_hotkeys() {
 
   bool joy = ui_joy_hotkeys();
@@ -363,7 +382,8 @@ bool on_global_hotkeys() {
   }
 
   if (hotkey == HOTKEY_REBOOT) {
-    flush_and_reboot();
+    menu_event = true;
+    if (!menu_held) back_to_menu();
     return true;
   }
 
@@ -407,7 +427,9 @@ void on_keyboard() {
 
   hid_kbd_report_sync();
 
+  menu_event = false;
   need_redraw = on_global_hotkeys();
+  if (menu_event) return;
 
   // in-osd keyboard handle
   ui_on_keyboard();
