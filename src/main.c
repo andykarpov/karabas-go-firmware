@@ -151,8 +151,10 @@ static void karabas_setup()
   if (msc_active()) {
     // the boot core shows the msc screen; the card is read before the PC gets it
     osd_state = state_msc;
+    // the msc screen over the menu of a boot core with RPC (it gets no card meanwhile); set before
+    // do_configure(), which shows the OSD only when is_osd is on (after it nothing showed it again)
+    is_osd = true;
     if (has_sd && sd_exists(core_file_boot())) do_configure(core_file_boot());
-    is_osd = true; // the msc screen over the menu of a boot core with RPC (it gets no card meanwhile)
     msc_start();
   } else {
     osd_state = state_main;
