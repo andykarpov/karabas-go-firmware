@@ -43,7 +43,6 @@
 #include "periph/esp_at.h"
 #include "periph/esp_serial.h"
 #include "periph/ntp_sync.h"
-#include "periph/esp_update.h"
 #include "periph/periph.h"
 #include "periph/i2c_bus.h"
 #include "storage/storage.h"
