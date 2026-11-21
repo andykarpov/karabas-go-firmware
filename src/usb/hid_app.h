@@ -36,16 +36,6 @@ void hid_ext_inject_tick(); // core1, usb_host_loop
 // everything injected (keyboard, mouse, pads) has been delivered and its hold time is over
 bool hid_inject_idle();
 
-// The mouse moves for the graphic menus (APP): the sums since the last take, the buttons held and
-// the ones pressed since then (a short click between two takes is not lost).
-typedef struct {
-  int32_t dx, dy, wheel;
-  uint8_t buttons;
-  uint8_t pressed;
-  bool changed;
-} hid_mouse_move_t;
-
-bool hid_mouse_take(hid_mouse_move_t *m); // false: nothing since the last take
 
 // Raw reports of one pad, for the OSD gamepad mapper (APP). After start, the pad whose report
 // changes first is followed; get returns its latest report (seq counts them).

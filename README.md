@@ -11,8 +11,9 @@ the running core over SPI.
 
 **[USB gamepad mapper](https://andykarpov.github.io/karabas-go-firmware/hidmapper/)**: map a USB
 HID gamepad in the browser and download its driver ini for `/drivers/` on the SD card. It is
-rarely needed now: most pads work without an ini, and the board maps a pad itself in Setup >
-Map USB gamepad (text and graphic menus), see [USB HID gamepads](docs/usb_gamepads.md).
+rarely needed now: most pads work without an ini, and the board maps a pad itself (Setup >
+Map USB gamepad in the OSD of a core, Setup > Gamepad in the boot menu), see
+[USB HID gamepads](docs/usb_gamepads.md).
 
 ## Boards
 
@@ -27,10 +28,14 @@ firmware also reads the older per-board files `.kg1` / `.kg2` / `.kg3`.
 
 ## Features
 
-- **Core loading.** The core browser lists the cores on the SD card: a graphical menu on the FT812
-  video chip when the board has it, or a text menu otherwise. It can start a chosen core
-  automatically after a timeout. The bitstream goes to the FPGA through PIO and DMA, then the
-  ROMs of the core follow.
+- **Core loading.** The bitstream goes to the FPGA through PIO and DMA, then the ROMs of the
+  core follow.
+- **Boot menu.** The boot core (`boot.kg`, [karabas-go-core-menu](https://github.com/andykarpov/karabas-go-core-menu))
+  draws the menu of the cores and its Setup itself, with its own CPU. It asks the firmware over
+  the link ([docs/link_v2.md](docs/link_v2.md) section 5.9, RPC) for the core list, `karabas.ini`,
+  the clock and the USB pads, and to start a core. A chosen core can start automatically after a
+  timeout, once after power on. A `boot.kg` too old for this firmware (without RPC) gets a
+  message from the firmware: put the new `boot.kg` on the card (BTN2 makes the card a USB drive).
 - **OSD.** Cores with an on-screen menu get their options, switches and hotkeys from the core file.
   A long menu scrolls; a core can split it into sub-menus (pages, nested), separators and options
   shown or enabled only with a value of another option (the `core.json` keys are in
@@ -45,10 +50,8 @@ firmware also reads the older per-board files `.kg1` / `.kg2` / `.kg3`.
 - **Bitmap OSD.** Cores on link v2 ([docs/link_v2.md](docs/link_v2.md), all current cores) get a
   256x128 monochrome OSD drawn by the MCU (u8g2) with UTF-8 (Cyrillic) names: Off / On switches are
   check boxes (Space or Enter toggles them), Enter on a switch with more options opens the list of
-  them, and Setup (clock, USB gamepad mapper; in the boot core also Wi-Fi and Settings) and About
-  are the last entries of the main menu. The boot menu on this OSD lists Setup, Graphic menu (the FT812
-  menu, also when it is off in `karabas.ini`) and About after the cores, with the board name in
-  its header. Older cores keep the text OSD of link v1.
+  them, and Setup (clock, USB gamepad mapper) and About are the last entries of the main menu.
+  Older cores keep the text OSD of link v1.
 - **Input.**
   - USB keyboards (including NKRO) and mice.
   - USB HID gamepads: mapped by default from their HID descriptor, or with a driver ini
@@ -60,17 +63,21 @@ firmware also reads the older per-board files `.kg1` / `.kg2` / `.kg3`.
   - Every joystick reaches the core as a Sega Mega Drive 6-button pad.
 - **USB host.** Runs on the second RP2040 core over PIO-USB, hubs included. A USB printer
   driver (Epson LX-300+II) is in progress.
-- **Real-time clock**, set in the OSD Setup menu and passed to the core.
-- **Wi-Fi setup** of the ESP8266 in the OSD Setup menu (core browser): scan, password, join. The
-  module keeps the network and joins it on start; its CTS flow control is turned on.
+- **Real-time clock**, set in Setup RTC of the OSD or on the Clock page of the boot menu (with
+  the time zone and NTP sync), and passed to the core.
+- **Wi-Fi** of the ESP8266: the boot core sets it up itself in its Setup (scan, join, Forget,
+  Upgrade / Reset module) and syncs the clock over NTP; it takes the uart of the module while its
+  Setup runs. The firmware bridges the uart of the module to the USB serial port
+  (`AT+KARABAS=esp`).
 - **SD card as a USB drive.** The PC sees the SD card as a USB mass storage device, so the card
   can stay in the board.
 - **USB serial bridge.** Two USB serial ports: the control port (the log and the `AT+KARABAS=`
   commands that control the firmware) and the core serial port, the UART of the core byte for
   byte. A USB-UART adapter plugged into the USB host
   takes the place of the core serial port.
-- **Optional peripherals**, detected at boot: FT812, OLED display, LED matrix, I2C extender (Go),
-  ESP8266, MIDI (Mini G).
+- **Optional peripherals**, detected at boot: OLED display, LED matrix, I2C extender (Go),
+  ESP8266, MIDI (Mini G). The FT812 is reset before every core but the boot core; the cores that
+  use it drive it themselves.
 - **Fast transfers.** Link v2 cores take every message as one packet (a sector, a ROM block of up
   to 512 bytes) and raise an interrupt line when they have something for the MCU; older link v1
   cores that support it receive ROMs and files in bursts of up to 512 bytes over a second chip
@@ -112,7 +119,7 @@ artifacts for 90 days.
 
 | Path | What |
 | --- | --- |
-| `/boot.kg` | the core browser, loaded at power on |
+| `/boot.kg` | the boot menu core ([karabas-go-core-menu](https://github.com/andykarpov/karabas-go-core-menu)), loaded at power on: the menu of the cores and its Setup |
 | `/*.kg` | the cores: one file for all the boards (format kgo2, [docs/kgo2.md](https://github.com/andykarpov/karabas-go-tools/blob/master/docs/kgo2.md)), listed if the file has the board. The core file is only read: what you change in its menu is kept in `/config` |
 | `/*.kg1` (`.kg2`, `.kg3`), `/boot.kg1` (...) | cores in the older per-board format kgo1, still read (`boot.kg` wins when both are there); their menu settings are written into the core file |
 | `/config/<core id>.ini`, `.eep` | the settings of a `.kg` core: the options that differ from the core's defaults, the images, the last file of a file loader; its EEPROM. Made by the firmware; About (`A` in the core menu) > `R` deletes them |
@@ -127,10 +134,10 @@ The card can be FAT16, FAT32 or exFAT. The cores are built with
 ### karabas.ini
 
 The file is optional: without it the firmware uses the defaults below. Every key but `[fileloader]` and `[setup] watchdog`
-can be changed in the menus: Setup > Settings of the text core browser (`[setup]`, `[autoload]`, `[matrix]`,
-`enabled` / `video_mode` of `[ft812]`) and the graphic setup (all of them). A save creates the
-file, or writes only the changed keys and keeps the rest of it. Lines must be at most 78
-characters long (without the line end), or the whole file is ignored.
+can be changed in the Setup of the boot menu (sections System, Autoload, Display, Sound, Theme,
+Clock), which reads and writes the file through the firmware. A save creates the file, or writes
+only the changed keys and keeps the rest of it. Lines must be at most 78 characters long
+(without the line end), or the whole file is ignored.
 
 | Section | Key | Default | Meaning |
 | --- | --- | --- | --- |
@@ -138,17 +145,15 @@ characters long (without the line end), or the whole file is ignored.
 | | `watchdog` | `1` | with `debug=1`: `0` turns off the hang watchdog (a reset after 8 s without progress of the main task, the cause in the next boot log) |
 | | `dvi_only` | `0` | `1`: the cores drop the HDMI frames (audio, info) and output plain DVI |
 | | `core_sort` | `name` | the order of the core list: `name` (the core name), `file` (the file name), `order` (the `order` of the core, then the name); the boot core is always first |
-| | `tz` | `+00:00` | UTC offset for NTP sync, set in Setup RTC / the Clock page, e.g. `+03:00`, `-04:30`; no daylight saving |
-| `[ft812]` | `enabled` | `1` | `1`: graphical core browser on the FT812 |
-| | `video_mode` | `1` | FT812 video mode: `0` 640x480@60, `1` 800x600@60 |
-| | `sound` | `1` | the start sound of the graphic menu: `0` off, `1` Klyuchik, `2` Ta-dan, `3` Run, `4` Sound 4 |
+| | `tz` | `+00:00` | UTC offset for NTP sync, set on the Clock page of the boot menu, e.g. `+03:00`, `-04:30`; no daylight saving |
+| `[ft812]` | | | the look of the boot menu (the section keeps the name of the FT812 menu it had) |
+| | `sound` | `1` | the start sound of the menu: `0` off, `1` Klyuchik, `2` Ta-dan, `3` Run, `4` Sound 4 |
 | | `click` | `1` | `1`: a click on a key press |
-| | `time`, `date`, `char` | `1`, `1`, `1` | show the clock, the date and the Karabas picture in the graphical browser |
+| | `time`, `date`, `char` | `1`, `1`, `1` | show the clock, the date and the Karabas picture in the menu |
 | | `color_bg`, `color_gradient`, `color_button`, `color_active`, `color_text`, `color_text_active`, `color_copyright` | `010101`, `0000c8`, `202026`, `0000c8`, `ffffff`, `ffffff`, `787878` | colors (hex RGB) |
-| | `3d_buttons` | `0` | `1`: buttons with a shadow and a light edge (not in 800x600: too heavy for the FT812 there) |
-| | `mouse_speed` | `3` | mouse pointer speed in the graphic menu, 1..5 |
+| | `mouse_speed` | `3` | mouse pointer speed in the menu, 1..5 |
 | `[matrix]` | `enabled`, `brightness`, `clock_*`, `meter_*` | `1`, `0`, ... | the LED matrix, see [docs/matrix.md](docs/matrix.md) |
-| `[autoload]` | `enabled`, `timeout`, `core` | `0`, `15`, none | start the core with this id (`core.json` `id`, e.g. `tsconf`) after `timeout` seconds |
+| `[autoload]` | `enabled`, `timeout`, `core` | `0`, `15`, none | start the core with this id (`core.json` `id`, e.g. `tsconf`) after `timeout` seconds; once after power on, not after a return to the menu |
 | `[fileloader]` | `<core id>` | none | the dir of the last file loaded by a file loader core in the older `.kgN` format (written by the firmware; empty or none: the dir of the core); a `.kg` core keeps it in `/config/<core id>.ini` |
 
 Example:
@@ -159,7 +164,7 @@ debug=0
 tz=+03:00
 
 [ft812]
-video_mode=0
+sound=2
 
 [autoload]
 enabled=1
@@ -172,12 +177,11 @@ core=tsconf
 | Keys | Joystick | Action |
 | --- | --- | --- |
 | Menu (Win) + Esc | Start + C, Start + Select | open / close the OSD of the running core |
-| Ctrl + Alt + Backspace | Start + X | back to the core browser (the boot core is loaded, the MCU and its USB devices keep running); in the core browser: restart the MCU |
+| Ctrl + Alt + Backspace | Start + X | back to the boot menu (the boot core is loaded, the MCU and its USB devices keep running, no autoload); in the boot menu: restart the MCU |
 | arrows, Enter, Esc | D-pad, A / B, C or Select | navigate the menus (a held direction repeats); not in the gamepad mapping itself |
-| Left | Left | back, where Left has nothing else to do: Setup menu, About, Wi-Fi status and network list, the tabs of the graphic setup; on the first core of the graphic browser, onto the Setup button (Enter opens it, Right goes back) |
+| Left | Left | back, where Left has nothing else to do: Setup menu, About |
 | digits | Up / Down | the digit under the cursor of a date / time field |
-| typing | Up / Down, Right, Left | a Wi-Fi text field: change the last char, add one, delete one |
-| `S` | Start (core browser) | Setup: clock, Wi-Fi and Settings (core browser), USB gamepad mapper; in the graphic browser, the graphic setup (settings, video mode, color themes) |
+| `S` (boot menu) | Start | the Setup of the boot menu |
 | `S`, `A` (core OSD) | | Setup (clock, USB gamepad mapper), About |
 | Space (core OSD, bitmap OSD) | | toggle a check box (an Off / On switch) |
 | Enter, Right (core OSD) | A / B, Right | open the sub-menu of a `►` item |
@@ -186,11 +190,9 @@ core=tsconf
 | Backspace (file list) | | the parent dir |
 | `H` (file list of a file loader core) | | back to the dir of the core |
 | `R` (file list of a file loader core) | | read the list again |
-| Space (graphical browser) | | switch to the text browser |
-| mouse (graphical browser, Setup) | | hover, click, wheel; right button = Esc |
-| `G` (text browser) | | switch to the graphical browser, also when it is off in `karabas.ini` (or the Graphic menu entry of the bitmap boot menu) |
 
-Cores can define their own OSD hotkeys.
+Cores can define their own OSD hotkeys. In the boot menu the keys, the pads and the mouse go to
+the menu of the boot core, which has its own keys.
 
 ## On-board buttons
 
@@ -206,8 +208,8 @@ starts with clean memory, as from the menu.
 ## SD card as a USB drive
 
 Press **BTN2** in the boot menu, or send `AT+KARABAS=msc` to the serial port. The board then shows
-its SD card to the PC as a USB drive, and nothing else runs; the screen says so. Eject the drive on
-the PC to restart normally.
+its SD card to the PC as a USB drive, and nothing else runs; the OSD says so over the boot menu.
+Eject the drive on the PC to restart normally.
 
 The second SD card (the slot of the FPGA, used by the cores) works the same way: hold **BTN2** in
 the boot menu for 2 seconds, or send `AT+KARABAS=msc2`. The drive is named "SD Card 2" and is
@@ -247,8 +249,8 @@ bytes are dropped (they no longer go to the UART of the core):
 | `AT+KARABAS=boot` | restart into BOOTSEL mode, to update the firmware |
 | `AT+KARABAS=msc` | restart with the SD card as a USB drive |
 | `AT+KARABAS=msc2` | restart with the second SD card (the slot of the FPGA) as a USB drive |
-| `AT+KARABAS=sd2test` | core browser only: reads the second SD card at a few SPI clocks (a check of the card and the link) |
-| `AT+KARABAS=esp` | core browser only: the bridge goes to the ESP8266, for its own AT commands (a CR, LF or CR LF from the terminal goes as CR LF) |
+| `AT+KARABAS=sd2test` | boot core only: reads the second SD card at a few SPI clocks (a check of the card and the link) |
+| `AT+KARABAS=esp` | boot core only: the bridge goes to the ESP8266, for its own AT commands (a CR, LF or CR LF from the terminal goes as CR LF) |
 | `AT+KARABAS=uart` | back to the UART of the core |
 | `AT+KARABAS=key:<keys>` | press and release keys as a USB keyboard would (core, OSD, hotkeys): keys apart by spaces, each modifiers and one key joined by `+` (`ctrl+alt+del`, `menu+esc`, `menu+f3`, `enter`, `f12`, `0x29` a HID usage), 100 ms down, 40 ms up |
 | `AT+KARABAS=type:<text>` | type the text (printable ASCII, US layout) |
@@ -257,7 +259,7 @@ bytes are dropped (they no longer go to the UART of the core):
 | `AT+KARABAS=mouse:<dx>,<dy>[,<buttons>[,<wheel>]]` | move as a USB mouse would (each axis up to 4000); buttons: bit 0 left, 1 right, 2 middle, left out or empty: the ones held stay |
 | `AT+KARABAS=click[:left\|right\|middle]` | a mouse click (left by default) |
 | `AT+KARABAS=pad:<port>:<buttons> ...` / `padhold:<port>:<buttons>` | press and release pad buttons on USB joystick port 0 or 1, e.g. `pad:0:up up+a` / keep them down until `release` or the next `pad`. Buttons: up down left right start a b c x y z mode |
-| `AT+KARABAS=state` | `+KARABAS:core;<file>;<id>;<name>;<build>;<boot, osd, fileloader or hidden>`, `+KARABAS:osd;<open>;<screen>;<file browser open>`, then an `item` line per file item |
+| `AT+KARABAS=state` | `+KARABAS:core;<file>;<id>;<name>;<build>;<boot, osd, fileloader or hidden>`, `+KARABAS:osd;<open>;<screen>;<file browser open>` (screen `core_browser`: the boot core), then an `item` line per file item |
 | `AT+KARABAS=load:<file or id>` | start a core from any core, `OK` when it has started; the boot core: loaded again, no MCU reboot |
 | `AT+KARABAS=reset` | start the running core again with clean memory; in the boot core: the boot core loaded again, no MCU reboot |
 | `AT+KARABAS=osd` / `osd:<item>` / `osd:<item>=<value>` | the menu items of the core: `+KARABAS:item;<pos>;<key>;<name>;<kind>;<enabled>;<value number>;<value>;<options or extensions>`; set by the number or the name of the option, a trigger with `=1` |

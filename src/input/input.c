@@ -4,7 +4,7 @@
 #include "input/ps2kbd.h"
 #include "input/usb_hid_keys.h"
 #include "apps/app_core.h"
-#include "apps/app_core_browser.h"
+#include "fpga/core_list.h"
 #include "apps/app_file_loader.h"
 #include "diag/hang_diag.h"
 
@@ -86,7 +86,7 @@ static bool menu_held = false;
 static void back_to_menu(void) {
   menu_held = true;
   if (core.type == CORE_TYPE_BOOT) flush_and_reboot();
-  else app_core_browser_return();
+  else core_list_return();
 }
 
 // the osd of a core with one (Menu+Esc, the osd button action)

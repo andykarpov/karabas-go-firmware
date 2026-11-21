@@ -20,9 +20,10 @@ A HID pad is mapped in one of two ways:
 
 ## OSD mapper
 
-If the default map does not suit a pad, map it in the OSD: open Setup (`S` in the core browser
-or in the core menu), then **Map USB gamepad**; in the graphic setup of the core browser it is
-the **Gamepad** tab. A keyboard (or, in the graphic setup, a mouse) drives the screen.
+If the default map does not suit a pad, map it in the OSD: open Setup (`S` in the core menu),
+then **Map USB gamepad**; in the boot menu it is the **Gamepad** page of its Setup (`S`), drawn by
+the boot core, which runs the same learning in the firmware over RPC. A keyboard (in the boot
+menu also a mouse) drives the screen.
 
 The screen opens on the two joystick ports: the pad on each (VID:PID) and what maps it, its
 driver ini, `default map` or `XInput`. **Forget** renames the driver ini of the chosen pad (all
@@ -35,8 +36,8 @@ default map at once. **Assign** learns a pad:
 3. Press each MD2 button when asked and release it. `Enter` skips a button (it is also skipped
    after 10 s), `Backspace` goes back one.
 4. `Enter` saves `/drivers/<vid>_<pid>.ini`. Other ini files for the same VID/PID are renamed to
-   `*.ini.bak`. The drivers are reloaded, and the pad uses the new map right away. In the graphic
-   setup the pad drawn on the screen then shows the buttons held through the new map.
+   `*.ini.bak`. The drivers are reloaded, and the pad uses the new map right away. On the Gamepad
+   page of the boot menu the test then shows the buttons held through the new map.
 
 For each press the mapper takes a hat nibble first, then a single bit, then the axis that moved
 most, as an axis range from halfway between rest and pressed (`lib/common/hid_learn`).

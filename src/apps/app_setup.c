@@ -19,8 +19,6 @@ typedef struct {
 
 static const setup_item_t setup_items[] = {
   { "Setup RTC",       state_rtc,        false },
-  { "Setup Wi-Fi",     state_wifi,       true },
-  { "Settings",        state_settings,   true },
   { "Map USB gamepad", state_pad_mapper, false },
 };
 #define SETUP_ITEMS (sizeof(setup_items) / sizeof(setup_items[0]))

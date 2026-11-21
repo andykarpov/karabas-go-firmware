@@ -4,7 +4,7 @@
 #include "time_zone.h"
 #include "matrix_style.h"
 #include "file_name.h"
-#include "apps/app_core_browser.h"
+#include "fpga/core_list.h"
 
 // karabas.ini
 
@@ -323,7 +323,7 @@ bool save_setup(const setup_t *s) {
   bool resort = s->core_sort != o->core_sort;
   hw_setup = *s;
   matrix_setup(&hw_setup);
-  if (resort) app_core_browser_sort();
+  if (resort) core_list_sort();
   return true;
 }
 
@@ -341,4 +341,16 @@ bool settings_ini_set(const char *section, const char *key, const char *value) {
   if (!kg_ini_line_fits(key, value)) return false;
   kg_ini_item_t item = { section, key, value, false };
   return ini_write(&item, 1);
+}
+
+char *settings_ini_text(size_t *len) {
+  if (!has_sd || msc_active()) return NULL;
+  char *text = sd_read_all(INI_FILE, INI_MAX, len);
+  if (text && !kg_ini_valid(text, *len, INI_LINE_BUF)) { free(text); return NULL; }
+  return text;
+}
+
+bool settings_ini_set_items(kg_ini_item_t *items, uint8_t count) {
+  for (uint8_t i = 0; i < count; i++) if (!kg_ini_line_fits(items[i].key, items[i].value)) return false;
+  return ini_write(items, count);
 }

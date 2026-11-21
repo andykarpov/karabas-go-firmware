@@ -23,6 +23,7 @@ typedef enum {
   LINK_CAP_MIDI,     // the core takes the MIDI IN of a USB MIDI keyboard
   LINK_CAP_IMG_WP,   // the core knows write protected images
   LINK_CAP_BURST,    // fast data transfers (v1: bursts)
+  LINK_CAP_RPC,      // v2 target 08: the core calls the firmware (a core with a CPU, the boot menu)
 } link_cap_t;
 
 bool link_has(link_cap_t cap);
@@ -53,6 +54,21 @@ void link_sys_spi_control(uint8_t bits);            // FT812 / SD2 / ESP routing
 
 // the core asks to be loaded again (it runs in the dispatch task)
 void link_sys_on_reload(void (*cb)(uint8_t core_id));
+
+// ---- RPC (v2 target 08, docs/link_v2.md 5.9): the calls of the core to the firmware ----
+
+#define LINK_RPC_MAX 512
+typedef struct {
+  uint8_t id, svc, fn;
+  uint16_t len;
+  uint8_t data[LINK_RPC_MAX + 1]; // + a 0 after the payload (strings)
+} link_rpc_req_t;
+
+void link_rpc_on_request(void (*cb)(void)); // a request waits (IRQ bit 8): read it with link_rpc_read
+bool link_rpc_read(link_rpc_req_t *req);    // false: no request, or its sum stayed bad
+bool link_rpc_respond(uint8_t id, uint8_t status, const uint8_t *data, uint16_t len); // false: refused
+bool link_rpc_event(uint8_t svc, uint8_t code, const uint8_t *data, uint16_t len);    // false: the slot is full / refused
+uint16_t link_rpc_services(void);           // the services the core uses (HELLO)
 
 // ---- HID ----
 

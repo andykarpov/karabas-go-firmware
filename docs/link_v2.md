@@ -92,10 +92,11 @@ Flow control is in band: a target that cannot take data reports it in a status c
 | `05` | PORT: byte streams (UART, ESP, MIDI, printer) | 5 | `UART`, `ESP_UART`, `MIDI`, `13`/`14` |
 | `06` | RTC | 6 | `CMD_RTC` |
 | `07` | AUX: LED matrix, audio peaks, debug values | 7 | `60`..`63`, `70`/`71`, `30`/`31` |
+| `08` | RPC: the calls of the core to the firmware | 8 | new |
 
 ### Interrupt line
 
-`INT = (pending != 0)`, `pending` being 8 bits, one per target. A target sets its bit while it has
+`INT = (pending != 0)`, `pending` being 16 bits, one per target (`SYS IRQ` answers them in two bytes). A target sets its bit while it has
 something for the MCU (an event in its queue, data to read) and clears it itself when the MCU has
 read it all. The MCU acknowledges only the edge-like causes of SYS (section 5.1).
 
@@ -113,7 +114,7 @@ read while INT is low.
 | C | Name | → | ← | Notes |
 |---|---|---|---|---|
 | `00` | `STATUS` | | `'K' 'G'`, version (2), caps (2 bytes), OSD width / 8, OSD height / 8, ports mask | The first packet after configuration; the magic says the core runs and speaks v2 |
-| `01` | `IRQ` | ack mask | pending | `pending` as it was before the ack. Ack clears only the SYS causes (bit 0) |
+| `01` | `IRQ` | ack mask | pending 7..0, pending 15..8 | `pending` as it was before the ack. Ack clears only the SYS causes (bit 0) |
 | `02` | `IRQ_SRC` | | SYS causes | bit 0 coldboot, bit 1 reload request; reading clears bit 0 |
 | `03` | `SETVAL` | (index, value) × n | | The OSD switches (the firmware sends one pair per packet); index = the switch index of v1 (`sw` of kgo2), so pinned `index` values keep working. Triggers: 1, then 0 after 100 ms |
 | `04` | `HW_SETUP` | key, value bytes | | value byte k is key + k: 0 board (`HW_ID`), 1 DVI only, `10`..`17` core build, `18`..`1F` firmware build. The firmware sends board and DVI as two packets and the 16 build characters in one |
@@ -123,7 +124,7 @@ read while INT is low.
 | `08` | `RELOAD` | | core id | Read after `IRQ_SRC` bit 1 (v1 `CMD_FLASHBOOT`); `FE` from any core = a load fault (a part of the ROMs lost): the firmware loads the core again, 2 times in a row at most |
 
 Caps (`STATUS` bytes 3..4): bit 0 IMG, 1 backup RAM, 2 write-protected images, 3 floppy drives
-(DSKCHG), 4 LOAD flow control (`LD_READY`), 5 RTC, 6 AUX, 7 FT812 video, 8 reload, 9 MIDI IN.
+(DSKCHG), 4 LOAD flow control (`LD_READY`), 5 RTC, 6 AUX, 7 FT812 video, 8 reload, 9 MIDI IN, 10 RPC.
 The firmware uses bits 1, 2, 4, 5 (`RTC SET` is sent only with it) and 9; the others are
 informational (AUX is served on IRQ bit 7 whatever the caps say). The ports mask says which PORT
 indexes the core has (bit n = port n); the firmware sends nothing to a port the core does not have.
@@ -267,6 +268,55 @@ IRQ bit 5 while any port has tx bytes.
 
 IRQ bit 7 while one of them changed since it was read. The core keeps the frames of v1 (`MATRIX_CMD`: CTL, PIXEL, BITPLAN, the peaks of `audio_peaks.v`): `kg_l2_aux` keeps the bitplanes for the MCU.
 
+### 5.9 RPC (`08`)
+
+Calls of the core to the firmware: a core with a CPU (the self-drawing boot menu of
+karabas-go-core-menu, later other cores) asks for services of the MCU (files, settings, the core
+list, the time). The MCU is the SPI master, so a call is a mailbox: the CPU writes a **request**
+into a buffer of the core and raises IRQ bit 8, the MCU reads it, does it and writes the
+**response** back. The MCU can also push **events** into a slot of the core. One call at a time;
+payloads up to 512 bytes each way; a 16-bit sum (the bytes from the first header byte to the end of
+the payload added) on every request, response and event. FPGA side: `kg_l2_rpc`
+(`kg_mcu2` `ENABLE_RPC`, caps bit 10).
+
+| C | Name | → | ← | Notes |
+|---|---|---|---|---|
+| `01` | `HELLO` | firmware RPC version, Z | core RPC version, max payload (2), services (2) | Sent once after `SYS STATUS` with caps bit 10. The core raises IRQ bit 8 only after it, so an older firmware never sees INT held high by a target it does not know |
+| `02` | `STATUS` | | flags, request length (2) | Z first. flags: bit 0 a request waits for its response, bit 1 the event slot is free, bit 2 HELLO came |
+| `03` | `REQ` | | id, service, function, length (2), payload, sum (2) | Z first. The read of the sum ends IRQ bit 8 for this request; the request stays (and can be read again after a bad sum) until its response |
+| `04` | `RESP` | id, status, length (2), payload, sum (2), Z | 0 taken / 1 refused | Refused: a bad sum, another id, no request waiting, a length over 512: the MCU sends it again |
+| `05` | `EVENT` | service, code, length (2), payload, sum (2), Z | 0 taken / 1 refused | Only while `STATUS` bit 1; refused when the slot is full (the CPU reads the event, then frees the slot) |
+
+`SYS IRQ` answers a second byte of pending bits (bit 0 = target 08); an older firmware reads only
+the first, an older core gives 0 for the second (reading past the data gives 0).
+
+Response status: 0 ok, 1 unknown service / function, 2 bad arguments, 3 not found, 4 I/O error,
+5 denied, 6 busy (call again). Strings in a payload end with a 0 byte; numbers are little-endian.
+
+Services (`src/fpga/rpc_server.c`; the plan of the menu: karabas-go-core-menu `docs/RPC.md`):
+
+| Service | F | Name | In | Out |
+|---|---|---|---|---|
+| 0 SYS | 0 | `INFO` | | firmware build (8), board, RPC version, services (2) |
+| | 1 | `TIME_GET` | | year (2), month, day, hour, minute, second, weekday |
+| | 2 | `TIME_SET` | as `TIME_GET` | |
+| 1 CFG | 0 | `GET` | file, (section, key)… | per pair: 1 and the value, or 0 and "" (not in the file); one read of the file |
+| | 1 | `SET` | file, (section, key, value)… | | written into the file at once, one rewrite for all |
+| | 2 | `SAVE` | file | | the firmware takes the settings again (`load_setup`, the LED matrix as saved) |
+| | 3 | `PREVIEW` | file, mode (`none`, `clock`, `meter`), (section, key, value)… | | the LED matrix shows the `[matrix]` values given (not written) and the clock / the meters of mode; no values: back to `karabas.ini` |
+| 2 CORES | 0 | `SCAN` | | count (2), in the order of `[setup] core_sort` |
+| | 1 | `ITEM` | index (2) | file name, name, build, id, flags (bit 0 visible, bits 1.. the type) |
+| | 2 | `LAUNCH` | file name | | the core is replaced: no response |
+| | 3 | `AUTOLOAD` | | timeout (s, 0 none), file name |
+| 3 HID | 0 | `PADS` | | per joystick port: source (0 none, 1 driver ini, 2 default map, 3 XInput), VID (2), PID (2), driver file |
+| | 1 | `FORGET` | port | | the driver ini of its pad becomes `.bak` |
+| | 2 | `LEARN_START` | | | the learning of a USB pad (`apps/pad_learn`) starts: the first pad whose report changes |
+| | 3 | `LEARN_STATE` | | state, button, last button, seconds left, VID (2), PID (2), mapped (2), held (2), the rule of the last button, the saved file | state: 0 idle, 1 waiting for a pad, 2 / 3 settle / rest, 4 press, 5 release, 6 done, 7 saved, 8 failed; buttons Up Down Left Right A B C X Y Z Start Mode = bits 0..11 |
+| | 4 | `LEARN_DO` | 0 stop, 1 skip, 2 back, 3 save | | |
+
+CFG file `0` is `karabas.ini` and CORES, HID are for a menu core only: the boot core, or a core whose HELLO lists CORES. A boot core
+with RPC draws the menu itself: the firmware shows no menu, no FT812, and leaves the autoload to it.
+
 ## 6. Core start
 
 `configure()` in `src/fpga/core_loader.c`:
@@ -314,7 +364,7 @@ There is no font download (the font is in the MCU) and no caps query apart from 
     level under it a triangle "back" and the title (the page path "Options > Video", the app,
     "Disk 8: /dir" of a browser). At the right the clock, in a browser its extensions instead.
   - 9 rows of 12 pixels, no hint lines; a scrollbar at the right.
-  - The setup apps (Setup RTC, Map USB gamepad; the boot core also Wi-Fi, Settings) and About are
+  - The setup apps (Setup RTC, Map USB gamepad) and About are
     the last items of the main page, after a separator.
   - Switches: Left / Right and the hotkey step the options; Enter opens a screen of the options
     (radio buttons, Up / Down, Enter takes one, Esc back). Off / On, No / Yes, Disabled / Enabled

@@ -22,12 +22,13 @@
 -- EU, 2024, 2025, 2026
 ------------------------------------------------------------------------------------------------------------------*/
 
+#include "fpga/rpc_server.h"
 #include "main.h"
 #include "usb/hid_driver.h"
 #include "tusb.h"
 #include "pio_usb.h"
 #include "input/ps2kbd.h"
-#include "apps/app_core_browser.h"
+#include "fpga/core_list.h"
 #include "diag/diag.h"
 #include "diag/hang_diag.h"
 #include "diag/usb_diag.h"
@@ -131,6 +132,7 @@ static void karabas_setup()
   ft_begin(link_sys_spi_control, PIN_MCU_FT_CS, board_ft_reset_pin());
 
   storage_begin();
+  rpc_server_init(); // the calls of a core over link v2 (the self-drawing boot menu)
 
   // load usb joy drivers
   d_println("Loading usb hid joystick drivers");
@@ -150,6 +152,7 @@ static void karabas_setup()
     // the boot core shows the msc screen; the card is read before the PC gets it
     osd_state = state_msc;
     if (has_sd && sd_exists(core_file_boot())) do_configure(core_file_boot());
+    is_osd = true; // the msc screen over the menu of a boot core with RPC (it gets no card meanwhile)
     msc_start();
   } else {
     osd_state = state_main;
@@ -166,7 +169,7 @@ static void karabas_setup()
     esp_serial_begin(esp_send);
 
     osd_state = state_core_browser;
-    app_core_browser_read_list();
+    core_list_read();
   }
 }
 
@@ -266,6 +269,7 @@ static void karabas_loop()
   // let the fpga talk even when nothing else was sent
   hang_mark(0x0f00);
   link_poll();
+  rpc_server_tick(); // a core started by the boot menu (CORES LAUNCH), outside the link service
 }
 
 // usb host loop, runs on core1. It never blocks, so all of it runs from RAM: from flash,

@@ -5,7 +5,7 @@
 #include "periph/at_control.h"
 #include "periph/serial_bridge.h"
 #include "apps/app_core.h"
-#include "apps/app_core_browser.h"
+#include "fpga/core_list.h"
 #include "fpga/core_file.h"
 #include "input/input.h"
 #include <ctype.h>
@@ -140,7 +140,7 @@ static bool core_find(const char *what, char *file, size_t size, uint8_t *type) 
 
 // the boot core loaded again in place, no MCU reboot (the USB devices stay); answered once it runs
 static void boot_core_with_ok() {
-  app_core_browser_return();
+  core_list_return();
   reply(true);
 }
 
@@ -149,7 +149,7 @@ static void at_load(const char *what) {
   uint8_t type;
   if (!core_find(what, file, sizeof(file), &type)) { reply(false); return; }
   if (type == CORE_TYPE_BOOT) { boot_core_with_ok(); return; }
-  app_core_browser_start_file(file);
+  core_list_start_file(file);
   reply(true);
 }
 

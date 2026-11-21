@@ -8,24 +8,25 @@ Set `debug=1` in `karabas.ini` and keep a terminal on the USB serial port: most 
 
 ## Smoke
 
-- [ ] The board boots into the BOOT core, the core list shows (FT812 browser or text OSD).
+- [ ] The board boots into the BOOT core, its menu (drawn by the core) lists the cores.
 - [ ] The log: `USB host: N hardware spinlocks free`, no `PIO programs did not load`, no `Last boot hung / panicked / halted`.
 - [ ] `DIAG` every 10 s: core1 loops non-zero, `usb sof 1000/s` with a max gap of about 1000 us, `disc` / `own` / `ovf` 0, no task low on stack.
-- [ ] A USB keyboard behind the hub works in the browser; a core loads and returns to BOOT (Ctrl+Alt+Backspace).
+- [ ] A USB keyboard behind the hub works in the boot menu; a core loads and returns to BOOT (Ctrl+Alt+Backspace).
 
 ## Cores
 
-- [ ] BOOT core: the core list, long names, the selection kept over a reboot.
+- [ ] BOOT core with RPC (`Link v2: RPC version ...` in the log): the menu is drawn by the core, the firmware OSD stays closed; the core list (CORES SCAN / ITEM), long names, the `core_sort` order; a chosen core starts (`RPC: the boot menu starts ...`).
+- [ ] A `boot.kg` without RPC (an older one): the firmware shows `This boot.kg is too old` with its build; BTN2 makes the card a USB drive, a new `boot.kg` copied there starts after the eject.
 - [ ] An OSD core (tsconf): loads, its ROMs arrive (`ROM ... ms` with the link mode in the log), Win+Esc opens and closes the OSD.
 - [ ] A FILELOADER core (NES): the file list, a game loads, the last file is remembered (the id is written into the core file (kgo1) / `/config/<id>.ini` (kgo2)).
 - [x] A FILELOADER core with menu items (Mini G, NES, 2026-11-01): `Options` in the hint line (text OSD), Tab / O open the core menu, Esc on its main page goes back to the files (the cursor on the same file, the game is not loaded again), an F item hotkey opens the menu, Menu+Esc opens the files again.
 - [ ] A link v2 core (`Link v2: core answered in ...` in the log, no `Link v2: N v1 frames not sent`).
-- [ ] The bitmap OSD of a link v2 core: the boot list with Setup / Graphic menu / About after the cores and the board name in the header; a core menu (check boxes, an option list, sub-pages), the dialogs (toast, progress, boxes) and About.
+- [ ] The bitmap OSD of a link v2 core: a core menu (check boxes, an option list, sub-pages) with Setup / About at its end, the dialogs (toast, progress, boxes) and About.
 - [ ] Link v1: a burst core (`FPGA caps` with burst in the log) and a classic one (old core, no caps answer).
 - [ ] A core with its own `spi_freq`.
 - [ ] The heaviest core (nanomig): loads, Kickstart autoload (`FL` item with `autoload`), runs.
-- [ ] Autoload (`[autoload]`): the countdown, a key stops it.
-- [ ] Ctrl+Alt+Backspace (joy Start+X) goes back to BOOT without an MCU reboot (the USB devices behind the hub stay mounted, the log shows no new boot), also from inside the OSD; held, it does not go off again in BOOT; in BOOT it reboots the MCU.
+- [ ] Autoload (`[autoload]`): the boot menu counts down and starts the core once after power on, a key stops it; back in the menu by Ctrl+Alt+Backspace there is no countdown.
+- [ ] Ctrl+Alt+Backspace (joy Start+X) goes back to BOOT without an MCU reboot and without autoload (the USB devices behind the hub stay mounted, the log shows no new boot), also from inside the OSD; held, it does not go off again in BOOT; in BOOT it reboots the MCU.
 - [ ] UKNC Run SAV: with `RT11BASE.DSK` (or `BASERT11.DSK`) in `/mc0511-media`, a `.SAV` boots RT-11 and runs (log `Run SAV: name as NAME.SAV`, `RT11SAV.DSK` in FDD0); a second run keeps the disk before it as `RT11OLD.DSK`; without the template the OSD shows `No RT11BASE.DSK` and nothing changes.
 
 ## OSD
@@ -34,7 +35,7 @@ Set `debug=1` in `karabas.ini` and keep a terminal on the USB serial port: most 
 - [ ] Hotkeys of OSD items (Ctrl+Alt+Del of tsconf).
 - [x] The key of a `Menu+key` hotkey does not reach the machine (Mini G, RK core, Specialist, 2026-11-08: `Menu+M` shows no `M` in the Monitor, also when Menu is released first; the switch still changes; F12 still resets). Ctrl+Alt+Del: same path as F12, not tried.
 - [ ] A tree menu (nanomig): Enter / Right open a `►` page, Esc goes back, the cursor is kept per page, the path in the title row; a `show_if` item appears and an `enable_if` item turns grey with its switch; a hotkey of an item on another page opens that page. A flat core (tsconf) looks as before.
-- [ ] Long lists: the scrollbar in the last column of the core browser and the file browser (a slot per page), the core menu and the Wi-Fi list (a thumb at most half the track); no scrollbar and no empty column when the list fits; the core menu scrolls with the cursor.
+- [ ] Long lists: the scrollbar in the last column of the file browser (a slot per page) and the core menu (a thumb at most half the track); no scrollbar and no empty column when the list fits; the core menu scrolls with the cursor.
 - [ ] `F` / `FL` browsers list the dirs (cyan, ending with `/`) and only the files with the item's extensions ("Files: ..." on the hint row of the text OSD).
 - [ ] `F` slots: mount, eject, the browser starts in the dir of the last image (disk 2 after disk 1), Esc to the slot's own dir.
 - [ ] The file mounter reads and writes (a disk image written by the core keeps its data after a reload).
@@ -45,36 +46,36 @@ Set `debug=1` in `karabas.ini` and keep a terminal on the USB serial port: most 
 ## Storage
 
 - [ ] SD card FAT32 and exFAT: the lists, long names, opening by id.
-- [ ] `karabas.ini` missing: defaults, the first save from Settings creates it. An invalid line (79 chars or more): `karabas.ini is invalid`, defaults.
-- [ ] Settings save only writes the changed keys (`karabas.new` then rename), the comments stay.
-- [ ] MSC (`msc` button action or `AT+KARABAS=msc`): the msc screen, the card on the PC, read / write speed, eject reboots (Linux eject, Windows "Safely Remove").
+- [ ] `karabas.ini` missing: defaults, the first save from the Setup of the boot menu creates it. An invalid line (79 chars or more): `karabas.ini is invalid`, defaults.
+- [ ] A save from the Setup of the boot menu (RPC CFG SET) only writes the changed keys (`karabas.new` then rename), the comments stay.
+- [ ] MSC (`msc` button action or `AT+KARABAS=msc`): the msc screen on the OSD over the boot menu (the menu gets busy for CFG / CORES / HID meanwhile), the card on the PC, read / write speed, eject reboots (Linux eject, Windows "Safely Remove").
 - [ ] MSC with the second card (`msc2`, BTN2 held 2 s in BOOT): "SD Card 2" on the PC, eject; no card: the screen says so, reboot after 5 s.
 - [ ] `AT+KARABAS=sd2test` (BOOT core): reads at 4..24 MHz, 24 MHz may fail.
 - [ ] No I/O errors in `journalctl -k` during MSC.
 
 ## Input
 
-- [ ] USB keyboard and mouse, directly and behind a hub; the mouse in the FT menus.
+- [ ] USB keyboard and mouse, directly and behind a hub; the mouse in the boot menu.
 - [ ] A low-speed device behind the hub (cheap gamepad, old keyboard): `own` stays 0.
 - [ ] HID gamepads: with a `drivers/*.ini` and without one (the auto map); the two joystick ports keep their pads.
-- [ ] Setup > Map USB gamepad: learn, save the ini, forget.
+- [ ] Setup > Map USB gamepad (core OSD) and Setup > Gamepad of the boot menu (RPC HID): learn, save the ini, forget.
 - [ ] XInput pad (8BitDo M30).
 - [ ] PS/2 keyboard.
 - [ ] **G:** Sega joysticks.
 - [ ] On-board buttons: the actions of `core.btn` (press and hold), `bootsel`, `msc`, `msc2`.
-- [ ] Keys are not lost under load (a core loading, the FT browser redrawing, debug log on).
+- [ ] Keys are not lost under load (a core loading, the boot menu redrawing, debug log on).
 
 ## Printer
 
 - [ ] USB printer (Epson LX-300): a page from a core prints whole, no repeated or lost lines (bulk OUT).
 
-## Time and network (BOOT core)
+## Time and network
 
-- [ ] RTC: Setup RTC sets the date and time, kept over a power cycle.
+- [ ] RTC: Setup RTC of a core OSD and the Clock page of the boot menu (RPC SYS TIME_SET) set the date and time, kept over a power cycle.
 - [ ] The RTC of the cores: MC146818A (profi: the CP/M time keeps the binary mode of register B after a core reload, no reset to 2012; pcxt: the DOS time) in BCD with an erased EEPROM (register B 02h), DS1307 (next), ZX Evolution (tsconf), MSM6242B (nanomig: the Workbench clock).
-- [ ] Time zone `tz`: text Setup and the FT Clock page, saved.
-- [ ] NTP sync sets the RTC.
-- [ ] Wi-Fi: status, scan, password, join; the CTS flow control (`AT+UART_DEF`).
+- [ ] Time zone `tz`: the Clock page of the boot menu, saved in `karabas.ini`.
+- [ ] NTP sync of the boot menu (the core on the ESP uart) sets the RTC.
+- [ ] Wi-Fi in the Setup of the boot menu (the core drives the ESP itself): status, scan, password, join, Forget; the CTS flow control (`AT+UART_DEF`).
 - [ ] Wi-Fi: Upgrade module (`AT+CIUPDATE`) and Reset module (`AT+RESTORE`) with the progress bar.
 
 ## Serial bridge
@@ -85,14 +86,13 @@ Set `debug=1` in `karabas.ini` and keep a terminal on the USB serial port: most 
 - [ ] `AT+KARABAS=key:menu+esc` opens the OSD, `key:esc` closes it; `type:dir` + `key:enter` in a core; `hold:alt` / `release`. (Mini G 2026-10-31: boot menu, PC XT OSD and file browser, Ctrl+Alt+Del driven this way.)
 - [ ] `AT+KARABAS=state` in the boot core and in a core; `load:<id>` from the boot core and from a running core, `load:boot`; `reset`.
 - [ ] `AT+KARABAS=osd`, `osd:<item>=<value>` (the value stays after a reload), a trigger; `mount:<item>:<path>` / `eject:<item>` (the OSD shows the image).
-- [ ] `AT+KARABAS=mouse:`, `click` in a core and in the graphic menu; `pad:0:up` in a core; `sync` answers after the input ended; `debug:1` / `debug:0`.
+- [ ] `AT+KARABAS=mouse:`, `click` in a core and in the boot menu; `pad:0:up` in a core; `sync` answers after the input ended; `debug:1` / `debug:0`.
 - [ ] A USB-UART adapter (FTDI, CP210x, CH34x, CDC ACM) on the USB host: `USB UART mounted` in the log, the core UART goes to it both ways at 115200 (tsconf ZiFi) and at the EVO RS232 speed; CDC 0 keeps the log and `AT+KARABAS=`; unplugged, the core UART goes back to CDC 1; a second adapter is ignored.
 
 ## Displays
 
-- [ ] **MG:** FT812 browser: the video modes (try, confirm, revert), the setup pages (System, Clock, Wi-Fi, Gamepad), sounds and the key click, colors.
-- [ ] **MG:** the FT812 picture starts on every boot (no black screen, see `FT start` in the log).
-- [ ] Text OSD browser with `[ft812] enabled=0`.
+- [ ] The boot menu takes its look from `[ft812]` (colors, time, date, char, start sound, key click, mouse speed); a change in its Setup is saved and comes back after a reload.
+- [ ] **MG:** a core that drives the FT812 itself starts its picture after the boot menu (the firmware resets the FT812 before it).
 - [ ] LED matrix: `core` (the boot scroll, core meters), `scroll`, `effect` (clock, drive with the image slots), `image`, `blank`; `[matrix]` brightness and the clock / meter look; the icon in BOOTSEL and MSC; the progress bar while a core loads.
 - [ ] OLED.
 
