@@ -19,6 +19,11 @@
 #define V2_CAP_IMG_WP 0x0004
 #define V2_CAP_LOAD_READY 0x0010
 #define V2_CAP_MIDI 0x0200
+#define V2_CAP_RPC 0x0400
+#define T_RPC 0x08
+#define RPC_VERSION 1
+static uint16_t v2_rpc_services = 0;
+static void (*rpc_cb)(void) = NULL;
 static uint16_t v2_caps = 0;
 static uint8_t v2_osd_w8 = 0, v2_osd_h8 = 0; // the OSD size of STATUS, / 8
 static uint8_t v2_ports = 0;                  // the PORT mask of STATUS
@@ -50,6 +55,7 @@ bool link_has(link_cap_t cap) {
       case LINK_CAP_MIDI: return (v2_caps & V2_CAP_MIDI) != 0;
       case LINK_CAP_IMG_WP: return (v2_caps & V2_CAP_IMG_WP) != 0;
       case LINK_CAP_BURST: return true; // every packet is one
+      case LINK_CAP_RPC: return (v2_caps & V2_CAP_RPC) != 0;
     }
     return false;
   }
@@ -58,6 +64,7 @@ bool link_has(link_cap_t cap) {
     case LINK_CAP_MIDI: return (link_core_caps() & CAPS_MIDI) != 0;
     case LINK_CAP_IMG_WP: return (link_core_caps() & CAPS_IMG_WP) != 0;
     case LINK_CAP_BURST: return link_burst_available();
+    case LINK_CAP_RPC: return false;
   }
   return false;
 }
@@ -91,6 +98,16 @@ bool link_core_hello(void) {
       v2_read(T_SYS, 0x02, &causes, 1); // clears the coldboot cause
       d_printf("Link v2: core answered in %lu ms, caps %04x, osd %ux%u, ports %02x", (unsigned long) ms_since(t),
         v2_caps, st[5] * 8, st[6] * 8, st[7]); d_println();
+      v2_rpc_services = 0;
+      if (v2_caps & V2_CAP_RPC) {
+        // HELLO: our version; the core answers its version, the max payload, its services, and
+        // raises IRQ bit 8 for its calls from now on
+        const uint8_t tx[4] = { T_RPC, 0x01, RPC_VERSION, 0 };
+        uint8_t rx[5];
+        link2_xfer(tx, sizeof(tx), rx, sizeof(rx));
+        v2_rpc_services = rx[3] | (rx[4] << 8);
+        d_printf("Link v2: RPC version %u, max %u, services %04x", rx[0], rx[1] | (rx[2] << 8), v2_rpc_services); d_println();
+      }
       return true;
     }
   } while (ms_since(t) < V2_HELLO_MS);
@@ -942,11 +959,16 @@ static void v2_img_event(void) {
 
 void link_v2_service(void) {
   if (!V2 || !link2_int()) return;
-  uint8_t pending;
+  uint8_t pending, pending_hi;
   {
-    const uint8_t tx[4] = { T_SYS, 0x01, 0x00, 0x00 }; // IRQ: no ack, Z, pending
-    link2_xfer(tx, sizeof(tx), &pending, 1);
+    // IRQ: no ack, Z, pending 7..0, pending 15..8 (0 from a core without targets over 07)
+    const uint8_t tx[4] = { T_SYS, 0x01, 0x00, 0x00 };
+    uint8_t rx[2];
+    link2_xfer(tx, sizeof(tx), rx, sizeof(rx));
+    pending = rx[0];
+    pending_hi = rx[1];
   }
+  if ((pending_hi & 0x01) && rpc_cb) rpc_cb();
   if (pending & 0x01) {
     uint8_t causes;
     v2_read(T_SYS, 0x02, &causes, 1);
@@ -969,4 +991,78 @@ void link_v2_service(void) {
       if (ps2_cmd_cb) ps2_cmd_cb(ev[1 + 2 * i], ev[2 + 2 * i]);
     }
   }
+}
+
+// ---- RPC (target 08, docs/link_v2.md 5.9) ----
+
+void link_rpc_on_request(void (*cb)(void)) { rpc_cb = cb; }
+
+uint16_t link_rpc_services(void) { return v2_rpc_services; }
+
+#define RPC_TRIES 3
+
+bool link_rpc_read(link_rpc_req_t *req) {
+  if (!V2 || !(v2_caps & V2_CAP_RPC)) return false;
+  for (int t = 0; t < RPC_TRIES; t++) {
+    // STATUS: flags (bit 0 a request waits), its length
+    uint8_t st[3];
+    v2_read(T_RPC, 0x02, st, sizeof(st));
+    if (!(st[0] & 0x01)) return false;
+    uint16_t len = st[1] | (st[2] << 8);
+    if (len > LINK_RPC_MAX) len = LINK_RPC_MAX;
+    // REQ: id, service, function, length (2), payload, sum (2)
+    static uint8_t rx[5 + LINK_RPC_MAX + 2];
+    v2_read(T_RPC, 0x03, rx, 5 + len + 2);
+    uint16_t rlen = rx[3] | (rx[4] << 8);
+    uint16_t sum = 0;
+    for (uint16_t i = 0; i < 5 + len; i++) sum += rx[i];
+    uint16_t got = rx[5 + len] | (rx[6 + len] << 8);
+    if (rlen != len || sum != got) {
+      d_printf("RPC: bad request (len %u / %u, sum %04x / %04x)", rlen, len, got, sum); d_println();
+      continue;
+    }
+    req->id = rx[0];
+    req->svc = rx[1];
+    req->fn = rx[2];
+    req->len = len;
+    memcpy(req->data, rx + 5, len);
+    req->data[len] = 0;
+    return true;
+  }
+  return false;
+}
+
+// RESP / EVENT: h0, h1, length (2), payload, sum (2), Z, then the answer 0 taken / 1 refused
+static bool rpc_send(uint8_t cmd, uint8_t h0, uint8_t h1, const uint8_t *data, uint16_t len) {
+  if (len > LINK_RPC_MAX) return false;
+  static uint8_t tx[2 + 4 + LINK_RPC_MAX + 3];
+  tx[0] = T_RPC; tx[1] = cmd;
+  tx[2] = h0; tx[3] = h1; tx[4] = len & 0xFF; tx[5] = len >> 8;
+  if (len) memcpy(tx + 6, data, len);
+  uint16_t sum = 0;
+  for (uint16_t i = 2; i < 6 + len; i++) sum += tx[i];
+  tx[6 + len] = sum & 0xFF;
+  tx[7 + len] = sum >> 8;
+  tx[8 + len] = 0;
+  for (int t = 0; t < RPC_TRIES; t++) {
+    uint8_t ack = 1;
+    link2_xfer(tx, 9 + len, &ack, 1);
+    if (ack == 0) return true;
+  }
+  return false;
+}
+
+bool link_rpc_respond(uint8_t id, uint8_t status, const uint8_t *data, uint16_t len) {
+  if (!V2 || !(v2_caps & V2_CAP_RPC)) return false;
+  bool ok = rpc_send(0x04, id, status, data, len);
+  if (!ok) { d_printf("RPC: response %u refused", id); d_println(); }
+  return ok;
+}
+
+bool link_rpc_event(uint8_t svc, uint8_t code, const uint8_t *data, uint16_t len) {
+  if (!V2 || !(v2_caps & V2_CAP_RPC)) return false;
+  uint8_t st[3];
+  v2_read(T_RPC, 0x02, st, sizeof(st));
+  if (!(st[0] & 0x02)) return false; // the slot of the core is full
+  return rpc_send(0x05, svc, code, data, len);
 }

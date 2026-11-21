@@ -1,3 +1,4 @@
+#include "fpga/rpc_server.h"
 #include "config.h"
 #include "types.h"
 #include "main.h"
@@ -387,7 +388,8 @@ void app_core_browser_read_list() {
   char autoload_id[sizeof(hw_setup.autoload_core)];
   strcpy(autoload_id, hw_setup.autoload_core); kg_trim(autoload_id);
   for (uint8_t i=0; i<cores_len; i++) {
-    if (!autoload_enabled && hw_setup.autoload_enabled && strcmp(cores[i].id, autoload_id) == 0) {
+    // the self-drawing boot menu counts its autoload down itself (RPC CORES AUTOLOAD)
+    if (!autoload_enabled && hw_setup.autoload_enabled && !rpc_boot_menu() && strcmp(cores[i].id, autoload_id) == 0) {
       autoload_enabled = true;
       autoload_countdown = hw_setup.autoload_timeout;
       core_sel = i;

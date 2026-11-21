@@ -876,7 +876,8 @@ void read_core(const char* filename) {
   // show OSD on boot (only for boot and fileloader cores)
   is_osd = false;
   switch (core.type) {
-    case CORE_TYPE_BOOT: is_osd = true; break;
+    // a boot core with RPC draws the menu itself (karabas-go-core-menu docs/PLAN.md): no OSD, no FT812
+    case CORE_TYPE_BOOT: is_osd = !link_has(LINK_CAP_RPC); break;
     case CORE_TYPE_OSD: is_osd = false; break;
     case CORE_TYPE_FILELOADER: is_osd = true; break;
     default: is_osd = false;

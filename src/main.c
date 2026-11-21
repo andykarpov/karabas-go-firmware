@@ -22,6 +22,7 @@
 -- EU, 2024, 2025, 2026
 ------------------------------------------------------------------------------------------------------------------*/
 
+#include "fpga/rpc_server.h"
 #include "main.h"
 #include "usb/hid_driver.h"
 #include "tusb.h"
@@ -131,6 +132,7 @@ static void karabas_setup()
   ft_begin(link_sys_spi_control, PIN_MCU_FT_CS, board_ft_reset_pin());
 
   storage_begin();
+  rpc_server_init(); // the calls of a core over link v2 (the self-drawing boot menu)
 
   // load usb joy drivers
   d_println("Loading usb hid joystick drivers");
@@ -266,6 +268,7 @@ static void karabas_loop()
   // let the fpga talk even when nothing else was sent
   hang_mark(0x0f00);
   link_poll();
+  rpc_server_tick(); // a core started by the boot menu (CORES LAUNCH), outside the link service
 }
 
 // usb host loop, runs on core1. It never blocks, so all of it runs from RAM: from flash,
