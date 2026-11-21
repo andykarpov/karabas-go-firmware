@@ -308,8 +308,13 @@ Services (`src/fpga/rpc_server.c`; the plan of the menu: karabas-go-core-menu `d
 | | 1 | `ITEM` | index (2) | file name, name, build, id, flags (bit 0 visible, bits 1.. the type) |
 | | 2 | `LAUNCH` | file name | | the core is replaced: no response |
 | | 3 | `AUTOLOAD` | | timeout (s, 0 none), file name |
+| 3 HID | 0 | `PADS` | | per joystick port: source (0 none, 1 driver ini, 2 default map, 3 XInput), VID (2), PID (2), driver file |
+| | 1 | `FORGET` | port | | the driver ini of its pad becomes `.bak` |
+| | 2 | `LEARN_START` | | | the learning of a USB pad (`apps/pad_learn`) starts: the first pad whose report changes |
+| | 3 | `LEARN_STATE` | | state, button, last button, seconds left, VID (2), PID (2), mapped (2), held (2), the rule of the last button, the saved file | state: 0 idle, 1 waiting for a pad, 2 / 3 settle / rest, 4 press, 5 release, 6 done, 7 saved, 8 failed; buttons Up Down Left Right A B C X Y Z Start Mode = bits 0..11 |
+| | 4 | `LEARN_DO` | 0 stop, 1 skip, 2 back, 3 save | | |
 
-CFG file `0` is `karabas.ini` and CORES are for a menu core only: the boot core, or a core whose HELLO lists CORES. A boot core
+CFG file `0` is `karabas.ini` and CORES, HID are for a menu core only: the boot core, or a core whose HELLO lists CORES. A boot core
 with RPC draws the menu itself: the firmware shows no menu, no FT812, and leaves the autoload to it.
 
 ## 6. Core start

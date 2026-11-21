@@ -12,15 +12,19 @@
 #include "apps/app_core_browser.h"
 #include "rtc.h"
 #include "fpga/core_file.h"
+#include "usb/hid_app.h"
+#include "usb/hid_driver.h"
+#include "apps/pad_learn.h"
+#include "hid_learn.h"
 #include "periph/matrix.h"
 #include "ini_read.h"
 #include "ini_update.h"
 #include "matrix_style.h"
 #include <stdlib.h>
 
-enum { SVC_SYS = 0, SVC_CFG = 1, SVC_CORES = 2 };
+enum { SVC_SYS = 0, SVC_CFG = 1, SVC_CORES = 2, SVC_HID = 3 };
 enum { ST_OK = 0, ST_UNKNOWN = 1, ST_ARGS = 2, ST_NOT_FOUND = 3, ST_IO = 4, ST_DENIED = 5, ST_BUSY = 6 };
-#define RPC_SERVICES ((1 << SVC_SYS) | (1 << SVC_CFG) | (1 << SVC_CORES))
+#define RPC_SERVICES ((1 << SVC_SYS) | (1 << SVC_CFG) | (1 << SVC_CORES) | (1 << SVC_HID))
 
 static link_rpc_req_t req;
 static uint8_t out[LINK_RPC_MAX];
@@ -206,6 +210,63 @@ static uint8_t cores_svc(uint8_t fn, uint16_t *n) {
   }
 }
 
+// HID (a menu core): the USB pads of the two joystick ports and the learning of a pad
+// (apps/pad_learn, as Setup > Gamepad of the FT812 menu did), driven and drawn by the core
+static uint8_t hid_svc(uint8_t fn, uint16_t *n) {
+  if (!menu_core()) return ST_DENIED;
+  switch (fn) {
+    case 0: { // PADS -> per port: source, VID (2), PID (2), driver file
+      usb_pad_t pads[2];
+      usb_pads_get(pads);
+      for (uint8_t i = 0; i < 2; i++) {
+        out[(*n)++] = pads[i].source;
+        out[(*n)++] = pads[i].vid & 0xFF; out[(*n)++] = pads[i].vid >> 8;
+        out[(*n)++] = pads[i].pid & 0xFF; out[(*n)++] = pads[i].pid >> 8;
+        put_str(n, pads[i].source == USB_PAD_DRIVER && pads[i].file ? pads[i].file : "");
+      }
+      return ST_OK;
+    }
+    case 1: { // FORGET port: the driver ini of its pad becomes .bak
+      if (req.len < 1 || req.data[0] > 1) return ST_ARGS;
+      usb_pad_t pads[2];
+      usb_pads_get(pads);
+      return hid_driver_forget(pads[req.data[0]].vid, pads[req.data[0]].pid) ? ST_OK : ST_IO;
+    }
+    case 2: // LEARN_START
+      pl_start();
+      return ST_OK;
+    case 3: { // LEARN_STATE -> state, button, last button, seconds left, VID (2), PID (2), mapped (2),
+              // held (2), the rule of the last button, the saved file
+      out[0] = pl_state(); out[1] = pl_btn(); out[2] = (uint8_t) pl_last_btn(); out[3] = (uint8_t) pl_press_left_s();
+      out[4] = pl_vid() & 0xFF; out[5] = pl_vid() >> 8; out[6] = pl_pid() & 0xFF; out[7] = pl_pid() >> 8;
+      uint16_t m = 0;
+      for (uint8_t i = 0; i < HID_JOY_BUTTONS; i++) if (pl_mapped(i)) m |= 1 << i;
+      out[8] = m & 0xFF; out[9] = m >> 8;
+      uint16_t live = 0;
+      for (uint8_t i = 0; i < HID_JOY_BUTTONS; i++) if (pl_live() & hid_joy_btns[i]) live |= 1 << i;
+      out[10] = live & 0xFF; out[11] = live >> 8;
+      *n = 12;
+      char r[24] = "";
+      if (pl_last_btn() >= 0 && pl_mapped(pl_last_btn())) hid_learn_format_rule(pl_rule(pl_last_btn()), r, sizeof(r));
+      put_str(n, r);
+      put_str(n, pl_saved_path());
+      return ST_OK;
+    }
+    case 4: // LEARN_DO: 0 stop, 1 skip, 2 back, 3 save
+      if (req.len < 1) return ST_ARGS;
+      switch (req.data[0]) {
+        case 0: pl_stop(); break;
+        case 1: pl_skip(); break;
+        case 2: pl_back(); break;
+        case 3: pl_save(); break;
+        default: return ST_ARGS;
+      }
+      return ST_OK;
+    default:
+      return ST_UNKNOWN;
+  }
+}
+
 static void on_request(void) {
   if (!link_rpc_read(&req)) return;
   uint16_t n = 0;
@@ -214,6 +275,7 @@ static void on_request(void) {
     case SVC_SYS: st = sys(req.fn, &n); break;
     case SVC_CFG: st = cfg(req.fn, &n); break;
     case SVC_CORES: st = cores_svc(req.fn, &n); break;
+    case SVC_HID: st = hid_svc(req.fn, &n); break;
     default: st = ST_UNKNOWN;
   }
   if (hw_setup.debug_enabled) {
@@ -229,6 +291,7 @@ void rpc_server_init(void) {
 }
 
 void rpc_server_tick(void) {
+  if (pl_state() != PL_IDLE && menu_core()) pl_tick();   // the learning of a pad (HID LEARN_*)
   if (!launch_file[0]) return;
   char f[sizeof(launch_file)];
   strcpy(f, launch_file);
