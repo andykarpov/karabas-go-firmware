@@ -14,8 +14,7 @@
 extern "C" {
 #endif
 
-extern core_list_item_t *cores; // on the heap, NULL while empty
-extern uint8_t cores_len;
+#include "fpga/core_list.h"
 
 void app_core_browser_overlay();
 void app_core_browser_menu(uint8_t vpos);

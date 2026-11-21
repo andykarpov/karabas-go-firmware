@@ -8,6 +8,7 @@
 #include "input/sega.h"
 #include "input/usb_hid_keys.h"
 #include "apps/app_core_browser.h"
+#include "fpga/core_list.h"
 #include "apps/app_core.h"
 #include "apps/app_setup.h"
 #include "ui/sorts.h"
@@ -21,9 +22,6 @@
 #include "ui/ui2.h"
 #include "ui/osd2.h"
 
-core_list_item_t *cores = NULL; // on the heap, cores_len items
-uint8_t cores_len = 0;
-#define CORES_CHUNK 16
 static uint8_t core_sel = 0;
 static const uint8_t core_page_size = MAX_CORES_PER_PAGE;
 // the graphic list: as many buttons as fit between the logo and the page line
@@ -310,41 +308,13 @@ void app_core_browser_ft_menu(uint8_t play_sounds) {
 }
 
 
-// the header of the open core file (file1); false if it is not a core of this board
-bool app_core_browser_get_item(const char *filename, core_list_item_t *core) {
-  core_file_t cf;
-  if (!core_file_open(&file1, filename, &cf)) return false;
-  snprintf(core->filename, sizeof(core->filename), "%s", filename);
-  core_file_info(&file1, &cf, core);
-  return true;
-}
-
-// the next free item of cores[], NULL at MAX_CORES or out of memory
-static uint8_t cores_cap = 0;
-static core_list_item_t *add_core(void) {
-  if (cores_len >= MAX_CORES) {
-    d_printf("Core list: more than %d cores, the rest is left out", MAX_CORES); d_println();
-    return NULL;
-  }
-  if (cores_len >= cores_cap) {
-    uint16_t c = cores_cap + CORES_CHUNK;
-    if (c > MAX_CORES) c = MAX_CORES;
-    core_list_item_t *p = (core_list_item_t *) realloc(cores, c * sizeof(core_list_item_t));
-    if (p == NULL) {
-      d_printf("Core list: out of memory at %d cores", cores_len); d_println();
-      return NULL;
-    }
-    cores = p;
-    cores_cap = (uint8_t) c;
-  }
-  return &cores[cores_len++];
-}
+bool app_core_browser_get_item(const char *filename, core_list_item_t *core) { return core_list_get_item(filename, core); }
 
 void app_core_browser_sort() {
   if (cores_len == 0) return;
   char sel[sizeof(cores[0].filename)];
   strlcpy(sel, cores[core_sel < cores_len ? core_sel : 0].filename, sizeof(sel));
-  cores_sort(cores, cores_len, hw_setup.core_sort);
+  core_list_sort();
   // the cursor stays on its core
   for (uint8_t i = 0; i < cores_len; i++) {
     if (strcmp(cores[i].filename, sel) == 0) { core_sel = i; break; }
@@ -352,37 +322,8 @@ void app_core_browser_sort() {
 }
 
 void app_core_browser_read_list() {
-  free(cores);
-  cores = NULL;
-  cores_len = 0;
-  cores_cap = 0;
+  core_list_read();
 
-  // files from sd card
-  if (has_sd) {
-    if (!sd_opendir(&root1, "/")) {
-      return;
-    }
-    FILINFO fi;
-    while (f_readdir(&root1, &fi) == FR_OK && fi.fname[0]) {
-      if (!(fi.fattrib & AM_DIR) && strlen(fi.fname) < 32 && core_file_is_core(fi.fname) &&
-          sd_open(&file1, fi.fname, FA_READ)) {
-        core_list_item_t item;
-        bool ok = app_core_browser_get_item(fi.fname, &item); // a .kg of other boards is left out
-        sd_close(&file1);
-        if (!ok) continue;
-        core_list_item_t *p = add_core();
-        if (!p) break;
-        *p = item;
-      }
-    }
-    // give the unused end of the last chunk back
-    if (cores_len > 0 && cores_len < cores_cap) {
-      core_list_item_t *p = (core_list_item_t *) realloc(cores, cores_len * sizeof(core_list_item_t));
-      if (p) { cores = p; cores_cap = cores_len; }
-    }
-  }
-  cores_sort(cores, cores_len, hw_setup.core_sort);
-  
   autoload_enabled = false;
   // pre-select autoload core
   char autoload_id[sizeof(hw_setup.autoload_core)];
