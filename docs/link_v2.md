@@ -364,7 +364,7 @@ There is no font download (the font is in the MCU) and no caps query apart from 
     level under it a triangle "back" and the title (the page path "Options > Video", the app,
     "Disk 8: /dir" of a browser). At the right the clock, in a browser its extensions instead.
   - 9 rows of 12 pixels, no hint lines; a scrollbar at the right.
-  - The setup apps (Setup RTC, Map USB gamepad; the boot core also Wi-Fi, Settings) and About are
+  - The setup apps (Setup RTC, Map USB gamepad) and About are
     the last items of the main page, after a separator.
   - Switches: Left / Right and the hotkey step the options; Enter opens a screen of the options
     (radio buttons, Up / Down, Enter takes one, Esc back). Off / On, No / Yes, Disabled / Enabled

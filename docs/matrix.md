@@ -26,9 +26,9 @@ After `repeat` passes of the scroll (or loops of the animation) the matrix goes 
 "matrix": {"mode": "scroll", "text": "NES {build}", "color": "rainbow", "repeat": 2, "then": "core"}
 ```
 
-`karabas.ini` `[matrix]`: `enabled=0` keeps the matrix dark in all cores, `brightness=1..16` sets the brightness of all cores (`0`: as the core sets it). Both are in Setup > Settings of the boot menu.
+`karabas.ini` `[matrix]`: `enabled=0` keeps the matrix dark in all cores, `brightness=1..16` sets the brightness of all cores (`0`: as the core sets it). Both are in the Setup of the boot menu (System).
 
-The look of the clock effect and of the audio meters of the cores is set in `[matrix]` too, for all cores (Setup > Settings > Matrix effects, the graphic menu: System > Matrix effects; the matrix shows the plugin while its options are edited):
+The look of the clock effect and of the audio meters of the cores is set in `[matrix]` too, for all cores (Setup > System > Matrix effects of the boot menu; the matrix shows the plugin while its options are edited):
 
 | Key | Values | Default |
 |---|---|---|
