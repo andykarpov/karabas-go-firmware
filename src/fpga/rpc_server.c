@@ -12,6 +12,11 @@
 #include "apps/app_core_browser.h"
 #include "rtc.h"
 #include "fpga/core_file.h"
+#include "periph/matrix.h"
+#include "ini_read.h"
+#include "ini_update.h"
+#include "matrix_style.h"
+#include <stdlib.h>
 
 enum { SVC_SYS = 0, SVC_CFG = 1, SVC_CORES = 2 };
 enum { ST_OK = 0, ST_UNKNOWN = 1, ST_ARGS = 2, ST_NOT_FOUND = 3, ST_IO = 4, ST_DENIED = 5, ST_BUSY = 6 };
@@ -39,7 +44,7 @@ static const char *arg(const link_rpc_req_t *r, int k) {
     if (p >= r->len) return NULL;
     p++;
   }
-  return p <= r->len ? (const char *) r->data + p : NULL;
+  return p < r->len ? (const char *) r->data + p : NULL;
 }
 
 // appends a string with its NUL; false when it does not fit
@@ -91,28 +96,73 @@ static uint8_t sys(uint8_t fn, uint16_t *n) {
   }
 }
 
-// CFG: file 0 = karabas.ini (the boot core only); SET writes the line at once, SAVE takes the
-// settings into the firmware (load_setup)
+// CFG: file 0 = karabas.ini (a menu core only). GET takes several section / key pairs (one read of
+// the file), SET several section / key / value triples (one rewrite), SAVE takes the settings into
+// the firmware (load_setup, the matrix as saved), PREVIEW shows [matrix] values on the LED matrix
+// without writing them
+#define CFG_ITEMS 40
+static kg_ini_item_t cfg_items[CFG_ITEMS];
+
+// the [matrix] values of a payload over a copy of the settings
+static void matrix_values(setup_t *s, int from) {
+  for (int k = from; arg(&req, k) && arg(&req, k + 1) && arg(&req, k + 2); k += 3) {
+    const char *section = arg(&req, k), *key = arg(&req, k + 1), *v = arg(&req, k + 2);
+    if (strcmp(section, "matrix") != 0) continue;
+    if (!strcmp(key, "enabled")) s->matrix_enabled = v[0] == '1';
+    else if (!strcmp(key, "brightness")) { unsigned b = strtoul(v, 0, 10); if (b <= 16) s->matrix_brightness = b; }
+    else if (!strcmp(key, "meter_peak")) s->matrix_style.meter_peak = v[0] == '1';
+    else for (uint8_t i = 0; i < KG_MX_OPT_COUNT; i++) {
+      if (strcmp(key, kg_mx_opt_key(i)) != 0) continue;
+      int o = kg_mx_opt_parse(i, v);
+      if (o >= 0) s->matrix_style.opt[i] = o;
+    }
+  }
+}
+
 static uint8_t cfg(uint8_t fn, uint16_t *n) {
-  const char *file = arg(&req, 0), *section = arg(&req, 1), *key = arg(&req, 2);
+  const char *file = arg(&req, 0);
   if (!file || file[0] != '0' || file[1] != 0) return ST_DENIED; // the own ini of a core: later (FS)
   if (!menu_core()) return ST_DENIED;
   switch (fn) {
-    case 0: { // GET section, key -> value
-      if (!section || !key) return ST_ARGS;
-      char v[128];
-      if (!settings_ini_get(section, key, v, sizeof(v))) return ST_NOT_FOUND;
-      put_str(n, v);
-      return ST_OK;
+    case 0: { // GET (section, key)... -> per pair: 1 + value, or 0 + "" (not in the file)
+      if (!arg(&req, 2)) return ST_ARGS;
+      size_t len;
+      char *text = settings_ini_text(&len);
+      if (!text) return ST_IO;
+      uint8_t st = ST_OK;
+      for (int k = 1; arg(&req, k) && arg(&req, k + 1); k += 2) {
+        char v[128];
+        bool found = kg_ini_get(text, len, arg(&req, k), arg(&req, k + 1), v, sizeof(v));
+        if (*n + 1 > sizeof(out)) { st = ST_ARGS; break; }
+        out[(*n)++] = found ? 1 : 0;
+        if (!put_str(n, found ? v : "")) { st = ST_ARGS; break; }
+      }
+      free(text);
+      return st;
     }
-    case 1: { // SET section, key, value
-      const char *value = arg(&req, 3);
-      if (!section || !key || !value) return ST_ARGS;
-      return settings_ini_set(section, key, value) ? ST_OK : ST_IO;
+    case 1: { // SET (section, key, value)...
+      uint8_t count = 0;
+      for (int k = 1; arg(&req, k) && arg(&req, k + 1) && arg(&req, k + 2); k += 3) {
+        if (count == CFG_ITEMS) return ST_ARGS;
+        cfg_items[count++] = (kg_ini_item_t) { arg(&req, k), arg(&req, k + 1), arg(&req, k + 2), false };
+      }
+      if (!count) return ST_ARGS;
+      return settings_ini_set_items(cfg_items, count) ? ST_OK : ST_IO;
     }
     case 2: // SAVE
       load_setup();
+      matrix_setup(&hw_setup);
+      matrix_preview(MATRIX_PREVIEW_NONE);
       return ST_OK;
+    case 3: { // PREVIEW mode ("none", "clock", "meter"), (section, key, value)...: none of them = back
+      const char *mode = arg(&req, 1);
+      if (!mode) return ST_ARGS;
+      setup_t s = hw_setup;
+      matrix_values(&s, 2);
+      matrix_setup(&s);
+      matrix_preview(!strcmp(mode, "clock") ? MATRIX_PREVIEW_CLOCK : !strcmp(mode, "meter") ? MATRIX_PREVIEW_METER : MATRIX_PREVIEW_NONE);
+      return ST_OK;
+    }
     default:
       return ST_UNKNOWN;
   }

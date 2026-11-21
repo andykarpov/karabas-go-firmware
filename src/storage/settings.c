@@ -342,3 +342,15 @@ bool settings_ini_set(const char *section, const char *key, const char *value) {
   kg_ini_item_t item = { section, key, value, false };
   return ini_write(&item, 1);
 }
+
+char *settings_ini_text(size_t *len) {
+  if (!has_sd || msc_active()) return NULL;
+  char *text = sd_read_all(INI_FILE, INI_MAX, len);
+  if (text && !kg_ini_valid(text, *len, INI_LINE_BUF)) { free(text); return NULL; }
+  return text;
+}
+
+bool settings_ini_set_items(kg_ini_item_t *items, uint8_t count) {
+  for (uint8_t i = 0; i < count; i++) if (!kg_ini_line_fits(items[i].key, items[i].value)) return false;
+  return ini_write(items, count);
+}

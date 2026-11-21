@@ -19,6 +19,10 @@ bool save_setup(const setup_t *s);
 // written into it (false if key=value does not fit in a line, or the save failed)
 bool settings_ini_get(const char *section, const char *key, char *buf, size_t size);
 bool settings_ini_set(const char *section, const char *key, const char *value);
+// karabas.ini as a whole (free() it; NULL: no card, MSC, or not valid), and several values written
+// at once (one rewrite of the file)
+char *settings_ini_text(size_t *len);
+bool settings_ini_set_items(kg_ini_item_t *items, uint8_t count);
 
 // writes the items (kg_ini_update) into the ini file path through tmp, keeping the rest of it;
 // false if a line of the old file is longer than line_max, or the save failed (APP only: the

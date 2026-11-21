@@ -300,9 +300,10 @@ Services (`src/fpga/rpc_server.c`; the plan of the menu: karabas-go-core-menu `d
 | 0 SYS | 0 | `INFO` | | firmware build (8), board, RPC version, services (2) |
 | | 1 | `TIME_GET` | | year (2), month, day, hour, minute, second, weekday |
 | | 2 | `TIME_SET` | as `TIME_GET` | |
-| 1 CFG | 0 | `GET` | file, section, key | value |
-| | 1 | `SET` | file, section, key, value | | written into the file at once |
-| | 2 | `SAVE` | file | | the firmware takes the settings again (`load_setup`) |
+| 1 CFG | 0 | `GET` | file, (section, key)… | per pair: 1 and the value, or 0 and "" (not in the file); one read of the file |
+| | 1 | `SET` | file, (section, key, value)… | | written into the file at once, one rewrite for all |
+| | 2 | `SAVE` | file | | the firmware takes the settings again (`load_setup`, the LED matrix as saved) |
+| | 3 | `PREVIEW` | file, mode (`none`, `clock`, `meter`), (section, key, value)… | | the LED matrix shows the `[matrix]` values given (not written) and the clock / the meters of mode; no values: back to `karabas.ini` |
 | 2 CORES | 0 | `SCAN` | | count (2), in the order of `[setup] core_sort` |
 | | 1 | `ITEM` | index (2) | file name, name, build, id, flags (bit 0 visible, bits 1.. the type) |
 | | 2 | `LAUNCH` | file name | | the core is replaced: no response |
