@@ -151,8 +151,11 @@ static void karabas_setup()
   if (msc_active()) {
     // the boot core shows the msc screen; the card is read before the PC gets it
     osd_state = state_msc;
+    // the msc screen over the menu of a boot core with RPC (it gets no card meanwhile); set before
+    // do_configure(), which shows the OSD only when is_osd is on (after it nothing showed it again)
+    is_osd = true;
     if (has_sd && sd_exists(core_file_boot())) do_configure(core_file_boot());
-    is_osd = true; // the msc screen over the menu of a boot core with RPC (it gets no card meanwhile)
+    settings_msc_keep_ini(); // the colours of the msc screen of the boot menu (CFG GET)
     msc_start();
   } else {
     osd_state = state_main;
@@ -218,9 +221,10 @@ static void karabas_loop()
   hang_mark(0x0300);
   rtc_handle();
 
-  // in msc mode nothing else runs until eject
+  // in msc mode nothing else runs until eject, but the link: the boot core gets its OSD (the msc screen) and
+  // its RPC calls answered (SYS; CFG / CORES / HID busy), or its menu waits for RPC and finds no cores
   hang_mark(0x0400);
-  if (msc_tick()) return;
+  if (msc_tick()) { link_poll(); return; }
 
   // osd hide / popup timers
   hang_mark(0x0500);

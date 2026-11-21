@@ -293,11 +293,14 @@ the first, an older core gives 0 for the second (reading past the data gives 0).
 Response status: 0 ok, 1 unknown service / function, 2 bad arguments, 3 not found, 4 I/O error,
 5 denied, 6 busy (call again). Strings in a payload end with a 0 byte; numbers are little-endian.
 
+In the USB drive mode (the card is the PC's) the link is still served: SYS answers, CFG GET reads a copy of
+karabas.ini kept before the PC got the card, the other CFG calls, CORES and HID are busy.
+
 Services (`src/fpga/rpc_server.c`; the plan of the menu: karabas-go-core-menu `docs/RPC.md`):
 
 | Service | F | Name | In | Out |
 |---|---|---|---|---|
-| 0 SYS | 0 | `INFO` | | firmware build (8), board, RPC version, services (2) |
+| 0 SYS | 0 | `INFO` | | firmware build (8), board, RPC version, services (2), USB drive mode (0 none, 1 SD, 2 SD2, 3 SD2 not found; an older firmware sends 12 bytes) |
 | | 1 | `TIME_GET` | | year (2), month, day, hour, minute, second, weekday |
 | | 2 | `TIME_SET` | as `TIME_GET` | |
 | 1 CFG | 0 | `GET` | file, (section, key)… | per pair: 1 and the value, or 0 and "" (not in the file); one read of the file |

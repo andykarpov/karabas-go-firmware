@@ -22,6 +22,8 @@ bool settings_ini_set(const char *section, const char *key, const char *value);
 // karabas.ini as a whole (free() it; NULL: no card, MSC, or not valid), and several values written
 // at once (one rewrite of the file)
 char *settings_ini_text(size_t *len);
+// msc mode: keep karabas.ini before the PC gets the card; settings_ini_text() then gives a copy of it
+void settings_msc_keep_ini(void);
 bool settings_ini_set_items(kg_ini_item_t *items, uint8_t count);
 
 // writes the items (kg_ini_update) into the ini file path through tmp, keeping the rest of it;

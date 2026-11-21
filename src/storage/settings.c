@@ -343,7 +343,29 @@ bool settings_ini_set(const char *section, const char *key, const char *value) {
   return ini_write(&item, 1);
 }
 
+// karabas.ini read before the PC gets the card (msc mode): the boot menu draws its msc screen in the colours of
+// the ini (CFG GET), as the FT812 menu did from hw_setup
+static char *msc_ini = NULL;
+static size_t msc_ini_len = 0;
+
+void settings_msc_keep_ini(void) {
+  if (!has_sd || msc_ini) return;
+  size_t len;
+  char *text = sd_read_all(INI_FILE, INI_MAX, &len);
+  if (text && !kg_ini_valid(text, len, INI_LINE_BUF)) { free(text); text = NULL; }
+  msc_ini = text;
+  msc_ini_len = text ? len : 0;
+}
+
 char *settings_ini_text(size_t *len) {
+  if (has_sd && msc_active() && msc_ini) {
+    // a copy: the caller frees it
+    char *copy = malloc(msc_ini_len + 1);
+    if (!copy) return NULL;
+    memcpy(copy, msc_ini, msc_ini_len + 1);
+    *len = msc_ini_len;
+    return copy;
+  }
   if (!has_sd || msc_active()) return NULL;
   char *text = sd_read_all(INI_FILE, INI_MAX, len);
   if (text && !kg_ini_valid(text, *len, INI_LINE_BUF)) { free(text); return NULL; }
