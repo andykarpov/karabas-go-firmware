@@ -63,7 +63,7 @@ static bool put_str(uint16_t *n, const char *s) {
 
 static uint8_t sys(uint8_t fn, uint16_t *n) {
   switch (fn) {
-    case 0: { // INFO: the firmware build (8), board, RPC version, the services (2)
+    case 0: { // INFO: the firmware build (8), board, RPC version, the services (2), the USB drive mode
       static const char fw_build[] = STRINGIZE_VALUE_OF(BUILD_VER);
       memset(out, 0, 8);
       memcpy(out, fw_build, strlen(fw_build) < 8 ? strlen(fw_build) : 8);
@@ -71,7 +71,9 @@ static uint8_t sys(uint8_t fn, uint16_t *n) {
       out[9] = 1;
       out[10] = RPC_SERVICES & 0xFF;
       out[11] = RPC_SERVICES >> 8;
-      *n = 12;
+      // the USB drive mode (msc): 0 none, 1 the SD card, 2 the second one, 3 the second one is not found
+      out[12] = !msc_active() ? 0 : msc_failed() ? 3 : msc_card();
+      *n = 13;
       return ST_OK;
     }
     case 1: { // TIME_GET: year (2), month, day, hour, minute, second, weekday
@@ -277,7 +279,8 @@ static void on_request(void) {
   uint16_t n = 0;
   uint8_t st;
   // the PC has the card (USB mass storage): no file of it is read or written meanwhile
-  if (msc_active() && (req.svc == SVC_CFG || req.svc == SVC_CORES || req.svc == SVC_HID)) st = ST_BUSY;
+  // msc mode: the card is the PC's; CFG GET reads the copy of karabas.ini kept before (the msc screen)
+  if (msc_active() && ((req.svc == SVC_CFG && req.fn != 0) || req.svc == SVC_CORES || req.svc == SVC_HID)) st = ST_BUSY;
   else switch (req.svc) {
     case SVC_SYS: st = sys(req.fn, &n); break;
     case SVC_CFG: st = cfg(req.fn, &n); break;
