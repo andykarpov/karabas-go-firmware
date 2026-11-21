@@ -4,7 +4,7 @@
 #include "time_zone.h"
 #include "matrix_style.h"
 #include "file_name.h"
-#include "apps/app_core_browser.h"
+#include "fpga/core_list.h"
 
 // karabas.ini
 
@@ -323,7 +323,7 @@ bool save_setup(const setup_t *s) {
   bool resort = s->core_sort != o->core_sort;
   hw_setup = *s;
   matrix_setup(&hw_setup);
-  if (resort) app_core_browser_sort();
+  if (resort) core_list_sort();
   return true;
 }
 

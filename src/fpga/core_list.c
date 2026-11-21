@@ -6,6 +6,8 @@
 #include "main.h"
 #include "fpga/core_list.h"
 #include "ui/sorts.h"
+#include "osd.h"
+#include "apps/app_core.h"
 
 core_list_item_t *cores = NULL; // on the heap, cores_len items
 uint8_t cores_len = 0;
@@ -70,4 +72,39 @@ void core_list_read(void) {
     }
   }
   core_list_sort();
+}
+
+// the screen a core starts on
+static void set_core_screen(void) {
+  switch (core.type) {
+    case CORE_TYPE_BOOT: osd_state = state_core_browser; break;
+    case CORE_TYPE_OSD: osd_state = state_main; break;
+    case CORE_TYPE_FILELOADER: osd_state = state_file_loader; break;
+    default: osd_state = state_main;
+  }
+}
+
+void core_list_start_file(const char *filename) {
+  bool from_boot = core.type == CORE_TYPE_BOOT;
+  app_core_leave_browser();
+  if (from_boot) do_configure(filename);
+  else do_configure_clean(filename);
+  set_core_screen();
+}
+
+// back to the boot core from a running core without an MCU reboot (back_to_menu() of input.c): the
+// USB host and its devices stay as they are. The boot core clears the SRAM itself when it starts.
+// Also from the boot core itself (AT+KARABAS=reset, load:boot).
+void core_list_return(void) {
+  if (!has_sd || !sd_exists(core_file_boot())) {
+    flush_and_reboot(); // no boot core to load: the reboot says so
+    return;
+  }
+  d_println("Back to the boot core");
+  app_core_leave_browser();
+  do_configure(core_file_boot());
+  ui_osd_reset_timers();
+  osd_state = state_core_browser;
+  core_list_read();
+  osd_handle(true);
 }

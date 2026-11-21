@@ -902,47 +902,14 @@ void read_core(const char* filename) {
   // re-send rtc registers
   rtc_send_all();
 
-  has_ft = false;
-
-  // hw ft reset for other cores types
+  // hw ft reset for other cores types (they drive the FT812 themselves; the boot core draws its menu
+  // itself, the FT812 stays off)
   if (core.type != CORE_TYPE_BOOT) {
     ft_reset();
   }
 
   // reset ESP and MIDI (mini revG)
   board_reset_peripherals();
-
-  // boot core tries to use FT812 as osd handler
-  if (core.type == CORE_TYPE_BOOT && is_osd) {
-    if (hw_setup.ft_enabled) {
-      // space skip ft osd
-      hid_kbd_report_sync();
-      if (usb_keyboard_report.keycode[0] == KEY_SPACE) {
-        d_println("Space pressed: skip FT81x detection, fallback to classic OSD");
-      } else {
-        ft_spi(true);
-        has_ft = ft_init(hw_setup.ft_video_mode);
-        if (ft_init_failures()[0]) {
-          d_printf("FT81x failed attempts: %s", ft_init_failures()); d_println();
-        }
-        if (has_ft) {
-          d_printf("Found FT81x IC (system clock %lu kHz, attempt %u), switching to FT OSD",
-            (unsigned long) (ft_init_clock_hz() / 1000), ft_init_attempts()); d_println();
-          // with no picture: 0 frames is the chip's side, running frames the video path of the core
-          // (on the Mini boards its hdmi_pll locks to the FT812 pixel clock)
-          if (hw_setup.debug_enabled) {
-            d_printf("FT81x scanout: %lu frames in 100 ms", (unsigned long) ft_frames_in(100)); d_println();
-          }
-          ft_vga(true);
-        } else {
-          d_printf("FT81x IC did not found (%u attempts, last system clock %lu kHz)", ft_init_attempts(),
-            (unsigned long) (ft_init_clock_hz() / 1000)); d_println();
-          ft_vga(false);
-          ft_spi(false);
-        }
-      }
-    }
-  }
 
   // dump parsed OSD items
   for(uint8_t i=0; i<core.osd_len; i++) {

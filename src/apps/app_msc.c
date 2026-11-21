@@ -3,7 +3,6 @@
 #include "main.h"
 #include "osd.h"
 #include "apps/app_msc.h"
-#include "apps/app_core_browser.h"
 #include "ui/ui_draw.h"
 #include "ui/ui2.h"
 #include "ui/osd2.h"
@@ -43,27 +42,7 @@ static const char *const *msc_lines() {
   return msc_card() == 2 ? lines2 : lines;
 }
 
-// the graphic screen; on_time() redraws it for the clock
-void app_msc_ft_draw() {
-  ft_begin_display_list();
-  app_core_browser_ft_background(&hw_setup);
-  app_core_browser_ft_decor(&hw_setup, true);
-  uint16_t y = ft_height() / 2 - 80;
-  ft_draw_text(ft_width() / 2, y, 30, hw_setup.color_text, FT81x_OPT_CENTER, "USB mass storage");
-  const char *const *l = msc_lines();
-  for (uint8_t i = 0; i < MSC_LINES; i++) {
-    ft_draw_text(ft_width() / 2, y + 50 + i * 24, 28, hw_setup.color_text, FT81x_OPT_CENTER, l[i]);
-  }
-  ft_swap_screen();
-}
-
 void app_msc_overlay() {
-  if (has_ft) {
-    app_core_browser_ft_load();
-    app_msc_ft_draw();
-    return;
-  }
-
   if (osd2_active()) {
     ui2_screen_note("USB mass storage", NULL, false);
     ui2_center(MSC_LINES, 0);

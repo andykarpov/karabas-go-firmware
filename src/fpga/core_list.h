@@ -19,6 +19,10 @@ void core_list_read(void);
 void core_list_sort(void);
 // the header of the open core file (file1); false if it is not a core of this board
 bool core_list_get_item(const char *filename, core_list_item_t *core);
+// AT+KARABAS=load, RPC CORES LAUNCH: the core file starts on its screen, from the boot core or any other
+void core_list_start_file(const char *filename);
+// from a core back to the boot core, without an MCU reboot
+void core_list_return(void);
 
 #ifdef __cplusplus
 }

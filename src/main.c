@@ -28,7 +28,7 @@
 #include "tusb.h"
 #include "pio_usb.h"
 #include "input/ps2kbd.h"
-#include "apps/app_core_browser.h"
+#include "fpga/core_list.h"
 #include "diag/diag.h"
 #include "diag/hang_diag.h"
 #include "diag/usb_diag.h"
@@ -152,6 +152,7 @@ static void karabas_setup()
     // the boot core shows the msc screen; the card is read before the PC gets it
     osd_state = state_msc;
     if (has_sd && sd_exists(core_file_boot())) do_configure(core_file_boot());
+    is_osd = true; // the msc screen over the menu of a boot core with RPC (it gets no card meanwhile)
     msc_start();
   } else {
     osd_state = state_main;
@@ -168,7 +169,7 @@ static void karabas_setup()
     esp_serial_begin(esp_send);
 
     osd_state = state_core_browser;
-    app_core_browser_read_list();
+    core_list_read();
   }
 }
 

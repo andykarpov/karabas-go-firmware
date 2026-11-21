@@ -9,7 +9,8 @@
 #include "fpga/link_api.h"
 #include "fpga/rpc_server.h"
 #include "storage/settings.h"
-#include "apps/app_core_browser.h"
+#include "fpga/core_list.h"
+#include "storage/msc.h"
 #include "rtc.h"
 #include "fpga/core_file.h"
 #include "usb/hid_app.h"
@@ -176,7 +177,7 @@ static uint8_t cores_svc(uint8_t fn, uint16_t *n) {
   if (!menu_core()) return ST_DENIED;
   switch (fn) {
     case 0: // SCAN -> count (2), in the order of [setup] core_sort
-      app_core_browser_read_list();
+      core_list_read();
       out[0] = cores_len; out[1] = 0;
       *n = 2;
       return ST_OK;
@@ -196,12 +197,16 @@ static uint8_t cores_svc(uint8_t fn, uint16_t *n) {
       strcpy(launch_file, f);
       return ST_OK;
     }
-    case 3: { // AUTOLOAD -> timeout (s), file name ("" = none)
-      out[0] = hw_setup.autoload_enabled ? hw_setup.autoload_timeout : 0;
+    case 3: { // AUTOLOAD -> timeout (s), file name ("" = none): once after the MCU start, not after a
+              // return to the menu (the user asked for the menu)
+      static bool given = false;
+      bool on = hw_setup.autoload_enabled && !given;
+      given = true;
+      out[0] = on ? hw_setup.autoload_timeout : 0;
       *n = 1;
       const char *file = "";
       for (uint8_t i = 0; i < cores_len; i++)
-        if (hw_setup.autoload_enabled && strcmp(cores[i].id, hw_setup.autoload_core) == 0) file = cores[i].filename;
+        if (on && strcmp(cores[i].id, hw_setup.autoload_core) == 0) file = cores[i].filename;
       put_str(n, file);
       return ST_OK;
     }
@@ -271,7 +276,9 @@ static void on_request(void) {
   if (!link_rpc_read(&req)) return;
   uint16_t n = 0;
   uint8_t st;
-  switch (req.svc) {
+  // the PC has the card (USB mass storage): no file of it is read or written meanwhile
+  if (msc_active() && (req.svc == SVC_CFG || req.svc == SVC_CORES || req.svc == SVC_HID)) st = ST_BUSY;
+  else switch (req.svc) {
     case SVC_SYS: st = sys(req.fn, &n); break;
     case SVC_CFG: st = cfg(req.fn, &n); break;
     case SVC_CORES: st = cores_svc(req.fn, &n); break;
@@ -297,5 +304,5 @@ void rpc_server_tick(void) {
   strcpy(f, launch_file);
   launch_file[0] = 0;
   d_printf("RPC: the boot menu starts %s", f); d_println();
-  app_core_browser_start_file(f);
+  core_list_start_file(f);
 }

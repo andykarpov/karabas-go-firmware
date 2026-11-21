@@ -1,7 +1,7 @@
 #pragma once
 
 // The editing of the clock shared by Setup RTC (app_rtc, text) and the Clock page of the graphic
-// setup (app_ft_clock): the date and the time in masked fields, the time zone of NTP sync
+// (and once app_ft_clock): the date and the time in masked fields, the time zone of NTP sync
 // (karabas.ini [setup] tz), writing the RTC, NTP sync and the message of the last action. The
 // screens only lay it out, move their focus and map their keys / clicks onto it.
 

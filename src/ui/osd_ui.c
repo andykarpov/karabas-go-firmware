@@ -4,16 +4,12 @@
 #include "input/ps2kbd.h"
 #include "input/usb_hid_keys.h"
 #include "apps/app_core.h"
-#include "apps/app_core_browser.h"
+#include "apps/app_boot.h"
 #include "apps/app_file_loader.h"
 #include "apps/app_setup.h"
 #include "apps/app_about.h"
 #include "apps/app_pad_mapper.h"
 #include "apps/app_rtc.h"
-#include "apps/app_wifi.h"
-#include "apps/app_settings.h"
-#include "apps/app_ft_setup.h"
-#include "apps/app_ft_pages.h"
 #include "apps/app_msc.h"
 #include "masked_input.h"
 #include "kg_list.h"
@@ -24,7 +20,6 @@
 volatile bool is_osd = false;       // also read by the input task
 static bool is_osd_hiding = false;
 bool need_redraw = false;
-bool has_ft = false;
 static uint32_t hide_timer = 0;
 uint8_t osd_state;
 uint8_t osd_return_state;
@@ -40,14 +35,6 @@ typedef struct {
   void (*tick)(); // optional, every loop while the app owns the OSD
 } app_t;
 
-static void app_core_browser_show() {
-  if (has_ft) {
-    app_core_browser_ft_overlay();
-  } else {
-    app_core_browser_overlay();
-  }
-}
-
 static void app_core_show() { app_core_overlay(true); }
 static void app_file_loader_show() { app_file_loader_overlay(false); }
 
@@ -56,13 +43,13 @@ static const app_t apps[] = {
   { app_core_show,                                     app_core_on_keyboard },         // state_main
   { app_setup_overlay,                                 app_setup_on_keyboard },        // state_setup
   { app_about_overlay,                                 app_about_on_keyboard },        // state_about
-  { app_core_browser_show,                             app_core_browser_on_keyboard,   app_core_browser_tick }, // state_core_browser
+  { app_boot_overlay,                                  app_boot_on_keyboard },         // state_core_browser: the boot core
   { app_file_loader_show,                              app_file_loader_on_keyboard },  // state_file_loader
   { app_pad_mapper_overlay,                            app_pad_mapper_on_keyboard,     app_pad_mapper_tick }, // state_pad_mapper
   { app_rtc_overlay,                                   app_rtc_on_keyboard,            app_rtc_tick }, // state_rtc
-  { app_wifi_overlay,                                  app_wifi_on_keyboard,           app_wifi_tick }, // state_wifi
-  { app_settings_overlay,                              app_settings_on_keyboard },     // state_settings
-  { app_ft_setup_overlay,                              app_ft_setup_on_keyboard,       app_ft_setup_tick }, // state_ft_setup
+  { app_boot_overlay,                                  app_boot_on_keyboard },         // state_wifi: gone (Ф4), kept for the AT names
+  { app_boot_overlay,                                  app_boot_on_keyboard },         // state_settings: gone
+  { app_boot_overlay,                                  app_boot_on_keyboard },         // state_ft_setup: gone
   { app_msc_overlay,                                   app_msc_on_keyboard },          // state_msc
 };
 static const uint8_t apps_len = sizeof(apps) / sizeof(apps[0]);
@@ -115,7 +102,7 @@ void ui_osd_hide() {
   osd_hide_menu();
 }
 
-// another core is loaded in place (app_core_browser_return()): a hide or a popup timer of the core
+// another core is loaded in place (core_list_return()): a hide or a popup timer of the core
 // before does not go off on the screen of the new one
 void ui_osd_reset_timers() {
   is_osd_hiding = false;
@@ -180,28 +167,12 @@ void print_time() {
 
 void on_time() {
   if (osd2_active()) {
-    if (is_osd && !has_ft) ui2_clock(); // the header of the v2 screens
+    if (is_osd) ui2_clock(); // the header of the v2 screens
   } else {
     print_time();
     osd_update();
   }
 
-  if (osd_state == state_msc) {
-    if (has_ft) app_msc_ft_draw();
-    return;
-  }
-
-  // on time callback
-  app_core_browser_on_time();
-
-  if (core.type == CORE_TYPE_BOOT && has_ft == true && is_osd == true) {
-    // redraw the graphic menu (the clock)
-    if (osd_state == state_ft_setup) {
-      app_ft_setup_draw();
-    } else {
-      app_core_browser_ft_menu(0);
-    }
-  }
 }
 
 static bool in_report(const hid_keyboard_report_t *r, uint8_t key) {
@@ -256,7 +227,6 @@ bool ui_joy_edit(char *text, size_t max, uint8_t key) {
 
 bool ui_joy_repeats() {
   if (osd_state == state_pad_mapper) return app_pad_mapper_listing();
-  if (osd_state == state_ft_setup) return !ft_page_pad_mapping();
   return true;
 }
 

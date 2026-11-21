@@ -1,6 +1,5 @@
 #include "main.h"
 #include "apps/clock_edit.h"
-#include "apps/app_ft_setup.h"
 #include "input/usb_hid_keys.h"
 #include "time_zone.h"
 
@@ -83,7 +82,6 @@ bool ce_save_tz(void) {
     say("Can't save karabas.ini", CE_MSG_ERROR);
     return false;
   }
-  app_ft_setup_tz_saved(tz); // the graphic setup keeps a copy
   return true;
 }
 
