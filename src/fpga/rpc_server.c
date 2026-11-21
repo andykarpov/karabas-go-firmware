@@ -21,6 +21,12 @@ static link_rpc_req_t req;
 static uint8_t out[LINK_RPC_MAX];
 static char launch_file[33] = "";
 
+// a menu core: the boot core, or a core that asked for CORES in its HELLO (a test build of the menu
+// under another name, started by AT+KARABAS=load, which reboots into boot.kg for a boot type)
+static bool menu_core(void) {
+  return core.type == CORE_TYPE_BOOT || (link_rpc_services() & (1 << SVC_CORES)) != 0;
+}
+
 bool rpc_boot_menu(void) {
   return core.type == CORE_TYPE_BOOT && link_has(LINK_CAP_RPC);
 }
@@ -90,7 +96,7 @@ static uint8_t sys(uint8_t fn, uint16_t *n) {
 static uint8_t cfg(uint8_t fn, uint16_t *n) {
   const char *file = arg(&req, 0), *section = arg(&req, 1), *key = arg(&req, 2);
   if (!file || file[0] != '0' || file[1] != 0) return ST_DENIED; // the own ini of a core: later (FS)
-  if (core.type != CORE_TYPE_BOOT) return ST_DENIED;
+  if (!menu_core()) return ST_DENIED;
   switch (fn) {
     case 0: { // GET section, key -> value
       if (!section || !key) return ST_ARGS;
@@ -113,7 +119,7 @@ static uint8_t cfg(uint8_t fn, uint16_t *n) {
 }
 
 static uint8_t cores_svc(uint8_t fn, uint16_t *n) {
-  if (core.type != CORE_TYPE_BOOT) return ST_DENIED;
+  if (!menu_core()) return ST_DENIED;
   switch (fn) {
     case 0: // SCAN -> count (2), in the order of [setup] core_sort
       app_core_browser_read_list();

@@ -308,7 +308,7 @@ Services (`src/fpga/rpc_server.c`; the plan of the menu: karabas-go-core-menu `d
 | | 2 | `LAUNCH` | file name | | the core is replaced: no response |
 | | 3 | `AUTOLOAD` | | timeout (s, 0 none), file name |
 
-CFG file `0` is `karabas.ini` (the boot core only); CORES is for the boot core only. A boot core
+CFG file `0` is `karabas.ini` and CORES are for a menu core only: the boot core, or a core whose HELLO lists CORES. A boot core
 with RPC draws the menu itself: the firmware shows no menu, no FT812, and leaves the autoload to it.
 
 ## 6. Core start
