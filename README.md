@@ -152,6 +152,7 @@ only the changed keys and keeps the rest of it. Lines must be at most 78 charact
 | | `time`, `date`, `char` | `1`, `1`, `1` | show the clock, the date and the Karabas picture in the menu |
 | | `color_bg`, `color_gradient`, `color_button`, `color_active`, `color_text`, `color_text_active`, `color_copyright` | `010101`, `0000c8`, `202026`, `0000c8`, `ffffff`, `ffffff`, `787878` | colors (hex RGB) |
 | | `mouse_speed` | `3` | mouse pointer speed in the menu, 1..5 |
+| | `video_mode` | `0` | the video mode of the menu: `0` 640x480, `1` 800x600 (60 Hz VESA; another number is 640x480); Setup > Display > Video mode tries a mode and goes back after 15 s unless kept |
 | `[matrix]` | `enabled`, `brightness`, `clock_*`, `meter_*` | `1`, `0`, ... | the LED matrix, see [docs/matrix.md](docs/matrix.md) |
 | `[autoload]` | `enabled`, `timeout`, `core` | `0`, `15`, none | start the core with this id (`core.json` `id`, e.g. `tsconf`) after `timeout` seconds; once after power on, not after a return to the menu |
 | `[fileloader]` | `<core id>` | none | the dir of the last file loaded by a file loader core in the older `.kgN` format (written by the firmware; empty or none: the dir of the core); a `.kg` core keeps it in `/config/<core id>.ini` |

@@ -92,6 +92,7 @@ Set `debug=1` in `karabas.ini` and keep a terminal on the USB serial port: most 
 ## Displays
 
 - [ ] The boot menu takes its look from `[ft812]` (colors, time, date, char, start sound, key click, mouse speed); a change in its Setup is saved and comes back after a reload.
+- [ ] The boot menu starts in the video mode of `[ft812] video_mode` (640x480 without it); Setup > Display > Video mode switches to the other mode, Keep keeps it, without Keep it goes back after 15 s; the monitor takes both modes.
 - [ ] **MG:** a core that drives the FT812 itself starts its picture after the boot menu (the firmware resets the FT812 before it).
 - [ ] LED matrix: `core` (the boot scroll, core meters), `scroll`, `effect` (clock, drive with the image slots), `image`, `blank`; `[matrix]` brightness and the clock / meter look; the icon in BOOTSEL and MSC; the progress bar while a core loads.
 - [ ] OLED.
