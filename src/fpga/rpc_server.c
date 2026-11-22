@@ -24,6 +24,7 @@
 #include "board/board.h"
 #include "periph/i2c_bus.h"
 #include "i2c_dev.h"
+#include "storage/storage.h"
 #include <stdlib.h>
 
 enum { SVC_SYS = 0, SVC_CFG = 1, SVC_CORES = 2, SVC_HID = 3 };
@@ -115,6 +116,23 @@ static uint8_t sys(uint8_t fn, uint16_t *n) {
       // them back to the firmware (so does the start of the next core)
       if (req.len < 2) return ST_ARGS;
       led_override(req.data[0], req.data[1]);
+      return ST_OK;
+    }
+    case 5: { // SD_INFO: the SD card of the MCU (SD1), for the board test core; read only. mounted, card
+      // type (0 none, 1 SDSC, 2 SDHC / SDXC), sectors (4), FatFs type (1 FAT12 .. 4 exFAT), total KB (4),
+      // free KB (4), the volume label. SD is used only from APP (no lock); the first call after the
+      // mount may scan the FAT for the free space (seconds on a big FAT32 card without FSInfo)
+      if (msc_active()) return ST_BUSY; // the card is the PC's
+      sd1_info_t i;
+      sd1_info(&i);
+      out[0] = i.mounted;
+      out[1] = i.card;
+      memcpy(out + 2, &i.sectors, 4);
+      out[6] = i.fs_type;
+      memcpy(out + 7, &i.total_kb, 4);
+      memcpy(out + 11, &i.free_kb, 4);
+      *n = 15;
+      put_str(n, i.label);
       return ST_OK;
     }
     default:

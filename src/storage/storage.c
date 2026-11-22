@@ -2,6 +2,7 @@
 #include "sd_pio.h"
 #include "diskio.h"
 #include "file_name.h"
+#include "diag/hang_diag.h"
 
 // SD card on a dedicated PIO SPI
 
@@ -94,6 +95,22 @@ void storage_begin() {
 
 bool sd_is_exfat() {
   return sd1_fs.fs_type == FS_EXFAT;
+}
+
+void sd1_info(sd1_info_t *i) {
+  memset(i, 0, sizeof(*i));
+  i->card = sd1.type == SD_CARD_SDHC ? 2 : sd1.type != SD_CARD_NONE ? 1 : 0;
+  if (sd1.type) i->sectors = sd_card_sectors(&sd1);
+  if (!has_sd) return;
+  i->mounted = true;
+  i->fs_type = sd1_fs.fs_type;
+  uint64_t cluster_kb2 = (uint64_t) sd1_fs.csize; // half KB (512-byte sectors) per cluster
+  i->total_kb = (uint32_t) ((sd1_fs.n_fatent - 2) * cluster_kb2 / 2);
+  DWORD nfree;
+  FATFS *fs;
+  hang_step(0xb0); // a FAT scan of a few seconds (the APP watchdog: 8 s from the last mark)
+  if (f_getfree("", &nfree, &fs) == FR_OK) i->free_kb = (uint32_t) (nfree * cluster_kb2 / 2);
+  if (f_getlabel("", i->label, NULL) != FR_OK) i->label[0] = 0;
 }
 
 bool sd_exists(const char *path) {

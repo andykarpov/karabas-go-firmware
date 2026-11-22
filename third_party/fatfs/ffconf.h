@@ -12,7 +12,7 @@
 #define FF_USE_FASTSEEK	0
 #define FF_USE_EXPAND	0
 #define FF_USE_CHMOD	0
-#define FF_USE_LABEL	0
+#define FF_USE_LABEL	1	/* karabas: f_getlabel for RPC SYS SD_INFO */
 #define FF_USE_FORWARD	0
 #define FF_USE_STRFUNC	0
 #define FF_PRINT_LLI	0

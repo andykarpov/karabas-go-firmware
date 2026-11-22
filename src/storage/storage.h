@@ -21,6 +21,19 @@ sd_card_t *sd1_card();
 // dedicated bus of SD1. APP only; nothing in MSC mode (the card is the PC's, the eject ends it).
 void sd1_sync_before_reboot();
 bool sd_is_exfat();
+// SD1 as the card and FatFs see it (RPC SYS SD_INFO, the board test core); APP only, nothing is
+// written. The card type and sectors also without a file system (card answers, mount failed).
+typedef struct {
+  bool mounted;
+  uint8_t card;      // 0 none, 1 SDSC (SD v1 / v2), 2 SDHC / SDXC
+  uint32_t sectors;  // of the card (CSD), 0 unknown
+  uint8_t fs_type;   // FatFs: 0 none, 1 FAT12, 2 FAT16, 3 FAT32, 4 exFAT
+  uint32_t total_kb, free_kb;
+  char label[40];    // the volume label in UTF-8 ("" none; 11 chars of up to 3 bytes)
+} sd1_info_t;
+// the first call after the mount may scan the whole FAT (FAT32 without a valid FSInfo free count):
+// ~1 s per 4 MB of FAT (a 32 GB card of 32 KB clusters), FatFs keeps the count after it
+void sd1_info(sd1_info_t *i);
 bool sd_exists(const char *path);
 bool sd_is_dir(const char *path);
 static inline bool sd_is_open(const FIL *f) { return f->obj.fs != NULL; }
