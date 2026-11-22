@@ -152,6 +152,7 @@ Autoload, Display, Sound, Theme, Clock), которое читает и пише
 | | `time`, `date`, `char` | `1`, `1`, `1` | показывать в меню часы, дату и картинку «Карабаса» |
 | | `color_bg`, `color_gradient`, `color_button`, `color_active`, `color_text`, `color_text_active`, `color_copyright` | `010101`, `0000c8`, `202026`, `0000c8`, `ffffff`, `ffffff`, `787878` | цвета (hex RGB) |
 | | `mouse_speed` | `3` | скорость указателя мыши в меню, 1..5 |
+| | `video_mode` | `0` | видеорежим меню: `0` 640x480, `1` 800x600 (60 Гц VESA; другое число — 640x480); Setup > Display > Video mode включает режим на пробу и через 15 с возвращает прежний, если его не оставить (Keep) |
 | `[matrix]` | `enabled`, `brightness`, `clock_*`, `meter_*` | `1`, `0`, ... | LED-матрица, см. [docs/matrix.ru.md](docs/matrix.ru.md) |
 | `[autoload]` | `enabled`, `timeout`, `core` | `0`, `15`, нет | запуск ядра с этим id (`id` в `core.json`, например `tsconf`) через `timeout` секунд; один раз после включения, не после возврата в меню |
 | `[fileloader]` | `<id ядра>` | нет | каталог последнего файла, загруженного ядром-загрузчиком в старом формате `.kgN` (пишет прошивка; пусто или нет ключа — каталог ядра); ядро `.kg` хранит его в `/config/<id ядра>.ini` |
