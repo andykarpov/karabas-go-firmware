@@ -106,10 +106,15 @@ void sd1_info(sd1_info_t *i) {
   i->fs_type = sd1_fs.fs_type;
   uint64_t cluster_kb2 = (uint64_t) sd1_fs.csize; // half KB (512-byte sectors) per cluster
   i->total_kb = (uint32_t) ((sd1_fs.n_fatent - 2) * cluster_kb2 / 2);
+  // the free space without a scan of the FAT: the count of FSInfo (FAT32) or the one FatFs keeps after a write.
+  // A FAT scan takes seconds on a big card and holds APP (USB, the watchdog), so without a count it is unknown
+  // (0xFFFFFFFF). exFAT counts its allocation bitmap (a bit per cluster: small), so it is asked always.
+  i->free_kb = 0xFFFFFFFFu;
   DWORD nfree;
   FATFS *fs;
-  hang_step(0xb0); // a FAT scan of a few seconds (the APP watchdog: 8 s from the last mark)
-  if (f_getfree("", &nfree, &fs) == FR_OK) i->free_kb = (uint32_t) (nfree * cluster_kb2 / 2);
+  bool counted = sd1_fs.free_clst <= sd1_fs.n_fatent - 2;
+  if ((counted || sd1_fs.fs_type == FS_EXFAT) && f_getfree("", &nfree, &fs) == FR_OK)
+    i->free_kb = (uint32_t) (nfree * cluster_kb2 / 2);
   if (f_getlabel("", i->label, NULL) != FR_OK) i->label[0] = 0;
 }
 

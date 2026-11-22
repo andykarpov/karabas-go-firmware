@@ -120,8 +120,7 @@ static uint8_t sys(uint8_t fn, uint16_t *n) {
     }
     case 5: { // SD_INFO: the SD card of the MCU (SD1), for the board test core; read only. mounted, card
       // type (0 none, 1 SDSC, 2 SDHC / SDXC), sectors (4), FatFs type (1 FAT12 .. 4 exFAT), total KB (4),
-      // free KB (4), the volume label. SD is used only from APP (no lock); the first call after the
-      // mount may scan the FAT for the free space (seconds on a big FAT32 card without FSInfo)
+      // free KB (4: FFFFFFFF unknown, no FAT scan), the volume label. SD is used only from APP (no lock)
       if (msc_active()) return ST_BUSY; // the card is the PC's
       sd1_info_t i;
       sd1_info(&i);
