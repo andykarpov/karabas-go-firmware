@@ -219,6 +219,7 @@ bool hid_inject_idle()
 // Invoked when device is mounted (configured); its id and class are logged by the enumeration
 void tuh_mount_cb(uint8_t daddr) {
   d_printf("Device attached, address = %d\r\n", daddr);
+  hub_watch_mounted(daddr);
 }
 
 void tuh_umount_cb(uint8_t daddr) {

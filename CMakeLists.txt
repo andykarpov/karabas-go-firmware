@@ -79,6 +79,11 @@ function(karabas_firmware target hw_id)
   target_link_options(${target} PRIVATE
     # panics are kept for the next boot's log (src/diag/hang_diag)
     -Wl,--wrap=panic
+    # the ports of the usb hubs, followed from outside TinyUSB (src/usb/hub_watch)
+    -Wl,--wrap=hcd_event_handler
+    -Wl,--wrap=hub_port_get_status
+    -Wl,--wrap=hub_open
+    -Wl,--wrap=hub_close
     # newlib's reentrancy per task (src/platform/newlib.c)
     -Wl,--wrap=__getreent)
   target_link_libraries(${target} PRIVATE
