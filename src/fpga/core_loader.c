@@ -356,6 +356,7 @@ static void configure(const char* filename, bool clear_sram) {
   spi_bus_lock();
   hang_step(0x83);
   matrix_on_configure_start();
+  led_override(0, 0); // the LEDs back to the firmware (a board test core may have held them)
   bk_flush(); // the save of the game of the core before (it is still running)
   core_eeprom_flush(); // and its eeprom (bank 4..254), before core is read again
   hang_step(0x84);

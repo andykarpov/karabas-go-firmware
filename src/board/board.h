@@ -40,6 +40,9 @@ int board_fdd_chng();
 
 bool btn_read(uint8_t num);
 void led_write(uint8_t num, bool on);
+// the LEDs held by a core (RPC SYS LED, the board test core): bit n of mask = LED n + 1 is held at bit n
+// of on, led_write leaves it alone; mask 0 gives the LEDs back to the firmware (also at a core start)
+void led_override(uint8_t mask, uint8_t on);
 
 #ifdef __cplusplus
 }
