@@ -2,6 +2,7 @@
 #include "sd_pio.h"
 #include "diskio.h"
 #include "file_name.h"
+#include "diag/hang_diag.h"
 
 // SD card on a dedicated PIO SPI
 
@@ -94,6 +95,27 @@ void storage_begin() {
 
 bool sd_is_exfat() {
   return sd1_fs.fs_type == FS_EXFAT;
+}
+
+void sd1_info(sd1_info_t *i) {
+  memset(i, 0, sizeof(*i));
+  i->card = sd1.type == SD_CARD_SDHC ? 2 : sd1.type != SD_CARD_NONE ? 1 : 0;
+  if (sd1.type) i->sectors = sd_card_sectors(&sd1);
+  if (!has_sd) return;
+  i->mounted = true;
+  i->fs_type = sd1_fs.fs_type;
+  uint64_t cluster_kb2 = (uint64_t) sd1_fs.csize; // half KB (512-byte sectors) per cluster
+  i->total_kb = (uint32_t) ((sd1_fs.n_fatent - 2) * cluster_kb2 / 2);
+  // the free space without a scan of the FAT: the count of FSInfo (FAT32) or the one FatFs keeps after a write.
+  // A FAT scan takes seconds on a big card and holds APP (USB, the watchdog), so without a count it is unknown
+  // (0xFFFFFFFF). exFAT counts its allocation bitmap (a bit per cluster: small), so it is asked always.
+  i->free_kb = 0xFFFFFFFFu;
+  DWORD nfree;
+  FATFS *fs;
+  bool counted = sd1_fs.free_clst <= sd1_fs.n_fatent - 2;
+  if ((counted || sd1_fs.fs_type == FS_EXFAT) && f_getfree("", &nfree, &fs) == FR_OK)
+    i->free_kb = (uint32_t) (nfree * cluster_kb2 / 2);
+  if (f_getlabel("", i->label, NULL) != FR_OK) i->label[0] = 0;
 }
 
 bool sd_exists(const char *path) {

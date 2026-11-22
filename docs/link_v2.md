@@ -293,7 +293,7 @@ the first, an older core gives 0 for the second (reading past the data gives 0).
 Response status: 0 ok, 1 unknown service / function, 2 bad arguments, 3 not found, 4 I/O error,
 5 denied, 6 busy (call again). Strings in a payload end with a 0 byte; numbers are little-endian.
 
-In the USB drive mode (the card is the PC's) the link is still served: SYS answers, CFG GET reads a copy of
+In the USB drive mode (the card is the PC's) the link is still served: SYS answers (but SD_INFO), CFG GET reads a copy of
 karabas.ini kept before the PC got the card, the other CFG calls, CORES and HID are busy.
 
 Services (`src/fpga/rpc_server.c`; the plan of the menu: karabas-go-core-menu `docs/RPC.md`):
@@ -305,6 +305,7 @@ Services (`src/fpga/rpc_server.c`; the plan of the menu: karabas-go-core-menu `d
 | | 2 | `TIME_SET` | as `TIME_GET` | |
 | | 3 | `I2C_SCAN` | | 16 bytes: bit a % 8 of byte a / 8 = the device at address a answers (0x08..0x77; the board test core: RTC 68, EEPROM 50, LED matrix 70 / 71, the I/O extender of the Go 41) |
 | | 4 | `LED` | mask, on | | the on-board LED n + 1 is held at bit n of on while bit n of mask is set (the board test core); mask 0 gives them back to the firmware, as does the start of the next core |
+| | 5 | `SD_INFO` | | the SD card of the MCU (SD1, the board test core; read only): mounted (0 / 1), card type (0 none, 1 SDSC, 2 SDHC / SDXC), sectors (4), FatFs type (0 none, 1 FAT12, 2 FAT16, 3 FAT32, 4 exFAT), total KB (4), free KB (4: FFFFFFFF unknown), the volume label (UTF-8, "" none); type and sectors also when the mount failed. The free space is the count of FSInfo / FatFs (exFAT: its bitmap), never a scan of the FAT (seconds on a big card, APP held): without a count it is unknown. Busy (6) in the USB drive mode |
 | 1 CFG | 0 | `GET` | file, (section, key)… | per pair: 1 and the value, or 0 and "" (not in the file); one read of the file |
 | | 1 | `SET` | file, (section, key, value)… | | written into the file at once, one rewrite for all |
 | | 2 | `SAVE` | file | | the firmware takes the settings again (`load_setup`, the LED matrix as saved) |
