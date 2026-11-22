@@ -310,16 +310,10 @@ static bool at_usbhub(const char *v) {
   uint8_t hub = hub_watch_first_hub();
   if (strcasecmp(v, "stall") == 0) { hub_watch_request_stall(); return true; }
   if (strcasecmp(v, "scan") == 0) return hub && hub_watch_request_scan(hub);
-  char *end;
-  unsigned long n = strtoul(v, &end, 10);
-  if (end == v) return false;
-  if (*end == '.') {
-    hub = (uint8_t) n;
-    const char *p = end + 1;
-    n = strtoul(p, &end, 10);
-    if (end == p) return false;
-  }
-  return *end == 0 && hub && n <= 255 && hub_watch_request_reset(hub, (uint8_t) n);
+  uint8_t h, port;
+  if (!kg_at_hub_port_parse(v, &h, &port)) return false;
+  if (h) hub = h;
+  return hub && hub_watch_request_reset(hub, port);
 }
 
 bool at_control_command(const char *arg) {

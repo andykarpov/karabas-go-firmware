@@ -17,12 +17,18 @@ extern "C" {
 void hub_watch_tick(void);            // core1, from the USB loop (RAM, 10 Hz past its check)
 void hub_watch_mounted(uint8_t daddr); // tuh_mount_cb: the device of the port being enumerated
 
-// AT+KARABAS=usbhub (APP): the state of the hubs and their ports, and the test requests
+// AT+KARABAS=usbhub (APP): the state of the hubs and their ports, and the test requests.
+// A request is one volatile slot taken by the USB task at its next step (100 ms) when no job runs;
+// true: queued (the log tells what came of it), false: a port out of 1..7, or a request still
+// waiting. A request for an address that is not a hub (any more) is dropped by the USB task.
 void hub_watch_print(void (*out)(const char *line));
 uint8_t hub_watch_first_hub(void); // 0: none
 bool hub_watch_request_reset(uint8_t hub_addr, uint8_t port); // enumerate the port again
 bool hub_watch_request_scan(uint8_t hub_addr);                // look at the ports, as for a stopped pipe
-void hub_watch_request_stall(void); // the next hub port enumeration stops at its start (a test)
+// A test of a stopped enumeration, for AT only: the next start of an enumeration of any hub port
+// (the AT reset of a port, or a real connection) fails as a TU_ASSERT in it would; a one-shot flag,
+// cleared by the USB task when it is used. hub_watch restarts that enumeration after 5 s.
+void hub_watch_request_stall(void);
 
 #ifdef __cplusplus
 }

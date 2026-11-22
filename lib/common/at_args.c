@@ -84,3 +84,28 @@ bool kg_at_path_split(const char *path, char *dir, size_t dir_size, char *name, 
   strcpy(name, file);
   return true;
 }
+
+// a decimal 1..255 at *s, *s moved past it
+static bool byte_number(const char **s, uint8_t *v) {
+  unsigned n = 0;
+  const char *p = *s;
+  if (*p < '0' || *p > '9') return false;
+  while (*p >= '0' && *p <= '9') {
+    n = n * 10 + (unsigned) (*p++ - '0');
+    if (n > 255) return false;
+  }
+  if (n == 0) return false;
+  *v = (uint8_t) n;
+  *s = p;
+  return true;
+}
+
+bool kg_at_hub_port_parse(const char *s, uint8_t *hub, uint8_t *port) {
+  uint8_t a, b;
+  if (!byte_number(&s, &a)) return false;
+  if (*s == 0) { *hub = 0; *port = a; return true; }
+  if (*s++ != '.' || !byte_number(&s, &b) || *s != 0) return false;
+  *hub = a;
+  *port = b;
+  return true;
+}
