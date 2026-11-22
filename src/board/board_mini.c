@@ -70,8 +70,22 @@ bool btn_read(uint8_t num) {
   return !gpio_get(num == 0 ? PIN_BTN1 : PIN_BTN2);
 }
 
+static uint8_t led_ovr_mask = 0, led_ovr_on = 0;
+static uint8_t led_fw_on = 0; // the last state the firmware wrote, put back when a core lets an LED go
+
 void led_write(uint8_t num, bool on) {
+  if (on) led_fw_on |= 1 << num; else led_fw_on &= ~(1 << num);
+  if (led_ovr_mask & (1 << num)) on = (led_ovr_on >> num) & 1;
   gpio_put(num == 0 ? PIN_LED1 : PIN_LED2, !on);
+}
+
+void led_override(uint8_t mask, uint8_t on) {
+  uint8_t changed = led_ovr_mask | (mask & 3);
+  led_ovr_mask = mask & 3;
+  led_ovr_on = on & 3;
+  // the held LEDs at their state, the released ones back at the state of the firmware
+  uint8_t fw = led_fw_on;
+  for (uint8_t i = 0; i < 2; i++) if (changed & (1 << i)) led_write(i, (fw >> i) & 1);
 }
 
 #endif // HW_ID_MINI || HW_ID_MINIG

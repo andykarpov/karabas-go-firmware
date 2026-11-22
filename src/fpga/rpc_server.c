@@ -21,6 +21,9 @@
 #include "ini_read.h"
 #include "ini_update.h"
 #include "matrix_style.h"
+#include "board/board.h"
+#include "periph/i2c_bus.h"
+#include "i2c_dev.h"
 #include <stdlib.h>
 
 enum { SVC_SYS = 0, SVC_CFG = 1, SVC_CORES = 2, SVC_HID = 3 };
@@ -96,6 +99,22 @@ static uint8_t sys(uint8_t fn, uint16_t *n) {
       rtc_set_hour(req.data[4]); rtc_set_minute(req.data[5]); rtc_set_second(req.data[6]);
       rtc_set_week(req.data[7]);
       rtc_save();
+      return ST_OK;
+    }
+    case 3: { // I2C_SCAN: 16 bytes, bit a % 8 of byte a / 8 = the device at address a answers (0x08..0x77),
+      // for the board test core: the RTC 68, the EEPROM 50, the LED matrix 70 / 71, the I/O extender of the Go 41
+      memset(out, 0, 16);
+      i2c_bus_lock();
+      for (uint8_t a = 0x08; a < 0x78; a++)
+        if (i2c_dev_probe(a)) out[a >> 3] |= 1 << (a & 7);
+      i2c_bus_unlock();
+      *n = 16;
+      return ST_OK;
+    }
+    case 4: { // LED: mask, on: LED n + 1 held by the core at bit n of on while bit n of mask; mask 0 gives
+      // them back to the firmware (so does the start of the next core)
+      if (req.len < 2) return ST_ARGS;
+      led_override(req.data[0], req.data[1]);
       return ST_OK;
     }
     default:

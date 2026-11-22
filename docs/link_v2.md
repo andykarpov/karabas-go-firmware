@@ -303,6 +303,8 @@ Services (`src/fpga/rpc_server.c`; the plan of the menu: karabas-go-core-menu `d
 | 0 SYS | 0 | `INFO` | | firmware build (8), board, RPC version, services (2), USB drive mode (0 none, 1 SD, 2 SD2, 3 SD2 not found; an older firmware sends 12 bytes) |
 | | 1 | `TIME_GET` | | year (2), month, day, hour, minute, second, weekday |
 | | 2 | `TIME_SET` | as `TIME_GET` | |
+| | 3 | `I2C_SCAN` | | 16 bytes: bit a % 8 of byte a / 8 = the device at address a answers (0x08..0x77; the board test core: RTC 68, EEPROM 50, LED matrix 70 / 71, the I/O extender of the Go 41) |
+| | 4 | `LED` | mask, on | | the on-board LED n + 1 is held at bit n of on while bit n of mask is set (the board test core); mask 0 gives them back to the firmware, as does the start of the next core |
 | 1 CFG | 0 | `GET` | file, (section, key)… | per pair: 1 and the value, or 0 and "" (not in the file); one read of the file |
 | | 1 | `SET` | file, (section, key, value)… | | written into the file at once, one rewrite for all |
 | | 2 | `SAVE` | file | | the firmware takes the settings again (`load_setup`, the LED matrix as saved) |
