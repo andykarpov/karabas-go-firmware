@@ -266,6 +266,7 @@ bytes are dropped (they no longer go to the UART of the core):
 | `AT+KARABAS=osd` / `osd:<item>` / `osd:<item>=<value>` | the menu items of the core: `+KARABAS:item;<pos>;<key>;<name>;<kind>;<enabled>;<value number>;<value>;<options or extensions>`; set by the number or the name of the option, a trigger with `=1` |
 | `AT+KARABAS=mount:<item>:<path>` / `eject:<item>` | the image of a file item, saved like one chosen in the OSD. An item is its key or name (any case) or `#<pos>`; the argument of a line is at most 80 characters |
 | `AT+KARABAS=debug:0` / `debug:1` | the debug log off / on until the next reboot; `karabas.ini` does not change |
+| `AT+KARABAS=usbhub` / `usbhub:<port>` / `usbhub:<hub>.<port>` / `usbhub:scan` / `usbhub:stall` | the USB hubs: `+KARABAS:usbhub;<address>;<mounted or enumerating>;pipe <armed or not armed>` and `+KARABAS:usbport;<hub>;<port>;<empty, enumerating, mounted or failed>;<device>;<restarts>`; the port of the first hub (or of a hub by its address) enumerated again, its device removed first / its ports looked at, as for a hub that stopped reporting / the next enumeration of a hub port stops at its start (as a failed check inside TinyUSB would). A test of the hub recovery: a device behind a hub whose enumeration failed or stopped is enumerated again by itself, up to 3 times (logged with `debug=1`) |
 
 ### USB-UART adapter
 

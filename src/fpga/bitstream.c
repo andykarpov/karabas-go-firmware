@@ -122,7 +122,8 @@ static void bitstream_send_bitbang(uint32_t total, uint32_t *sent) {
 
 uint32_t fpga_send(const char* filename) {
 
-  d_print("Configuring FPGA by "); d_println(filename);
+  // the time: the usb hub port events of the log have it too (src/usb/hub_watch)
+  d_printf("Configuring FPGA by %s at %lu ms\r\n", filename, (unsigned long) ms_now());
 
   if (!sd_open(&file1, filename, FA_READ)) {
     halt("Unable to open bitstream file to read");
@@ -194,7 +195,7 @@ uint32_t fpga_send(const char* filename) {
     ms_delay(10);
   }
   hang_step(0x95);
-  d_println("Done");
+  d_printf("Done at %lu ms\r\n", (unsigned long) ms_now());
 
   return sent;
 }

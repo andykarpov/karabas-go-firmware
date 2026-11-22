@@ -304,6 +304,18 @@ static bool at_eject(const char *s) {
   return true;
 }
 
+// usbhub:scan (the ports of the first hub) / usbhub:<port> / usbhub:<hub>.<port> (enumerate it
+// again) / usbhub:stall (the next hub port enumeration stops at its start)
+static bool at_usbhub(const char *v) {
+  uint8_t hub = hub_watch_first_hub();
+  if (strcasecmp(v, "stall") == 0) { hub_watch_request_stall(); return true; }
+  if (strcasecmp(v, "scan") == 0) return hub && hub_watch_request_scan(hub);
+  uint8_t h, port;
+  if (!kg_at_hub_port_parse(v, &h, &port)) return false;
+  if (h) hub = h;
+  return hub && hub_watch_request_reset(hub, port);
+}
+
 bool at_control_command(const char *arg) {
   const char *v;
   if (strcasecmp(arg, "state") == 0) at_state();
@@ -323,6 +335,11 @@ bool at_control_command(const char *arg) {
   else if ((v = after(arg, "click:"))) reply(at_click(v));
   else if ((v = after(arg, "pad:"))) reply(at_pad(v, false));
   else if ((v = after(arg, "padhold:"))) reply(at_pad(v, true));
+  else if (strcasecmp(arg, "usbhub") == 0) {
+    hub_watch_print(serial_host_print);
+    reply(true);
+  }
+  else if ((v = after(arg, "usbhub:"))) reply(at_usbhub(v));
   else if ((v = after(arg, "debug:"))) {
     bool ok = strcmp(v, "0") == 0 || strcmp(v, "1") == 0;
     if (ok) hw_setup.debug_enabled = v[0] == '1';

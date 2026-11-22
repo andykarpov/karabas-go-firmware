@@ -24,6 +24,7 @@
 #include "rtc.h"
 #include "input/sega.h"
 #include "usb/hid_app.h"
+#include "usb/hub_watch.h"
 #include "ms_time.h"
 #include "storage/file.h"
 #include "board/board.h"

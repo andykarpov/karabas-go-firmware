@@ -284,6 +284,7 @@ static void __not_in_flash_func(usb_host_loop)()
   diag_loop_core1();
   hang_beat_core1();
   usb_diag_tick();
+  hub_watch_tick();
   // timeout 0: on OPT_OS_FREERTOS tuh_task() would block on its queue after the last event
   if (tuh_task_event_ready()) tuh_task_ext(0, false);
   printer_host_tick();

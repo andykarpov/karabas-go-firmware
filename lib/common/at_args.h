@@ -37,6 +37,10 @@ bool kg_at_pad_parse(const char *s, uint16_t *buttons);
 // name, or a part does not fit
 bool kg_at_path_split(const char *path, char *dir, size_t dir_size, char *name, size_t name_size);
 
+// the port of usbhub: "<port>" (*hub 0: the first hub) or "<hub>.<port>", each 1..255 in decimal.
+// false: no number, another char, 0 or more than 255
+bool kg_at_hub_port_parse(const char *s, uint8_t *hub, uint8_t *port);
+
 #ifdef __cplusplus
 }
 #endif

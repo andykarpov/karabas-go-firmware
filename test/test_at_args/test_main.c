@@ -86,6 +86,21 @@ static void test_path_split() {
   TEST_ASSERT_FALSE(kg_at_path_split("/1234567/x", d, sizeof(d), n, sizeof(n)));
 }
 
+static void test_hub_port() {
+  uint8_t h = 99, p = 99;
+  TEST_ASSERT_TRUE(kg_at_hub_port_parse("1", &h, &p));
+  TEST_ASSERT_EQUAL(0, h); TEST_ASSERT_EQUAL(1, p);
+  TEST_ASSERT_TRUE(kg_at_hub_port_parse("9.4", &h, &p));
+  TEST_ASSERT_EQUAL(9, h); TEST_ASSERT_EQUAL(4, p);
+  TEST_ASSERT_TRUE(kg_at_hub_port_parse("255.255", &h, &p));
+  TEST_ASSERT_EQUAL(255, h); TEST_ASSERT_EQUAL(255, p);
+  const char *bad[] = {"", "0", "256", "265.1", "9.256", "9.0", "0.1", "-1", "+1", " 1", "1 ", "9.", ".1", "9.1.1",
+                       "9x", "99999999999999999999.1"};
+  for (size_t i = 0; i < sizeof(bad) / sizeof(bad[0]); i++) {
+    TEST_ASSERT_FALSE_MESSAGE(kg_at_hub_port_parse(bad[i], &h, &p), bad[i]);
+  }
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_mouse_parse);
@@ -94,5 +109,6 @@ int main() {
   RUN_TEST(test_mouse_button);
   RUN_TEST(test_pad);
   RUN_TEST(test_path_split);
+  RUN_TEST(test_hub_port);
   return UNITY_END();
 }
