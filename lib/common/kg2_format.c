@@ -72,6 +72,7 @@ bool kg2_loader_parse(const uint8_t *sec, size_t len, kg2_loader_t *out) {
   out->flags = sec[8];
   out->files = sec[9];
   out->files_ofs = kg_le16(sec + 10);
+  out->save_name = (kg_le16(sec) >= KG2_LOADER_SIZE_NAME && len >= KG2_LOADER_SIZE_NAME) ? kg_le16(sec + 12) : 0;
   if (out->files && (size_t) out->files_ofs + 2u * out->files > len) out->files = 0;
   return true;
 }

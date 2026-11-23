@@ -19,7 +19,8 @@ extern "C" {
 #define KG2_MAX_SECTIONS 64    // more is a broken file
 #define KG2_CORE_SIZE 16       // the CORE record of the first format: the least a record has
 #define KG2_CORE_SIZE_LINK 18  // with the link field (offset 16)
-#define KG2_LOADER_SIZE 12
+#define KG2_LOADER_SIZE 12       // the LOADER record of the first format: the least a record has
+#define KG2_LOADER_SIZE_NAME 14  // with the save name (offset 12)
 #define KG2_OSD_HEAD_SIZE 8
 #define KG2_ITEM_SIZE 48       // the fields of an OSD item record this parser knows
 #define KG2_OPTION_SIZE 8
@@ -102,8 +103,10 @@ typedef struct {
   uint8_t flags;                // KG2_LOADER_*
   uint8_t files;                // file candidates
   uint16_t files_ofs;           // their string refs, in the section
+  uint16_t save_name;           // string: the name of the backup RAM files, 0 the game's
 } kg2_loader_t;
 
+// sec: the first len bytes of the section (KG2_LOADER_SIZE_NAME or the whole of a shorter one)
 bool kg2_loader_parse(const uint8_t *sec, size_t len, kg2_loader_t *out);
 
 // the string ref n of a list of refs at ofs of a section (the file candidates); false if out

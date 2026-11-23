@@ -503,7 +503,7 @@ static void kg1_read(const core_file_t *cf) {
   file_seek(FILE_POS_SPI_FREQ); core.spi_freq = file_read();
   core.drives[0] = '\0';
   file_read_str(&file1, FILE_POS_SAVE_DIR, core.save_dir, 32); // older core files: FF, no save dir
-  core.loader_file[0] = '\0';
+  core.loader_file[0] = core.save_name[0] = '\0';
   core.loader_autoload = true;
   uint8_t b[3 * CORE_BUTTONS];
   file_seek(FILE_POS_BUTTONS);
@@ -667,14 +667,17 @@ static void kg2_read(const core_file_t *cf) {
   core.last_file_id = 0;
 
   // the file loader: its dir, extensions, save dir, the default file
-  core.dir[0] = core.file_extensions[0] = core.save_dir[0] = core.loader_file[0] = '\0';
+  core.dir[0] = core.file_extensions[0] = core.save_dir[0] = core.save_name[0] = core.loader_file[0] = '\0';
   core.loader_autoload = false;
   kg2_loader_t ld;
-  if (core_file_sec_read(&file1, cf, KG2_SEC_LOADER, 0, rec, KG2_LOADER_SIZE) &&
-      kg2_loader_parse(rec, KG2_LOADER_SIZE, &ld)) {
+  uint32_t ld_len = cf->kg2.sec[KG2_SEC_LOADER].length;
+  if (ld_len > KG2_LOADER_SIZE_NAME) ld_len = KG2_LOADER_SIZE_NAME;
+  if (core_file_sec_read(&file1, cf, KG2_SEC_LOADER, 0, rec, ld_len) &&
+      kg2_loader_parse(rec, ld_len, &ld)) {
     core_file_str(&file1, cf, ld.dir, core.dir, sizeof(core.dir));
     core_file_str(&file1, cf, ld.exts, core.file_extensions, sizeof(core.file_extensions));
     core_file_str(&file1, cf, ld.save_dir, core.save_dir, sizeof(core.save_dir));
+    core_file_str(&file1, cf, ld.save_name, core.save_name, sizeof(core.save_name));
     core.loader_autoload = (ld.flags & KG2_LOADER_AUTOLOAD) != 0;
     char dir[KG_PATH_MAX], d[KG_PATH_MAX], name[KG_PATH_MAX];
     snprintf(dir, sizeof(dir), "%s", core.dir);

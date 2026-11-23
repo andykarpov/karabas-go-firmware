@@ -125,7 +125,7 @@ artifacts for 90 days.
 | `/config/<core id>.ini`, `.eep` | the settings of a `.kg` core: the options that differ from the core's defaults, the images, the last file of a file loader; its EEPROM. Made by the firmware; About (`A` in the core menu) > `R` deletes them |
 | `/karabas.ini` | settings, optional, see below |
 | `/drivers/*.ini` | USB gamepad drivers, optional ([format](docs/usb_gamepads.md#driver-ini)) |
-| `<save_dir>/` or `<dir of the game>/saves/<game>.sav` | the backup RAM of the cores that have it (NES...), made by the firmware; the game is the file of a file loader or of an `FL` item (Doom: the WAD) |
+| `<save_dir>/` or `<dir of the game>/saves/<game>.sav` | the backup RAM of the cores that have it (NES...), made by the firmware; the game is the file of a file loader or of an `FL` item (Doom: the WAD); a core with `loader` `save_name` in its `core.json` has one name for all (`<save_name>.sav`) |
 
 The card can be FAT16, FAT32 or exFAT. The cores are built with
 [make_core](https://github.com/andykarpov/karabas-go-tools/tree/master/make_core) from
