@@ -107,6 +107,19 @@ static void test_strings() {
   TEST_ASSERT_EQUAL_STRING("", kg2_str(s, sizeof(s), 1));
 }
 
+// a LOADER record of 12 bytes (older make_core): no save name
+static void test_loader_old() {
+  uint8_t r[KG2_LOADER_SIZE_NAME] = { 12, 0, 1, 0, 2, 0, 3, 0, 0, 0, 12, 0, 9, 0 };
+  kg2_loader_t ld;
+  TEST_ASSERT_TRUE(kg2_loader_parse(r, sizeof(r), &ld));
+  TEST_ASSERT_EQUAL(0, ld.save_name);
+  r[0] = 14;
+  TEST_ASSERT_TRUE(kg2_loader_parse(r, KG2_LOADER_SIZE, &ld)); // only 12 bytes read
+  TEST_ASSERT_EQUAL(0, ld.save_name);
+  TEST_ASSERT_TRUE(kg2_loader_parse(r, sizeof(r), &ld));
+  TEST_ASSERT_EQUAL(9, ld.save_name);
+}
+
 static void test_loader() {
   kg2_layout_t go = layout(GO);
   kg2_loader_t ld;
@@ -116,6 +129,7 @@ static void test_loader() {
   TEST_ASSERT_EQUAL_STRING("/test", str(&go, ld.dir));
   TEST_ASSERT_EQUAL_STRING("tap,tzx", str(&go, ld.exts));
   TEST_ASSERT_EQUAL_STRING("", str(&go, ld.save_dir));
+  TEST_ASSERT_EQUAL_STRING("pak0", str(&go, ld.save_name));
   TEST_ASSERT_EQUAL(0, ld.flags & KG2_LOADER_AUTOLOAD);
   TEST_ASSERT_EQUAL(2, ld.files);
   uint16_t ref;
@@ -278,6 +292,7 @@ int main() {
   RUN_TEST(test_core);
   RUN_TEST(test_strings);
   RUN_TEST(test_loader);
+  RUN_TEST(test_loader_old);
   RUN_TEST(test_osd);
   RUN_TEST(test_buttons_eeprom);
   RUN_TEST(test_roms);

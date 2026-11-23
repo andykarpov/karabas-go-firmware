@@ -66,10 +66,15 @@ static void bk_dir(char *out, size_t size) {
   strip_slashes(out, 1);
 }
 
-// the file of a request: <dir>/<game name without its extension>.sav (or .ss<kind>)
+// the save name of the core (loader save_name), else the name of the game
+static const char *bk_base_name() {
+  return core.save_name[0] ? core.save_name : game_name;
+}
+
+// the file of a request: <dir>/<save name without its extension>.sav (or .ss<kind>)
 static void bk_file_name(uint8_t kind, char *out, size_t size) {
   char base[sizeof(game_name)];
-  strcpy(base, game_name);
+  snprintf(base, sizeof(base), "%s", bk_base_name());
   char *dot = strrchr(base, '.');
   if (dot && dot > base) *dot = '\0';
   if (!base[0]) strcpy(base, "game");
@@ -115,7 +120,7 @@ void bk_tick() {
   if (bk_slot >= 0 && bk_slot != slot) bk_close();
   core_file_slot_t *fs = &file_slots[slot];
   fs->is_mounted = false;
-  if (size > 0 && size <= BK_MAX_SECTORS && game_name[0]) {
+  if (size > 0 && size <= BK_MAX_SECTORS && bk_base_name()[0]) {
     char dir[sizeof(fs->dir)], name[sizeof(fs->filename)];
     bk_dir(dir, sizeof(dir));
     bk_file_name(req_kind, name, sizeof(name));

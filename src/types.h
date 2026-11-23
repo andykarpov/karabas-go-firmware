@@ -112,6 +112,7 @@ typedef struct {
 	uint8_t format;      // CORE_FORMAT_KGO1 / KGO2 (fpga/core_file.h)
 	char dir[256];       // the start dir of the file loader
 	char save_dir[256];  // backup RAM files (FILE_POS_SAVE_DIR)
+	char save_name[33];  // kgo2: their name (loader save_name), "" the name of the game
 	char loader_file[256]; // kgo2: the default file of the loader (its full path), "" none
 	bool loader_autoload;  // the last / default file is loaded at the start (kgo1: always)
 	core_btn_t btn[CORE_BUTTONS];
