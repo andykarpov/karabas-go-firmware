@@ -189,7 +189,7 @@ Dialog kinds of the UI layer (`ui/dialog`, section 8), the same for v1 (text cel
 - **progress** (`dialog_progress()`, `dialog_loading()`): a title and a bar; takes no keys;
 - **box** (`dialog_box()`): a title and a line in a frame, kinds ERROR, BUSY (waiting for a core,
   Wi-Fi) and ASK; no buttons: for ASK the caller reads Enter / Esc;
-- **load screen** (`dialog_load_screen()`, `dialog_load_rom*()`): the ROM loading of a core.
+- **load screen** (`dialog_load_screen()`, `dialog_load_rom*()`): the ROM loading of a core (not for the boot core: its menu is drawn by its own CPU from the ROMs).
 
 ### 5.4 IMG (`03`)
 

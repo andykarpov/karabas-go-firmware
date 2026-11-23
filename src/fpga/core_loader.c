@@ -101,6 +101,8 @@ void core_send(uint8_t pos)
   d_println();
 }
 
+static bool rom_popup; // the loading screen of the ROMs is shown (not for the boot core)
+
 #define SEND_PROGRESS_STEP 32768 // an OSD redraw costs: a popup every 8 KB made a 256 KB file 18% slower
 
 uint32_t core_send_file(FIL *f, uint32_t len, link_load_kind_t kind, uint32_t addr,
@@ -403,7 +405,10 @@ static void configure(const char* filename, bool clear_sram) {
   read_core(filename);
   send_build_ids();
   hang_step(0xa4);
-  if (!is_osd) dialog_load_screen();
+  // the loading screen of the ROMs: not for the boot core (its menu starts at once, the ROMs are its
+  // program) nor for an OSD-less core
+  rom_popup = !is_osd && core.type != CORE_TYPE_BOOT;
+  if (rom_popup) dialog_load_screen();
   hang_step(0xa5);
   read_roms(filename);
   bool popup = send_autoload_files(); // after the ROMs: a file over a ROM of the core file wins
@@ -1036,19 +1041,19 @@ void read_roms(const char* filename) {
       d_print("External ROM "); d_println(rom_filename);
 
       if (sd_open(&file2, rom_filename, FA_READ)) {
-        rom_bytes += core_send_file(&file2, UINT32_MAX, LINK_LOAD_ROM, rom_addr, rom_progress, &rom_idx, NULL);
+        rom_bytes += core_send_file(&file2, UINT32_MAX, LINK_LOAD_ROM, rom_addr, rom_popup ? rom_progress : NULL, &rom_idx, NULL);
         sd_close(&file2);
       } else {
         dialog_load_rom_missing(rom_idx);
       }
     } else {
       file_seek(rom_pos + KG_ROM_BLOCK_HEADER_SIZE);
-      rom_bytes += core_send_file(&file1, rom_len, LINK_LOAD_ROM, rom_addr, rom_progress, &rom_idx, NULL);
+      rom_bytes += core_send_file(&file1, rom_len, LINK_LOAD_ROM, rom_addr, rom_popup ? rom_progress : NULL, &rom_idx, NULL);
     }
     offset = offset + rom_len + KG_ROM_BLOCK_HEADER_SIZE;
     roms_len = roms_len - rom_len - KG_ROM_BLOCK_HEADER_SIZE;
     rom_idx++;
-    if (roms_len > 0) {
+    if (roms_len > 0 && rom_popup) {
       dialog_load_rom(rom_idx); // next rom
     }
   }
