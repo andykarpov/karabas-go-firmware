@@ -222,7 +222,7 @@ new (`kg_l2_img`), and `kg_bk_ram`, `hdf_ata` sit on it as now (section 11).
 
 | C | Name | → | ← | Notes |
 |---|---|---|---|---|
-| `01` | `START` | kind, slot, size (8), extension (ASCII, up to 8) | | kind 0 ROM (the core holds its CPU in reset), 1 file loader, 2 `FL` item; `LD_START` one clock after the size (a new file: the core resets what it loads into), `LD_ACTIVE` until `END` |
+| `01` | `START` | kind, slot, size (8), extension (ASCII, up to 8) | | kind 0 ROM (the core holds its CPU in reset), 1 file loader, 2 `FL` item; `LD_START` one clock after the size (a new file: the core resets what it loads into), `LD_ACTIVE` until `END`. The extension (`LD_EXT`: the file name after its last dot, as the user named the file, no case change; none for ROMs) comes for `FL` items and, since firmware #172, for the file loader too; its bytes follow the size, so they are in only after `LD_START` / `LD_ACTIVE` rose: a core takes `LD_EXT` later (at `END`, as core-sms) and compares it without case |
 | `02` | `DATA` | kind, address (4), 1..512 bytes | | Byte k to address + k (`LD_WR` per byte); a packet of another kind than the open `START` is dropped |
 | `03` | `END` | kind | | `LD_ACTIVE` off, `LD_END` one clock |
 | `04` | `STATUS` | | 1 = a `DATA` packet of 512 bytes may come (`LD_READY`), 0 = wait | Only with caps bit 4; without it the core takes `DATA` at any rate (a byte per 333 ns at 24 MHz) |
@@ -437,7 +437,7 @@ message (a report, a register set, a sector) in one chip select, and as core-sid
 | Mouse | 4 frames, `MS_UPD` toggles on the buttons byte, `MS_Z` 4 bits | `HID MOUSE` 4 bytes | `MS_X`, `MS_Y`, `MS_Z` (8 bits), `MS_B`, `MS_WR` | toggle -> strobe; the wheel is 8 bits |
 | Joysticks | 2 frames per port, 13 bits | `HID JOY` (port, lo, hi) × n | `JOY_L`, `JOY_R` (16 bits), `JOY_WR` | the width (bits 13..15 free for more buttons) |
 | ROMs | `ROMLOADER`, `ROMBANK` + `ROMDATA` per byte or bursts (second chip select, `BURST_READY`) | `LOAD START 0`, `DATA` (kind, address, up to 512 bytes), `END 0` | the `LD_*` bus, `LD_KIND` 0 | `ROMLOAD_*` -> `LD_*` |
-| File loader (`fileloader` cores) | `FILELOADER` 3 / 2 / 0 levels, `FILEBANK` + `FILEDATA` or bursts | `LOAD START 1` / `DATA` / `END 1` | `LD_*`, `LD_KIND` 1, `LD_START` = the reset of a new file | `FILELOAD_*` -> `LD_*` |
+| File loader (`fileloader` cores) | `FILELOADER` 3 / 2 / 0 levels, `FILEBANK` + `FILEDATA` or bursts | `LOAD START 1` (with the extension of the file since #172) / `DATA` / `END 1` | `LD_*`, `LD_KIND` 1, `LD_START` = the reset of a new file, `LD_EXT` (v2 only: v1 has no extension for the file loader) | `FILELOAD_*` -> `LD_*` |
 | FL items (ioctl) | `IOCTL_STATE`, `SLOT`, `SIZE` × 8 twice, `EXT`, `BANK` + `DATA` or bursts | `LOAD START 2` (slot, size, extension in one packet) / `DATA` / `END 2` | `LD_*`, `LD_KIND` 2, `LD_SLOT`, `LD_SIZE` | as above; `FILE_TO_ROM` / `FILE_WR_EACH` choices go into the core |
 | Flow control of loads | `BURST_READY` line | `LOAD STATUS` before a packet (caps bit 4) | `LD_READY` | a core with a slow memory drives it |
 | File mounter: mount | `IMG_SLOT`, `IMG_SIZE` × 8 twice, `IMG_FLAGS`, `IMG_PHYS` | `IMG MOUNT` (slot, size, flags: write protected, physical drive) in one packet | the mount signals of `img_sdc` | none for the drives (`sdc_*` stays) |
