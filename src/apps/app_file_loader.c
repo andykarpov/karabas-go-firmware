@@ -302,8 +302,10 @@ void app_file_loader_send_file(uint16_t file_id) {
   // keep the whole file transfer together on the fpga link
   spi_bus_lock();
 
-  // trigger reset
-  link_load_start(LINK_LOAD_FILE, 0, 0, NULL); // active + reset, then active
+  // trigger reset; the extension of the file goes with it (LD_EXT of kg_l2_load: a core that serves
+  // several systems picks one by it, as the MiSTer ports do with ioctl_file_ext)
+  const char *dot = strrchr(game_name, '.');
+  link_load_start(LINK_LOAD_FILE, 0, 0, dot ? dot + 1 : NULL); // active + reset, then active
 
   uint32_t file_size = f_size(&file1);
   d_printf("Sending file %d (%lu bytes)", file_id, (unsigned long) file_size); d_println();
